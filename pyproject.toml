@@ -18,6 +18,7 @@ python = "^3.8.1"
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.1.0"
+twine = "^4.0.2"
 
 [build-system]
 requires = [
