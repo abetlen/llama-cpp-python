@@ -1,3 +1,5 @@
+_skbuild/
+
 .envrc
 
 models/

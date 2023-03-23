@@ -5,7 +5,7 @@ from ctypes import c_int, c_float, c_double, c_char_p, c_void_p, c_bool, POINTER
 import pathlib
 
 # Load the library
-libfile = pathlib.Path(__file__).parent.parent / "libllama.so"
+libfile = pathlib.Path(__file__).parent / "libllama.so"
 lib = ctypes.CDLL(str(libfile))
 
 

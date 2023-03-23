@@ -20,5 +20,10 @@ python = "^3.8.1"
 black = "^23.1.0"
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = [
+    "setuptools>=42",
+    "scikit-build>=0.13",
+    "cmake>=3.18",
+    "ninja",
+]
+build-backend = "setuptools.build_meta"
