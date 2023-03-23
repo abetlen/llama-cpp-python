@@ -5,8 +5,8 @@ description = "Python bindings for the llama.cpp library"
 authors = ["Andrei Betlen <abetlen@gmail.com>"]
 license = "MIT"
 readme = "README.md"
-homepage = "https://github.com/abetlen/llama_cpp_python"
-repository = "https://github.com/abetlen/llama_cpp_python"
+homepage = "https://github.com/abetlen/llama-cpp-python"
+repository = "https://github.com/abetlen/llama-cpp-python"
 packages = [{include = "llama_cpp"}]
 include = [
     "LICENSE.md",
