@@ -1,9 +1,10 @@
 # `llama.cpp` Python Bindings
 
 Simple Python bindings for @ggerganov's [`llama.cpp`](https://github.com/ggerganov/llama.cpp) library.
+This package provides:
 
-These bindings expose the low-level `llama.cpp` C API through a complete `ctypes` interface.
-This module also exposes a high-level Python API that is more convenient to use and follows a familiar format.
+- Low-level access to C API via `ctypes` interface
+- High-level Python API for text completion inspired by OpenAI's API
 
 # Install
 
