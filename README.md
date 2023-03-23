@@ -8,7 +8,7 @@ This module also exposes a high-level Python API that is more convenient to use 
 # Install
 
 ```bash
-pip install llama_cpp
+pip install llama-cpp-python
 ```
 
 # Usage
