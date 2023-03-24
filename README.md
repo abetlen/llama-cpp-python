@@ -1,4 +1,9 @@
-# 🦙 Python Bindings for `llama.cpp` 
+# 🦙 Python Bindings for `llama.cpp`
+
+[![PyPI](https://img.shields.io/pypi/v/llama-cpp-python)](https://pypi.org/project/llama-cpp-python/)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/llama-cpp-python)](https://pypi.org/project/llama-cpp-python/)
+[![PyPI - License](https://img.shields.io/pypi/l/llama-cpp-python)](https://pypi.org/project/llama-cpp-python/)
+[![PyPI - Downloads](https://img.shields.io/pypi/dm/llama-cpp-python)](https://pypi.org/project/llama-cpp-python/)
 
 Simple Python bindings for **@ggerganov's** [`llama.cpp`](https://github.com/ggerganov/llama.cpp) library.
 This package provides:
@@ -6,9 +11,11 @@ This package provides:
 - Low-level access to C API via `ctypes` interface.
 - High-level Python API for text completion
   - OpenAI-like API
-  - Langchain compatibility
+  - LangChain compatibility
 
-# Install
+# Installation
+
+Install from PyPI:
 
 ```bash
 pip install llama-cpp-python
@@ -41,3 +48,7 @@ pip install llama-cpp-python
   }
 }
 ```
+
+# License
+
+This project is licensed under the terms of the MIT license.
