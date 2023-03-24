@@ -16,10 +16,8 @@ class Llama:
         logits_all: bool = False,
         vocab_only: bool = False,
         n_threads: Optional[int] = None,
-        model_name: Optional[str]=None,
     ):
         self.model_path = model_path
-        self.model = model_name or model_path
 
         self.params = llama_cpp.llama_context_default_params()
         self.params.n_ctx = n_ctx
@@ -122,7 +120,7 @@ class Llama:
             "id": f"cmpl-{str(uuid.uuid4())}", # Likely to change
             "object": "text_completion",
             "created": int(time.time()),
-            "model": self.model, # Likely to change
+            "model": self.model_path,
             "choices": [
                 {
                     "text": text,
