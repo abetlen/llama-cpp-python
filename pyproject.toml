@@ -19,6 +19,9 @@ python = "^3.8.1"
 [tool.poetry.group.dev.dependencies]
 black = "^23.1.0"
 twine = "^4.0.2"
+mkdocs = "^1.4.2"
+mkdocstrings = {extras = ["python"], version = "^0.20.0"}
+mkdocs-material = "^9.1.4"
 
 [build-system]
 requires = [

@@ -1,0 +1,10 @@
+site_name: llama-cpp-python
+
+theme:
+  name: "material"
+
+plugins:
+  - mkdocstrings
+
+watch:
+  - llama_cpp

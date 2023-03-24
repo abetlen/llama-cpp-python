@@ -8,6 +8,8 @@ from . import llama_cpp
 
 
 class Llama:
+    """High-level Python wrapper for a llama.cpp model."""
+
     def __init__(
         self,
         model_path: str,
@@ -18,7 +20,25 @@ class Llama:
         logits_all: bool = False,
         vocab_only: bool = False,
         n_threads: Optional[int] = None,
-    ):
+    ) -> "Llama":
+        """Load a llama.cpp model from `model_path`.
+
+        Args:
+            model_path: Path to the model directory.
+            n_ctx: Number of tokens to keep in memory.
+            n_parts: Number of parts to split the model into. If -1, the number of parts is automatically determined.
+            seed: Random seed.
+            f16_kv: Use half-precision for key/value matrices.
+            logits_all: Return logits for all tokens, not just the vocabulary.
+            vocab_only: Only use tokens in the vocabulary.
+            n_threads: Number of threads to use. If None, the number of threads is automatically determined.
+
+        Raises:
+            ValueError: If the model path does not exist.
+
+        Returns:
+            A Llama instance.
+        """
         self.model_path = model_path
 
         self.last_n = 64
@@ -56,6 +76,27 @@ class Llama:
         repeat_penalty: float = 1.1,
         top_k: int = 40,
     ):
+        """Generate text from a prompt.
+
+        Args:
+            prompt: The prompt to generate text from.
+            suffix: A suffix to append to the generated text. If None, no suffix is appended.
+            max_tokens: The maximum number of tokens to generate.
+            temperature: The temperature to use for sampling.
+            top_p: The top-p value to use for sampling.
+            logprobs: The number of logprobs to return. If None, no logprobs are returned.
+            echo: Whether to echo the prompt.
+            stop: A list of strings to stop generation when encountered.
+            repeat_penalty: The penalty to apply to repeated tokens.
+            top_k: The top-k value to use for sampling.
+
+        Raises:
+            ValueError: If the requested tokens exceed the context window.
+            RuntimeError: If the prompt fails to tokenize or the model fails to evaluate the prompt.
+
+        Returns:
+            Response object containing the generated text.
+        """
         text = b""
         finish_reason = "length"
         completion_tokens = 0
