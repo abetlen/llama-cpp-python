@@ -1,3 +1,5 @@
+import argparse
+
 from llama_cpp import Llama
 
 from langchain.llms.base import LLM
@@ -24,6 +26,26 @@ class LlamaLLM(LLM):
     def _identifying_params(self) -> Mapping[str, Any]:
         return {"model_path": self.model_path}
 
-llm = LlamaLLM(model_path="models/...")
+parser = argparse.ArgumentParser()
+parser.add_argument("-m", "--model", type=str, default="./models/...")
+args = parser.parse_args()
 
-print(llm("Question: What is the capital of France? Answer: ", stop=["Question:", "\n"]))
+# Load the model
+llm = LlamaLLM(model_path=args.model)
+
+# Basic Q&A
+answer = llm("Question: What is the capital of France? Answer: ", stop=["Question:", "\n"])
+print(f"Answer: {answer.strip()}")
+
+# Using in a chain
+from langchain.prompts import PromptTemplate
+from langchain.chains import LLMChain
+
+prompt = PromptTemplate(
+    input_variables=["product"],
+    template="\n\n### Instruction:\nWrite a good name for a company that makes {product}\n\n### Response:\n",
+)
+chain = LLMChain(llm=llm, prompt=prompt)
+
+# Run the chain only specifying the input variable.
+print(chain.run("colorful socks"))
