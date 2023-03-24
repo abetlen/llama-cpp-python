@@ -12,11 +12,15 @@ from ctypes import (
 )
 
 import pathlib
+from itertools import chain
 
 # Load the library
-libfile = pathlib.Path(__file__).parent / "libllama.so"
-lib = ctypes.CDLL(str(libfile))
-
+# TODO: fragile, should fix
+_base_path = pathlib.Path(__file__).parent
+(_lib_path,) = chain(
+    _base_path.glob("*.so"), _base_path.glob("*.dylib"), _base_path.glob("*.dll")
+)
+_lib = ctypes.CDLL(str(_lib_path))
 
 # C types
 llama_context_p = c_void_p
@@ -60,12 +64,12 @@ llama_context_params_p = POINTER(llama_context_params)
 
 
 def llama_context_default_params() -> llama_context_params:
-    params = lib.llama_context_default_params()
+    params = _lib.llama_context_default_params()
     return params
 
 
-lib.llama_context_default_params.argtypes = []
-lib.llama_context_default_params.restype = llama_context_params
+_lib.llama_context_default_params.argtypes = []
+_lib.llama_context_default_params.restype = llama_context_params
 
 
 # Various functions for loading a ggml llama model.
@@ -74,20 +78,20 @@ lib.llama_context_default_params.restype = llama_context_params
 def llama_init_from_file(
     path_model: bytes, params: llama_context_params
 ) -> llama_context_p:
-    return lib.llama_init_from_file(path_model, params)
+    return _lib.llama_init_from_file(path_model, params)
 
 
-lib.llama_init_from_file.argtypes = [c_char_p, llama_context_params]
-lib.llama_init_from_file.restype = llama_context_p
+_lib.llama_init_from_file.argtypes = [c_char_p, llama_context_params]
+_lib.llama_init_from_file.restype = llama_context_p
 
 
 # Frees all allocated memory
 def llama_free(ctx: llama_context_p):
-    lib.llama_free(ctx)
+    _lib.llama_free(ctx)
 
 
-lib.llama_free.argtypes = [llama_context_p]
-lib.llama_free.restype = None
+_lib.llama_free.argtypes = [llama_context_p]
+_lib.llama_free.restype = None
 
 
 # TODO: not great API - very likely to change
@@ -95,11 +99,11 @@ lib.llama_free.restype = None
 def llama_model_quantize(
     fname_inp: bytes, fname_out: bytes, itype: c_int, qk: c_int
 ) -> c_int:
-    return lib.llama_model_quantize(fname_inp, fname_out, itype, qk)
+    return _lib.llama_model_quantize(fname_inp, fname_out, itype, qk)
 
 
-lib.llama_model_quantize.argtypes = [c_char_p, c_char_p, c_int, c_int]
-lib.llama_model_quantize.restype = c_int
+_lib.llama_model_quantize.argtypes = [c_char_p, c_char_p, c_int, c_int]
+_lib.llama_model_quantize.restype = c_int
 
 
 # Run the llama inference to obtain the logits and probabilities for the next token.
@@ -113,11 +117,11 @@ def llama_eval(
     n_past: c_int,
     n_threads: c_int,
 ) -> c_int:
-    return lib.llama_eval(ctx, tokens, n_tokens, n_past, n_threads)
+    return _lib.llama_eval(ctx, tokens, n_tokens, n_past, n_threads)
 
 
-lib.llama_eval.argtypes = [llama_context_p, llama_token_p, c_int, c_int, c_int]
-lib.llama_eval.restype = c_int
+_lib.llama_eval.argtypes = [llama_context_p, llama_token_p, c_int, c_int, c_int]
+_lib.llama_eval.restype = c_int
 
 
 # Convert the provided text into tokens.
@@ -132,32 +136,27 @@ def llama_tokenize(
     n_max_tokens: c_int,
     add_bos: c_bool,
 ) -> c_int:
-    """Convert the provided text into tokens.
-    The tokens pointer must be large enough to hold the resulting tokens.
-    Returns the number of tokens on success, no more than n_max_tokens
-    Returns a negative number on failure - the number of tokens that would have been returned
-    """
-    return lib.llama_tokenize(ctx, text, tokens, n_max_tokens, add_bos)
+    return _lib.llama_tokenize(ctx, text, tokens, n_max_tokens, add_bos)
 
 
-lib.llama_tokenize.argtypes = [llama_context_p, c_char_p, llama_token_p, c_int, c_bool]
-lib.llama_tokenize.restype = c_int
+_lib.llama_tokenize.argtypes = [llama_context_p, c_char_p, llama_token_p, c_int, c_bool]
+_lib.llama_tokenize.restype = c_int
 
 
 def llama_n_vocab(ctx: llama_context_p) -> c_int:
-    return lib.llama_n_vocab(ctx)
+    return _lib.llama_n_vocab(ctx)
 
 
-lib.llama_n_vocab.argtypes = [llama_context_p]
-lib.llama_n_vocab.restype = c_int
+_lib.llama_n_vocab.argtypes = [llama_context_p]
+_lib.llama_n_vocab.restype = c_int
 
 
 def llama_n_ctx(ctx: llama_context_p) -> c_int:
-    return lib.llama_n_ctx(ctx)
+    return _lib.llama_n_ctx(ctx)
 
 
-lib.llama_n_ctx.argtypes = [llama_context_p]
-lib.llama_n_ctx.restype = c_int
+_lib.llama_n_ctx.argtypes = [llama_context_p]
+_lib.llama_n_ctx.restype = c_int
 
 
 # Token logits obtained from the last call to llama_eval()
@@ -166,48 +165,48 @@ lib.llama_n_ctx.restype = c_int
 # Rows: n_tokens
 # Cols: n_vocab
 def llama_get_logits(ctx: llama_context_p):
-    return lib.llama_get_logits(ctx)
+    return _lib.llama_get_logits(ctx)
 
 
-lib.llama_get_logits.argtypes = [llama_context_p]
-lib.llama_get_logits.restype = POINTER(c_float)
+_lib.llama_get_logits.argtypes = [llama_context_p]
+_lib.llama_get_logits.restype = POINTER(c_float)
 
 
 # Get the embeddings for the input
 # shape: [n_embd] (1-dimensional)
 def llama_get_embeddings(ctx: llama_context_p):
-    return lib.llama_get_embeddings(ctx)
+    return _lib.llama_get_embeddings(ctx)
 
 
-lib.llama_get_embeddings.argtypes = [llama_context_p]
-lib.llama_get_embeddings.restype = POINTER(c_float)
+_lib.llama_get_embeddings.argtypes = [llama_context_p]
+_lib.llama_get_embeddings.restype = POINTER(c_float)
 
 
 # Token Id -> String. Uses the vocabulary in the provided context
 def llama_token_to_str(ctx: llama_context_p, token: int) -> bytes:
-    return lib.llama_token_to_str(ctx, token)
+    return _lib.llama_token_to_str(ctx, token)
 
 
-lib.llama_token_to_str.argtypes = [llama_context_p, llama_token]
-lib.llama_token_to_str.restype = c_char_p
+_lib.llama_token_to_str.argtypes = [llama_context_p, llama_token]
+_lib.llama_token_to_str.restype = c_char_p
 
 # Special tokens
 
 
 def llama_token_bos() -> llama_token:
-    return lib.llama_token_bos()
+    return _lib.llama_token_bos()
 
 
-lib.llama_token_bos.argtypes = []
-lib.llama_token_bos.restype = llama_token
+_lib.llama_token_bos.argtypes = []
+_lib.llama_token_bos.restype = llama_token
 
 
 def llama_token_eos() -> llama_token:
-    return lib.llama_token_eos()
+    return _lib.llama_token_eos()
 
 
-lib.llama_token_eos.argtypes = []
-lib.llama_token_eos.restype = llama_token
+_lib.llama_token_eos.argtypes = []
+_lib.llama_token_eos.restype = llama_token
 
 
 # TODO: improve the last_n_tokens interface ?
@@ -220,12 +219,12 @@ def llama_sample_top_p_top_k(
     temp: c_double,
     repeat_penalty: c_double,
 ) -> llama_token:
-    return lib.llama_sample_top_p_top_k(
+    return _lib.llama_sample_top_p_top_k(
         ctx, last_n_tokens_data, last_n_tokens_size, top_k, top_p, temp, repeat_penalty
     )
 
 
-lib.llama_sample_top_p_top_k.argtypes = [
+_lib.llama_sample_top_p_top_k.argtypes = [
     llama_context_p,
     llama_token_p,
     c_int,
@@ -234,33 +233,32 @@ lib.llama_sample_top_p_top_k.argtypes = [
     c_double,
     c_double,
 ]
-lib.llama_sample_top_p_top_k.restype = llama_token
+_lib.llama_sample_top_p_top_k.restype = llama_token
 
 
 # Performance information
 
 
 def llama_print_timings(ctx: llama_context_p):
-    lib.llama_print_timings(ctx)
+    _lib.llama_print_timings(ctx)
 
 
-lib.llama_print_timings.argtypes = [llama_context_p]
-lib.llama_print_timings.restype = None
+_lib.llama_print_timings.argtypes = [llama_context_p]
+_lib.llama_print_timings.restype = None
 
 
 def llama_reset_timings(ctx: llama_context_p):
-    lib.llama_reset_timings(ctx)
+    _lib.llama_reset_timings(ctx)
 
 
-lib.llama_reset_timings.argtypes = [llama_context_p]
-lib.llama_reset_timings.restype = None
+_lib.llama_reset_timings.argtypes = [llama_context_p]
+_lib.llama_reset_timings.restype = None
 
 
 # Print system information
 def llama_print_system_info() -> bytes:
-    """Print system informaiton"""
-    return lib.llama_print_system_info()
+    return _lib.llama_print_system_info()
 
 
-lib.llama_print_system_info.argtypes = []
-lib.llama_print_system_info.restype = c_char_p
+_lib.llama_print_system_info.argtypes = []
+_lib.llama_print_system_info.restype = c_char_p
