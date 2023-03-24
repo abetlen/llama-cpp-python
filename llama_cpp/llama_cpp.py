@@ -67,6 +67,7 @@ def llama_context_default_params() -> llama_context_params:
 lib.llama_context_default_params.argtypes = []
 lib.llama_context_default_params.restype = llama_context_params
 
+
 # Various functions for loading a ggml llama model.
 # Allocate (almost) all memory needed for the model.
 # Return NULL on failure
@@ -79,6 +80,7 @@ def llama_init_from_file(
 lib.llama_init_from_file.argtypes = [c_char_p, llama_context_params]
 lib.llama_init_from_file.restype = llama_context_p
 
+
 # Frees all allocated memory
 def llama_free(ctx: llama_context_p):
     lib.llama_free(ctx)
@@ -86,6 +88,7 @@ def llama_free(ctx: llama_context_p):
 
 lib.llama_free.argtypes = [llama_context_p]
 lib.llama_free.restype = None
+
 
 # TODO: not great API - very likely to change
 # Returns 0 on success
@@ -97,6 +100,7 @@ def llama_model_quantize(
 
 lib.llama_model_quantize.argtypes = [c_char_p, c_char_p, c_int, c_int]
 lib.llama_model_quantize.restype = c_int
+
 
 # Run the llama inference to obtain the logits and probabilities for the next token.
 # tokens + n_tokens is the provided batch of new tokens to process
@@ -155,6 +159,7 @@ def llama_n_ctx(ctx: llama_context_p) -> c_int:
 lib.llama_n_ctx.argtypes = [llama_context_p]
 lib.llama_n_ctx.restype = c_int
 
+
 # Token logits obtained from the last call to llama_eval()
 # The logits for the last token are stored in the last row
 # Can be mutated in order to change the probabilities of the next token
@@ -167,13 +172,16 @@ def llama_get_logits(ctx: llama_context_p):
 lib.llama_get_logits.argtypes = [llama_context_p]
 lib.llama_get_logits.restype = POINTER(c_float)
 
+
 # Get the embeddings for the input
 # shape: [n_embd] (1-dimensional)
 def llama_get_embeddings(ctx: llama_context_p):
     return lib.llama_get_embeddings(ctx)
 
+
 lib.llama_get_embeddings.argtypes = [llama_context_p]
 lib.llama_get_embeddings.restype = POINTER(c_float)
+
 
 # Token Id -> String. Uses the vocabulary in the provided context
 def llama_token_to_str(ctx: llama_context_p, token: int) -> bytes:
@@ -184,6 +192,7 @@ lib.llama_token_to_str.argtypes = [llama_context_p, llama_token]
 lib.llama_token_to_str.restype = c_char_p
 
 # Special tokens
+
 
 def llama_token_bos() -> llama_token:
     return lib.llama_token_bos()
@@ -229,6 +238,7 @@ lib.llama_sample_top_p_top_k.restype = llama_token
 
 
 # Performance information
+
 
 def llama_print_timings(ctx: llama_context_p):
     lib.llama_print_timings(ctx)

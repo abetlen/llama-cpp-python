@@ -7,5 +7,5 @@ setup(
     author="Andrei Betlen",
     author_email="abetlen@gmail.com",
     license="MIT",
-    packages=["llama_cpp"]
+    packages=["llama_cpp"],
 )

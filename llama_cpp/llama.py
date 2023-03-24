@@ -60,7 +60,11 @@ class Llama:
             stop = [s.encode("utf-8") for s in stop]
 
         prompt_tokens = llama_cpp.llama_tokenize(
-            self.ctx, prompt.encode("utf-8"), self.tokens, llama_cpp.llama_n_ctx(self.ctx), True
+            self.ctx,
+            prompt.encode("utf-8"),
+            self.tokens,
+            llama_cpp.llama_n_ctx(self.ctx),
+            True,
         )
 
         if prompt_tokens + max_tokens > self.params.n_ctx:
