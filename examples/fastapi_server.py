@@ -1,3 +1,5 @@
+"""Example FastAPI server for llama.cpp.
+"""
 from typing import List, Optional
 
 from llama_cpp import Llama
