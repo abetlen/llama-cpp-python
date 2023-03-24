@@ -30,8 +30,8 @@ class CompletionRequest(BaseModel):
     class Config:
         schema_extra = {
             "example": {
-                "prompt": "Question: What is the capital of France? Answer: ",
-                "stop": ["\n", " Question:"]
+                "prompt": "\n\n### Instructions:\nWhat is the capital of France?\n\n### Response:\n",
+                "stop": ["\n", "###"]
             }
         }
 
