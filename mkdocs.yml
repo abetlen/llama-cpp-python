@@ -1,4 +1,5 @@
 site_name: llama-cpp-python
+repo_url: https://github.com/abetlen/llama-cpp-python
 
 theme:
   name: "material"
