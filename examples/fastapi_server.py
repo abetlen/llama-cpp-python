@@ -5,8 +5,10 @@ from llama_cpp import Llama
 from fastapi import FastAPI
 from pydantic import BaseModel, BaseSettings, Field
 
+
 class Settings(BaseSettings):
     model: str
+
 
 app = FastAPI(
     title="🦙 llama.cpp Python API",
@@ -14,6 +16,7 @@ app = FastAPI(
 )
 settings = Settings()
 llama = Llama(settings.model)
+
 
 class CompletionRequest(BaseModel):
     prompt: str
@@ -31,10 +34,9 @@ class CompletionRequest(BaseModel):
         schema_extra = {
             "example": {
                 "prompt": "\n\n### Instructions:\nWhat is the capital of France?\n\n### Response:\n",
-                "stop": ["\n", "###"]
+                "stop": ["\n", "###"],
             }
         }
-
 
 
 @app.post("/v1/completions")

@@ -5,6 +5,7 @@ from typing import List, Optional
 
 from . import llama_cpp
 
+
 class Llama:
     def __init__(
         self,
@@ -82,7 +83,10 @@ class Llama:
 
         for i in range(max_tokens):
             tokens_seen = prompt_tokens + completion_tokens
-            last_n_tokens = [0] * max(0, self.last_n - tokens_seen)  + [self.tokens[j] for j in range(max(tokens_seen - self.last_n, 0), tokens_seen)]
+            last_n_tokens = [0] * max(0, self.last_n - tokens_seen) + [
+                self.tokens[j]
+                for j in range(max(tokens_seen - self.last_n, 0), tokens_seen)
+            ]
 
             token = llama_cpp.llama_sample_top_p_top_k(
                 self.ctx,
@@ -128,9 +132,8 @@ class Llama:
                 self.ctx,
             )[:logprobs]
 
-
         return {
-            "id": f"cmpl-{str(uuid.uuid4())}", # Likely to change
+            "id": f"cmpl-{str(uuid.uuid4())}",  # Likely to change
             "object": "text_completion",
             "created": int(time.time()),
             "model": self.model_path,
@@ -151,5 +154,3 @@ class Llama:
 
     def __del__(self):
         llama_cpp.llama_free(self.ctx)
-
-

@@ -27,7 +27,15 @@ embd = embd_inp
 n = 8
 
 for i in range(n):
-    id = llama_cpp.llama_sample_top_p_top_k(ctx, (llama_cpp.c_int * len(embd))(*embd), n_of_tok + i, 40, 0.8, 0.2, 1.0/0.85)
+    id = llama_cpp.llama_sample_top_p_top_k(
+        ctx,
+        (llama_cpp.c_int * len(embd))(*embd),
+        n_of_tok + i,
+        40,
+        0.8,
+        0.2,
+        1.0 / 0.85,
+    )
 
     embd.append(id)
 

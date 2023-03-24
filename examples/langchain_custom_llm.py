@@ -5,6 +5,7 @@ from llama_cpp import Llama
 from langchain.llms.base import LLM
 from typing import Optional, List, Mapping, Any
 
+
 class LlamaLLM(LLM):
     model_path: str
     llm: Llama
@@ -16,7 +17,7 @@ class LlamaLLM(LLM):
     def __init__(self, model_path: str, **kwargs: Any):
         model_path = model_path
         llm = Llama(model_path=model_path)
-        super().__init__(model_path=model_path, llm=llm,  **kwargs)
+        super().__init__(model_path=model_path, llm=llm, **kwargs)
 
     def _call(self, prompt: str, stop: Optional[List[str]] = None) -> str:
         response = self.llm(prompt, stop=stop or [])
@@ -26,6 +27,7 @@ class LlamaLLM(LLM):
     def _identifying_params(self) -> Mapping[str, Any]:
         return {"model_path": self.model_path}
 
+
 parser = argparse.ArgumentParser()
 parser.add_argument("-m", "--model", type=str, default="./models/...")
 args = parser.parse_args()
@@ -34,7 +36,9 @@ args = parser.parse_args()
 llm = LlamaLLM(model_path=args.model)
 
 # Basic Q&A
-answer = llm("Question: What is the capital of France? Answer: ", stop=["Question:", "\n"])
+answer = llm(
+    "Question: What is the capital of France? Answer: ", stop=["Question:", "\n"]
+)
 print(f"Answer: {answer.strip()}")
 
 # Using in a chain
