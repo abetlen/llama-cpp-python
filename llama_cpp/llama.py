@@ -24,13 +24,13 @@ class Llama:
         """Load a llama.cpp model from `model_path`.
 
         Args:
-            model_path: Path to the model directory.
-            n_ctx: Number of tokens to keep in memory.
+            model_path: Path to the model.
+            n_ctx: Maximum context size.
             n_parts: Number of parts to split the model into. If -1, the number of parts is automatically determined.
-            seed: Random seed.
-            f16_kv: Use half-precision for key/value matrices.
-            logits_all: Return logits for all tokens, not just the vocabulary.
-            vocab_only: Only use tokens in the vocabulary.
+            seed: Random seed. 0 for random.
+            f16_kv: Use half-precision for key/value cache.
+            logits_all: Return logits for all tokens, not just the last token.
+            vocab_only: Only load the vocabulary no weights.
             n_threads: Number of threads to use. If None, the number of threads is automatically determined.
 
         Raises:
