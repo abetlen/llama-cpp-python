@@ -42,6 +42,7 @@ llama_token_data_p = POINTER(llama_token_data)
 
 llama_progress_callback = ctypes.CFUNCTYPE(None, c_double, c_void_p)
 
+
 class llama_context_params(Structure):
     _fields_ = [
         ("n_ctx", c_int),  # text context
@@ -55,7 +56,6 @@ class llama_context_params(Structure):
         ("vocab_only", c_bool),  # only load the vocabulary, no weights
         ("use_mlock", c_bool),  # force system to keep model in RAM
         ("embedding", c_bool),  # embedding mode only
-
         # called with a progress value between 0 and 1, pass NULL to disable
         ("progress_callback", llama_progress_callback),
         # context pointer passed to the progress callback
@@ -163,6 +163,14 @@ def llama_n_ctx(ctx: llama_context_p) -> c_int:
 
 _lib.llama_n_ctx.argtypes = [llama_context_p]
 _lib.llama_n_ctx.restype = c_int
+
+
+def llama_n_embd(ctx: llama_context_p) -> c_int:
+    return _lib.llama_n_ctx(ctx)
+
+
+_lib.llama_n_embd.argtypes = [llama_context_p]
+_lib.llama_n_embd.restype = c_int
 
 
 # Token logits obtained from the last call to llama_eval()
