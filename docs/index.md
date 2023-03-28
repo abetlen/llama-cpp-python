@@ -57,6 +57,9 @@ pip install llama-cpp-python
         members:
             - __init__
             - __call__
+            - embed
+            - tokenize
+            - detokenize
         show_root_heading: true
 
 ::: llama_cpp.llama_cpp
