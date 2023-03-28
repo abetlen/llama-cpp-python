@@ -105,6 +105,20 @@ class Llama:
             output += llama_cpp.llama_token_to_str(self.ctx, token)
         return output
 
+    def embed(self, text: str):
+        """Embed a string.
+
+        Args:
+            text: The utf-8 encoded string to embed.
+
+        Returns:
+            A list of embeddings.
+        """
+        tokens = self.tokenize(text.encode("utf-8"))
+        self._eval(tokens, 0)
+        embeddings = llama_cpp.llama_get_embeddings(self.ctx)
+        return embeddings[:llama_cpp.llama_n_embd(self.ctx)]
+
     def _eval(self, tokens: List[int], n_past):
         rc = llama_cpp.llama_eval(
             self.ctx,
