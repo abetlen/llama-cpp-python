@@ -3,6 +3,7 @@ import uuid
 import time
 import multiprocessing
 from typing import List, Optional
+from collections import deque
 
 from . import llama_cpp
 
@@ -46,9 +47,6 @@ class Llama:
         """
         self.model_path = model_path
 
-        self.last_n = 64
-        self.max_chunk_size = 32
-
         self.params = llama_cpp.llama_context_default_params()
         self.params.n_ctx = n_ctx
         self.params.n_parts = n_parts
@@ -59,15 +57,75 @@ class Llama:
         self.params.use_mlock = use_mlock
         self.params.embedding = embedding
 
-        self.n_threads = n_threads or multiprocessing.cpu_count()
+        self.last_n = 64
+        self.max_chunk_size = n_ctx
 
-        self.tokens = (llama_cpp.llama_token * self.params.n_ctx)()
+        self.n_threads = n_threads or multiprocessing.cpu_count()
 
         if not os.path.exists(model_path):
             raise ValueError(f"Model path does not exist: {model_path}")
 
         self.ctx = llama_cpp.llama_init_from_file(
             self.model_path.encode("utf-8"), self.params
+        )
+
+    def tokenize(self, text: bytes) -> List[int]:
+        """Tokenize a string.
+
+        Args:
+            text: The utf-8 encoded string to tokenize.
+
+        Returns:
+            A list of tokens.
+        """
+        n_ctx = llama_cpp.llama_n_ctx(self.ctx)
+        tokens = (llama_cpp.llama_token * n_ctx)()
+        n_tokens = llama_cpp.llama_tokenize(
+            self.ctx,
+            text,
+            tokens,
+            n_ctx,
+            True,
+        )
+        if n_tokens < 0:
+            raise RuntimeError(f"Failed to tokenize: text=\"{text}\" n_tokens={n_tokens}")
+        return list(tokens[:n_tokens])
+
+    def detokenize(self, tokens: List[int]) -> bytes:
+        """Detokenize a list of tokens.
+
+        Args:
+            tokens: The list of tokens to detokenize.
+
+        Returns:
+            The detokenized string.
+        """
+        output = b""
+        for token in tokens:
+            output += llama_cpp.llama_token_to_str(self.ctx, token)
+        return output
+
+
+    def _eval(self, tokens: List[int], n_past):
+        rc = llama_cpp.llama_eval(
+            self.ctx,
+            (llama_cpp.llama_token * len(tokens))(*tokens),
+            len(tokens),
+            n_past,
+            self.n_threads,
+        )
+        if rc != 0:
+            raise RuntimeError(f"Failed to evaluate: {rc}")
+
+    def _sample(self, last_n_tokens, top_p, top_k, temp, repeat_penalty):
+        return llama_cpp.llama_sample_top_p_top_k(
+            self.ctx,
+            (llama_cpp.llama_token * len(last_n_tokens))(*last_n_tokens),
+            len(last_n_tokens),
+            top_k=top_k,
+            top_p=top_p,
+            temp=temp,
+            repeat_penalty=repeat_penalty,
         )
 
     def __call__(
@@ -106,61 +164,38 @@ class Llama:
         """
         text = b""
         finish_reason = "length"
-        completion_tokens = 0
+        completion_tokens = []
+        last_n_tokens = deque([0] * self.last_n, maxlen=self.last_n)
 
-        if stop is not None:
-            stop = [s.encode("utf-8") for s in stop]
+        prompt_tokens = self.tokenize(prompt.encode("utf-8"))
 
-        prompt_tokens = llama_cpp.llama_tokenize(
-            self.ctx,
-            prompt.encode("utf-8"),
-            self.tokens,
-            llama_cpp.llama_n_ctx(self.ctx),
-            True,
-        )
-        if prompt_tokens < 0:
-            raise RuntimeError(f"Failed to tokenize prompt: {prompt_tokens}")
-
-        if prompt_tokens + max_tokens > self.params.n_ctx:
+        if len(prompt_tokens) + max_tokens > llama_cpp.llama_n_ctx(self.ctx):
             raise ValueError(
                 f"Requested tokens exceed context window of {llama_cpp.llama_n_ctx(self.ctx)}"
             )
 
         # Process prompt in chunks to avoid running out of memory
-        for i in range(0, prompt_tokens, self.max_chunk_size):
-            chunk = self.tokens[i : min(prompt_tokens, i + self.max_chunk_size)]
-            rc = llama_cpp.llama_eval(
-                self.ctx,
-                (llama_cpp.llama_token * len(chunk))(*chunk),
-                len(chunk),
-                max(0, i - 1),
-                self.n_threads,
-            )
-            if rc != 0:
-                raise RuntimeError(f"Failed to evaluate prompt: {rc}")
+        for i in range(0, len(prompt_tokens), self.max_chunk_size):
+            chunk = prompt_tokens[i : min(len(prompt_tokens), i + self.max_chunk_size)]
+            self._eval(chunk, n_past=i)
+
+        if stop is not None:
+            stop = [s.encode("utf-8") for s in stop]
 
         for i in range(max_tokens):
-            tokens_seen = prompt_tokens + completion_tokens
-            last_n_tokens = [0] * max(0, self.last_n - tokens_seen) + [
-                self.tokens[j]
-                for j in range(max(tokens_seen - self.last_n, 0), tokens_seen)
-            ]
-
-            token = llama_cpp.llama_sample_top_p_top_k(
-                self.ctx,
-                (llama_cpp.llama_token * len(last_n_tokens))(*last_n_tokens),
-                len(last_n_tokens),
-                top_k=top_k,
+            token = self._sample(
+                last_n_tokens,
                 top_p=top_p,
+                top_k=top_k,
                 temp=temperature,
-                repeat_penalty=repeat_penalty,
+                repeat_penalty=repeat_penalty
             )
             if token == llama_cpp.llama_token_eos():
                 finish_reason = "stop"
                 break
-            text += llama_cpp.llama_token_to_str(self.ctx, token)
-            self.tokens[prompt_tokens + i] = token
-            completion_tokens += 1
+            text += self.detokenize([token])
+            last_n_tokens.append(token)
+            completion_tokens.append(token)
 
             any_stop = [s for s in stop if s in text]
             if len(any_stop) > 0:
@@ -169,15 +204,7 @@ class Llama:
                 finish_reason = "stop"
                 break
 
-            rc = llama_cpp.llama_eval(
-                self.ctx,
-                (llama_cpp.llama_token * 1)(self.tokens[prompt_tokens + i]),
-                1,
-                prompt_tokens + completion_tokens,
-                self.n_threads,
-            )
-            if rc != 0:
-                raise RuntimeError(f"Failed to evaluate next token: {rc}")
+            self._eval([token], len(prompt_tokens) + len(completion_tokens))
 
         text = text.decode("utf-8")
 
@@ -206,9 +233,9 @@ class Llama:
                 }
             ],
             "usage": {
-                "prompt_tokens": prompt_tokens,
-                "completion_tokens": completion_tokens,
-                "total_tokens": prompt_tokens + completion_tokens,
+                "prompt_tokens": len(prompt_tokens),
+                "completion_tokens": len(completion_tokens),
+                "total_tokens": len(prompt_tokens) + len(completion_tokens),
             },
         }
 
