@@ -47,7 +47,6 @@ class llama_context_params(Structure):
         ("n_ctx", c_int),  # text context
         ("n_parts", c_int),  # -1 for default
         ("seed", c_int),  # RNG seed, 0 for random
-
         ("f16_kv", c_bool),  # use fp16 for KV cache
         (
             "logits_all",
@@ -56,7 +55,6 @@ class llama_context_params(Structure):
         ("vocab_only", c_bool),  # only load the vocabulary, no weights
         ("use_mlock", c_bool),  # force system to keep model in RAM
         ("embedding", c_bool),  # embedding mode only
-
         # called with a progress value between 0 and 1, pass NULL to disable
         ("progress_callback", llama_progress_callback),
         # context pointer passed to the progress callback
