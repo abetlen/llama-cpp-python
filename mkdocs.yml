@@ -6,6 +6,7 @@ theme:
 
 plugins:
   - mkdocstrings
+  - search
 
 watch:
   - llama_cpp
