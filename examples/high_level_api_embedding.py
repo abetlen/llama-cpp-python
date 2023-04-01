@@ -1,4 +1,3 @@
-import json
 import argparse
 
 from llama_cpp import Llama
@@ -9,4 +8,4 @@ args = parser.parse_args()
 
 llm = Llama(model_path=args.model, embedding=True)
 
-print(llm.embed("Hello world!"))
+print(llm.create_embedding("Hello world!"))
