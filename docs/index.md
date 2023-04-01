@@ -69,6 +69,8 @@ python3 setup.py develop
             - create_embedding
             - create_completion
             - __call__
+            - token_bos
+            - token_eos
         show_root_heading: true
 
 ::: llama_cpp.llama_cpp

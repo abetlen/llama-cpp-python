@@ -446,3 +446,13 @@ class Llama:
         if self.ctx is not None:
             llama_cpp.llama_free(self.ctx)
             self.ctx = None
+
+    @staticmethod
+    def token_eos() -> llama_cpp.llama_token:
+        """Return the end-of-sequence token."""
+        return llama_cpp.llama_token_eos()
+
+    @staticmethod
+    def token_bos() -> llama_cpp.llama_token:
+        """Return the beginning-of-sequence token."""
+        return llama_cpp.llama_token_bos()
