@@ -31,6 +31,7 @@ llama = llama_cpp.Llama(
     settings.model,
     f16_kv=True,
     use_mlock=True,
+    embedding=True,
     n_threads=6,
     n_batch=2048,
 )
@@ -93,4 +94,6 @@ CreateEmbeddingResponse = create_model_from_typeddict(llama_cpp.Embedding)
     response_model=CreateEmbeddingResponse,
 )
 def create_embedding(request: CreateEmbeddingRequest):
-    return llama.create_embedding(**request.dict())
+    # print(request)
+    # return llama.create_embedding(**request.dict(exclude={"model", "user"}))
+    return llama.create_embedding(request.input)
