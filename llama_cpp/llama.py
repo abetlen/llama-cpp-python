@@ -125,6 +125,23 @@ class Llama:
     ) -> Generator[
         llama_cpp.llama_token, Optional[Sequence[llama_cpp.llama_token]], None
     ]:
+        """Generate tokens.
+
+        >>> llama = Llama("models/117M")
+        >>> tokens = llama.tokenize(b"Hello, world!")
+        >>> for token in llama.generate(tokens, top_k=40, top_p=0.95, temp=1.0, repeat_penalty=1.1):
+        ...     print(llama.detokenize([token]))
+
+        Args:
+            tokens: The prompt tokens.
+            top_k: The top-k sampling parameter.
+            top_p: The top-p sampling parameter.
+            temp: The temperature parameter.
+            repeat_penalty: The repeat penalty parameter.
+
+        Yields:
+            The generated tokens.
+        """
         # Temporary workaround for https://github.com/ggerganov/llama.cpp/issues/684
         if temp == 0.0:
             temp = 1.0
