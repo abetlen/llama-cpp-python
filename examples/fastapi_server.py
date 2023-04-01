@@ -94,6 +94,4 @@ CreateEmbeddingResponse = create_model_from_typeddict(llama_cpp.Embedding)
     response_model=CreateEmbeddingResponse,
 )
 def create_embedding(request: CreateEmbeddingRequest):
-    # print(request)
-    # return llama.create_embedding(**request.dict(exclude={"model", "user"}))
     return llama.create_embedding(request.input)
