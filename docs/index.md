@@ -64,10 +64,11 @@ python3 setup.py develop
     options:
         members:
             - __init__
-            - __call__
-            - embed
             - tokenize
             - detokenize
+            - create_embedding
+            - create_completion
+            - __call__
         show_root_heading: true
 
 ::: llama_cpp.llama_cpp
