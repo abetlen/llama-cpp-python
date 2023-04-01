@@ -127,10 +127,11 @@ class Llama:
     ]:
         """Generate tokens.
 
-        >>> llama = Llama("models/117M")
-        >>> tokens = llama.tokenize(b"Hello, world!")
-        >>> for token in llama.generate(tokens, top_k=40, top_p=0.95, temp=1.0, repeat_penalty=1.1):
-        ...     print(llama.detokenize([token]))
+        Examples:
+            >>> llama = Llama("models/ggml-7b.bin")
+            >>> tokens = llama.tokenize(b"Hello, world!")
+            >>> for token in llama.generate(tokens, top_k=40, top_p=0.95, temp=1.0, repeat_penalty=1.1):
+            ...     print(llama.detokenize([token]))
 
         Args:
             tokens: The prompt tokens.
