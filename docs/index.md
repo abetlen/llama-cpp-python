@@ -66,6 +66,9 @@ python3 setup.py develop
             - __init__
             - tokenize
             - detokenize
+            - reset
+            - eval
+            - sample
             - generate
             - create_embedding
             - create_completion
