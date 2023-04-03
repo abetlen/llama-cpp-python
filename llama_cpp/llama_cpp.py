@@ -5,7 +5,7 @@ from ctypes import c_int, c_float, c_char_p, c_void_p, c_bool, POINTER, Structur
 import pathlib
 
 # Load the library
-def load_shared_library(lib_base_name):
+def _load_shared_library(lib_base_name):
     # Determine the file extension based on the platform
     if sys.platform.startswith("linux"):
         lib_ext = ".so"
@@ -40,10 +40,10 @@ def load_shared_library(lib_base_name):
     raise FileNotFoundError(f"Shared library with base name '{lib_base_name}' not found")
 
 # Specify the base name of the shared library to load
-lib_base_name = "llama"
+_lib_base_name = "llama"
 
 # Load the library
-_lib = load_shared_library(lib_base_name)
+_lib = _load_shared_library(_lib_base_name)
 
 # C types
 llama_context_p = c_void_p
