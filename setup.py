@@ -10,7 +10,7 @@ setup(
     description="A Python wrapper for llama.cpp",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    version="0.1.17",
+    version="0.1.18",
     author="Andrei Betlen",
     author_email="abetlen@gmail.com",
     license="MIT",
