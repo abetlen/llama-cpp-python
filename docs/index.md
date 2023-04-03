@@ -71,6 +71,7 @@ python3 setup.py develop
             - sample
             - generate
             - create_embedding
+            - embed
             - create_completion
             - __call__
             - token_bos
