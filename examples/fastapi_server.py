@@ -34,6 +34,7 @@ llama = llama_cpp.Llama(
     embedding=True,
     n_threads=6,
     n_batch=2048,
+    n_ctx=2048,
 )
 
 
