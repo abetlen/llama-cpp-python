@@ -1,5 +1,5 @@
-from typing import List, Optional, Dict, Literal
-from typing_extensions import TypedDict
+from typing import List, Optional, Dict, Literal, Union
+from typing_extensions import TypedDict, NotRequired
 
 
 class EmbeddingUsage(TypedDict):
@@ -55,3 +55,43 @@ class Completion(TypedDict):
     model: str
     choices: List[CompletionChoice]
     usage: CompletionUsage
+
+
+class ChatCompletionMessage(TypedDict):
+    role: Union[Literal["assistant"], Literal["user"], Literal["system"]]
+    content: str
+    user: NotRequired[str]
+
+
+class ChatCompletionChoice(TypedDict):
+    index: int
+    message: ChatCompletionMessage
+    finish_reason: Optional[str]
+
+
+class ChatCompletion(TypedDict):
+    id: str
+    object: Literal["chat.completion"]
+    created: int
+    model: str
+    choices: List[ChatCompletionChoice]
+    usage: CompletionUsage
+
+
+class ChatCompletionChunkDelta(TypedDict):
+    role: NotRequired[Literal["assistant"]]
+    content: NotRequired[str]
+
+
+class ChatCompletionChunkChoice(TypedDict):
+    index: int
+    delta: ChatCompletionChunkDelta
+    finish_reason: Optional[str]
+
+
+class ChatCompletionChunk(TypedDict):
+    id: str
+    model: str
+    object: Literal["chat.completion.chunk"]
+    created: int
+    choices: List[ChatCompletionChunkChoice]

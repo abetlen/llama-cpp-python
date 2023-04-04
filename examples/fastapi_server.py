@@ -1,7 +1,18 @@
 """Example FastAPI server for llama.cpp.
+
+To run this example:
+
+```bash
+pip install fastapi uvicorn sse-starlette
+export MODEL=../models/7B/...
+uvicorn fastapi_server_chat:app --reload
+```
+
+Then visit http://localhost:8000/docs to see the interactive API docs.
+
 """
 import json
-from typing import List, Optional, Iterator
+from typing import List, Optional, Literal, Union, Iterator
 
 import llama_cpp
 
@@ -95,4 +106,67 @@ CreateEmbeddingResponse = create_model_from_typeddict(llama_cpp.Embedding)
     response_model=CreateEmbeddingResponse,
 )
 def create_embedding(request: CreateEmbeddingRequest):
-    return llama.create_embedding(request.input)
+    return llama.create_embedding(**request.dict(exclude={"model", "user"}))
+
+
+class ChatCompletionRequestMessage(BaseModel):
+    role: Union[Literal["system"], Literal["user"], Literal["assistant"]]
+    content: str
+    user: Optional[str] = None
+
+
+class CreateChatCompletionRequest(BaseModel):
+    model: Optional[str]
+    messages: List[ChatCompletionRequestMessage]
+    temperature: float = 0.8
+    top_p: float = 0.95
+    stream: bool = False
+    stop: List[str] = []
+    max_tokens: int = 128
+    repeat_penalty: float = 1.1
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "messages": [
+                    ChatCompletionRequestMessage(
+                        role="system", content="You are a helpful assistant."
+                    ),
+                    ChatCompletionRequestMessage(
+                        role="user", content="What is the capital of France?"
+                    ),
+                ]
+            }
+        }
+
+
+CreateChatCompletionResponse = create_model_from_typeddict(llama_cpp.ChatCompletion)
+
+
+@app.post(
+    "/v1/chat/completions",
+    response_model=CreateChatCompletionResponse,
+)
+async def create_chat_completion(
+    request: CreateChatCompletionRequest,
+) -> Union[llama_cpp.ChatCompletion, EventSourceResponse]:
+    completion_or_chunks = llama.create_chat_completion(
+        **request.dict(exclude={"model"}),
+    )
+
+    if request.stream:
+
+        async def server_sent_events(
+            chat_chunks: Iterator[llama_cpp.ChatCompletionChunk],
+        ):
+            for chat_chunk in chat_chunks:
+                yield dict(data=json.dumps(chat_chunk))
+            yield dict(data="[DONE]")
+
+        chunks: Iterator[llama_cpp.ChatCompletionChunk] = completion_or_chunks  # type: ignore
+
+        return EventSourceResponse(
+            server_sent_events(chunks),
+        )
+    completion: llama_cpp.ChatCompletion = completion_or_chunks  # type: ignore
+    return completion
