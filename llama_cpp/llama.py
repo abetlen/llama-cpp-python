@@ -480,7 +480,7 @@ class Llama:
         repeat_penalty: float = 1.1,
         top_k: int = 40,
         stream: bool = False,
-    ):
+    ) -> Union[Completion, Iterator[CompletionChunk]]:
         """Generate text from a prompt.
 
         Args:
