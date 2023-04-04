@@ -70,7 +70,7 @@ python3 setup.py develop
 
 # How does this compare to other Python bindings of `llama.cpp`?
 
-I wrote this package for my own use, I had two goals in mind:
+I originally wrote this package for my own use with two goals in mind:
 
 - Provide a simple process to install `llama.cpp` and access the full C API in `llama.h` from Python
 - Provide a high-level Python API that can be used as a drop-in replacement for the OpenAI API so existing apps can be easily ported to use `llama.cpp`
