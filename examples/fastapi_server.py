@@ -11,6 +11,7 @@ uvicorn fastapi_server_chat:app --reload
 Then visit http://localhost:8000/docs to see the interactive API docs.
 
 """
+import os
 import json
 from typing import List, Optional, Literal, Union, Iterator
 
@@ -24,6 +25,13 @@ from sse_starlette.sse import EventSourceResponse
 
 class Settings(BaseSettings):
     model: str
+    n_ctx: int = 2048
+    n_batch: int = 2048
+    n_threads: int = os.cpu_count() or 1
+    f16_kv: bool = True
+    use_mlock: bool = True
+    embedding: bool = True
+    last_n_tokens_size: int = 64
 
 
 app = FastAPI(
@@ -40,12 +48,13 @@ app.add_middleware(
 settings = Settings()
 llama = llama_cpp.Llama(
     settings.model,
-    f16_kv=True,
-    use_mlock=True,
-    embedding=True,
-    n_threads=6,
-    n_batch=2048,
-    n_ctx=2048,
+    f16_kv=settings.f16_kv,
+    use_mlock=settings.use_mlock,
+    embedding=settings.embedding,
+    n_threads=settings.n_threads,
+    n_batch=settings.n_batch,
+    n_ctx=settings.n_ctx,
+    last_n_tokens_size=settings.last_n_tokens_size,
 )
 
 
