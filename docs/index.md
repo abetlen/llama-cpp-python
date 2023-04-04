@@ -74,6 +74,7 @@ python3 setup.py develop
             - embed
             - create_completion
             - __call__
+            - create_chat_completion
             - token_bos
             - token_eos
         show_root_heading: true
