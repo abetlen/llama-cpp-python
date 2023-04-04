@@ -586,6 +586,21 @@ class Llama:
         max_tokens: int = 128,
         repeat_penalty: float = 1.1,
     ) -> Union[ChatCompletion, Iterator[ChatCompletionChunk]]:
+        """Generate a chat completion from a list of messages.
+
+        Args:
+            messages: A list of messages to generate a response for.
+            temperature: The temperature to use for sampling.
+            top_p: The top-p value to use for sampling.
+            top_k: The top-k value to use for sampling.
+            stream: Whether to stream the results.
+            stop: A list of strings to stop generation when encountered.
+            max_tokens: The maximum number of tokens to generate.
+            repeat_penalty: The penalty to apply to repeated tokens.
+
+        Returns:
+            Generated chat completion or a stream of chat completion chunks.
+        """
         instructions = """Complete the following chat conversation between the user and the assistant. System messages should be strictly followed as additional instructions."""
         chat_history = "\n".join(
             f'{message["role"]} {message.get("user", "")}: {message["content"]}'
