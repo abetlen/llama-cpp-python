@@ -1,5 +1,5 @@
-from typing import List, Optional, Dict, Literal, Union
-from typing_extensions import TypedDict, NotRequired
+from typing import List, Optional, Dict, Union
+from typing_extensions import TypedDict, NotRequired, Literal
 
 
 class EmbeddingUsage(TypedDict):
