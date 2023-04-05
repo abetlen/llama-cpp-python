@@ -242,6 +242,11 @@ class Llama:
         """
         assert self.ctx is not None
 
+        if self.params.embedding == False:
+            raise RuntimeError(
+                "Llama model must be created with embedding=True to call this method"
+            )
+
         if self.verbose:
             llama_cpp.llama_reset_timings(self.ctx)
 
