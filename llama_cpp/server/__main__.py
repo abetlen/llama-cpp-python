@@ -27,7 +27,7 @@ from sse_starlette.sse import EventSourceResponse
 class Settings(BaseSettings):
     model: str
     n_ctx: int = 2048
-    n_batch: int = 2048
+    n_batch: int = 8
     n_threads: int = os.cpu_count() or 1
     f16_kv: bool = True
     use_mlock: bool = True
