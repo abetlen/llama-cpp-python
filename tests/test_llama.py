@@ -77,3 +77,20 @@ def test_llama_patch(monkeypatch):
     chunks = llama.create_completion(text, max_tokens=2, stream=True)
     assert "".join(chunk["choices"][0]["text"] for chunk in chunks) == " j"
     assert completion["choices"][0]["finish_reason"] == "length"
+
+
+def test_llama_pickle():
+    import pickle
+    import tempfile
+    fp = tempfile.TemporaryFile()
+    llama = llama_cpp.Llama(model_path=MODEL, vocab_only=True)
+    pickle.dump(llama, fp)
+    fp.seek(0)
+    llama = pickle.load(fp)
+
+    assert llama
+    assert llama.ctx is not None
+
+    text = b"Hello World"
+
+    assert llama.detokenize(llama.tokenize(text)) == text
