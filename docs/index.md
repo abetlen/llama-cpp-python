@@ -1,5 +1,9 @@
-# 🦙 Python Bindings for `llama.cpp`
+# Getting Started
 
+## 🦙 Python Bindings for `llama.cpp`
+
+[![Documentation](https://img.shields.io/badge/docs-passing-green.svg)](https://abetlen.github.io/llama-cpp-python)
+[![Tests](https://github.com/abetlen/llama-cpp-python/actions/workflows/test.yaml/badge.svg?branch=main)](https://github.com/abetlen/llama-cpp-python/actions/workflows/test.yaml)
 [![PyPI](https://img.shields.io/pypi/v/llama-cpp-python)](https://pypi.org/project/llama-cpp-python/)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/llama-cpp-python)](https://pypi.org/project/llama-cpp-python/)
 [![PyPI - License](https://img.shields.io/pypi/l/llama-cpp-python)](https://pypi.org/project/llama-cpp-python/)
@@ -21,7 +25,7 @@ Install from PyPI:
 pip install llama-cpp-python
 ```
 
-## Usage
+## High-level API
 
 ```python
 >>> from llama_cpp import Llama
@@ -49,7 +53,32 @@ pip install llama-cpp-python
 }
 ```
 
+## Web Server
+
+`llama-cpp-python` offers a web server which aims to act as a drop-in replacement for the OpenAI API.
+This allows you to use llama.cpp compatible models with any OpenAI compatible client (language libraries, services, etc).
+
+To install the server package and get started:
+
+```bash
+pip install llama-cpp-python[server]
+export MODEL=./models/7B
+python3 -m llama_cpp.server
+```
+
+Navigate to [http://localhost:8000/docs](http://localhost:8000/docs) to see the OpenAPI documentation.
+
+## Low-level API
+
+The low-level API is a direct `ctypes` binding to the C API provided by `llama.cpp`.
+The entire API can be found in [llama_cpp/llama_cpp.py](https://github.com/abetlen/llama-cpp-python/blob/master/llama_cpp/llama_cpp.py) and should mirror [llama.h](https://github.com/ggerganov/llama.cpp/blob/master/llama.h).
+
+
 ## Development
+
+This package is under active development and I welcome any contributions.
+
+To get started, clone the repository and install the package in development mode:
 
 ```bash
 git clone git@github.com:abetlen/llama-cpp-python.git
