@@ -14,10 +14,15 @@ setup(
     author="Andrei Betlen",
     author_email="abetlen@gmail.com",
     license="MIT",
-    packages=["llama_cpp"],
+    package_dir={"llama_cpp": "llama_cpp", "llama_cpp.server": "llama_cpp/server"},
+    packages=["llama_cpp", "llama_cpp.server"],
+    entry_points={"console_scripts": ["llama_cpp.server=llama_cpp.server:main"]},
     install_requires=[
         "typing-extensions>=4.5.0",
     ],
+    extras_require={
+        "server": ["uvicorn>=0.21.1", "fastapi>=0.95.0", "sse-starlette>=1.3.3"],
+    },
     python_requires=">=3.7",
     classifiers=[
         "Programming Language :: Python :: 3",
