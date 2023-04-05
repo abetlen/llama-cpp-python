@@ -1,8 +1,9 @@
 import os
+import sys
 import uuid
 import time
 import multiprocessing
-from typing import List, Optional, Union, Generator, Sequence
+from typing import List, Optional, Union, Generator, Sequence, Iterator
 from collections import deque
 
 from . import llama_cpp
@@ -27,6 +28,7 @@ class Llama:
         n_threads: Optional[int] = None,
         n_batch: int = 8,
         last_n_tokens_size: int = 64,
+        verbose: bool = True,
     ):
         """Load a llama.cpp model from `model_path`.
 
@@ -43,6 +45,7 @@ class Llama:
             n_threads: Number of threads to use. If None, the number of threads is automatically determined.
             n_batch: Maximum number of prompt tokens to batch together when calling llama_eval.
             last_n_tokens_size: Maximum number of tokens to keep in the last_n_tokens deque.
+            verbose: Print verbose output to stderr.
 
         Raises:
             ValueError: If the model path does not exist.
@@ -50,6 +53,7 @@ class Llama:
         Returns:
             A Llama instance.
         """
+        self.verbose = verbose
         self.model_path = model_path
 
         self.params = llama_cpp.llama_context_default_params()
@@ -68,7 +72,7 @@ class Llama:
             maxlen=self.last_n_tokens_size,
         )
         self.tokens_consumed = 0
-        self.n_batch = n_batch
+        self.n_batch = min(n_ctx, n_batch)
 
         self.n_threads = n_threads or multiprocessing.cpu_count()
 
@@ -78,6 +82,9 @@ class Llama:
         self.ctx = llama_cpp.llama_init_from_file(
             self.model_path.encode("utf-8"), self.params
         )
+
+        if self.verbose:
+            print(llama_cpp.llama_print_system_info().decode("utf-8"), file=sys.stderr)
 
     def tokenize(self, text: bytes) -> List[llama_cpp.llama_token]:
         """Tokenize a string.
@@ -169,11 +176,6 @@ class Llama:
             The sampled token.
         """
         assert self.ctx is not None
-        # Temporary workaround for https://github.com/ggerganov/llama.cpp/issues/684
-        if temp == 0.0:
-            temp = 1.0
-            top_p = 0.0
-            top_k = 1
         return llama_cpp.llama_sample_top_p_top_k(
             ctx=self.ctx,
             last_n_tokens_data=(llama_cpp.llama_token * self.last_n_tokens_size)(
@@ -239,6 +241,15 @@ class Llama:
             An embedding object.
         """
         assert self.ctx is not None
+
+        if self.params.embedding == False:
+            raise RuntimeError(
+                "Llama model must be created with embedding=True to call this method"
+            )
+
+        if self.verbose:
+            llama_cpp.llama_reset_timings(self.ctx)
+
         tokens = self.tokenize(input.encode("utf-8"))
         self.reset()
         self.eval(tokens)
@@ -246,6 +257,10 @@ class Llama:
         embedding = llama_cpp.llama_get_embeddings(self.ctx)[
             : llama_cpp.llama_n_embd(self.ctx)
         ]
+
+        if self.verbose:
+            llama_cpp.llama_print_timings(self.ctx)
+
         return {
             "object": "list",
             "data": [
@@ -262,6 +277,17 @@ class Llama:
             },
         }
 
+    def embed(self, input: str) -> List[float]:
+        """Embed a string.
+
+        Args:
+            input: The utf-8 encoded string to embed.
+
+        Returns:
+            A list of embeddings
+        """
+        return list(map(float, self.create_embedding(input)["data"][0]["embedding"]))
+
     def _create_completion(
         self,
         prompt: str,
@@ -275,10 +301,7 @@ class Llama:
         repeat_penalty: float = 1.1,
         top_k: int = 40,
         stream: bool = False,
-    ) -> Union[
-        Generator[Completion, None, None],
-        Generator[CompletionChunk, None, None],
-    ]:
+    ) -> Union[Iterator[Completion], Iterator[CompletionChunk],]:
         assert self.ctx is not None
         completion_id = f"cmpl-{str(uuid.uuid4())}"
         created = int(time.time())
@@ -287,6 +310,9 @@ class Llama:
         prompt_tokens = self.tokenize(b" " + prompt.encode("utf-8"))
         text = b""
         returned_characters = 0
+
+        if self.verbose:
+            llama_cpp.llama_reset_timings(self.ctx)
 
         if len(prompt_tokens) + max_tokens > int(llama_cpp.llama_n_ctx(self.ctx)):
             raise ValueError(
@@ -341,7 +367,7 @@ class Llama:
                     "model": self.model_path,
                     "choices": [
                         {
-                            "text": text[start :].decode("utf-8"),
+                            "text": text[start:].decode("utf-8"),
                             "index": 0,
                             "logprobs": None,
                             "finish_reason": None,
@@ -384,6 +410,9 @@ class Llama:
         if logprobs is not None:
             raise NotImplementedError("logprobs not implemented")
 
+        if self.verbose:
+            llama_cpp.llama_print_timings(self.ctx)
+
         yield {
             "id": completion_id,
             "object": "text_completion",
@@ -417,7 +446,7 @@ class Llama:
         repeat_penalty: float = 1.1,
         top_k: int = 40,
         stream: bool = False,
-    ) -> Union[Completion, Generator[CompletionChunk, None, None]]:
+    ) -> Union[Completion, Iterator[CompletionChunk]]:
         """Generate text from a prompt.
 
         Args:
@@ -454,7 +483,7 @@ class Llama:
             stream=stream,
         )
         if stream:
-            chunks: Generator[CompletionChunk, None, None] = completion_or_chunks
+            chunks: Iterator[CompletionChunk] = completion_or_chunks
             return chunks
         completion: Completion = next(completion_or_chunks)  # type: ignore
         return completion
@@ -472,7 +501,7 @@ class Llama:
         repeat_penalty: float = 1.1,
         top_k: int = 40,
         stream: bool = False,
-    ):
+    ) -> Union[Completion, Iterator[CompletionChunk]]:
         """Generate text from a prompt.
 
         Args:
@@ -509,10 +538,157 @@ class Llama:
             stream=stream,
         )
 
+    def _convert_text_completion_to_chat(
+        self, completion: Completion
+    ) -> ChatCompletion:
+        return {
+            "id": "chat" + completion["id"],
+            "object": "chat.completion",
+            "created": completion["created"],
+            "model": completion["model"],
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": completion["choices"][0]["text"],
+                    },
+                    "finish_reason": completion["choices"][0]["finish_reason"],
+                }
+            ],
+            "usage": completion["usage"],
+        }
+
+    def _convert_text_completion_chunks_to_chat(
+        self,
+        chunks: Iterator[CompletionChunk],
+    ) -> Iterator[ChatCompletionChunk]:
+        for i, chunk in enumerate(chunks):
+            if i == 0:
+                yield {
+                    "id": "chat" + chunk["id"],
+                    "model": chunk["model"],
+                    "created": chunk["created"],
+                    "object": "chat.completion.chunk",
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {
+                                "role": "assistant",
+                            },
+                            "finish_reason": None,
+                        }
+                    ],
+                }
+            yield {
+                "id": "chat" + chunk["id"],
+                "model": chunk["model"],
+                "created": chunk["created"],
+                "object": "chat.completion.chunk",
+                "choices": [
+                    {
+                        "index": 0,
+                        "delta": {
+                            "content": chunk["choices"][0]["text"],
+                        },
+                        "finish_reason": chunk["choices"][0]["finish_reason"],
+                    }
+                ],
+            }
+
+    def create_chat_completion(
+        self,
+        messages: List[ChatCompletionMessage],
+        temperature: float = 0.8,
+        top_p: float = 0.95,
+        top_k: int = 40,
+        stream: bool = False,
+        stop: List[str] = [],
+        max_tokens: int = 128,
+        repeat_penalty: float = 1.1,
+    ) -> Union[ChatCompletion, Iterator[ChatCompletionChunk]]:
+        """Generate a chat completion from a list of messages.
+
+        Args:
+            messages: A list of messages to generate a response for.
+            temperature: The temperature to use for sampling.
+            top_p: The top-p value to use for sampling.
+            top_k: The top-k value to use for sampling.
+            stream: Whether to stream the results.
+            stop: A list of strings to stop generation when encountered.
+            max_tokens: The maximum number of tokens to generate.
+            repeat_penalty: The penalty to apply to repeated tokens.
+
+        Returns:
+            Generated chat completion or a stream of chat completion chunks.
+        """
+        instructions = """Complete the following chat conversation between the user and the assistant. System messages should be strictly followed as additional instructions."""
+        chat_history = "\n".join(
+            f'{message["role"]} {message.get("user", "")}: {message["content"]}'
+            for message in messages
+        )
+        PROMPT = f" \n\n### Instructions:{instructions}\n\n### Inputs:{chat_history}\n\n### Response:\nassistant: "
+        PROMPT_STOP = ["###", "\nuser: ", "\nassistant: ", "\nsystem: "]
+        completion_or_chunks = self(
+            prompt=PROMPT,
+            stop=PROMPT_STOP + stop,
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            stream=stream,
+            max_tokens=max_tokens,
+            repeat_penalty=repeat_penalty,
+        )
+        if stream:
+            chunks: Iterator[CompletionChunk] = completion_or_chunks  # type: ignore
+            return self._convert_text_completion_chunks_to_chat(chunks)
+        else:
+            completion: Completion = completion_or_chunks  # type: ignore
+            return self._convert_text_completion_to_chat(completion)
+
     def __del__(self):
         if self.ctx is not None:
             llama_cpp.llama_free(self.ctx)
             self.ctx = None
+
+    def __getstate__(self):
+        return dict(
+            verbose=self.verbose,
+            model_path=self.model_path,
+            n_ctx=self.params.n_ctx,
+            n_parts=self.params.n_parts,
+            seed=self.params.seed,
+            f16_kv=self.params.f16_kv,
+            logits_all=self.params.logits_all,
+            vocab_only=self.params.vocab_only,
+            use_mlock=self.params.use_mlock,
+            embedding=self.params.embedding,
+            last_n_tokens_size=self.last_n_tokens_size,
+            last_n_tokens_data=self.last_n_tokens_data,
+            tokens_consumed=self.tokens_consumed,
+            n_batch=self.n_batch,
+            n_threads=self.n_threads,
+        )
+
+    def __setstate__(self, state):
+        self.__init__(
+            model_path=state["model_path"],
+            n_ctx=state["n_ctx"],
+            n_parts=state["n_parts"],
+            seed=state["seed"],
+            f16_kv=state["f16_kv"],
+            logits_all=state["logits_all"],
+            vocab_only=state["vocab_only"],
+            use_mlock=state["use_mlock"],
+            embedding=state["embedding"],
+            n_threads=state["n_threads"],
+            n_batch=state["n_batch"],
+            last_n_tokens_size=state["last_n_tokens_size"],
+            verbose=state["verbose"],
+        )
+        self.last_n_tokens_data=state["last_n_tokens_data"]
+        self.tokens_consumed=state["tokens_consumed"]
+
 
     @staticmethod
     def token_eos() -> llama_cpp.llama_token:

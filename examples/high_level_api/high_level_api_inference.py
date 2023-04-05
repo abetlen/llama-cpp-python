@@ -11,7 +11,7 @@ llm = Llama(model_path=args.model)
 
 output = llm(
     "Question: What are the names of the planets in the solar system? Answer: ",
-    max_tokens=1,
+    max_tokens=48,
     stop=["Q:", "\n"],
     echo=True,
 )

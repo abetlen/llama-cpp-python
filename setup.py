@@ -10,7 +10,7 @@ setup(
     description="A Python wrapper for llama.cpp",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    version="0.1.17",
+    version="0.1.22",
     author="Andrei Betlen",
     author_email="abetlen@gmail.com",
     license="MIT",
@@ -19,4 +19,12 @@ setup(
         "typing-extensions>=4.5.0",
     ],
     python_requires=">=3.7",
+    classifiers=[
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+    ],
 )

@@ -1,6 +1,7 @@
 # 🦙 Python Bindings for `llama.cpp`
 
 [![Documentation](https://img.shields.io/badge/docs-passing-green.svg)](https://abetlen.github.io/llama-cpp-python)
+[![Tests](https://github.com/abetlen/llama-cpp-python/actions/workflows/test.yaml/badge.svg?branch=main)](https://github.com/abetlen/llama-cpp-python/actions/workflows/test.yaml)
 [![PyPI](https://img.shields.io/pypi/v/llama-cpp-python)](https://pypi.org/project/llama-cpp-python/)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/llama-cpp-python)](https://pypi.org/project/llama-cpp-python/)
 [![PyPI - License](https://img.shields.io/pypi/l/llama-cpp-python)](https://pypi.org/project/llama-cpp-python/)
@@ -70,7 +71,7 @@ python3 setup.py develop
 
 # How does this compare to other Python bindings of `llama.cpp`?
 
-I wrote this package for my own use, I had two goals in mind:
+I originally wrote this package for my own use with two goals in mind:
 
 - Provide a simple process to install `llama.cpp` and access the full C API in `llama.h` from Python
 - Provide a high-level Python API that can be used as a drop-in replacement for the OpenAI API so existing apps can be easily ported to use `llama.cpp`
