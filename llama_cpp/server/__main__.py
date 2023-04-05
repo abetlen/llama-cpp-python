@@ -28,9 +28,9 @@ class Settings(BaseSettings):
     model: str
     n_ctx: int = 2048
     n_batch: int = 8
-    n_threads: int = os.cpu_count() or 1
+    n_threads: int = int(os.cpu_count() / 2) or 1
     f16_kv: bool = True
-    use_mlock: bool = True
+    use_mlock: bool = False     # This causes a silent failure on platforms that don't support mlock (e.g. Windows) took forever to figure out...
     embedding: bool = True
     last_n_tokens_size: int = 64
 
