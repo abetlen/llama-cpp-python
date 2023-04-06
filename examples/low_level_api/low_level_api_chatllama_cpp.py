@@ -183,7 +183,7 @@ n_keep = {self.params.n_keep}
 
 	def set_color(self, c):
 		if (self.params.use_color):
-			print(c)
+			print(c, end="")
 
 	# generate tokens
 	def generate(self):
