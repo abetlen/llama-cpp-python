@@ -599,13 +599,13 @@ class Llama:
     def create_chat_completion(
         self,
         messages: List[ChatCompletionMessage],
-        temperature: float = 0.8,
-        top_p: float = 0.95,
-        top_k: int = 40,
+        temperature: float = 0.72,
+        top_p: float = 0.73,
+        top_k: int = 0,
         stream: bool = False,
         stop: List[str] = [],
-        max_tokens: int = 128,
-        repeat_penalty: float = 1.1,
+        max_tokens: int = 256,
+        repeat_penalty: float = 1/0.85,
     ) -> Union[ChatCompletion, Iterator[ChatCompletionChunk]]:
         """Generate a chat completion from a list of messages.
 
@@ -627,7 +627,7 @@ class Llama:
             f'{message["role"]} {message.get("user", "")}: {message["content"]}'
             for message in messages
         )
-        PROMPT = f" \n\n### Instructions:{instructions}\n\n### Inputs:{chat_history}\n\n### Response:\nassistant: "
+        PROMPT = f"### Instructions:\n{instructions}\n\n{chat_history}\n\n### Response:\nassistant:"
         PROMPT_STOP = ["###", "\nuser: ", "\nassistant: ", "\nsystem: "]
         completion_or_chunks = self(
             prompt=PROMPT,
