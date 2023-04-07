@@ -19,6 +19,7 @@ setup(
     entry_points={"console_scripts": ["llama_cpp.server=llama_cpp.server:main"]},
     install_requires=[
         "typing-extensions>=4.5.0",
+        "pydantic==1.10.7",
     ],
     extras_require={
         "server": ["uvicorn>=0.21.1", "fastapi>=0.95.0", "sse-starlette>=1.3.3"],
