@@ -16,7 +16,6 @@ setup(
     license="MIT",
     package_dir={"llama_cpp": "llama_cpp", "llama_cpp.server": "llama_cpp/server"},
     packages=["llama_cpp", "llama_cpp.server"],
-    entry_points={"console_scripts": ["llama_cpp.server=llama_cpp.server:main"]},
     install_requires=[
         "typing-extensions>=4.5.0",
         "pydantic==1.10.7",
