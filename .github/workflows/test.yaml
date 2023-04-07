@@ -52,7 +52,7 @@ jobs:
         run: |
           pytest
 
-  build-linux:
+  build-macos:
 
     runs-on: macos-latest
     strategy:
