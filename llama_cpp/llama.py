@@ -686,8 +686,8 @@ class Llama:
             last_n_tokens_size=state["last_n_tokens_size"],
             verbose=state["verbose"],
         )
-        self.last_n_tokens_data=state["last_n_tokens_data"]
-        self.tokens_consumed=state["tokens_consumed"]
+        self.last_n_tokens_data = state["last_n_tokens_data"]
+        self.tokens_consumed = state["tokens_consumed"]
 
 
     @staticmethod
