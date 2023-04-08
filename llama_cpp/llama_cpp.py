@@ -10,7 +10,7 @@ def _load_shared_library(lib_base_name):
     if sys.platform.startswith("linux"):
         lib_ext = ".so"
     elif sys.platform == "darwin":
-        lib_ext = ".dylib"
+        lib_ext = ".so"
     elif sys.platform == "win32":
         lib_ext = ".dll"
     else:
