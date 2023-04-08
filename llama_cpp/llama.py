@@ -74,7 +74,7 @@ class Llama:
         self.tokens_consumed = 0
         self.n_batch = min(n_ctx, n_batch)
 
-        self.n_threads = n_threads or multiprocessing.cpu_count()
+        self.n_threads = n_threads or max(multiprocessing.cpu_count() // 2, 1)
 
         if not os.path.exists(model_path):
             raise ValueError(f"Model path does not exist: {model_path}")
