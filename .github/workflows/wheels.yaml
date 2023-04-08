@@ -1,9 +1,9 @@
 name: Build
 
-on:
-  push:
-    branches:
-      - main
+on: workflow_dispatch
+  # push:
+  #   branches:
+  #     - main
 
 jobs:
   build_wheels:
