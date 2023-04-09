@@ -360,6 +360,16 @@ class Llama:
                             break
                 text = all_text[: len(all_text) - longest]
                 returned_characters += len(text[start:])
+                _text = ''
+                try:
+                    _text = text[start:].decode("utf-8")
+                except UnicodeDecodeError:
+                    for i in range(1,4):
+                        try:
+                            _text = text[start:-i].decode("utf-8")
+                            break
+                        except UnicodeDecodeError:
+                            continue
                 yield {
                     "id": completion_id,
                     "object": "text_completion",
@@ -367,7 +377,7 @@ class Llama:
                     "model": self.model_path,
                     "choices": [
                         {
-                            "text": text[start:].decode("utf-8"),
+                            "text": _text,
                             "index": 0,
                             "logprobs": None,
                             "finish_reason": None,
