@@ -9,6 +9,8 @@ jobs:
   build_wheels:
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    env:
+      CIBW_BUILD: cp310-*
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macOS-latest]
