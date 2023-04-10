@@ -4,7 +4,7 @@ To run this example:
 
 ```bash
 pip install fastapi uvicorn sse-starlette
-export MODEL=../models/7B/...
+export MODEL=../models/7B/ggml-model.bin
 uvicorn fastapi_server_chat:app --reload
 ```
 
