@@ -1,0 +1,31 @@
+name: Publish to PyPI
+
+# Based on: https://packaging.python.org/en/latest/guides/publishing-package-distribution-releases-using-github-actions-ci-cd-workflows/
+
+on: workflow_dispatch
+
+jobs:
+  build-n-publish:
+    name: Build and publish
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: "true"
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.8"
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip pytest cmake scikit-build setuptools
+    - name: Build source distribution
+      run: |
+        python setup.py sdist
+    - name: Publish distribution to PyPI
+      # TODO: move to tag based releases
+      # if: startsWith(github.ref, 'refs/tags')
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        password: ${{ secrets.PYPI_API_TOKEN }}

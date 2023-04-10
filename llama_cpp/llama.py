@@ -23,6 +23,7 @@ class Llama:
         f16_kv: bool = False,
         logits_all: bool = False,
         vocab_only: bool = False,
+        use_mmap: bool = True,
         use_mlock: bool = False,
         embedding: bool = False,
         n_threads: Optional[int] = None,
@@ -40,6 +41,7 @@ class Llama:
             f16_kv: Use half-precision for key/value cache.
             logits_all: Return logits for all tokens, not just the last token.
             vocab_only: Only load the vocabulary no weights.
+            use_mmap: Use mmap if possible.
             use_mlock: Force the system to keep the model in RAM.
             embedding: Embedding mode only.
             n_threads: Number of threads to use. If None, the number of threads is automatically determined.
@@ -63,6 +65,7 @@ class Llama:
         self.params.f16_kv = f16_kv
         self.params.logits_all = logits_all
         self.params.vocab_only = vocab_only
+        self.params.use_mmap = use_mmap
         self.params.use_mlock = use_mlock
         self.params.embedding = embedding
 
@@ -661,6 +664,7 @@ class Llama:
             f16_kv=self.params.f16_kv,
             logits_all=self.params.logits_all,
             vocab_only=self.params.vocab_only,
+            use_mmap=self.params.use_mmap,
             use_mlock=self.params.use_mlock,
             embedding=self.params.embedding,
             last_n_tokens_size=self.last_n_tokens_size,
@@ -679,6 +683,7 @@ class Llama:
             f16_kv=state["f16_kv"],
             logits_all=state["logits_all"],
             vocab_only=state["vocab_only"],
+            use_mmap=state["use_mmap"],
             use_mlock=state["use_mlock"],
             embedding=state["embedding"],
             n_threads=state["n_threads"],
