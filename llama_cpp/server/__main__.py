@@ -4,7 +4,7 @@ To run this example:
 
 ```bash
 pip install fastapi uvicorn sse-starlette
-export MODEL=../models/7B/ggml-model.bin
+export MODEL=../models/7B/...
 uvicorn fastapi_server_chat:app --reload
 ```
 
@@ -28,9 +28,9 @@ class Settings(BaseSettings):
     model: str
     n_ctx: int = 2048
     n_batch: int = 8
-    n_threads: int = int(os.cpu_count() / 2) or 1
+    n_threads: int = ((os.cpu_count() or 2) // 2) or 1
     f16_kv: bool = True
-    use_mlock: bool = False     # This causes a silent failure on platforms that don't support mlock (e.g. Windows) took forever to figure out...
+    use_mlock: bool = False  # This causes a silent failure on platforms that don't support mlock (e.g. Windows) took forever to figure out...
     embedding: bool = True
     last_n_tokens_size: int = 64
 
@@ -60,7 +60,7 @@ llama = llama_cpp.Llama(
 
 
 class CreateCompletionRequest(BaseModel):
-    prompt: str
+    prompt: Union[str, List[str]]
     suffix: Optional[str] = Field(None)
     max_tokens: int = 16
     temperature: float = 0.8
@@ -100,10 +100,10 @@ CreateCompletionResponse = create_model_from_typeddict(llama_cpp.Completion)
     response_model=CreateCompletionResponse,
 )
 def create_completion(request: CreateCompletionRequest):
-    if request.stream:
-        chunks: Iterator[llama_cpp.CompletionChunk] = llama(**request.dict())  # type: ignore
-        return EventSourceResponse(dict(data=json.dumps(chunk)) for chunk in chunks)
-    return llama(
+    if isinstance(request.prompt, list):
+        request.prompt = "".join(request.prompt)
+
+    completion_or_chunks = llama(
         **request.dict(
             exclude={
                 "model",
@@ -117,6 +117,11 @@ def create_completion(request: CreateCompletionRequest):
             }
         )
     )
+    if request.stream:
+        chunks: Iterator[llama_cpp.CompletionChunk] = completion_or_chunks  # type: ignore
+        return EventSourceResponse(dict(data=json.dumps(chunk)) for chunk in chunks)
+    completion: llama_cpp.Completion = completion_or_chunks  # type: ignore
+    return completion
 
 
 class CreateEmbeddingRequest(BaseModel):
@@ -259,4 +264,6 @@ if __name__ == "__main__":
     import os
     import uvicorn
 
-    uvicorn.run(app, host=os.getenv("HOST", "localhost"), port=os.getenv("PORT", 8000))
+    uvicorn.run(
+        app, host=os.getenv("HOST", "localhost"), port=int(os.getenv("PORT", 8000))
+    )

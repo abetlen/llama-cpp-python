@@ -15,7 +15,7 @@ This package provides:
   - OpenAI-like API
   - LangChain compatibility
 
-# Installation
+## Installation
 
 Install from PyPI:
 
@@ -23,18 +23,18 @@ Install from PyPI:
 pip install llama-cpp-python
 ```
 
-# Usage
+## High-level API
 
 ```python
 >>> from llama_cpp import Llama
->>> llm = Llama(model_path="models/7B/...")
+>>> llm = Llama(model_path="./models/7B/ggml-model.bin")
 >>> output = llm("Q: Name the planets in the solar system? A: ", max_tokens=32, stop=["Q:", "\n"], echo=True)
 >>> print(output)
 {
   "id": "cmpl-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
   "object": "text_completion",
   "created": 1679561337,
-  "model": "models/7B/...",
+  "model": "./models/7B/ggml-model.bin",
   "choices": [
     {
       "text": "Q: Name the planets in the solar system? A: Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, Neptune and Pluto.",
@@ -50,6 +50,27 @@ pip install llama-cpp-python
   }
 }
 ```
+
+## Web Server
+
+`llama-cpp-python` offers a web server which aims to act as a drop-in replacement for the OpenAI API.
+This allows you to use llama.cpp compatible models with any OpenAI compatible client (language libraries, services, etc).
+
+To install the server package and get started:
+
+```bash
+pip install llama-cpp-python[server]
+export MODEL=./models/7B/ggml-model.bin
+python3 -m llama_cpp.server
+```
+
+Navigate to [http://localhost:8000/docs](http://localhost:8000/docs) to see the OpenAPI documentation.
+
+## Low-level API
+
+The low-level API is a direct `ctypes` binding to the C API provided by `llama.cpp`.
+The entire API can be found in [llama_cpp/llama_cpp.py](https://github.com/abetlen/llama-cpp-python/blob/master/llama_cpp/llama_cpp.py) and should mirror [llama.h](https://github.com/ggerganov/llama.cpp/blob/master/llama.h).
+
 
 # Documentation
 
