@@ -25,8 +25,8 @@ def _load_shared_library(lib_base_name):
         _base_path / f"{lib_base_name}{lib_ext}"
     ]
 
-    if ("LLAMA_LIB" in os.environ):
-        lib_base_name = os.environ["LLAMA_LIB"]
+    if ("LLAMA_CPP_LIB" in os.environ):
+        lib_base_name = os.environ["LLAMA_CPP_LIB"]
         _lib = pathlib.Path(lib_base_name)
         _base_path = _lib.parent.resolve()
         _lib_paths = [_lib.resolve()]
