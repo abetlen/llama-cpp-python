@@ -196,7 +196,7 @@ CreateChatCompletionResponse = create_model_from_typeddict(llama_cpp.ChatComplet
     "/v1/chat/completions",
     response_model=CreateChatCompletionResponse,
 )
-async def create_chat_completion(
+def create_chat_completion(
     request: CreateChatCompletionRequest,
 ) -> Union[llama_cpp.ChatCompletion, EventSourceResponse]:
     completion_or_chunks = llama.create_chat_completion(
