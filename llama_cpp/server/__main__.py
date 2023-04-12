@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     use_mlock: bool = False  # This causes a silent failure on platforms that don't support mlock (e.g. Windows) took forever to figure out...
     embedding: bool = True
     last_n_tokens_size: int = 64
+    logits_all: bool = False
 
 
 app = FastAPI(
@@ -52,6 +53,7 @@ llama = llama_cpp.Llama(
     f16_kv=settings.f16_kv,
     use_mlock=settings.use_mlock,
     embedding=settings.embedding,
+    logits_all=settings.logits_all,
     n_threads=settings.n_threads,
     n_batch=settings.n_batch,
     n_ctx=settings.n_ctx,
