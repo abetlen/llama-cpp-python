@@ -330,7 +330,7 @@ class Llama:
         repeat_penalty: float = 1.1,
         top_k: int = 40,
         stream: bool = False,
-    ) -> Union[Iterator[Completion], Iterator[CompletionChunk],]:
+    ) -> Union[Iterator[Completion], Iterator[CompletionChunk]]:
         assert self.ctx is not None
         completion_id = f"cmpl-{str(uuid.uuid4())}"
         created = int(time.time())
