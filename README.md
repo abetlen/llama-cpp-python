@@ -71,7 +71,7 @@ Navigate to [http://localhost:8000/docs](http://localhost:8000/docs) to see the 
 A Docker image is available on [GHCR](https://ghcr.io/abetlen/llama-cpp-python). To run the server:
 
 ```bash
-docker run --rm -it -p8000:8000 -v /path/to/models:/models -eMODEL=/models/ggml-vicuna-7b-4bit.bin ghcr.io/abetlen/llama-cpp-python:latest
+docker run --rm -it -p8000:8000 -v /path/to/models:/models -eMODEL=/models/ggml-model-name.bin ghcr.io/abetlen/llama-cpp-python:latest
 ```
 
 ## Low-level API
