@@ -118,7 +118,6 @@ def create_completion(request: CreateCompletionRequest, llama: llama_cpp.Llama=D
             exclude={
                 "model",
                 "n",
-                "logprobs",
                 "frequency_penalty",
                 "presence_penalty",
                 "best_of",
