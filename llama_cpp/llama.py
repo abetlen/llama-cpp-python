@@ -763,8 +763,6 @@ class Llama:
             use_mlock=self.params.use_mlock,
             embedding=self.params.embedding,
             last_n_tokens_size=self.last_n_tokens_size,
-            last_n_tokens_data=self.last_n_tokens_data,
-            tokens_consumed=self.tokens_consumed,
             n_batch=self.n_batch,
             n_threads=self.n_threads,
         )
@@ -786,9 +784,6 @@ class Llama:
             last_n_tokens_size=state["last_n_tokens_size"],
             verbose=state["verbose"],
         )
-        self.last_n_tokens_data = state["last_n_tokens_data"]
-        self.tokens_consumed = state["tokens_consumed"]
-
 
     @staticmethod
     def token_eos() -> llama_cpp.llama_token:
