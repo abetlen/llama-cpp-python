@@ -109,7 +109,9 @@ CreateCompletionResponse = create_model_from_typeddict(llama_cpp.Completion)
     "/v1/completions",
     response_model=CreateCompletionResponse,
 )
-def create_completion(request: CreateCompletionRequest, llama: llama_cpp.Llama=Depends(get_llama)):
+def create_completion(
+    request: CreateCompletionRequest, llama: llama_cpp.Llama = Depends(get_llama)
+):
     if isinstance(request.prompt, list):
         request.prompt = "".join(request.prompt)
 
@@ -153,7 +155,9 @@ CreateEmbeddingResponse = create_model_from_typeddict(llama_cpp.Embedding)
     "/v1/embeddings",
     response_model=CreateEmbeddingResponse,
 )
-def create_embedding(request: CreateEmbeddingRequest, llama: llama_cpp.Llama=Depends(get_llama)):
+def create_embedding(
+    request: CreateEmbeddingRequest, llama: llama_cpp.Llama = Depends(get_llama)
+):
     return llama.create_embedding(**request.dict(exclude={"model", "user"}))
 
 
@@ -207,7 +211,7 @@ CreateChatCompletionResponse = create_model_from_typeddict(llama_cpp.ChatComplet
 )
 def create_chat_completion(
     request: CreateChatCompletionRequest,
-    llama: llama_cpp.Llama=Depends(get_llama),
+    llama: llama_cpp.Llama = Depends(get_llama),
 ) -> Union[llama_cpp.ChatCompletion, EventSourceResponse]:
     completion_or_chunks = llama.create_chat_completion(
         **request.dict(
