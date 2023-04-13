@@ -1,7 +1,7 @@
 import os
-import telethon
+# import telethon
 import logging
-from telethon import TelegramClient, events, types
+from telethon import TelegramClient, events #, types
 import requests
 
 # Set up logging
@@ -32,7 +32,9 @@ def get_weather(city, api_key):
     else:
         print("City not found")
         
-model = "7B"
+model = "Alpacabot 30B"
+LLAMA_HOST=os.environ.get("LLAMA_HOST")
+api_url = f'http://{LLAMA_HOST}:8000/v1/chat/completions'
 
 # Read the Telegram API credentials from environment variables
 API_ID = int(os.environ.get("API_ID"))
@@ -56,22 +58,29 @@ async def beth(event):
         # Check if message count has reached limit
         if message_count >= 1000:
             # Send "tired" message and return
-            await client.send_message(event.chat_id, "I'm tired, I can't answer any more messages.")
+            await client.send_message(event.chat_id, "I'm hungover, I can't answer any more messages.")
             return
 
         # Get the message text
         message_text = event.message.message.replace('/beth', '').strip()
 
         # Prepare the API request
-        api_url = 'http://192.168.1.73:8000/v1/completions'
         headers = {'accept': 'application/json', 'Content-Type': 'application/json'}
         data = {
-            "prompt": f"\n\n### Instructions:\n{message_text}\n\n### Response:\n",
-            "stop": [
-                "\n",
-                "###"
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "You are a female grandmaster chess player who needs drugs to play well"
+                },
+                {
+                    "role": "user",
+                    "content": message_text
+                }
             ]
         }
+
+        # Log the user prompt
+        logger.info(f"User prompt: {message_text}")
 
         # Send the API request
         response = requests.post(api_url, headers=headers, json=data)
@@ -80,23 +89,28 @@ async def beth(event):
         if response.status_code == 200:
             # Parse the response and send the result to the chat
             api_result = response.json()
-            result_text = api_result['choices'][0]['text']
+            result_text = api_result['choices'][0]['message']['content'].strip()
 
             # Add a default message if the result_text is empty
-            if not result_text.strip():
-                result_text = "I'm sorry, I don't have any information to provide on this topic."
+            if not result_text:
+                result_text = "I'm sorry, it is your turn to move."
+
+            # Log the API response
+            logger.info(f"API response: {result_text}")
 
             await client.send_message(event.chat_id, result_text)
         else:
             # Send an error message if the request was not successful
-            await client.send_message(event.chat_id, "Sorry, something went wrong. Please try again later.")
-
+            await client.send_message(event.chat_id, "Sorry, I need to go to the bathroom. Back soon!")
 
     except Exception as e:
         # Handle exceptions and send an error message
         print(f"Error: {e}")
-        await client.send_message(event.chat_id, "An error occurred. Please try again later.")
+        await client.send_message(event.chat_id, "Oops. Broke the chess board.")
 
+# Start the Telegram client
+logger.info("Starting Telegram bot with LLama model: %s ", model)
+client.run_until_disconnected()
 
 # # Create an event handler for /gpt command
 # @client.on(events.NewMessage(pattern='/gpt'))
@@ -170,6 +184,3 @@ async def beth(event):
 #         logger.error("Unexpected error: %s", str(e))
 
 
-# Start the Telegram client
-logger.info("Starting Telegram bot with LLama model: %s ", model)
-client.run_until_disconnected()
