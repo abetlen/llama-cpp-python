@@ -5,7 +5,7 @@ from telethon import TelegramClient, events #, types
 import requests
 
 # Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 
@@ -62,25 +62,34 @@ async def beth(event):
             return
 
         # Get the message text
-        message_text = event.message.message.replace('/beth', '').strip()
+        message_text = event.message.message.replace('/beth ', '').strip()
+        parts = message_text.split(' ')
+        logger.debug(f"Parts: {parts}")
+        if len(parts) >= 2:
+            try:
+                temperature = float(parts[0])
+                if 0.0 <= temperature <= 2.0:
+                    message_text = message_text.replace(f"{parts[0]} ", '')
+                else:
+                    await client.send_message(event.chat_id, "Too hot for me!")
+                    return
+            except ValueError:
+                temperature = 0.7
+        else:
+            temperature = 0.7
 
         # Prepare the API request
         headers = {'accept': 'application/json', 'Content-Type': 'application/json'}
         data = {
             "messages": [
-                {
-                    "role": "system",
-                    "content": "You are a female grandmaster chess player who needs drugs to play well"
-                },
-                {
-                    "role": "user",
-                    "content": message_text
-                }
-            ]
+                {"role": "system", "content": "You are a female grandmaster chess player who needs drugs to play well"},
+                {"role": "user", "content": message_text}
+            ],
+            "temperature": temperature
         }
 
         # Log the user prompt
-        logger.info(f"User prompt: {message_text}")
+        logger.info(f"Temp: {temperature}, prompt: {message_text}")
 
         # Send the API request
         response = requests.post(api_url, headers=headers, json=data)
@@ -93,7 +102,7 @@ async def beth(event):
 
             # Add a default message if the result_text is empty
             if not result_text:
-                result_text = "I'm sorry, it is your turn to move."
+                result_text = "I'm sorry, but it is still your turn to move."
 
             # Log the API response
             logger.info(f"API response: {result_text}")
@@ -105,7 +114,7 @@ async def beth(event):
 
     except Exception as e:
         # Handle exceptions and send an error message
-        print(f"Error: {e}")
+        logger.error(f"Error: {e}")
         await client.send_message(event.chat_id, "Oops. Broke the chess board.")
 
 # Start the Telegram client
