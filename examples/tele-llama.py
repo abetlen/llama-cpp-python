@@ -1,5 +1,4 @@
 import os
-import openai
 import telethon
 import logging
 from telethon import TelegramClient, events, types
@@ -49,8 +48,8 @@ client = TelegramClient('bot', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 # Initialize global message count variable
 message_count = 0
 
-@client.on(events.NewMessage(pattern='/llama'))
-async def llama(event):
+@client.on(events.NewMessage(pattern='/beth'))
+async def beth(event):
     global message_count
 
     try:
@@ -61,7 +60,7 @@ async def llama(event):
             return
 
         # Get the message text
-        message_text = event.message.message.replace('/llama', '').strip()
+        message_text = event.message.message.replace('/beth', '').strip()
 
         # Prepare the API request
         api_url = 'http://192.168.1.73:8000/v1/completions'
