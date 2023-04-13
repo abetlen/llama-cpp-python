@@ -3,7 +3,6 @@ import sys
 import uuid
 import time
 import math
-import warnings
 import multiprocessing
 from typing import List, Optional, Union, Generator, Sequence, Iterator
 from collections import deque
@@ -240,11 +239,6 @@ class Llama:
         Yields:
             The generated tokens.
         """
-        warnings.warn(
-            "Llama.generate is deprecated and will be removed in v0.2.0",
-            DeprecationWarning,
-            stacklevel=2,
-        )
         assert self.ctx is not None
         self.reset()
         while True:
