@@ -76,7 +76,7 @@ class CreateCompletionRequest(BaseModel):
     temperature: float = 0.8
     top_p: float = 0.95
     echo: bool = False
-    stop: List[str] = []
+    stop: Optional[List[str]] = []
     stream: bool = False
 
     # ignored or currently unsupported
@@ -173,7 +173,7 @@ class CreateChatCompletionRequest(BaseModel):
     temperature: float = 0.8
     top_p: float = 0.95
     stream: bool = False
-    stop: List[str] = []
+    stop: Optional[List[str]] = []
     max_tokens: int = 128
 
     # ignored or currently unsupported
