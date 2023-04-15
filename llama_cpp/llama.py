@@ -280,6 +280,7 @@ class Llama:
             if self.verbose:
                 print("generate cache hit", file=sys.stderr)
             reset = False
+            tokens = tokens[len(self.tokens) :]
         ###
         if reset:
             self.reset()
