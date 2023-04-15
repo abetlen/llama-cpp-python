@@ -4,7 +4,7 @@ FROM python:3-buster
 ENV HOST 0.0.0.0
 
 # Install the package
-RUN pip install llama-cpp-python[server]
+RUN apt update && apt install -y libopenblas-dev && LLAMA_OPENBLAS=1 pip install llama-cpp-python[server]
 
 # Run the server
 CMD python3 -m llama_cpp.server
