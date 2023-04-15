@@ -144,7 +144,7 @@ class Llama:
         self.tokens.clear()
         self.n_tokens = 0
         self.n_past = 0
-        self.all_logits = []
+        self.all_logits.clear()
 
     def eval(self, tokens: Sequence[llama_cpp.llama_token]):
         """Evaluate a list of tokens.
