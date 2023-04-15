@@ -13,12 +13,13 @@ Then visit http://localhost:8000/docs to see the interactive API docs.
 """
 import os
 import json
+from threading import Lock
 from typing import List, Optional, Literal, Union, Iterator, Dict
 from typing_extensions import TypedDict
 
 import llama_cpp
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, BaseSettings, Field, create_model_from_typeddict
 from sse_starlette.sse import EventSourceResponse
@@ -33,6 +34,8 @@ class Settings(BaseSettings):
     use_mlock: bool = False  # This causes a silent failure on platforms that don't support mlock (e.g. Windows) took forever to figure out...
     embedding: bool = True
     last_n_tokens_size: int = 64
+    logits_all: bool = False
+    cache: bool = False  # WARNING: This is an experimental feature
 
 
 app = FastAPI(
@@ -52,11 +55,21 @@ llama = llama_cpp.Llama(
     f16_kv=settings.f16_kv,
     use_mlock=settings.use_mlock,
     embedding=settings.embedding,
+    logits_all=settings.logits_all,
     n_threads=settings.n_threads,
     n_batch=settings.n_batch,
     n_ctx=settings.n_ctx,
     last_n_tokens_size=settings.last_n_tokens_size,
 )
+if settings.cache:
+    cache = llama_cpp.LlamaCache()
+    llama.set_cache(cache)
+llama_lock = Lock()
+
+
+def get_llama():
+    with llama_lock:
+        yield llama
 
 
 class CreateCompletionRequest(BaseModel):
@@ -66,7 +79,7 @@ class CreateCompletionRequest(BaseModel):
     temperature: float = 0.8
     top_p: float = 0.95
     echo: bool = False
-    stop: List[str] = []
+    stop: Optional[List[str]] = []
     stream: bool = False
 
     # ignored or currently unsupported
@@ -99,7 +112,9 @@ CreateCompletionResponse = create_model_from_typeddict(llama_cpp.Completion)
     "/v1/completions",
     response_model=CreateCompletionResponse,
 )
-def create_completion(request: CreateCompletionRequest):
+def create_completion(
+    request: CreateCompletionRequest, llama: llama_cpp.Llama = Depends(get_llama)
+):
     if isinstance(request.prompt, list):
         request.prompt = "".join(request.prompt)
 
@@ -108,7 +123,6 @@ def create_completion(request: CreateCompletionRequest):
             exclude={
                 "model",
                 "n",
-                "logprobs",
                 "frequency_penalty",
                 "presence_penalty",
                 "best_of",
@@ -144,7 +158,9 @@ CreateEmbeddingResponse = create_model_from_typeddict(llama_cpp.Embedding)
     "/v1/embeddings",
     response_model=CreateEmbeddingResponse,
 )
-def create_embedding(request: CreateEmbeddingRequest):
+def create_embedding(
+    request: CreateEmbeddingRequest, llama: llama_cpp.Llama = Depends(get_llama)
+):
     return llama.create_embedding(**request.dict(exclude={"model", "user"}))
 
 
@@ -160,7 +176,7 @@ class CreateChatCompletionRequest(BaseModel):
     temperature: float = 0.8
     top_p: float = 0.95
     stream: bool = False
-    stop: List[str] = []
+    stop: Optional[List[str]] = []
     max_tokens: int = 128
 
     # ignored or currently unsupported
@@ -198,6 +214,7 @@ CreateChatCompletionResponse = create_model_from_typeddict(llama_cpp.ChatComplet
 )
 def create_chat_completion(
     request: CreateChatCompletionRequest,
+    llama: llama_cpp.Llama = Depends(get_llama),
 ) -> Union[llama_cpp.ChatCompletion, EventSourceResponse]:
     completion_or_chunks = llama.create_chat_completion(
         **request.dict(
