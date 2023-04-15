@@ -21,7 +21,7 @@ class Llama:
         n_ctx: int = 512,
         n_parts: int = -1,
         seed: int = 1337,
-        f16_kv: bool = False,
+        f16_kv: bool = True,
         logits_all: bool = False,
         vocab_only: bool = False,
         use_mmap: bool = True,
