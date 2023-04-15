@@ -701,7 +701,7 @@ class Llama:
             for message in messages
         )
         PROMPT = chat_history + "### Assistant:"
-        PROMPT_STOP = ["### Assistant:", "### Human:", "\n"]
+        PROMPT_STOP = ["### Assistant:", "### Human:"]
         completion_or_chunks = self(
             prompt=PROMPT,
             stop=PROMPT_STOP + stop,
