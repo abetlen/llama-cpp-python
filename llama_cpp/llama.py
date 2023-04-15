@@ -696,10 +696,12 @@ class Llama:
             Generated chat completion or a stream of chat completion chunks.
         """
         stop = stop if stop is not None else []
+        chat_history = "".join(
+            f'### {"Human" if message["role"] == "user" else "Assistant"}:{message["content"]}'
             for message in messages
         )
-        PROMPT = f" \n\n### Instructions:{instructions}\n\n### Inputs:{chat_history}\n\n### Response:\nassistant: "
-        PROMPT_STOP = ["###", "\nuser: ", "\nassistant: ", "\nsystem: "]
+        PROMPT = chat_history + "### Assistant:"
+        PROMPT_STOP = ["### Assistant:", "### Human:", "\n"]
         completion_or_chunks = self(
             prompt=PROMPT,
             stop=PROMPT_STOP + stop,
