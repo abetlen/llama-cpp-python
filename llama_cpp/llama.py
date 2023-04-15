@@ -672,12 +672,12 @@ class Llama:
     def create_chat_completion(
         self,
         messages: List[ChatCompletionMessage],
-        temperature: float = 0.8,
+        temperature: float = 0.2,
         top_p: float = 0.95,
         top_k: int = 40,
         stream: bool = False,
         stop: Optional[List[str]] = [],
-        max_tokens: int = 128,
+        max_tokens: int = 256,
         repeat_penalty: float = 1.1,
     ) -> Union[ChatCompletion, Iterator[ChatCompletionChunk]]:
         """Generate a chat completion from a list of messages.
