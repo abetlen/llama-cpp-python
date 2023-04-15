@@ -5,7 +5,7 @@ from telethon import TelegramClient, events #, types
 import requests
 
 # Set up logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 
@@ -82,7 +82,7 @@ async def beth(event):
         headers = {'accept': 'application/json', 'Content-Type': 'application/json'}
         data = {
             "messages": [
-                {"role": "system", "content": "You are a female grandmaster chess player who needs drugs to play well"},
+                {"role": "system", "content": "You are a female grandmaster chess player named Beth who needs drugs to play well"},
                 {"role": "user", "content": message_text}
             ],
             "temperature": temperature
