@@ -695,10 +695,7 @@ class Llama:
         Returns:
             Generated chat completion or a stream of chat completion chunks.
         """
-        stop = stop if not None else []
-        instructions = """Complete the following chat conversation between the user and the assistant. System messages should be strictly followed as additional instructions."""
-        chat_history = "\n".join(
-            f'{message["role"]} {message.get("user", "")}: {message["content"]}'
+        stop = stop if stop is not None else []
             for message in messages
         )
         PROMPT = f" \n\n### Instructions:{instructions}\n\n### Inputs:{chat_history}\n\n### Response:\nassistant: "
