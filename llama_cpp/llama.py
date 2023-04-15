@@ -339,7 +339,7 @@ class Llama:
         prompt_tokens = self.tokenize(b" " + prompt.encode("utf-8"))
         text = b""
         returned_characters = 0
-        stop = stop if not None else []
+        stop = stop if stop is not None else []
 
         if self.verbose:
             llama_cpp.llama_reset_timings(self.ctx)
