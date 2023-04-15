@@ -332,13 +332,15 @@ class Llama:
         stream: bool = False,
     ) -> Union[Iterator[Completion], Iterator[CompletionChunk]]:
         assert self.ctx is not None
-        completion_id = f"cmpl-{str(uuid.uuid4())}"
-        created = int(time.time())
+        completion_id: str = f"cmpl-{str(uuid.uuid4())}"
+        created: int = int(time.time())
         completion_tokens: List[llama_cpp.llama_token] = []
         # Add blank space to start of prompt to match OG llama tokenizer
-        prompt_tokens = self.tokenize(b" " + prompt.encode("utf-8"))
-        text = b""
-        returned_characters = 0
+        prompt_tokens: List[llama_cpp.llama_token] = self.tokenize(
+            b" " + prompt.encode("utf-8")
+        )
+        text: bytes = b""
+        returned_characters: int = 0
         stop = stop if stop is not None else []
 
         if self.verbose:
