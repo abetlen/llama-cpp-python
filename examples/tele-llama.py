@@ -1,48 +1,20 @@
 import os
 import time
 import logging
-from telethon import TelegramClient, events #, types
+from telethon import TelegramClient, events
 import requests
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-
-def get_weather(city, api_key):
-    base_url = "https://api.openweathermap.org/data/2.5/weather?"
-    complete_url = f"{base_url}q={city}&appid={api_key}"
-
-    response = requests.get(complete_url)
-    weather_data = response.json()
-
-    if weather_data["cod"] != "404":
-        main_data = weather_data["main"]
-        current_temperature = main_data["temp"]
-        current_pressure = main_data["pressure"]
-        current_humidity = main_data["humidity"]
-
-        weather = weather_data["weather"]
-        weather_description = weather[0]["description"]
-
-        print(f"Temperature: {current_temperature - 273.15:.2f}°C")
-        print(f"Pressure: {current_pressure} hPa")
-        print(f"Humidity: {current_humidity}%")
-        print(f"Weather description: {weather_description}")
-    else:
-        print("City not found")
-        
 model = "Alpacabot 7B"
-LLAMA_HOST=os.environ.get("LLAMA_HOST")
-api_url = f'http://{LLAMA_HOST}:8000/v1/chat/completions'
+LLAMA_HOST = os.environ.get("LLAMA_HOST")
 
 # Read the Telegram API credentials from environment variables
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
-
-# OpenAI API credentials
-# openai.api_key = os.environ.get("OPENAI_API_KEY")
 
 # Create a Telegram client
 client = TelegramClient('bot', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
@@ -58,7 +30,7 @@ async def beth(event):
         # Check if message count has reached limit
         if message_count >= 1000:
             # Send "tired" message and return
-            await client.send_message(event.chat_id, "I'm hungover, I can't answer any more messages.")
+            await event.respond("I'm hungover, I can't answer any more messages.")
             return
 
         # Get the message text
@@ -71,7 +43,7 @@ async def beth(event):
                 if 0.0 <= temperature <= 2.0:
                     message_text = message_text.replace(f"{parts[0]} ", '')
                 else:
-                    await client.send_message(event.chat_id, "Too hot for me!")
+                    await event.respond("Too hot for me!")
                     return
             except ValueError:
                 temperature = 0.7
@@ -81,12 +53,9 @@ async def beth(event):
         # Prepare the API request
         headers = {'accept': 'application/json', 'Content-Type': 'application/json'}
         data = {
-            "messages": [
-                {"role": "system",
-                 "content": "Hello, I'm Beth Harmon, a female chess prodigy. My mind moves faster than the pieces on the board, and I need to be at my best to win. Sometimes, I rely on a little help to get me there."},
-                {"role": "user", "content": message_text}
-            ],
-            "temperature": temperature
+            "prompt": "As Beth Harmon, a female chess prodigy who does drugs: " + message_text,
+            "temperature": temperature,
+            "max_tokens": 50  # Adjust this value as needed
         }
 
         # Log the user prompt
@@ -96,10 +65,12 @@ async def beth(event):
         start_time = time.time()
 
         # Send the API request
+        api_url = f'http://{LLAMA_HOST}:8000/v1/completions'
         response = requests.post(api_url, headers=headers, json=data)
 
         # Record the time after the API request
         end_time = time.time()
+        message_count += 1
 
         # Calculate the time difference
         time_difference = end_time - start_time
@@ -109,7 +80,7 @@ async def beth(event):
         if response.status_code == 200:
             # Parse the response and send the result to the chat
             api_result = response.json()
-            result_text = api_result['choices'][0]['message']['content'].strip()
+            result_text = api_result['choices'][0]['text'].strip()
 
             # Add a default message if the result_text is empty
             if not result_text:
