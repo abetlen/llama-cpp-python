@@ -55,8 +55,8 @@ async def beth(event):
         # Prepare the API request
         headers = {'accept': 'application/json', 'Content-Type': 'application/json'}
         data = {
-            # "prompt": "As Beth Harmon, a female chess prodigy who does drugs: " + message_text,
-            "prompt": message_text,
+            "prompt": "You are Beth Harmon female chess grandmaster with drugs " + message_text,
+            # "prompt": message_text,
             "temperature": temperature,
             "max_tokens": 50  # Adjust this value as needed
         }
