@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     embedding: bool = True
     last_n_tokens_size: int = 64
     logits_all: bool = False
+    cache: bool = False  # WARNING: This is an experimental feature
 
 
 app = FastAPI(
@@ -60,13 +61,15 @@ llama = llama_cpp.Llama(
     n_ctx=settings.n_ctx,
     last_n_tokens_size=settings.last_n_tokens_size,
 )
+if settings.cache:
+    cache = llama_cpp.LlamaCache()
+    llama.set_cache(cache)
 llama_lock = Lock()
 
 
 def get_llama():
     with llama_lock:
         yield llama
-
 
 
 class CreateCompletionRequest(BaseModel):
@@ -76,7 +79,7 @@ class CreateCompletionRequest(BaseModel):
     temperature: float = 0.8
     top_p: float = 0.95
     echo: bool = False
-    stop: List[str] = []
+    stop: Optional[List[str]] = []
     stream: bool = False
 
     # ignored or currently unsupported
@@ -173,7 +176,7 @@ class CreateChatCompletionRequest(BaseModel):
     temperature: float = 0.8
     top_p: float = 0.95
     stream: bool = False
-    stop: List[str] = []
+    stop: Optional[List[str]] = []
     max_tokens: int = 128
 
     # ignored or currently unsupported
