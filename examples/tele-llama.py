@@ -8,7 +8,6 @@ import requests
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-model = "Alpacabot 7B"
 LLAMA_HOST = os.environ.get("LLAMA_HOST")
 
 # Read the Telegram API credentials from environment variables
@@ -22,21 +21,19 @@ client = TelegramClient('bot', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 # Initialize global message count variable
 message_count = 0
 
-@client.on(events.NewMessage(pattern='/beth'))
+@client.on(events.NewMessage(pattern='(?i)/beth'))
 async def beth(event):
     global message_count
 
     try:
-        # Show typing status
-        # async with event.respond("Thinking..."):
-            # Check if message count has reached limit
+        # Check if message count has reached limit
         if message_count >= 1000:
             # Send "tired" message and return
             await event.respond("I'm hungover, I can't answer any more messages.")
             return
 
         # Get the message text
-        message_text = event.message.message.replace('/beth', '').strip()
+        message_text = event.message.message.replace('/beth', '').strip().lower()
         parts = message_text.split(' ')
         logger.debug(f"Parts: {parts}")
         if len(parts) >= 2:
@@ -55,8 +52,7 @@ async def beth(event):
         # Prepare the API request
         headers = {'accept': 'application/json', 'Content-Type': 'application/json'}
         data = {
-            "prompt": "You are Beth Harmon female chess grandmaster with drugs. I say " + message_text,
-            # "prompt": message_text,
+            "prompt": message_text,
             "temperature": temperature,
             "max_tokens": 50  # Adjust this value as needed
         }
@@ -107,6 +103,24 @@ async def beth(event):
         # Handle exceptions and send an error message
         logger.error(f"Error: {e}")
         await client.send_message(event.chat_id, "Oops. Broke the chess board.")
-# Start the Telegram client
-logger.info("Starting Telegram bot with LLama model: %s ", model)
-client.run_until_disconnected()
+
+def get_current_model():
+    url = f"http://{LLAMA_HOST}:8000/v1/models"
+    headers = {'accept': 'application/json'}
+    response = requests.get(url, headers=headers)
+
+    if response.status_code == 200:
+        models_data = response.json()
+        for model in models_data["data"]:
+            if model["owned_by"] == "me":
+                return model["id"]
+    else:
+        logger.error("Failed to fetch current model. Status code: %s", response.status_code)
+        return None
+
+current_model = get_current_model()
+if current_model:
+    logger.info("Starting Telegram bot with Llama model: %s ", current_model)
+
+    # Start the Telegram client
+    client.run_until_disconnected()
