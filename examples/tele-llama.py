@@ -8,18 +8,19 @@ import requests
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-LLAMA_HOST = os.environ.get("LLAMA_HOST")
+def get_current_model():
+    url = f"http://{LLAMA_HOST}:8000/v1/models"
+    headers = {'accept': 'application/json'}
+    response = requests.get(url, headers=headers)
 
-# Read the Telegram API credentials from environment variables
-API_ID = int(os.environ.get("API_ID"))
-API_HASH = os.environ.get("API_HASH")
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
-
-# Create a Telegram client
-client = TelegramClient('bot', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
-
-# Initialize global message count variable
-message_count = 0
+    if response.status_code == 200:
+        models_data = response.json()
+        for model in models_data["data"]:
+            if model["owned_by"] == "me":
+                return model["id"]
+    else:
+        logger.error("Failed to fetch current model. Status code: %s", response.status_code)
+        return None
 
 @client.on(events.NewMessage(pattern='(?i)/beth'))
 async def beth(event):
@@ -52,6 +53,7 @@ async def beth(event):
         # Prepare the API request
         headers = {'accept': 'application/json', 'Content-Type': 'application/json'}
         data = {
+            # "prompt": f"{message_text} Chess prodigy Beth Harmon overcomes addiction challenges male dominated world replies",
             "prompt": message_text,
             "temperature": temperature,
             "max_tokens": 50  # Adjust this value as needed
@@ -104,19 +106,18 @@ async def beth(event):
         logger.error(f"Error: {e}")
         await client.send_message(event.chat_id, "Oops. Broke the chess board.")
 
-def get_current_model():
-    url = f"http://{LLAMA_HOST}:8000/v1/models"
-    headers = {'accept': 'application/json'}
-    response = requests.get(url, headers=headers)
+LLAMA_HOST = os.environ.get("LLAMA_HOST")
 
-    if response.status_code == 200:
-        models_data = response.json()
-        for model in models_data["data"]:
-            if model["owned_by"] == "me":
-                return model["id"]
-    else:
-        logger.error("Failed to fetch current model. Status code: %s", response.status_code)
-        return None
+# Read the Telegram API credentials from environment variables
+API_ID = int(os.environ.get("API_ID"))
+API_HASH = os.environ.get("API_HASH")
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+
+# Create a Telegram client
+client = TelegramClient('bot', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
+
+# Initialize global message count variable
+message_count = 0
 
 current_model = get_current_model()
 if current_model:
