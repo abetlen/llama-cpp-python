@@ -3,7 +3,11 @@ import time
 import logging
 from telethon import TelegramClient, events
 import requests
-
+import asyncio
+import aiohttp
+from telegram import ChatAction
+from telegram.ext import Updater, CommandHandler
+import requests
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
