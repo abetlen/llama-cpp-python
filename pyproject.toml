@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "llama_cpp_python"
-version = "0.1.35"
+version = "0.1.36"
 description = "Python bindings for the llama.cpp library"
 authors = ["Andrei Betlen <abetlen@gmail.com>"]
 license = "MIT"
