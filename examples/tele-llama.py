@@ -25,12 +25,14 @@ def get_current_model():
     else:
         logger.error("Failed to fetch current model. Status code: %s", response.status_code)
         return None
-
 @client.on(events.NewMessage(pattern='(?i)/beth'))
 async def beth(event):
     global message_count
 
     try:
+        # Send typing action
+        await client.send_chat_action(event.chat_id, ChatAction.TYPING)
+
         # Check if message count has reached limit
         if message_count >= 1000:
             # Send "tired" message and return
@@ -104,7 +106,7 @@ async def beth(event):
         else:
             # Send an error message if the request was not successful
             await client.send_message(event.chat_id, "Sorry, I need to go to the bathroom. Back soon!")
-
+            
     except Exception as e:
         # Handle exceptions and send an error message
         logger.error(f"Error: {e}")
