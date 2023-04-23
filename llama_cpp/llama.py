@@ -79,7 +79,7 @@ class Llama:
         self.params.f16_kv = f16_kv
         self.params.logits_all = logits_all
         self.params.vocab_only = vocab_only
-        self.params.use_mmap = use_mmap
+        self.params.use_mmap = use_mmap if lora_path is None else False
         self.params.use_mlock = use_mlock
         self.params.embedding = embedding
 
