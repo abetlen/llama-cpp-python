@@ -105,11 +105,15 @@ python3 setup.py develop
             - __call__
             - create_chat_completion
             - set_cache
+            - save_state
+            - load_state
             - token_bos
             - token_eos
         show_root_heading: true
 
 ::: llama_cpp.LlamaCache
+
+::: llama_cpp.LlamaState
 
 ::: llama_cpp.llama_cpp
     options:
