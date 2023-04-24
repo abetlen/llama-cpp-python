@@ -49,7 +49,7 @@ class Llama:
         use_mlock: bool = False,
         embedding: bool = False,
         n_threads: Optional[int] = None,
-        n_batch: int = 8,
+        n_batch: int = 512,
         last_n_tokens_size: int = 64,
         lora_base: Optional[str] = None,
         lora_path: Optional[str] = None,
