@@ -1,4 +1,4 @@
-FROM python:3-buster
+FROM python:3-bullseye
 
 # We need to set the host to 0.0.0.0 to allow outside access
 ENV HOST 0.0.0.0
