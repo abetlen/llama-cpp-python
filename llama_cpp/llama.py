@@ -377,7 +377,7 @@ class Llama:
         self,
         prompt: str,
         suffix: Optional[str] = None,
-        max_tokens: int = 16,
+        max_tokens: Optional[Union[int, None]] = 16,
         temperature: float = 0.8,
         top_p: float = 0.95,
         logprobs: Optional[int] = None,
@@ -402,7 +402,9 @@ class Llama:
         if self.verbose:
             llama_cpp.llama_reset_timings(self.ctx)
 
-        if len(prompt_tokens) + max_tokens > int(llama_cpp.llama_n_ctx(self.ctx)):
+        if max_tokens not in [-1, None] and len(prompt_tokens) + max_tokens > int(
+            llama_cpp.llama_n_ctx(self.ctx)
+        ):
             raise ValueError(
                 f"Requested tokens exceed context window of {llama_cpp.llama_n_ctx(self.ctx)}"
             )
@@ -487,7 +489,7 @@ class Llama:
                     ],
                 }
 
-            if len(completion_tokens) >= max_tokens:
+            if max_tokens not in [-1, None] and len(completion_tokens) >= max_tokens:
                 text = self.detokenize(completion_tokens)
                 finish_reason = "length"
                 break
@@ -591,7 +593,7 @@ class Llama:
         self,
         prompt: str,
         suffix: Optional[str] = None,
-        max_tokens: int = 128,
+        max_tokens: Optional[Union[int, None]] = 128,
         temperature: float = 0.8,
         top_p: float = 0.95,
         logprobs: Optional[int] = None,
@@ -626,7 +628,7 @@ class Llama:
         completion_or_chunks = self._create_completion(
             prompt=prompt,
             suffix=suffix,
-            max_tokens=max_tokens,
+            max_tokens=-1 if max_tokens is None else max_tokens,
             temperature=temperature,
             top_p=top_p,
             logprobs=logprobs,
@@ -646,7 +648,7 @@ class Llama:
         self,
         prompt: str,
         suffix: Optional[str] = None,
-        max_tokens: int = 128,
+        max_tokens: Optional[Union[int, None]] = 128,
         temperature: float = 0.8,
         top_p: float = 0.95,
         logprobs: Optional[int] = None,
@@ -758,7 +760,7 @@ class Llama:
         top_k: int = 40,
         stream: bool = False,
         stop: Optional[List[str]] = [],
-        max_tokens: int = 256,
+        max_tokens: Optional[Union[int, None]] = -1,
         repeat_penalty: float = 1.1,
     ) -> Union[ChatCompletion, Iterator[ChatCompletionChunk]]:
         """Generate a chat completion from a list of messages.
