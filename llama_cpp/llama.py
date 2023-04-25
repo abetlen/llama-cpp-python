@@ -133,6 +133,9 @@ class Llama:
 
         self.n_threads = n_threads or max(multiprocessing.cpu_count() // 2, 1)
 
+        self.lora_base = lora_base
+        self.lora_path = lora_path
+
         if not os.path.exists(model_path):
             raise ValueError(f"Model path does not exist: {model_path}")
 
@@ -140,8 +143,8 @@ class Llama:
             self.model_path.encode("utf-8"), self.params
         )
 
-        self.lora_base = lora_base
-        self.lora_path = lora_path
+        assert self.ctx is not None
+
         if self.lora_path:
             if llama_cpp.llama_apply_lora_from_file(
                 self.ctx,
