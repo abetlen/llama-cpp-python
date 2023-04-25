@@ -2,7 +2,11 @@ cmake_minimum_required(VERSION 3.4...3.22)
 
 project(llama_cpp)
 
-if (UNIX)
+option(FORCE_CMAKE "Force CMake build of Python bindings" OFF)
+
+set(FORCE_CMAKE $ENV{FORCE_CMAKE})
+
+if (UNIX AND NOT FORCE_CMAKE)
     add_custom_command(
         OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/vendor/llama.cpp/libllama.so
         COMMAND make libllama.so
