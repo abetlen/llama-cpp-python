@@ -109,7 +109,7 @@ class Llama:
         )
 
         if self.verbose:
-            print(llama_cpp.llama_print_system_info().decode("utf-8"), file=sys.stderr)
+            print(llama_cpp.llama_print_system_info().decode("utf-8", errors="ignore"), file=sys.stderr)
 
     def tokenize(self, text: bytes) -> List[llama_cpp.llama_token]:
         """Tokenize a string.
@@ -460,7 +460,7 @@ class Llama:
                     "model": self.model_path,
                     "choices": [
                         {
-                            "text": text[start:].decode("utf-8"),
+                            "text": text[start:].decode("utf-8", errors="ignore"),
                             "index": 0,
                             "logprobs": None,
                             "finish_reason": None,
@@ -484,7 +484,7 @@ class Llama:
                 "model": self.model_path,
                 "choices": [
                     {
-                        "text": text[returned_characters:].decode("utf-8"),
+                        "text": text[returned_characters:].decode("utf-8", errors="ignore"),
                         "index": 0,
                         "logprobs": None,
                         "finish_reason": finish_reason,
@@ -496,7 +496,7 @@ class Llama:
         ### HACK
         self._completion_bytes.append(text)
         ###
-        text_str = text.decode("utf-8")
+        text_str = text.decode("utf-8", errors="ignore")
 
         if echo:
             text_str = prompt + text_str
@@ -514,7 +514,7 @@ class Llama:
 
             all_tokens = prompt_tokens + completion_tokens
             all_token_strs = [
-                self.detokenize([token]).decode("utf-8") for token in all_tokens
+                self.detokenize([token]).decode("utf-8", errors="ignore") for token in all_tokens
             ]
             all_logprobs = [
                 [Llama.logit_to_logprob(logit) for logit in row]
@@ -533,7 +533,7 @@ class Llama:
                 )
                 token_logprobs.append(sorted_logprobs[int(token)][0])
                 top_logprob = {
-                    self.detokenize([llama_cpp.llama_token(i)]).decode("utf-8"): logprob
+                    self.detokenize([llama_cpp.llama_token(i)]).decode("utf-8", errors="ignore"): logprob
                     for logprob, i in sorted_logprobs[:logprobs]
                 }
                 top_logprob.update({token_str: sorted_logprobs[int(token)][0]})
