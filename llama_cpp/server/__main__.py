@@ -28,10 +28,11 @@ from sse_starlette.sse import EventSourceResponse
 class Settings(BaseSettings):
     model: str
     n_ctx: int = 2048
-    n_batch: int = 8
-    n_threads: int = ((os.cpu_count() or 2) // 2) or 1
+    n_batch: int = 512
+    n_threads: int = max((os.cpu_count() or 2) // 2, 1)
     f16_kv: bool = True
     use_mlock: bool = False  # This causes a silent failure on platforms that don't support mlock (e.g. Windows) took forever to figure out...
+    use_mmap: bool = True
     embedding: bool = True
     last_n_tokens_size: int = 64
     logits_all: bool = False
@@ -54,6 +55,7 @@ llama = llama_cpp.Llama(
     settings.model,
     f16_kv=settings.f16_kv,
     use_mlock=settings.use_mlock,
+    use_mmap=settings.use_mmap,
     embedding=settings.embedding,
     logits_all=settings.logits_all,
     n_threads=settings.n_threads,
