@@ -27,17 +27,16 @@ from sse_starlette.sse import EventSourceResponse
 
 class Settings(BaseSettings):
     model: str
-    n_ctx: int = 2048
-    n_batch: int = 512
-    n_threads: int = max((os.cpu_count() or 2) // 2, 1)
-    f16_kv: bool = True
-    use_mlock: bool = False  # This causes a silent failure on platforms that don't support mlock (e.g. Windows) took forever to figure out...
-    use_mmap: bool = True
-    embedding: bool = True
-    last_n_tokens_size: int = 64
-    logits_all: bool = False
-    cache: bool = False  # WARNING: This is an experimental feature
-
+    n_ctx: int = int(os.getenv('N_CTX', '2048'))
+    n_batch: int = int(os.getenv('N_BATCH', '512'))
+    n_threads: int = int(os.getenv('N_THREADS', '4'))
+    f16_kv: bool = bool(os.getenv('F16_KV', 'True'))
+    use_mlock: bool = bool(os.getenv('USE_MLOCK', 'False'))
+    use_mmap: bool = bool(os.getenv('USE_MMAP', 'True'))
+    embedding: bool = bool(os.getenv('EMBEDDING', 'True'))
+    last_n_tokens_size: int = int(os.getenv('LAST_N_TOKENS_SIZE', '64'))
+    logits_all: bool = bool(os.getenv('LOGITS_ALL', 'False'))
+    cache: bool = bool(os.getenv('CACHE', 'False'))
 
 app = FastAPI(
     title="🦙 llama.cpp Python API",
@@ -77,10 +76,10 @@ def get_llama():
 class CreateCompletionRequest(BaseModel):
     prompt: Union[str, List[str]]
     suffix: Optional[str] = Field(None)
-    max_tokens: int = 16
-    temperature: float = 0.8
-    top_p: float = 0.95
-    echo: bool = False
+    max_tokens: int = int(os.getenv('MAX_TOKENS', '16'))
+    temperature: float = float(os.getenv('TEMPERATURE', '0.8'))
+    top_p: float = float(os.getenv('TOP_P', '0.95'))
+    echo: bool = bool(os.getenv('ECHO', 'False'))
     stop: Optional[List[str]] = []
     stream: bool = False
 
@@ -95,8 +94,8 @@ class CreateCompletionRequest(BaseModel):
     user: Optional[str] = Field(None)
 
     # llama.cpp specific parameters
-    top_k: int = 40
-    repeat_penalty: float = 1.1
+    top_k: int = int(os.getenv('TOP_K', '40'))
+    repeat_penalty: float = float(os.getenv('REPEAT_PENALTY', '1.1'))
 
     class Config:
         schema_extra = {
@@ -175,11 +174,11 @@ class ChatCompletionRequestMessage(BaseModel):
 class CreateChatCompletionRequest(BaseModel):
     model: Optional[str]
     messages: List[ChatCompletionRequestMessage]
-    temperature: float = 0.8
-    top_p: float = 0.95
-    stream: bool = False
+    temperature: float = float(os.getenv('TEMPERATURE', '0.8'))
+    top_p: float = float(os.getenv('TOP_P', '0.95'))
+    stream: bool = bool(os.getenv('STREAM', 'False'))
     stop: Optional[List[str]] = []
-    max_tokens: int = 128
+    max_tokens: int = int(os.getenv('MAX_TOKENS', '128'))
 
     # ignored or currently unsupported
     model: Optional[str] = Field(None)
@@ -190,7 +189,7 @@ class CreateChatCompletionRequest(BaseModel):
     user: Optional[str] = Field(None)
 
     # llama.cpp specific parameters
-    repeat_penalty: float = 1.1
+    repeat_penalty: float = float(os.getenv('REPEAT_PENALTY', '1.1'))
 
     class Config:
         schema_extra = {
