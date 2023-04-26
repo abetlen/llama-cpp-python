@@ -24,7 +24,7 @@ def test_llama_patch(monkeypatch):
     monkeypatch.setattr("llama_cpp.llama_cpp.llama_eval", mock_eval)
 
     output_text = " jumps over the lazy dog."
-    output_tokens = llama.tokenize(output_text.encode("utf-8"))
+    output_tokens = llama.tokenize(output_text.encode("utf-8", errors="ignore"))
     token_eos = llama.token_eos()
     n = 0
 

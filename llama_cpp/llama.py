@@ -358,7 +358,7 @@ class Llama:
         if self.verbose:
             llama_cpp.llama_reset_timings(self.ctx)
 
-        tokens = self.tokenize(input.encode("utf-8"))
+        tokens = self.tokenize(input.encode("utf-8", errors="ignore"))
         self.reset()
         self.eval(tokens)
         n_tokens = len(tokens)
@@ -416,7 +416,7 @@ class Llama:
         completion_tokens: List[llama_cpp.llama_token] = []
         # Add blank space to start of prompt to match OG llama tokenizer
         prompt_tokens: List[llama_cpp.llama_token] = self.tokenize(
-            b" " + prompt.encode("utf-8")
+            b" " + prompt.encode("utf-8", errors="ignore")
         )
         text: bytes = b""
         returned_characters: int = 0
@@ -431,7 +431,7 @@ class Llama:
             )
 
         if stop != []:
-            stop_sequences = [s.encode("utf-8") for s in stop]
+            stop_sequences = [s.encode("utf-8", errors="ignore") for s in stop]
         else:
             stop_sequences = []
 
