@@ -356,10 +356,7 @@ n_keep = {self.params.n_keep}
 	def output(self):
 		self.remaining_tokens = self.params.n_predict
 		for id in self.generate():
-			try:
-				yield llama_cpp.llama_token_to_str(self.ctx, id).decode("utf-8", errors="ignore")
-			except UnicodeDecodeError:
-				pass
+			yield llama_cpp.llama_token_to_str(self.ctx, id).decode("utf-8", errors="ignore")
 
 	# read user input
 	def read_input(self):
