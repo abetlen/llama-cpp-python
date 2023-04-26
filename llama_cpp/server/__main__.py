@@ -31,12 +31,12 @@ class Settings(BaseSettings):
     n_batch: int = int(os.getenv('N_BATCH', '512'))
     n_threads: int = int(os.getenv('N_THREADS', '4'))
     f16_kv: bool = bool(os.getenv('F16_KV', 'True'))
-    use_mlock: bool = bool(os.getenv('USE_MLOCK', 'False'))
+    use_mlock: bool = bool(os.getenv('USE_MLOCK', 'False'))  # This causes a silent failure on platforms that don't support mlock (e.g. Windows) took forever to figure out...
     use_mmap: bool = bool(os.getenv('USE_MMAP', 'True'))
     embedding: bool = bool(os.getenv('EMBEDDING', 'True'))
     last_n_tokens_size: int = int(os.getenv('LAST_N_TOKENS_SIZE', '64'))
     logits_all: bool = bool(os.getenv('LOGITS_ALL', 'False'))
-    cache: bool = bool(os.getenv('CACHE', 'False'))
+    cache: bool = bool(os.getenv('CACHE', 'False'))  # WARNING: This is an experimental feature
 
 app = FastAPI(
     title="🦙 llama.cpp Python API",
