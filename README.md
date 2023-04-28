@@ -23,6 +23,12 @@ Install from PyPI:
 pip install llama-cpp-python
 ```
 
+The above command will attempt to install the package and build build `llama.cpp` from source.
+This is the recommended installation method as it ensures that `llama.cpp` is built with the available optimizations for your system.
+
+This method defaults to using `make` to build `llama.cpp` on Linux / MacOS and `cmake` on Windows.
+You can force the use of `cmake` on Linux / MacOS setting the `FORCE_CMAKE=1` environment variable before installing.
+
 ## High-level API
 
 ```python
