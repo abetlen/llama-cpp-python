@@ -472,7 +472,6 @@ class Llama:
             # Contains multi-byte UTF8
             for k,char in enumerate(all_text[-3:]):
                 k = 3 - k
-                char = int.from_bytes(char, "big")
                 for num,pattern in [(2, 192), (3, 224), (4, 240)]:
                     # Bitwise AND check
                     if (num > k and pattern & char == pattern):
