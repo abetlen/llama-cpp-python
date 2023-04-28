@@ -17,7 +17,7 @@ This package provides:
 
 ## Installation
 
-Install from PyPI:
+Install from PyPI (requires a c compiler):
 
 ```bash
 pip install llama-cpp-python
