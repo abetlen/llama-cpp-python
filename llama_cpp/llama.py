@@ -463,7 +463,7 @@ class Llama:
             for num,pattern in [(2, 192), (3, 224), (4, 240)]:
                 # Bitwise AND check
                 if (pattern & token == pattern):
-                    multibyte_fix = num
+                    multibyte_fix = num - 1
 
             if self.cache and len(completion_tokens) == 0:
                 if prompt_tokens not in self.cache:
