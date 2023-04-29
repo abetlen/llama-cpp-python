@@ -79,11 +79,10 @@ class CreateCompletionRequest(BaseModel):
     echo: bool = False
     stop: Optional[List[str]] = []
     stream: bool = False
+    logprobs: Optional[int] = Field(None)
 
     # ignored, but marked as required for the sake of compatibility with openai's api
     model: str = model_field
-
-    logprobs: Optional[int] = Field(None)
 
     # llama.cpp specific parameters
     top_k: int = 40
