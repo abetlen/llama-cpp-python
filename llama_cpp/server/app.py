@@ -13,7 +13,7 @@ from sse_starlette.sse import EventSourceResponse
 
 
 class Settings(BaseSettings):
-    model: str = os.environ["MODEL"]
+    model: str = os.environ.get("MODEL", "null")
     n_ctx: int = 2048
     n_batch: int = 512
     n_threads: int = max((os.cpu_count() or 2) // 2, 1)
@@ -38,30 +38,33 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-settings = Settings()
-llama = llama_cpp.Llama(
-    settings.model,
-    f16_kv=settings.f16_kv,
-    use_mlock=settings.use_mlock,
-    use_mmap=settings.use_mmap,
-    embedding=settings.embedding,
-    logits_all=settings.logits_all,
-    n_threads=settings.n_threads,
-    n_batch=settings.n_batch,
-    n_ctx=settings.n_ctx,
-    last_n_tokens_size=settings.last_n_tokens_size,
-    vocab_only=settings.vocab_only,
-)
-if settings.cache:
-    cache = llama_cpp.LlamaCache()
-    llama.set_cache(cache)
+
+llama: llama_cpp.Llama = None
+def init_llama(settings: Settings = None):
+    if settings is None:
+        settings = Settings()
+    global llama
+    llama = llama_cpp.Llama(
+        settings.model,
+        f16_kv=settings.f16_kv,
+        use_mlock=settings.use_mlock,
+        use_mmap=settings.use_mmap,
+        embedding=settings.embedding,
+        logits_all=settings.logits_all,
+        n_threads=settings.n_threads,
+        n_batch=settings.n_batch,
+        n_ctx=settings.n_ctx,
+        last_n_tokens_size=settings.last_n_tokens_size,
+        vocab_only=settings.vocab_only,
+    )
+    if settings.cache:
+        cache = llama_cpp.LlamaCache()
+        llama.set_cache(cache)
+
 llama_lock = Lock()
-
-
 def get_llama():
     with llama_lock:
         yield llama
-
 
 class CreateCompletionRequest(BaseModel):
     prompt: Union[str, List[str]]

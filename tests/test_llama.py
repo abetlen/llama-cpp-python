@@ -132,10 +132,11 @@ def test_utf8(monkeypatch):
 
 def test_llama_server():
     from fastapi.testclient import TestClient
-    import os
-    os.environ["MODEL"] = MODEL
-    os.environ["VOCAB_ONLY"] = "true"
-    from llama_cpp.server.app import app
+    from llama_cpp.server.app import app, init_llama, Settings
+    s = Settings()
+    s.model = MODEL
+    s.vocab_only = True
+    init_llama(s)
     client = TestClient(app)
     response = client.get("/v1/models")
     assert response.json() == {
