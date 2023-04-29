@@ -62,7 +62,7 @@ llama = llama_cpp.Llama(
 class CreateCompletionRequest(BaseModel):
     prompt: str
     suffix: Optional[str] = Field(None)
-    max_tokens: int = 16
+    max_tokens: Optional[Union[int, None]] = 16
     temperature: float = 0.8
     top_p: float = 0.95
     echo: bool = False
@@ -156,7 +156,7 @@ class CreateChatCompletionRequest(BaseModel):
     top_p: float = 0.95
     stream: bool = False
     stop: List[str] = []
-    max_tokens: int = 128
+    max_tokens: Optional[Union[int, None]] = -1
 
     # ignored or currently unsupported
     model: Optional[str] = Field(None)
