@@ -83,13 +83,7 @@ class CreateCompletionRequest(BaseModel):
     # ignored, but marked as required for the sake of compatibility with openai's api
     model: str = model_field
 
-    n: Optional[int] = 1
     logprobs: Optional[int] = Field(None)
-    presence_penalty: Optional[float] = 0
-    frequency_penalty: Optional[float] = 0
-    best_of: Optional[int] = 1
-    logit_bias: Optional[Dict[str, float]] = Field(None)
-    user: Optional[str] = Field(None)
 
     # llama.cpp specific parameters
     top_k: int = 40
@@ -120,13 +114,7 @@ def create_completion(
     completion_or_chunks = llama(
         **request.dict(
             exclude={
-                "model",
-                "n",
-                "frequency_penalty",
-                "presence_penalty",
-                "best_of",
-                "logit_bias",
-                "user",
+                "model"
             }
         )
     )
@@ -141,7 +129,6 @@ class CreateEmbeddingRequest(BaseModel):
     # ignored, but marked as required for the sake of compatibility with openai's api
     model: str = model_field
     input: str
-    user: Optional[str]
 
     class Config:
         schema_extra = {
@@ -161,7 +148,7 @@ CreateEmbeddingResponse = create_model_from_typeddict(llama_cpp.Embedding)
 def create_embedding(
     request: CreateEmbeddingRequest, llama: llama_cpp.Llama = Depends(get_llama)
 ):
-    return llama.create_embedding(**request.dict(exclude={"model", "user"}))
+    return llama.create_embedding(**request.dict(exclude={"model"}))
 
 
 class ChatCompletionRequestMessage(BaseModel):
@@ -181,12 +168,6 @@ class CreateChatCompletionRequest(BaseModel):
 
     # ignored, but marked as required for the sake of compatibility with openai's api
     model: str = model_field
-    
-    n: Optional[int] = 1
-    presence_penalty: Optional[float] = 0
-    frequency_penalty: Optional[float] = 0
-    logit_bias: Optional[Dict[str, float]] = Field(None)
-    user: Optional[str] = Field(None)
 
     # llama.cpp specific parameters
     repeat_penalty: float = 1.1
@@ -220,12 +201,7 @@ def create_chat_completion(
     completion_or_chunks = llama.create_chat_completion(
         **request.dict(
             exclude={
-                "model",
-                "n",
-                "presence_penalty",
-                "frequency_penalty",
-                "logit_bias",
-                "user",
+                "model"
             }
         ),
     )
