@@ -201,7 +201,7 @@ n_keep = {self.params.n_keep}
 	# tokenize a prompt
 	def _tokenize(self, prompt, bos=True):
 		_arr = (llama_cpp.llama_token * (len(prompt) + 1))()
-		_n = llama_cpp.llama_tokenize(self.ctx, prompt.encode("utf8"), _arr, len(_arr), bos)
+		_n = llama_cpp.llama_tokenize(self.ctx, prompt.encode("utf8", errors="ignore"), _arr, len(_arr), bos)
 		return _arr[:_n]
 
 	def set_color(self, c):
@@ -342,7 +342,7 @@ n_keep = {self.params.n_keep}
 	# return past text
 	def past(self):
 		for id in self.last_n_tokens[-self.n_past:]:
-			yield llama_cpp.llama_token_to_str(self.ctx, id).decode("utf-8")
+			yield llama_cpp.llama_token_to_str(self.ctx, id).decode("utf-8", errors="ignore")
 
 	# write input
 	def input(self, prompt: str):
@@ -356,7 +356,7 @@ n_keep = {self.params.n_keep}
 	def output(self):
 		self.remaining_tokens = self.params.n_predict
 		for id in self.generate():
-			yield llama_cpp.llama_token_to_str(self.ctx, id).decode("utf-8")
+			yield llama_cpp.llama_token_to_str(self.ctx, id).decode("utf-8", errors="ignore")
 
 	# read user input
 	def read_input(self):
