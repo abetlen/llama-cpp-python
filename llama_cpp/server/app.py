@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     last_n_tokens_size: int = 64
     logits_all: bool = False
     cache: bool = False  # WARNING: This is an experimental feature
+    vocab_only: bool = False
 
 
 app = FastAPI(
@@ -49,6 +50,7 @@ llama = llama_cpp.Llama(
     n_batch=settings.n_batch,
     n_ctx=settings.n_ctx,
     last_n_tokens_size=settings.last_n_tokens_size,
+    vocab_only=settings.vocab_only,
 )
 if settings.cache:
     cache = llama_cpp.LlamaCache()
