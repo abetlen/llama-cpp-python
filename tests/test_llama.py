@@ -24,7 +24,7 @@ def test_llama_patch(monkeypatch):
     monkeypatch.setattr("llama_cpp.llama_cpp.llama_eval", mock_eval)
 
     output_text = " jumps over the lazy dog."
-    output_tokens = llama.tokenize(output_text.encode("utf-8", errors="ignore"))
+    output_tokens = llama.tokenize(output_text.encode("utf-8"))
     token_eos = llama.token_eos()
     n = 0
 
@@ -94,3 +94,37 @@ def test_llama_pickle():
     text = b"Hello World"
 
     assert llama.detokenize(llama.tokenize(text)) == text
+
+def test_utf8(monkeypatch):
+    llama = llama_cpp.Llama(model_path=MODEL, vocab_only=True)
+
+    ## Set up mock function
+    def mock_eval(*args, **kwargs):
+        return 0
+
+    monkeypatch.setattr("llama_cpp.llama_cpp.llama_eval", mock_eval)
+
+    output_text = "😀"
+    output_tokens = llama.tokenize(output_text.encode("utf-8"))
+    token_eos = llama.token_eos()
+    n = 0
+
+    def mock_sample(*args, **kwargs):
+        nonlocal n
+        if n < len(output_tokens):
+            n += 1
+            return output_tokens[n - 1]
+        else:
+            return token_eos
+
+    monkeypatch.setattr("llama_cpp.llama_cpp.llama_sample_top_p_top_k", mock_sample)
+
+    ## Test basic completion with utf8 multibyte
+    n = 0  # reset
+    completion = llama.create_completion("", max_tokens=4)
+    assert completion["choices"][0]["text"] == output_text
+
+    ## Test basic completion with incomplete utf8 multibyte
+    n = 0  # reset
+    completion = llama.create_completion("", max_tokens=1)
+    assert completion["choices"][0]["text"] == ""
