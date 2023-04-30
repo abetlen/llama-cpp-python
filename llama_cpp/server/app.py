@@ -189,7 +189,9 @@ def create_completion(
 class CreateEmbeddingRequest(BaseModel):
     # ignored, but marked as required for the sake of compatibility with openai's api
     model: str = model_field
-    input: str
+    input: str = Field(
+        description="The input to embed."
+    )
 
     class Config:
         schema_extra = {
