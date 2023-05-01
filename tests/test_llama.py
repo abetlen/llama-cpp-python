@@ -128,3 +128,25 @@ def test_utf8(monkeypatch):
     n = 0  # reset
     completion = llama.create_completion("", max_tokens=1)
     assert completion["choices"][0]["text"] == ""
+
+
+def test_llama_server():
+    from fastapi.testclient import TestClient
+    from llama_cpp.server.app import app, init_llama, Settings
+    s = Settings()
+    s.model = MODEL
+    s.vocab_only = True
+    init_llama(s)
+    client = TestClient(app)
+    response = client.get("/v1/models")
+    assert response.json() == {
+        "object": "list",
+        "data": [
+            {
+                "id": MODEL,
+                "object": "model",
+                "owned_by": "me",
+                "permissions": [],
+            }
+        ],
+    }
