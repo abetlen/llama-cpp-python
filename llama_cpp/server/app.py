@@ -1,8 +1,8 @@
 import os
 import json
 from threading import Lock
-from typing import List, Optional, Literal, Union, Iterator, Dict
-from typing_extensions import TypedDict
+from typing import List, Optional, Union, Iterator, Dict
+from typing_extensions import TypedDict, Literal
 
 import llama_cpp
 
