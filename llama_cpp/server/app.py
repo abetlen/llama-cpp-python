@@ -215,8 +215,8 @@ def create_embedding(
 
 
 class ChatCompletionRequestMessage(BaseModel):
-    role: Union[Literal["system"], Literal["user"], Literal["assistant"]] = Field(
-        default=Literal["user"], description="The role of the message."
+    role: Literal["system", "user", "assistant"] = Field(
+        default="user", description="The role of the message."
     )
     content: str = Field(default="", description="The content of the message.")
 
