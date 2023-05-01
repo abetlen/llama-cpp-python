@@ -141,6 +141,17 @@ To get started, clone the repository and install the package in development mode
 
 ```bash
 git clone --recurse-submodules git@github.com:abetlen/llama-cpp-python.git
+
+# Install with pip
+pip install -e .
+
+# if you want to use the fastapi / openapi server
+pip install -e .[server]
+
+# If you're a poetry user, installing will also include a virtual environment
+poetry install --all-extras
+. .venv/bin/activate
+
 # Will need to be re-run any time vendor/llama.cpp is updated
 python3 setup.py develop
 ```
