@@ -25,6 +25,7 @@ mkdocstrings = {extras = ["python"], version = "^0.21.2"}
 mkdocs-material = "^9.1.11"
 pytest = "^7.3.1"
 httpx = "^0.24.0"
+scikit-build = "0.13"
 
 [build-system]
 requires = [
