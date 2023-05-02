@@ -24,10 +24,10 @@ Then visit http://localhost:8000/docs to see the interactive API docs.
 import os
 import uvicorn
 
-from llama_cpp.server.app import app, init_llama
+from llama_cpp.server.app import create_app
 
 if __name__ == "__main__":
-    init_llama()
+    app = create_app()
 
     uvicorn.run(
         app, host=os.getenv("HOST", "localhost"), port=int(os.getenv("PORT", 8000))
