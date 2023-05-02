@@ -4,6 +4,7 @@ on: workflow_dispatch
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
   docker:
