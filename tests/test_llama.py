@@ -151,9 +151,10 @@ def test_llama_server():
     from fastapi.testclient import TestClient
     from llama_cpp.server.app import create_app, Settings
 
-    settings = Settings()
-    settings.model = MODEL
-    settings.vocab_only = True
+    settings = Settings(
+        model=MODEL,
+        vocab_only=True,
+    )
     app = create_app(settings)
     client = TestClient(app)
     response = client.get("/v1/models")
