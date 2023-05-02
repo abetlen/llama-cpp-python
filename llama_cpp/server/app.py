@@ -126,7 +126,7 @@ repeat_penalty_field = Field(
 )
 
 class CreateCompletionRequest(BaseModel):
-    prompt: Union[str, List[str]] = Field(
+    prompt: Optional[str] = Field(
         default="",
         description="The prompt to generate completions for."
     )
@@ -175,9 +175,6 @@ CreateCompletionResponse = create_model_from_typeddict(llama_cpp.Completion)
 def create_completion(
     request: CreateCompletionRequest, llama: llama_cpp.Llama = Depends(get_llama)
 ):
-    if isinstance(request.prompt, list):
-        request.prompt = "".join(request.prompt)
-
     completion_or_chunks = llama(
         **request.dict(
             exclude={
