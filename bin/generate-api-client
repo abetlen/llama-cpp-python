@@ -1,0 +1,66 @@
+#!/bin/bash
+set -e
+
+cd $(dirname "$0")/../
+
+CLIENT_PACKAGE_NAME=llama_cpp.client
+CLIENT_TMP_DIR=.tmp/llama-cpp-openapi-client
+CLIENT_FINAL_DIR=llama_cpp/client
+
+# Ensure we're starting from a clean slate
+rm -rf .tmp $CLIENT_TMP_DIR $CLIENT_FINAL_DIR
+
+# Pull the latest version of the API's OpenAPI spec
+./bin/save-openapi-json
+OPENAPI_JSON_PATH=.tmp/llama_server_openapi.json
+
+# Generate the client
+
+# Version tolerant: this is apparently their newer, more pythonic generator that is more tolerant to changes in the API
+VERSION_TOLERANT=true
+
+# Python3 only: we don't need to support python2
+PYTHON3_ONLY=true
+
+# Low level client: I think this is yet another client generator (???) - turn it off for now
+LOW_LEVEL_CLIENT=false
+
+# Models: IMO the client it totally pointless without generating models (which is disabled by default) - so enable it
+# The only models that are supported are for msrest
+MODELS_MODE=msrest
+
+# Client-side validation: also something disabled by default - i'm going to turn this off for now because i think there might be some problems with return types in the API
+CLIENT_SIDE_VALIDATION=false
+
+# Setup.py: the client lives in llama_cpp/client, don't generate a setup.py or anything else to support a standalone package
+BASIC_SETUP_PY=false
+
+# RXun autorest
+docker run --rm \
+    -v $PWD:/local \
+    -w /local \
+    azsdkengsys.azurecr.io/azuresdk/autorest-python \
+    autorest \
+    --python \
+    --namespace=$CLIENT_PACKAGE_NAME \
+    --package-name=llama-cpp-api-client \
+    --package-version=0.0.1 \
+    --basic-setup-py=$BASIC_SETUP_PY \
+    --version-tolerant=$VERSION_TOLERANT \
+    --python3-only=$PYTHON3_ONLY \
+    --low-level-client=$LOW_LEVEL_CLIENT \
+    --models-mode=$MODELS_MODE \
+    --client-side-validation=$CLIENT_SIDE_VALIDATION \
+    --combine-operation-files=false \
+    --clear-output-folder=true \
+    --no-namespace-folders=true \
+    --input-file=/local/$OPENAPI_JSON_PATH \
+    --output-folder=/local/$CLIENT_TMP_DIR
+
+# Move the client to the final location
+cp -r $CLIENT_TMP_DIR $CLIENT_FINAL_DIR
+
+# Do some cleanup with black, isort and autoflake
+black $CLIENT_FINAL_DIR
+isort $CLIENT_FINAL_DIR
+autoflake -r --in-place --remove-all-unused-imports --remove-unused-variables $CLIENT_FINAL_DIR
