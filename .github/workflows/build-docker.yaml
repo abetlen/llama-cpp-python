@@ -2,6 +2,9 @@ name: Build Docker
 
 on: workflow_dispatch
 
+permissions:
+  contents: write
+
 jobs:
   docker:
     name: Build and push Docker image
