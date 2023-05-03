@@ -91,7 +91,7 @@ The entire API can be found in [llama_cpp/llama_cpp.py](https://github.com/abetl
 Documentation is available at [https://abetlen.github.io/llama-cpp-python](https://abetlen.github.io/llama-cpp-python).
 If you find any issues with the documentation, please open an issue or submit a PR.
 
-# Hugging Space Example 
+# Hugging Space
 
 Implementation available at Huggingface Space [here](https://huggingface.co/spaces/abhishekmamdapure/llama-cpp-python).
 
