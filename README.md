@@ -72,6 +72,14 @@ python3 -m llama_cpp.server
 
 Navigate to [http://localhost:8000/docs](http://localhost:8000/docs) to see the OpenAPI documentation.
 
+## Docker image
+
+A Docker image is available on [GHCR](https://ghcr.io/abetlen/llama-cpp-python). To run the server:
+
+```bash
+docker run --rm -it -p8000:8000 -v /path/to/models:/models -eMODEL=/models/ggml-model-name.bin ghcr.io/abetlen/llama-cpp-python:latest
+```
+
 ## Low-level API
 
 The low-level API is a direct `ctypes` binding to the C API provided by `llama.cpp`.
