@@ -39,7 +39,7 @@ jobs:
           tags: ghcr.io/abetlen/llama-cpp-python:latest
 
   docker-cuda:
-    name: Build and push Docker image
+    name: Build and push Docker CUDA image
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
