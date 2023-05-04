@@ -1,4 +1,4 @@
-FROM python:3-bullseye
+FROM python:3-slim-bullseye
 
 # We need to set the host to 0.0.0.0 to allow outside access
 ENV HOST 0.0.0.0
@@ -6,7 +6,7 @@ ENV HOST 0.0.0.0
 COPY . .
 
 # Install the package
-RUN apt update && apt install -y libopenblas-dev
+RUN apt update && apt install -y libopenblas-dev ninja-build build-essential
 RUN python -m pip install --upgrade pip pytest cmake scikit-build setuptools fastapi uvicorn sse-starlette
 
 RUN LLAMA_OPENBLAS=1 python3 setup.py develop
