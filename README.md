@@ -17,24 +17,30 @@ This package provides:
 
 ## Installation
 
-Install from PyPI:
+Install from PyPI (requires a c compiler):
 
 ```bash
 pip install llama-cpp-python
 ```
 
+The above command will attempt to install the package and build build `llama.cpp` from source.
+This is the recommended installation method as it ensures that `llama.cpp` is built with the available optimizations for your system.
+
+This method defaults to using `make` to build `llama.cpp` on Linux / MacOS and `cmake` on Windows.
+You can force the use of `cmake` on Linux / MacOS setting the `FORCE_CMAKE=1` environment variable before installing.
+
 ## High-level API
 
 ```python
 >>> from llama_cpp import Llama
->>> llm = Llama(model_path="models/7B/...")
+>>> llm = Llama(model_path="./models/7B/ggml-model.bin")
 >>> output = llm("Q: Name the planets in the solar system? A: ", max_tokens=32, stop=["Q:", "\n"], echo=True)
 >>> print(output)
 {
   "id": "cmpl-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
   "object": "text_completion",
   "created": 1679561337,
-  "model": "models/7B/...",
+  "model": "./models/7B/ggml-model.bin",
   "choices": [
     {
       "text": "Q: Name the planets in the solar system? A: Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, Neptune and Pluto.",
@@ -60,11 +66,19 @@ To install the server package and get started:
 
 ```bash
 pip install llama-cpp-python[server]
-export MODEL=./models/7B
+export MODEL=./models/7B/ggml-model.bin
 python3 -m llama_cpp.server
 ```
 
 Navigate to [http://localhost:8000/docs](http://localhost:8000/docs) to see the OpenAPI documentation.
+
+## Docker image
+
+A Docker image is available on [GHCR](https://ghcr.io/abetlen/llama-cpp-python). To run the server:
+
+```bash
+docker run --rm -it -p8000:8000 -v /path/to/models:/models -eMODEL=/models/ggml-model-name.bin ghcr.io/abetlen/llama-cpp-python:latest
+```
 
 ## Low-level API
 
@@ -84,8 +98,7 @@ This package is under active development and I welcome any contributions.
 To get started, clone the repository and install the package in development mode:
 
 ```bash
-git clone git@github.com:abetlen/llama-cpp-python.git
-git submodule update --init --recursive
+git clone --recurse-submodules git@github.com:abetlen/llama-cpp-python.git
 # Will need to be re-run any time vendor/llama.cpp is updated
 python3 setup.py develop
 ```

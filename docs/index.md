@@ -29,14 +29,14 @@ pip install llama-cpp-python
 
 ```python
 >>> from llama_cpp import Llama
->>> llm = Llama(model_path="models/7B/...")
+>>> llm = Llama(model_path="./models/7B/ggml-model.bin")
 >>> output = llm("Q: Name the planets in the solar system? A: ", max_tokens=32, stop=["Q:", "\n"], echo=True)
 >>> print(output)
 {
   "id": "cmpl-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
   "object": "text_completion",
   "created": 1679561337,
-  "model": "models/7B/...",
+  "model": "./models/7B/ggml-model.bin",
   "choices": [
     {
       "text": "Q: Name the planets in the solar system? A: Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, Neptune and Pluto.",
@@ -62,7 +62,7 @@ To install the server package and get started:
 
 ```bash
 pip install llama-cpp-python[server]
-export MODEL=./models/7B
+export MODEL=./models/7B/ggml-model.bin
 python3 -m llama_cpp.server
 ```
 
@@ -104,9 +104,16 @@ python3 setup.py develop
             - create_completion
             - __call__
             - create_chat_completion
+            - set_cache
+            - save_state
+            - load_state
             - token_bos
             - token_eos
         show_root_heading: true
+
+::: llama_cpp.LlamaCache
+
+::: llama_cpp.LlamaState
 
 ::: llama_cpp.llama_cpp
     options:

@@ -9,7 +9,7 @@ N_THREADS = multiprocessing.cpu_count()
 prompt = b"\n\n### Instruction:\nWhat is the capital of France?\n\n### Response:\n"
 
 lparams = llama_cpp.llama_context_default_params()
-ctx = llama_cpp.llama_init_from_file(b"models/ggml-alpaca-7b-q4.bin", lparams)
+ctx = llama_cpp.llama_init_from_file(b"../models/7B/ggml-model.bin", lparams)
 
 # determine the required inference memory per token:
 tmp = [0, 1, 2, 3]
@@ -70,7 +70,7 @@ while remaining_tokens > 0:
     if not input_noecho:
         for id in embd:
             print(
-                llama_cpp.llama_token_to_str(ctx, id).decode("utf-8"),
+                llama_cpp.llama_token_to_str(ctx, id).decode("utf-8", errors="ignore"),
                 end="",
                 flush=True,
             )

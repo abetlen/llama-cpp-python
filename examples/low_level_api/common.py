@@ -40,6 +40,7 @@ class GptParams:
     instruct: bool = False
     ignore_eos: bool = False
     perplexity: bool = False
+    use_mmap: bool = True
     use_mlock: bool = False
     mem_test: bool = False
     verbose_prompt: bool = False
@@ -49,7 +50,7 @@ class GptParams:
     # If chat ended prematurely, append this to the conversation to fix it.
     # Set to "\nUser:" etc.
     # This is an alternative to input_prefix which always adds it, so it potentially duplicates "User:""
-    fix_prefix: str = " "
+    fix_prefix: str = ""
     output_postfix: str = ""
     input_echo: bool = True,
 
@@ -74,7 +75,7 @@ def gpt_params_parse(argv = None, params: Optional[GptParams] = None):
     parser.add_argument("--top_p", type=float, default=0.95, help="top-p samplin",dest="top_p")
     parser.add_argument("--top_k", type=int, default=40, help="top-k sampling",dest="top_k")
     parser.add_argument("--temp", type=float, default=0.80, help="temperature",dest="temp")
-    parser.add_argument("--n_predict", type=int, default=128, help="number of model parts",dest="n_predict")
+    parser.add_argument("--n_predict", type=int, default=128, help="number of tokens to predict (-1 = infinity)",dest="n_predict")
     parser.add_argument("--repeat_last_n", type=int, default=64, help="last n tokens to consider for penalize ",dest="repeat_last_n")
     parser.add_argument("--repeat_penalty", type=float, default=1.10, help="penalize repeat sequence of tokens",dest="repeat_penalty")
     parser.add_argument("-b", "--batch_size", type=int, default=8, help="batch size for prompt processing",dest="n_batch")
@@ -110,7 +111,9 @@ def gpt_params_parse(argv = None, params: Optional[GptParams] = None):
         dest="use_color"
     )
     parser.add_argument("--mlock", action="store_true",help="force system to keep model in RAM rather than swapping or compressing",dest="use_mlock")
+    parser.add_argument("--no-mmap", action="store_false",help="do not memory-map model (slower load but may reduce pageouts if not using mlock)",dest="use_mmap")
     parser.add_argument("--mtest", action="store_true",help="compute maximum memory usage",dest="mem_test")
+    parser.add_argument("--verbose-prompt", action="store_true",help="print prompt before generation",dest="verbose_prompt")
     parser.add_argument(
         "-r",
         "--reverse-prompt",

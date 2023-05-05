@@ -3,14 +3,14 @@ from skbuild import setup
 from pathlib import Path
 
 this_directory = Path(__file__).parent
-long_description = (this_directory / "README.md").read_text()
+long_description = (this_directory / "README.md").read_text(encoding="utf-8")
 
 setup(
     name="llama_cpp_python",
     description="A Python wrapper for llama.cpp",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    version="0.1.27",
+    version="0.1.43",
     author="Andrei Betlen",
     author_email="abetlen@gmail.com",
     license="MIT",

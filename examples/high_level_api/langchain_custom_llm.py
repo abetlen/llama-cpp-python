@@ -29,7 +29,7 @@ class LlamaLLM(LLM):
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-m", "--model", type=str, default="./models/...")
+parser.add_argument("-m", "--model", type=str, default="../models/7B/ggml-models.bin")
 args = parser.parse_args()
 
 # Load the model
