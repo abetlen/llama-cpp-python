@@ -22,12 +22,26 @@ Then visit http://localhost:8000/docs to see the interactive API docs.
 
 """
 import os
+import argparse
+
 import uvicorn
 
-from llama_cpp.server.app import create_app
+from llama_cpp.server.app import create_app, Settings
 
 if __name__ == "__main__":
-    app = create_app()
+    parser = argparse.ArgumentParser()
+    for name, field in Settings.__fields__.items():
+        parser.add_argument(
+            f"--{name}",
+            dest=name,
+            type=field.type_,
+            default=field.default,
+            help=field.field_info.description,
+        )
+
+    args = parser.parse_args()
+    settings = Settings(**vars(args))
+    app = create_app(settings=settings)
 
     uvicorn.run(
         app, host=os.getenv("HOST", "localhost"), port=int(os.getenv("PORT", 8000))
