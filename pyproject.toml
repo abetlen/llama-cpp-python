@@ -18,7 +18,7 @@ typing-extensions = "^4.5.0"
 
 
 [tool.poetry.group.dev.dependencies]
-black = "^23.1.0"
+black = "^23.3.0"
 twine = "^4.0.2"
 mkdocs = "^1.4.2"
 mkdocstrings = {extras = ["python"], version = "^0.20.0"}
