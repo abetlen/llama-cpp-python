@@ -33,12 +33,10 @@ class LlamaCache:
                 return k
         return None
 
-    def __getitem__(
-        self, key: Sequence[llama_cpp.llama_token]
-    ) -> Optional["LlamaState"]:
+    def __getitem__(self, key: Sequence[llama_cpp.llama_token]) -> "LlamaState":
         _key = self._find_key(tuple(key))
         if _key is None:
-            return None
+            raise KeyError(f"Key not found: {key}")
         return self.cache_state[_key]
 
     def __contains__(self, key: Sequence[llama_cpp.llama_token]) -> bool:
