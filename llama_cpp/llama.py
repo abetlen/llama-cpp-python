@@ -287,7 +287,7 @@ class Llama:
             candidates=llama_cpp.ctypes.pointer(candidates),
             penalty=repeat_penalty,
         )
-        if temp == 0.0:
+        if float(temp) == 0.0:
             return llama_cpp.llama_sample_token_greedy(
                 ctx=self.ctx,
                 candidates=llama_cpp.ctypes.pointer(candidates),
