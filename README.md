@@ -74,7 +74,7 @@ python3 -m llama_cpp.server
 Windows
 ```cmd
 pip install llama-cpp-python[server]
-SET MODEL=\models\7B\ggml-model.bin
+SET MODEL=..\models\7B\ggml-model.bin
 python3 -m llama_cpp.server
 ```
 
