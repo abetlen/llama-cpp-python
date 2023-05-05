@@ -52,7 +52,7 @@ class LlamaState:
         self,
         eval_tokens: Deque[llama_cpp.llama_token],
         eval_logits: Deque[List[llama_cpp.c_float]],
-        llama_state,
+        llama_state,  # type: llama_cpp.Array[llama_cpp.c_uint8]
         llama_state_size: llama_cpp.c_size_t,
     ):
         self.eval_tokens = eval_tokens
