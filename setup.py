@@ -22,6 +22,7 @@ setup(
     extras_require={
         "server": ["uvicorn>=0.21.1", "fastapi>=0.95.0", "sse-starlette>=1.3.3"],
     },
+    cmake_args=['-DLLAMA_CUBLAS=ON'],
     python_requires=">=3.7",
     classifiers=[
         "Programming Language :: Python :: 3",
