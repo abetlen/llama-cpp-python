@@ -330,7 +330,7 @@ n_keep = {self.params.n_keep}
 
 				# Apply params.logit_bias map
 				for key, value in self.params.logit_bias.items():
-					logits[key] += llama_cpp.c_float(value)
+					logits[key] += value
 
 				_arr = (llama_cpp.llama_token_data * n_vocab)(*[
 					llama_cpp.llama_token_data(token_id, logits[token_id], 0.0)
