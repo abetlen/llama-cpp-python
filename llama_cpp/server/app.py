@@ -149,8 +149,15 @@ class CreateCompletionRequest(BaseModel):
         description="The number of logprobs to generate. If None, no logprobs are generated."
     )
 
-    # ignored, but marked as required for the sake of compatibility with openai's api
-    model: str = model_field
+    # ignored or currently unsupported
+    model: Optional[str] = model_field
+    n: Optional[int] = 1
+    logprobs: Optional[int] = Field(None)
+    presence_penalty: Optional[float] = 0
+    frequency_penalty: Optional[float] = 0
+    best_of: Optional[int] = 1
+    logit_bias: Optional[Dict[str, float]] = Field(None)
+    user: Optional[str] = Field(None)
 
     # llama.cpp specific parameters
     top_k: int = top_k_field
@@ -190,11 +197,11 @@ def create_completion(
 
 
 class CreateEmbeddingRequest(BaseModel):
-    # ignored, but marked as required for the sake of compatibility with openai's api
-    model: str = model_field
+    model: Optional[str] = model_field
     input: str = Field(
         description="The input to embed."
     )
+    user: Optional[str]
 
     class Config:
         schema_extra = {
@@ -235,8 +242,13 @@ class CreateChatCompletionRequest(BaseModel):
     stop: Optional[List[str]] = stop_field
     stream: bool = stream_field
 
-    # ignored, but marked as required for the sake of compatibility with openai's api
-    model: str = model_field
+    # ignored or currently unsupported
+    model: Optional[str] = model_field
+    n: Optional[int] = 1
+    presence_penalty: Optional[float] = 0
+    frequency_penalty: Optional[float] = 0
+    logit_bias: Optional[Dict[str, float]] = Field(None)
+    user: Optional[str] = Field(None)
 
     # llama.cpp specific parameters
     top_k: int = top_k_field
