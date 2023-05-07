@@ -27,11 +27,11 @@ class Settings(BaseSettings):
     )
     f16_kv: bool = Field(default=True, description="Whether to use f16 key/value.")
     use_mlock: bool = Field(
-        default=bool(llama_cpp.llama_mlock_supported().value),
+        default=llama_cpp.llama_mlock_supported(),
         description="Use mlock.",
     )
     use_mmap: bool = Field(
-        default=bool(llama_cpp.llama_mmap_supported().value),
+        default=llama_cpp.llama_mmap_supported(),
         description="Use mmap.",
     )
     embedding: bool = Field(default=True, description="Whether to use embeddings.")
