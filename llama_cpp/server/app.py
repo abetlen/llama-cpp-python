@@ -185,7 +185,13 @@ def create_completion(
     completion_or_chunks = llama(
         **request.dict(
             exclude={
-                "model"
+                "model",
+                "n",
+                "frequency_penalty",
+                "presence_penalty",
+                "best_of",
+                "logit_bias",
+                "user",
             }
         )
     )
@@ -221,7 +227,7 @@ CreateEmbeddingResponse = create_model_from_typeddict(llama_cpp.Embedding)
 def create_embedding(
     request: CreateEmbeddingRequest, llama: llama_cpp.Llama = Depends(get_llama)
 ):
-    return llama.create_embedding(**request.dict(exclude={"model"}))
+    return llama.create_embedding(**request.dict(exclude={"model", "user"}))
 
 
 class ChatCompletionRequestMessage(BaseModel):
@@ -283,7 +289,12 @@ def create_chat_completion(
     completion_or_chunks = llama.create_chat_completion(
         **request.dict(
             exclude={
-                "model"
+                "model",
+                "n",
+                "presence_penalty",
+                "frequency_penalty",
+                "logit_bias",
+                "user",
             }
         ),
     )

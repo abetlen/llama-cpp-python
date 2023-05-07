@@ -60,6 +60,8 @@ class Completion(TypedDict):
 class ChatCompletionMessage(TypedDict):
     role: Literal["assistant", "user", "system"]
     content: str
+    user: NotRequired[str]
+
 
 class ChatCompletionChoice(TypedDict):
     index: int
