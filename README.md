@@ -68,18 +68,9 @@ This allows you to use llama.cpp compatible models with any OpenAI compatible cl
 
 To install the server package and get started:
 
-Linux/MacOS
 ```bash
 pip install llama-cpp-python[server]
-export MODEL=./models/7B/ggml-model.bin
-python3 -m llama_cpp.server
-```
-
-Windows
-```cmd
-pip install llama-cpp-python[server]
-SET MODEL=..\models\7B\ggml-model.bin
-python3 -m llama_cpp.server
+python3 -m llama_cpp.server --model models/7B/ggml-model.bin
 ```
 
 Navigate to [http://localhost:8000/docs](http://localhost:8000/docs) to see the OpenAPI documentation.
