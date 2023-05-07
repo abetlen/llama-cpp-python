@@ -297,21 +297,25 @@ class Llama:
                 ctx=self.ctx,
                 candidates=llama_cpp.ctypes.pointer(candidates),
                 k=top_k,
+                min_keep=llama_cpp.c_size_t(1),
             )
             llama_cpp.llama_sample_tail_free(
                 ctx=self.ctx,
                 candidates=llama_cpp.ctypes.pointer(candidates),
                 z=llama_cpp.c_float(1.0),
+                min_keep=llama_cpp.c_size_t(1),
             )
             llama_cpp.llama_sample_typical(
                 ctx=self.ctx,
                 candidates=llama_cpp.ctypes.pointer(candidates),
                 p=llama_cpp.c_float(1.0),
+                min_keep=llama_cpp.c_size_t(1),
             )
             llama_cpp.llama_sample_top_p(
                 ctx=self.ctx,
                 candidates=llama_cpp.ctypes.pointer(candidates),
                 p=top_p,
+                min_keep=llama_cpp.c_size_t(1),
             )
             llama_cpp.llama_sample_temperature(
                 ctx=self.ctx,
