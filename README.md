@@ -31,6 +31,10 @@ You can force the use of `cmake` on Linux / MacOS setting the `FORCE_CMAKE=1` en
 
 ## High-level API
 
+The high-level API provides a simple managed interface through the `Llama` class.
+
+Below is a short example demonstrating how to use the high-level API to generate text:
+
 ```python
 >>> from llama_cpp import Llama
 >>> llm = Llama(model_path="./models/7B/ggml-model.bin")
@@ -90,8 +94,25 @@ docker run --rm -it -p8000:8000 -v /path/to/models:/models -eMODEL=/models/ggml-
 
 ## Low-level API
 
-The low-level API is a direct `ctypes` binding to the C API provided by `llama.cpp`.
-The entire API can be found in [llama_cpp/llama_cpp.py](https://github.com/abetlen/llama-cpp-python/blob/master/llama_cpp/llama_cpp.py) and should mirror [llama.h](https://github.com/ggerganov/llama.cpp/blob/master/llama.h).
+The low-level API is a direct [`ctypes`](https://docs.python.org/3/library/ctypes.html) binding to the C API provided by `llama.cpp`.
+The entire lowe-level API can be found in [llama_cpp/llama_cpp.py](https://github.com/abetlen/llama-cpp-python/blob/master/llama_cpp/llama_cpp.py) and directly mirrors the C API in [llama.h](https://github.com/ggerganov/llama.cpp/blob/master/llama.h).
+
+Below is a short example demonstrating how to use the low-level API to tokenize a prompt:
+
+```python
+>>> import llama_cpp
+>>> import ctypes
+>>> params = llama_cpp.llama_context_default_params()
+# use bytes for char * params
+>>> ctx = llama_cpp.llama_init_from_file(b"./models/7b/ggml-model.bin", params)
+>>> max_tokens = params.n_ctx
+# use ctypes arrays for array params
+>>> tokens = (llama_cppp.llama_token * int(max_tokens))()
+>>> n_tokens = llama_cpp.llama_tokenize(ctx, b"Q: Name the planets in the solar system? A: ", tokens, max_tokens, add_bos=llama_cpp.c_bool(True))
+>>> llama_cpp.llama_free(ctx)
+```
+
+Check out the [examples folder](examples/low_level_api) for more examples of using the low-level API.
 
 
 # Documentation
