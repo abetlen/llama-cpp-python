@@ -15,7 +15,7 @@ This package provides:
   - OpenAI-like API
   - LangChain compatibility
 
-## Installation
+## Installation from PyPI (recommended)
 
 Install from PyPI (requires a c compiler):
 
@@ -26,8 +26,30 @@ pip install llama-cpp-python
 The above command will attempt to install the package and build build `llama.cpp` from source.
 This is the recommended installation method as it ensures that `llama.cpp` is built with the available optimizations for your system.
 
-This method defaults to using `make` to build `llama.cpp` on Linux / MacOS and `cmake` on Windows.
-You can force the use of `cmake` on Linux / MacOS setting the `FORCE_CMAKE=1` environment variable before installing.
+
+### Installation with OpenBLAS / cuBLAS / CLBlast
+
+`llama.cpp` supports multiple BLAS backends for faster processing.
+Use the `FORCE_CMAKE=1` environment variable to force the use of `cmake` and install the pip package for the desired BLAS backend.
+
+To install with OpenBLAS, set the `LLAMA_OPENBLAS=1` environment variable before installing:
+
+```bash
+LLAMA_OPENBLAS=1 FORCE_CMAKE=1 pip install llama-cpp-python
+```
+
+To install with cuBLAS, set the `LLAMA_CUBLAS=1` environment variable before installing:
+
+```bash
+LLAMA_CUBLAS=1 FORCE_CMAKE=1 pip install llama-cpp-python
+```
+
+To install with CLBlast, set the `LLAMA_CLBLAST=1` environment variable before installing:
+
+```bash
+LLAMA_CLBLAST=1 FORCE_CMAKE=1 pip install llama-cpp-python
+```
+
 
 ## High-level API
 
