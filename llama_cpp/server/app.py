@@ -45,6 +45,10 @@ class Settings(BaseSettings):
         default=False,
         description="Use a cache to reduce processing times for evaluated prompts.",
     )
+    cache_size: int = Field(
+        default=2 << 30,
+        description="The size of the cache in bytes. Only used if cache is True.",
+    )
     vocab_only: bool = Field(
         default=False, description="Whether to only return the vocabulary."
     )
@@ -89,7 +93,7 @@ def create_app(settings: Optional[Settings] = None):
         verbose=settings.verbose,
     )
     if settings.cache:
-        cache = llama_cpp.LlamaCache()
+        cache = llama_cpp.LlamaCache(capacity_bytes=settings.cache_size)
         llama.set_cache(cache)
     return app
 
