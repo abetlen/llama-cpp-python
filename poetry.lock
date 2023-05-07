@@ -747,14 +747,14 @@ files = [
 
 [[package]]
 name = "mkdocs"
-version = "1.4.2"
+version = "1.4.3"
 description = "Project documentation with Markdown."
 category = "dev"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "mkdocs-1.4.2-py3-none-any.whl", hash = "sha256:c8856a832c1e56702577023cd64cc5f84948280c1c0fcc6af4cd39006ea6aa8c"},
-    {file = "mkdocs-1.4.2.tar.gz", hash = "sha256:8947af423a6d0facf41ea1195b8e1e8c85ad94ac95ae307fe11232e0424b11c5"},
+    {file = "mkdocs-1.4.3-py3-none-any.whl", hash = "sha256:6ee46d309bda331aac915cd24aab882c179a933bd9e77b80ce7d2eaaa3f689dd"},
+    {file = "mkdocs-1.4.3.tar.gz", hash = "sha256:5955093bbd4dd2e9403c5afaf57324ad8b04f16886512a3ee6ef828956481c57"},
 ]
 
 [package.dependencies]
@@ -1458,4 +1458,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8.1"
-content-hash = "a921481e74f47e925f7ec2814fa0bc2e07707cb36fd12d9b33ecc6b0402a27c8"
+content-hash = "f2de41d10587a7f21e4891584de2c7152dfa6f75809144778b2dc34d93395abe"
