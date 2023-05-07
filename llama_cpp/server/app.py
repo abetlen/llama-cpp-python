@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     vocab_only: bool = Field(
         default=False, description="Whether to only return the vocabulary."
     )
+    verbose: bool = Field(
+        default=True, description="Whether to print debug information."
+    )
 
 
 router = APIRouter()
@@ -83,6 +86,7 @@ def create_app(settings: Optional[Settings] = None):
         n_ctx=settings.n_ctx,
         last_n_tokens_size=settings.last_n_tokens_size,
         vocab_only=settings.vocab_only,
+        verbose=settings.verbose,
     )
     if settings.cache:
         cache = llama_cpp.LlamaCache()
