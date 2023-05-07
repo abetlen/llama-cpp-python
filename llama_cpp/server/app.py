@@ -1,8 +1,8 @@
-import os
 import json
+import multiprocessing
 from threading import Lock
 from typing import List, Optional, Union, Iterator, Dict
-from typing_extensions import TypedDict, Literal, Annotated
+from typing_extensions import TypedDict, Literal
 
 import llama_cpp
 
@@ -21,7 +21,7 @@ class Settings(BaseSettings):
         default=512, ge=1, description="The batch size to use per eval."
     )
     n_threads: int = Field(
-        default=max((os.cpu_count() or 2) // 2, 1),
+        default=max(multiprocessing.cpu_count() // 2, 1),
         ge=1,
         description="The number of threads to use.",
     )
