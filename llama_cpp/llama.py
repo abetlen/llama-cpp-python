@@ -174,7 +174,20 @@ class Llama:
         if self.verbose:
             print(llama_cpp.llama_print_system_info().decode("utf-8"), file=sys.stderr)
 
-    def tokenize(self, text: bytes) -> List[llama_cpp.llama_token]:
+    def truncate(self, truncate_strategy: TruncateStrategy, prompt: str, missing_size: int, max_size: int):
+        n_missing = (len(prompt) + missing_size) - max_size
+        if n_missing > 0:
+            if truncate_strategy == TruncateStrategy.START:
+                # Dont remove BOS token
+                prompt = prompt[0] + prompt[n_missing+1:]
+            elif truncate_strategy == TruncateStrategy.END:
+                prompt = prompt[:-n_missing]
+            elif truncate_strategy == TruncateStrategy.MIDDLE:
+                middle = int(len(prompt)/2)
+                prompt = prompt[:int(middle-(n_missing/2))] + prompt[int(middle+(n_missing/2)):]
+        return prompt
+
+    def tokenize(self, text: bytes, ignore_out_of_tokens: bool = False) -> List[llama_cpp.llama_token]:
         """Tokenize a string.
 
         Args:
@@ -188,7 +201,7 @@ class Llama:
         """
         assert self.ctx is not None
         n_ctx = llama_cpp.llama_n_ctx(self.ctx)
-        tokens = (llama_cpp.llama_token * int(n_ctx))()
+        tokens = (llama_cpp.llama_token * (int(n_ctx) * (2 if ignore_out_of_tokens else 1)))()
         n_tokens = llama_cpp.llama_tokenize(
             self.ctx,
             text,
@@ -196,7 +209,7 @@ class Llama:
             n_ctx,
             llama_cpp.c_bool(True),
         )
-        if int(n_tokens) < 0:
+        if not ignore_out_of_tokens and int(n_tokens) < 0:
             raise RuntimeError(f'Failed to tokenize: text="{text}" n_tokens={n_tokens}')
         return list(tokens[:n_tokens])
 
@@ -536,7 +549,7 @@ class Llama:
         completion_tokens: List[llama_cpp.llama_token] = []
         # Add blank space to start of prompt to match OG llama tokenizer
         prompt_tokens: List[llama_cpp.llama_token] = self.tokenize(
-            b" " + prompt.encode("utf-8")
+            b" " + prompt.encode("utf-8"), ignore_out_of_tokens=truncate_strategy != None
         )
         text: bytes = b""
         returned_characters: int = 0
@@ -546,21 +559,14 @@ class Llama:
             llama_cpp.llama_reset_timings(self.ctx)
 
         n_ctx = int(llama_cpp.llama_n_ctx(self.ctx))
-        n_missing = (len(prompt_tokens) + max_tokens) - n_ctx
-        if n_missing > 0:
-            if truncate_strategy:
-                if truncate_strategy == TruncateStrategy.START:
-                    # Dont remove BOS token
-                    prompt_tokens = prompt_tokens[0] + prompt_tokens[n_missing+1:]
-                elif truncate_strategy == TruncateStrategy.END:
-                    prompt_tokens = prompt_tokens[:-n_missing]
-                elif truncate_strategy == TruncateStrategy.MIDDLE:
-                    middle = int(len(prompt_tokens)/2)
-                    prompt_tokens = prompt_tokens[:int(middle-(n_missing/2))] + prompt_tokens[int(middle+(n_missing/2)):]
-            else:
-                raise ValueError(
-                    f"Requested tokens exceed context window of {llama_cpp.llama_n_ctx(self.ctx)}"
-                )
+
+        if truncate_strategy != None:
+            prompt_tokens = self.truncate(truncate_strategy, prompt_tokens, max_tokens, n_ctx)
+
+        if len(prompt_tokens) + max_tokens > n_ctx:
+            raise ValueError(
+                f"Requested tokens exceed context window of {llama_cpp.llama_n_ctx(self.ctx)}"
+            )
 
         if stop != []:
             stop_sequences = [s.encode("utf-8") for s in stop]
