@@ -214,8 +214,6 @@ def create_completion(
             exclude={
                 "model",
                 "n",
-                "frequency_penalty",
-                "presence_penalty",
                 "best_of",
                 "logit_bias",
                 "user",
@@ -315,8 +313,6 @@ def create_chat_completion(
             exclude={
                 "model",
                 "n",
-                "presence_penalty",
-                "frequency_penalty",
                 "logit_bias",
                 "user",
             }
