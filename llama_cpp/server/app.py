@@ -357,7 +357,9 @@ GetModelResponse = create_model_from_typeddict(ModelList)
 
 
 @router.get("/v1/models", response_model=GetModelResponse)
-def get_models() -> ModelList:
+def get_models(
+    llama: llama_cpp.Llama = Depends(get_llama),
+) -> ModelList:
     return {
         "object": "list",
         "data": [
