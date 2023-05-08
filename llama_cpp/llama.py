@@ -205,12 +205,13 @@ class Llama:
         n_tokens = -1
 
         while int(n_tokens) < 0:
-            tokens = (llama_cpp.llama_token * (int(n_ctx) * n_i))()
+            s_tokens = int(n_ctx) * n_i
+            tokens = (llama_cpp.llama_token * s_tokens)()
             n_tokens = llama_cpp.llama_tokenize(
                 self.ctx,
                 text,
                 tokens,
-                n_ctx,
+                llama_cpp.c_int(s_tokens),
                 llama_cpp.c_bool(True),
             )
             if not ignore_out_of_tokens:
