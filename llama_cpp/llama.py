@@ -546,17 +546,17 @@ class Llama:
             llama_cpp.llama_reset_timings(self.ctx)
 
         n_ctx = int(llama_cpp.llama_n_ctx(self.ctx))
-        excess = (len(prompt_tokens) + max_tokens) - n_ctx
-        if excess >= 0:
+        n_missing = (len(prompt_tokens) + max_tokens) - n_ctx
+        if n_missing > 0:
             if truncate_strategy:
                 if truncate_strategy == TruncateStrategy.START:
                     # Dont remove BOS token
-                    prompt_tokens = prompt_tokens[0] + prompt_tokens[excess+1:]
+                    prompt_tokens = prompt_tokens[0] + prompt_tokens[n_missing+1:]
                 elif truncate_strategy == TruncateStrategy.END:
-                    prompt_tokens = prompt_tokens[:-excess]
+                    prompt_tokens = prompt_tokens[:-n_missing]
                 elif truncate_strategy == TruncateStrategy.MIDDLE:
                     middle = int(len(prompt_tokens)/2)
-                    prompt_tokens = prompt_tokens[:int(middle-(excess/2))] + prompt_tokens[int(middle+(excess/2)):]
+                    prompt_tokens = prompt_tokens[:int(middle-(n_missing/2))] + prompt_tokens[int(middle+(n_missing/2)):]
             else:
                 raise ValueError(
                     f"Requested tokens exceed context window of {llama_cpp.llama_n_ctx(self.ctx)}"
