@@ -40,7 +40,7 @@ if __name__ == "__main__":
         )
 
     args = parser.parse_args()
-    settings = Settings(**vars(args))
+    settings = Settings(**{k: v for k, v in vars(args).items() if v is not None})
     app = create_app(settings=settings)
 
     uvicorn.run(
