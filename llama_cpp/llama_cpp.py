@@ -157,7 +157,7 @@ _lib.llama_context_default_params.argtypes = []
 _lib.llama_context_default_params.restype = llama_context_params
 
 
-def llama_mmap_supported() -> c_bool:
+def llama_mmap_supported() -> bool:
     return _lib.llama_mmap_supported()
 
 
@@ -165,7 +165,7 @@ _lib.llama_mmap_supported.argtypes = []
 _lib.llama_mmap_supported.restype = c_bool
 
 
-def llama_mlock_supported() -> c_bool:
+def llama_mlock_supported() -> bool:
     return _lib.llama_mlock_supported()
 
 
@@ -260,7 +260,7 @@ _lib.llama_get_state_size.restype = c_size_t
 # Returns the number of bytes copied
 def llama_copy_state_data(
     ctx: llama_context_p, dest  # type: Array[c_uint8]
-) -> c_size_t:
+) -> int:
     return _lib.llama_copy_state_data(ctx, dest)
 
 
@@ -272,7 +272,7 @@ _lib.llama_copy_state_data.restype = c_size_t
 # Returns the number of bytes read
 def llama_set_state_data(
     ctx: llama_context_p, src  # type: Array[c_uint8]
-) -> c_size_t:
+) -> int:
     return _lib.llama_set_state_data(ctx, src)
 
 
@@ -387,7 +387,9 @@ _lib.llama_n_embd.restype = c_int
 # Can be mutated in order to change the probabilities of the next token
 # Rows: n_tokens
 # Cols: n_vocab
-def llama_get_logits(ctx: llama_context_p):  # type: (...) -> Array[float] # type: ignore
+def llama_get_logits(
+    ctx: llama_context_p,
+):  # type: (...) -> Array[float] # type: ignore
     return _lib.llama_get_logits(ctx)
 
 
@@ -397,7 +399,9 @@ _lib.llama_get_logits.restype = c_float_p
 
 # Get the embeddings for the input
 # shape: [n_embd] (1-dimensional)
-def llama_get_embeddings(ctx: llama_context_p):  # type: (...) -> Array[float] # type: ignore
+def llama_get_embeddings(
+    ctx: llama_context_p,
+):  # type: (...) -> Array[float] # type: ignore
     return _lib.llama_get_embeddings(ctx)
 
 
@@ -515,7 +519,7 @@ def llama_sample_top_k(
     ctx: llama_context_p,
     candidates,  # type: _Pointer[llama_token_data_array]
     k: c_int,
-    min_keep: c_size_t = c_size_t(1),
+    min_keep: c_size_t,
 ):
     return _lib.llama_sample_top_k(ctx, candidates, k, min_keep)
 
@@ -534,7 +538,7 @@ def llama_sample_top_p(
     ctx: llama_context_p,
     candidates,  # type: _Pointer[llama_token_data_array]
     p: c_float,
-    min_keep: c_size_t = c_size_t(1),
+    min_keep: c_size_t,
 ):
     return _lib.llama_sample_top_p(ctx, candidates, p, min_keep)
 
@@ -553,7 +557,7 @@ def llama_sample_tail_free(
     ctx: llama_context_p,
     candidates,  # type: _Pointer[llama_token_data_array]
     z: c_float,
-    min_keep: c_size_t = c_size_t(1),
+    min_keep: c_size_t,
 ):
     return _lib.llama_sample_tail_free(ctx, candidates, z, min_keep)
 
@@ -572,7 +576,7 @@ def llama_sample_typical(
     ctx: llama_context_p,
     candidates,  # type: _Pointer[llama_token_data_array]
     p: c_float,
-    min_keep: c_size_t = c_size_t(1),
+    min_keep: c_size_t,
 ):
     return _lib.llama_sample_typical(ctx, candidates, p, min_keep)
 

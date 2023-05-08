@@ -5,7 +5,7 @@ import time
 import math
 import multiprocessing
 from typing import List, Optional, Union, Generator, Sequence, Iterator, Deque, Tuple
-from collections import deque
+from collections import deque, OrderedDict
 
 from . import llama_cpp
 from .llama_types import *
@@ -14,46 +14,59 @@ from .llama_types import *
 class LlamaCache:
     """Cache for a llama.cpp model."""
 
-    def __init__(self):
-        self.cache_state: Dict[Tuple[llama_cpp.llama_token, ...], "LlamaState"] = dict()
+    def __init__(self, capacity_bytes: int = (2 << 30)):
+        self.cache_state: OrderedDict[
+            Tuple[llama_cpp.llama_token, ...], "LlamaState"
+        ] = OrderedDict()
+        self.capacity_bytes = capacity_bytes
 
-    def _sorted_keys(self) -> List[Tuple[llama_cpp.llama_token, ...]]:
-        return [
-            key
-            for _, key in sorted(
-                ((len(key), key) for key in self.cache_state.keys()), reverse=True
-            )
-        ]
+    @property
+    def cache_size(self):
+        return sum([state.llama_state_size for state in self.cache_state.values()])
 
-    def _find_key(
-        self, key: Tuple[llama_cpp.llama_token, ...]
+    def _find_longest_prefix_key(
+        self,
+        key: Tuple[llama_cpp.llama_token, ...],
     ) -> Optional[Tuple[llama_cpp.llama_token, ...]]:
-        for k in self._sorted_keys():
-            if key[: len(k)] == k:
-                return k
-        return None
+        min_len = 0
+        min_key = None
+        keys = (
+            (k, Llama.longest_token_prefix(k, key)) for k in self.cache_state.keys()
+        )
+        for k, prefix_len in keys:
+            if prefix_len > min_len:
+                min_len = prefix_len
+                min_key = k
+        return min_key
 
     def __getitem__(self, key: Sequence[llama_cpp.llama_token]) -> "LlamaState":
-        _key = self._find_key(tuple(key))
+        key = tuple(key)
+        _key = self._find_longest_prefix_key(key)
         if _key is None:
-            raise KeyError(f"Key not found: {key}")
-        return self.cache_state[_key]
+            raise KeyError(f"Key not found")
+        value = self.cache_state[_key]
+        self.cache_state.move_to_end(_key)
+        return value
 
     def __contains__(self, key: Sequence[llama_cpp.llama_token]) -> bool:
-        return self._find_key(tuple(key)) is not None
+        return self._find_longest_prefix_key(tuple(key)) is not None
 
     def __setitem__(self, key: Sequence[llama_cpp.llama_token], value: "LlamaState"):
-        self.cache_state = dict()  # NOTE: Currently limit to one cache entry.
-        self.cache_state[tuple(key)] = value
+        key = tuple(key)
+        if key in self.cache_state:
+            del self.cache_state[key]
+        self.cache_state[key] = value
+        while self.cache_size > self.capacity_bytes:
+            self.cache_state.popitem(last=False)
 
 
 class LlamaState:
     def __init__(
         self,
         eval_tokens: Deque[llama_cpp.llama_token],
-        eval_logits: Deque[List[llama_cpp.c_float]],
+        eval_logits: Deque[List[float]],
         llama_state,  # type: llama_cpp.Array[llama_cpp.c_uint8]
-        llama_state_size: llama_cpp.c_size_t,
+        llama_state_size: int,
     ):
         self.eval_tokens = eval_tokens
         self.eval_logits = eval_logits
@@ -127,9 +140,7 @@ class Llama:
         self.last_n_tokens_size = last_n_tokens_size
         self.n_batch = min(n_ctx, n_batch)
         self.eval_tokens: Deque[llama_cpp.llama_token] = deque(maxlen=n_ctx)
-        self.eval_logits: Deque[List[float]] = deque(
-            maxlen=n_ctx if logits_all else 1
-        )
+        self.eval_logits: Deque[List[float]] = deque(maxlen=n_ctx if logits_all else 1)
 
         self.cache: Optional[LlamaCache] = None
 
@@ -250,7 +261,7 @@ class Llama:
             ]
             self.eval_logits.extend(logits)
 
-    def _sample_top_p_top_k(
+    def _sample(
         self,
         last_n_tokens_data,  # type: llama_cpp.Array[llama_cpp.llama_token]
         last_n_tokens_size: llama_cpp.c_int,
@@ -263,6 +274,8 @@ class Llama:
         mirostat_mu: llama_cpp.c_float,
         mirostat_m: llama_cpp.c_int,
         repeat_penalty: llama_cpp.c_float,
+        frequency_penalty: llama_cpp.c_float,
+        presence_penalty: llama_cpp.c_float,
     ):
         assert self.ctx is not None
         assert len(self.eval_logits) > 0
@@ -289,24 +302,24 @@ class Llama:
             ctx=self.ctx,
             last_tokens_data=last_n_tokens_data,
             last_tokens_size=last_n_tokens_size,
-            candidates=llama_cpp.ctypes.pointer(candidates),
+            candidates=llama_cpp.ctypes.byref(candidates),  # type: ignore
             penalty=repeat_penalty,
         )
-        if mirostat_mode == 1:
+        if mirostat_mode.value == 1:
             llama_cpp.llama_sample_temperature(
                 ctx=self.ctx,
-                candidates=llama_cpp.ctypes.pointer(candidates),
+                candidates=llama_cpp.ctypes.byref(candidates), # type: ignore
                 temp=temp,
             )
             llama_cpp.llama_sample_token_mirostat(
                 ctx=self.ctx,
-                candidates=llama_cpp.ctypes.pointer(candidates),
+                candidates=llama_cpp.ctypes.byref(candidates), # type: ignore
                 tau=mirostat_tau,
                 eta=mirostat_eta,
-                mu=mirostat_mu,
+                mu=llama_cpp.ctypes.byref(mirostat_mu), # type: ignore
                 m=mirostat_m
             )
-        elif mirostat_mode == 2:
+        elif mirostat_mode.value == 2:
             llama_cpp.llama_sample_temperature(
                 ctx=self.ctx,
                 candidates=llama_cpp.ctypes.pointer(candidates),
@@ -314,45 +327,57 @@ class Llama:
             )
             llama_cpp.llama_sample_token_mirostat_v2(
                 ctx=self.ctx,
-                candidates=llama_cpp.ctypes.pointer(candidates),
+                candidates=llama_cpp.ctypes.byref(candidates), # type: ignore
                 tau=mirostat_tau,
                 eta=mirostat_eta,
-                mu=mirostat_mu
+                mu=llama_cpp.ctypes.byref(mirostat_mu) # type: ignore
             )
-        elif float(temp.value) == 0.0:
+        llama_cpp.llama_sample_frequency_and_presence_penalties(
+            ctx=self.ctx,
+            candidates=llama_cpp.ctypes.byref(candidates),  # type: ignore
+            last_tokens_data=last_n_tokens_data,
+            last_tokens_size=last_n_tokens_size,
+            alpha_frequency=frequency_penalty,
+            alpha_presence=presence_penalty,
+        )
+        if float(temp.value) == 0.0:
             return llama_cpp.llama_sample_token_greedy(
                 ctx=self.ctx,
-                candidates=llama_cpp.ctypes.pointer(candidates),
+                candidates=llama_cpp.ctypes.byref(candidates),  # type: ignore
             )
         else:
             llama_cpp.llama_sample_top_k(
                 ctx=self.ctx,
-                candidates=llama_cpp.ctypes.pointer(candidates),
+                candidates=llama_cpp.ctypes.byref(candidates),  # type: ignore
                 k=top_k,
+                min_keep=llama_cpp.c_size_t(1),
             )
             llama_cpp.llama_sample_tail_free(
                 ctx=self.ctx,
-                candidates=llama_cpp.ctypes.pointer(candidates),
+                candidates=llama_cpp.ctypes.byref(candidates),  # type: ignore
                 z=llama_cpp.c_float(1.0),
+                min_keep=llama_cpp.c_size_t(1),
             )
             llama_cpp.llama_sample_typical(
                 ctx=self.ctx,
-                candidates=llama_cpp.ctypes.pointer(candidates),
+                candidates=llama_cpp.ctypes.byref(candidates),  # type: ignore
                 p=llama_cpp.c_float(1.0),
+                min_keep=llama_cpp.c_size_t(1),
             )
             llama_cpp.llama_sample_top_p(
                 ctx=self.ctx,
-                candidates=llama_cpp.ctypes.pointer(candidates),
+                candidates=llama_cpp.ctypes.byref(candidates),  # type: ignore
                 p=top_p,
+                min_keep=llama_cpp.c_size_t(1),
             )
             llama_cpp.llama_sample_temperature(
                 ctx=self.ctx,
-                candidates=llama_cpp.ctypes.pointer(candidates),
+                candidates=llama_cpp.ctypes.byref(candidates),  # type: ignore
                 temp=temp,
             )
             return llama_cpp.llama_sample_token(
                 ctx=self.ctx,
-                candidates=llama_cpp.ctypes.pointer(candidates),
+                candidates=llama_cpp.ctypes.byref(candidates),  # type: ignore
             )
 
     def sample(
@@ -366,6 +391,8 @@ class Llama:
         mirostat_mu: float,
         mirostat_m: int,
         repeat_penalty: float,
+        frequency_penalty: float = 0.0,
+        presence_penalty: float = 0.0,
     ):
         """Sample a token from the model.
 
@@ -382,7 +409,7 @@ class Llama:
         last_n_tokens_data = [llama_cpp.llama_token(0)] * max(
             0, self.last_n_tokens_size - len(self.eval_tokens)
         ) + list(self.eval_tokens)[-self.last_n_tokens_size :]
-        return self._sample_top_p_top_k(
+        return self._sample(
             last_n_tokens_data=(llama_cpp.llama_token * self.last_n_tokens_size)(
                 *last_n_tokens_data
             ),
@@ -396,6 +423,8 @@ class Llama:
             mirostat_eta=llama_cpp.c_float(mirostat_eta),
             mirostat_m=llama_cpp.c_int(mirostat_m),
             repeat_penalty=llama_cpp.c_float(repeat_penalty),
+            frequency_penalty=llama_cpp.c_float(frequency_penalty),
+            presence_penalty=llama_cpp.c_float(presence_penalty),
         )
 
     def generate(
@@ -410,6 +439,8 @@ class Llama:
         mirostat_mu: float,
         mirostat_m: int,
         repeat_penalty: float,
+        frequency_penalty: float = 0.0,
+        presence_penalty: float = 0.0,
         reset: bool = True,
     ) -> Generator[
         llama_cpp.llama_token, Optional[Sequence[llama_cpp.llama_token]], None
@@ -468,6 +499,8 @@ class Llama:
                 mirostat_eta=mirostat_eta,
                 mirostat_mu=mirostat_mu,
                 mirostat_m=mirostat_m,
+                frequency_penalty=frequency_penalty,
+                presence_penalty=presence_penalty,
                 repeat_penalty=repeat_penalty,
             )
             tokens_or_none = yield token
@@ -547,6 +580,8 @@ class Llama:
         logprobs: Optional[int] = None,
         echo: bool = False,
         stop: Optional[List[str]] = [],
+        frequency_penalty: float = 0.0,
+        presence_penalty: float = 0.0,
         repeat_penalty: float = 1.1,
         top_k: int = 40,
         stream: bool = False,
@@ -581,10 +616,22 @@ class Llama:
                 "logprobs is not supported for models created with logits_all=False"
             )
 
-        if self.cache and prompt_tokens in self.cache:
-            if self.verbose:
-                print("Llama._create_completion: cache hit", file=sys.stderr)
-            self.load_state(self.cache[prompt_tokens])
+        if self.cache:
+            try:
+                cache_item = self.cache[prompt_tokens]
+                cache_prefix_len = Llama.longest_token_prefix(
+                    cache_item.eval_tokens, prompt_tokens
+                )
+                eval_prefix_len = Llama.longest_token_prefix(
+                    self.eval_tokens, prompt_tokens
+                )
+                if cache_prefix_len > eval_prefix_len:
+                    self.load_state(cache_item)
+                    if self.verbose:
+                        print("Llama._create_completion: cache hit", file=sys.stderr)
+            except KeyError:
+                if self.verbose:
+                    print("Llama._create_completion: cache miss", file=sys.stderr)
 
         finish_reason = "length"
         multibyte_fix = 0
@@ -598,18 +645,14 @@ class Llama:
             mirostat_eta=mirostat_eta,
             mirostat_mu=mirostat_mu,
             mirostat_m=mirostat_m,
+            frequency_penalty=frequency_penalty,
+            presence_penalty=presence_penalty,
             repeat_penalty=repeat_penalty,
         ):
             if token == llama_cpp.llama_token_eos():
                 text = self.detokenize(completion_tokens)
                 finish_reason = "stop"
                 break
-
-            if self.cache and len(completion_tokens) == 0:
-                if prompt_tokens not in self.cache:
-                    if self.verbose:
-                        print("Llama._create_completion: cache miss", file=sys.stderr)
-                    self.cache[prompt_tokens] = self.save_state()
 
             completion_tokens.append(token)
 
@@ -668,6 +711,11 @@ class Llama:
                 text = self.detokenize(completion_tokens)
                 finish_reason = "length"
                 break
+
+        if self.cache:
+            if self.verbose:
+                print("Llama._create_completion: cache save", file=sys.stderr)
+            self.cache[prompt_tokens + completion_tokens] = self.save_state()
 
         if stream:
             yield {
@@ -778,6 +826,8 @@ class Llama:
         logprobs: Optional[int] = None,
         echo: bool = False,
         stop: Optional[List[str]] = [],
+        frequency_penalty: float = 0.0,
+        presence_penalty: float = 0.0,
         repeat_penalty: float = 1.1,
         top_k: int = 40,
         stream: bool = False,
@@ -818,6 +868,8 @@ class Llama:
             logprobs=logprobs,
             echo=echo,
             stop=stop,
+            frequency_penalty=frequency_penalty,
+            presence_penalty=presence_penalty,
             repeat_penalty=repeat_penalty,
             top_k=top_k,
             stream=stream,
@@ -843,6 +895,8 @@ class Llama:
         logprobs: Optional[int] = None,
         echo: bool = False,
         stop: Optional[List[str]] = [],
+        frequency_penalty: float = 0.0,
+        presence_penalty: float = 0.0,
         repeat_penalty: float = 1.1,
         top_k: int = 40,
         stream: bool = False,
@@ -883,6 +937,8 @@ class Llama:
             logprobs=logprobs,
             echo=echo,
             stop=stop,
+            frequency_penalty=frequency_penalty,
+            presence_penalty=presence_penalty,
             repeat_penalty=repeat_penalty,
             top_k=top_k,
             stream=stream,
@@ -955,6 +1011,8 @@ class Llama:
         stream: bool = False,
         stop: Optional[List[str]] = [],
         max_tokens: int = 256,
+        presence_penalty: float = 0.0,
+        frequency_penalty: float = 0.0,
         repeat_penalty: float = 1.1,
     ) -> Union[ChatCompletion, Iterator[ChatCompletionChunk]]:
         """Generate a chat completion from a list of messages.
@@ -988,6 +1046,8 @@ class Llama:
             stream=stream,
             max_tokens=max_tokens,
             repeat_penalty=repeat_penalty,
+            presence_penalty=presence_penalty,
+            frequency_penalty=frequency_penalty,
         )
         if stream:
             chunks: Iterator[CompletionChunk] = completion_or_chunks  # type: ignore
@@ -1085,3 +1145,15 @@ class Llama:
         exps = [math.exp(float(x)) for x in logits]
         sum_exps = sum(exps)
         return [math.log(x / sum_exps) for x in exps]
+
+    @staticmethod
+    def longest_token_prefix(
+        a: Sequence[llama_cpp.llama_token], b: Sequence[llama_cpp.llama_token]
+    ):
+        longest_prefix = 0
+        for _a, _b in zip(a, b):
+            if _a == _b:
+                longest_prefix += 1
+            else:
+                break
+        return longest_prefix
