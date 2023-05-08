@@ -528,6 +528,7 @@ class Llama:
         repeat_penalty: float = 1.1,
         top_k: int = 40,
         stream: bool = False,
+        truncate_strategy: TruncateStrategy = None
     ) -> Union[Iterator[Completion], Iterator[CompletionChunk]]:
         assert self.ctx is not None
         completion_id: str = f"cmpl-{str(uuid.uuid4())}"
@@ -544,10 +545,22 @@ class Llama:
         if self.verbose:
             llama_cpp.llama_reset_timings(self.ctx)
 
-        if len(prompt_tokens) + max_tokens > int(llama_cpp.llama_n_ctx(self.ctx)):
-            raise ValueError(
-                f"Requested tokens exceed context window of {llama_cpp.llama_n_ctx(self.ctx)}"
-            )
+        n_ctx = int(llama_cpp.llama_n_ctx(self.ctx))
+        excess = (len(prompt_tokens) + max_tokens) - n_ctx
+        if excess >= 0:
+            if truncate_strategy:
+                if truncate_strategy == TruncateStrategy.START:
+                    # Dont remove BOS token
+                    prompt_tokens = prompt_tokens[0] + prompt_tokens[excess+1:]
+                elif truncate_strategy == TruncateStrategy.END:
+                    prompt_tokens = prompt_tokens[:-excess]
+                elif truncate_strategy == TruncateStrategy.MIDDLE:
+                    middle = int(len(prompt_tokens)/2)
+                    prompt_tokens = prompt_tokens[:int(middle-(excess/2))] + prompt_tokens[int(middle+(excess/2)):]
+            else:
+                raise ValueError(
+                    f"Requested tokens exceed context window of {llama_cpp.llama_n_ctx(self.ctx)}"
+                )
 
         if stop != []:
             stop_sequences = [s.encode("utf-8") for s in stop]
