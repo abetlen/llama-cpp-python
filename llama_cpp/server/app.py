@@ -45,6 +45,10 @@ class Settings(BaseSettings):
         default=False,
         description="Use a cache to reduce processing times for evaluated prompts.",
     )
+    cache_size: int = Field(
+        default=2 << 30,
+        description="The size of the cache in bytes. Only used if cache is True.",
+    )
     vocab_only: bool = Field(
         default=False, description="Whether to only return the vocabulary."
     )
@@ -89,7 +93,7 @@ def create_app(settings: Optional[Settings] = None):
         verbose=settings.verbose,
     )
     if settings.cache:
-        cache = llama_cpp.LlamaCache()
+        cache = llama_cpp.LlamaCache(capacity_bytes=settings.cache_size)
         llama.set_cache(cache)
     return app
 
@@ -142,7 +146,7 @@ top_k_field = Field(
 )
 
 repeat_penalty_field = Field(
-    default=1.0,
+    default=0.0,
     ge=0.0,
     description="A penalty applied to each token that is already generated. This helps prevent the model from repeating itself.\n\n"
     + "Repeat penalty is a hyperparameter used to penalize the repetition of token sequences during text generation. It helps prevent the model from generating repetitive or monotonous text. A higher value (e.g., 1.5) will penalize repetitions more strongly, while a lower value (e.g., 0.9) will be more lenient.",
@@ -210,8 +214,6 @@ def create_completion(
             exclude={
                 "model",
                 "n",
-                "frequency_penalty",
-                "presence_penalty",
                 "best_of",
                 "logit_bias",
                 "user",
@@ -311,8 +313,6 @@ def create_chat_completion(
             exclude={
                 "model",
                 "n",
-                "presence_penalty",
-                "frequency_penalty",
                 "logit_bias",
                 "user",
             }
@@ -353,7 +353,9 @@ GetModelResponse = create_model_from_typeddict(ModelList)
 
 
 @router.get("/v1/models", response_model=GetModelResponse)
-def get_models() -> ModelList:
+def get_models(
+    llama: llama_cpp.Llama = Depends(get_llama),
+) -> ModelList:
     return {
         "object": "list",
         "data": [
