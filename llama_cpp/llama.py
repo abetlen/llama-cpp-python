@@ -174,7 +174,7 @@ class Llama:
         if self.verbose:
             print(llama_cpp.llama_print_system_info().decode("utf-8"), file=sys.stderr)
 
-    def truncate(self, truncate_strategy: TruncateStrategy, prompt: str, missing_size: int, max_size: int):
+    def truncate(self, truncate_strategy: TruncateStrategy, prompt: list, missing_size: int, max_size: int):
         n_missing = (len(prompt) + missing_size) - max_size
         if n_missing > 0:
             if truncate_strategy == TruncateStrategy.START:
@@ -549,7 +549,8 @@ class Llama:
         completion_tokens: List[llama_cpp.llama_token] = []
         # Add blank space to start of prompt to match OG llama tokenizer
         prompt_tokens: List[llama_cpp.llama_token] = self.tokenize(
-            b" " + prompt.encode("utf-8"), ignore_out_of_tokens=truncate_strategy != None
+            b" " + prompt.encode("utf-8"), 
+            ignore_out_of_tokens=truncate_strategy != None, 
         )
         text: bytes = b""
         returned_characters: int = 0
