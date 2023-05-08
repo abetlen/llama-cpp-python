@@ -528,7 +528,7 @@ class Llama:
         repeat_penalty: float = 1.1,
         top_k: int = 40,
         stream: bool = False,
-        truncate_strategy: TruncateStrategy = None
+        truncate_strategy: TruncateStrategy = None,
     ) -> Union[Iterator[Completion], Iterator[CompletionChunk]]:
         assert self.ctx is not None
         completion_id: str = f"cmpl-{str(uuid.uuid4())}"
@@ -777,6 +777,7 @@ class Llama:
         repeat_penalty: float = 1.1,
         top_k: int = 40,
         stream: bool = False,
+        truncate_strategy: TruncateStrategy = None,
     ) -> Union[Completion, Iterator[CompletionChunk]]:
         """Generate text from a prompt.
 
@@ -814,6 +815,7 @@ class Llama:
             repeat_penalty=repeat_penalty,
             top_k=top_k,
             stream=stream,
+            truncate_strategy=truncate_strategy,
         )
         if stream:
             chunks: Iterator[CompletionChunk] = completion_or_chunks
@@ -836,6 +838,7 @@ class Llama:
         repeat_penalty: float = 1.1,
         top_k: int = 40,
         stream: bool = False,
+        truncate_strategy: TruncateStrategy = None,
     ) -> Union[Completion, Iterator[CompletionChunk]]:
         """Generate text from a prompt.
 
@@ -873,6 +876,7 @@ class Llama:
             repeat_penalty=repeat_penalty,
             top_k=top_k,
             stream=stream,
+            truncate_strategy=truncate_strategy
         )
 
     def _convert_text_completion_to_chat(
