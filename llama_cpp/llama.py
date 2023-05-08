@@ -201,7 +201,7 @@ class Llama:
         """
         assert self.ctx is not None
         n_ctx = llama_cpp.llama_n_ctx(self.ctx)
-        n_i = 1
+        n_i = 2 if ignore_out_of_tokens else 1
         n_tokens = -1
 
         while int(n_tokens) < 0:
@@ -211,7 +211,7 @@ class Llama:
                 self.ctx,
                 text,
                 tokens,
-                llama_cpp.c_int(s_tokens),
+                s_tokens,
                 llama_cpp.c_bool(True),
             )
             if not ignore_out_of_tokens:
