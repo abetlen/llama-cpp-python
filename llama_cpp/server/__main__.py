@@ -29,16 +29,16 @@ import uvicorn
 from llama_cpp.server.app import create_app, Settings
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
-    )
+    parser = argparse.ArgumentParser()
     for name, field in Settings.__fields__.items():
+        description = field.field_info.description
+        if field.default is not None and description is not None:
+            description += f" (default: {field.default})"
         parser.add_argument(
             f"--{name}",
             dest=name,
             type=field.type_,
-            default=field.default,
-            help=field.field_info.description,
+            help=description,
         )
 
     args = parser.parse_args()
