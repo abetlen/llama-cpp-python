@@ -174,7 +174,7 @@ class Llama:
         if self.verbose:
             print(llama_cpp.llama_print_system_info().decode("utf-8"), file=sys.stderr)
 
-    def truncate(self, truncate_strategy: TruncateStrategy, prompt: list, missing_size: int, max_size: int):
+    def truncate(self, truncate_strategy: TruncateStrategy, prompt: str, missing_size: int, max_size: int):
         n_missing = (len(prompt) + missing_size) - max_size
         if n_missing > 0:
             if truncate_strategy == TruncateStrategy.START:
@@ -201,15 +201,23 @@ class Llama:
         """
         assert self.ctx is not None
         n_ctx = llama_cpp.llama_n_ctx(self.ctx)
-        tokens = (llama_cpp.llama_token * (int(n_ctx) * (2 if ignore_out_of_tokens else 1)))()
-        n_tokens = llama_cpp.llama_tokenize(
-            self.ctx,
-            text,
-            tokens,
-            n_ctx,
-            llama_cpp.c_bool(True),
-        )
-        if not ignore_out_of_tokens and int(n_tokens) < 0:
+        n_i = 1
+        n_tokens = -1
+
+        while int(n_tokens) < 0:
+            tokens = (llama_cpp.llama_token * (int(n_ctx) * n_i))()
+            n_tokens = llama_cpp.llama_tokenize(
+                self.ctx,
+                text,
+                tokens,
+                n_ctx,
+                llama_cpp.c_bool(True),
+            )
+            if not ignore_out_of_tokens:
+                break
+            n_i *= 2
+
+        if int(n_tokens) < 0:
             raise RuntimeError(f'Failed to tokenize: text="{text}" n_tokens={n_tokens}')
         return list(tokens[:n_tokens])
 
