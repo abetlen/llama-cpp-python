@@ -290,9 +290,13 @@ class Llama:
         top_k: llama_cpp.c_int,
         top_p: llama_cpp.c_float,
         temp: llama_cpp.c_float,
+        tfs_z: llama_cpp.c_float,
         repeat_penalty: llama_cpp.c_float,
         frequency_penalty: llama_cpp.c_float,
         presence_penalty: llama_cpp.c_float,
+        mirostat_mode: llama_cpp.c_int,
+        mirostat_tau: llama_cpp.c_float,
+        mirostat_eta: llama_cpp.c_float,
     ):
         assert self.ctx is not None
         assert len(self.eval_logits) > 0
@@ -330,10 +334,40 @@ class Llama:
             alpha_frequency=frequency_penalty,
             alpha_presence=presence_penalty,
         )
-        if float(temp.value) == 0.0:
+        if temp.value == 0.0:
             return llama_cpp.llama_sample_token_greedy(
                 ctx=self.ctx,
                 candidates=llama_cpp.ctypes.byref(candidates),  # type: ignore
+            )
+        elif mirostat_mode.value == 1:
+            mirostat_mu = llama_cpp.c_float(2.0 * mirostat_tau.value)
+            mirostat_m = llama_cpp.c_int(100)
+            llama_cpp.llama_sample_temperature(
+                ctx=self.ctx,
+                candidates=llama_cpp.ctypes.byref(candidates),  # type: ignore
+                temp=temp,
+            )
+            return llama_cpp.llama_sample_token_mirostat(
+                ctx=self.ctx,
+                candidates=llama_cpp.ctypes.byref(candidates),  # type: ignore
+                tau=mirostat_tau,
+                eta=mirostat_eta,
+                mu=llama_cpp.ctypes.byref(mirostat_mu),  # type: ignore
+                m=mirostat_m,
+            )
+        elif mirostat_mode.value == 2:
+            mirostat_mu = llama_cpp.c_float(2.0 * mirostat_tau.value)
+            llama_cpp.llama_sample_temperature(
+                ctx=self.ctx,
+                candidates=llama_cpp.ctypes.pointer(candidates),
+                temp=temp,
+            )
+            return llama_cpp.llama_sample_token_mirostat_v2(
+                ctx=self.ctx,
+                candidates=llama_cpp.ctypes.byref(candidates),  # type: ignore
+                tau=mirostat_tau,
+                eta=mirostat_eta,
+                mu=llama_cpp.ctypes.byref(mirostat_mu),  # type: ignore
             )
         else:
             llama_cpp.llama_sample_top_k(
@@ -345,7 +379,7 @@ class Llama:
             llama_cpp.llama_sample_tail_free(
                 ctx=self.ctx,
                 candidates=llama_cpp.ctypes.byref(candidates),  # type: ignore
-                z=llama_cpp.c_float(1.0),
+                z=tfs_z,
                 min_keep=llama_cpp.c_size_t(1),
             )
             llama_cpp.llama_sample_typical(
@@ -372,12 +406,16 @@ class Llama:
 
     def sample(
         self,
-        top_k: int,
-        top_p: float,
-        temp: float,
-        repeat_penalty: float,
+        top_k: int = 40,
+        top_p: float = 0.95,
+        temp: float = 0.80,
+        repeat_penalty: float = 1.1,
         frequency_penalty: float = 0.0,
         presence_penalty: float = 0.0,
+        tfs_z: float = 1.0,
+        mirostat_mode: int = 0,
+        mirostat_eta: float = 0.1,
+        mirostat_tau: float = 5.0,
     ):
         """Sample a token from the model.
 
@@ -402,9 +440,13 @@ class Llama:
             top_k=llama_cpp.c_int(top_k),
             top_p=llama_cpp.c_float(top_p),
             temp=llama_cpp.c_float(temp),
+            tfs_z=llama_cpp.c_float(tfs_z),
             repeat_penalty=llama_cpp.c_float(repeat_penalty),
             frequency_penalty=llama_cpp.c_float(frequency_penalty),
             presence_penalty=llama_cpp.c_float(presence_penalty),
+            mirostat_mode=llama_cpp.c_int(mirostat_mode),
+            mirostat_tau=llama_cpp.c_float(mirostat_tau),
+            mirostat_eta=llama_cpp.c_float(mirostat_eta),
         )
 
     def generate(
@@ -414,9 +456,12 @@ class Llama:
         top_p: float,
         temp: float,
         repeat_penalty: float,
+        reset: bool = True,
         frequency_penalty: float = 0.0,
         presence_penalty: float = 0.0,
-        reset: bool = True,
+        mirostat_mode: int = 0,
+        mirostat_tau: float = 5.0,
+        mirostat_eta: float = 0.1,
     ) -> Generator[
         llama_cpp.llama_token, Optional[Sequence[llama_cpp.llama_token]], None
     ]:
@@ -469,9 +514,12 @@ class Llama:
                 top_k=top_k,
                 top_p=top_p,
                 temp=temp,
+                repeat_penalty=repeat_penalty,
                 frequency_penalty=frequency_penalty,
                 presence_penalty=presence_penalty,
-                repeat_penalty=repeat_penalty,
+                mirostat_mode=mirostat_mode,
+                mirostat_tau=mirostat_tau,
+                mirostat_eta=mirostat_eta,
             )
             tokens_or_none = yield token
             tokens = [token]
@@ -550,6 +598,9 @@ class Llama:
         repeat_penalty: float = 1.1,
         top_k: int = 40,
         stream: bool = False,
+        mirostat_mode: int = 0,
+        mirostat_tau: float = 5.0,
+        mirostat_eta: float = 0.1,
         truncate_strategy: TruncateStrategy = None,
     ) -> Union[Iterator[Completion], Iterator[CompletionChunk]]:
         assert self.ctx is not None
@@ -612,6 +663,9 @@ class Llama:
             top_k=top_k,
             top_p=top_p,
             temp=temperature,
+            mirostat_mode=mirostat_mode,
+            mirostat_tau=mirostat_tau,
+            mirostat_eta=mirostat_eta,
             frequency_penalty=frequency_penalty,
             presence_penalty=presence_penalty,
             repeat_penalty=repeat_penalty,
@@ -793,6 +847,9 @@ class Llama:
         repeat_penalty: float = 1.1,
         top_k: int = 40,
         stream: bool = False,
+        mirostat_mode: int = 0,
+        mirostat_tau: float = 5.0,
+        mirostat_eta: float = 0.1,
         truncate_strategy: TruncateStrategy = None,
     ) -> Union[Completion, Iterator[CompletionChunk]]:
         """Generate text from a prompt.
@@ -831,6 +888,9 @@ class Llama:
             repeat_penalty=repeat_penalty,
             top_k=top_k,
             stream=stream,
+            mirostat_mode=mirostat_mode,
+            mirostat_tau=mirostat_tau,
+            mirostat_eta=mirostat_eta,
             truncate_strategy=truncate_strategy,
         )
         if stream:
@@ -854,6 +914,9 @@ class Llama:
         repeat_penalty: float = 1.1,
         top_k: int = 40,
         stream: bool = False,
+        mirostat_mode: int = 0,
+        mirostat_tau: float = 5.0,
+        mirostat_eta: float = 0.1,
         truncate_strategy: TruncateStrategy = None,
     ) -> Union[Completion, Iterator[CompletionChunk]]:
         """Generate text from a prompt.
@@ -892,6 +955,9 @@ class Llama:
             repeat_penalty=repeat_penalty,
             top_k=top_k,
             stream=stream,
+            mirostat_mode=mirostat_mode,
+            mirostat_tau=mirostat_tau,
+            mirostat_eta=mirostat_eta,
             truncate_strategy=truncate_strategy
         )
 
@@ -965,6 +1031,9 @@ class Llama:
         presence_penalty: float = 0.0,
         frequency_penalty: float = 0.0,
         repeat_penalty: float = 1.1,
+        mirostat_mode: int = 0,
+        mirostat_tau: float = 5.0,
+        mirostat_eta: float = 0.1,
     ) -> Union[ChatCompletion, Iterator[ChatCompletionChunk]]:
         """Generate a chat completion from a list of messages.
 
@@ -999,6 +1068,9 @@ class Llama:
             repeat_penalty=repeat_penalty,
             presence_penalty=presence_penalty,
             frequency_penalty=frequency_penalty,
+            mirostat_mode=mirostat_mode,
+            mirostat_tau=mirostat_tau,
+            mirostat_eta=mirostat_eta,
         )
         if stream:
             chunks: Iterator[CompletionChunk] = completion_or_chunks  # type: ignore
