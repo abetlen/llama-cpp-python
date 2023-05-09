@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, BaseSettings, Field, create_model_from_typeddict
 from sse_starlette.sse import EventSourceResponse
 
+UNSUPPORTED_PARAM_MESSAGE_TEMPLATE = "Parameter \"{param}\" is not supported, but accepted / documented here to maintain compatibility with OpenAI's API. It may be supported in the future. Check back here for updates."
 
 class Settings(BaseSettings):
     model: str = Field(
@@ -216,11 +217,11 @@ class CreateCompletionRequest(BaseModel):
 
     # ignored or currently unsupported
     model: Optional[str] = model_field
-    n: Optional[int] = 1
-    logprobs: Optional[int] = Field(None)
-    best_of: Optional[int] = 1
-    logit_bias: Optional[Dict[str, float]] = Field(None)
-    user: Optional[str] = Field(None)
+    n: Optional[int] = Field(1, description=UNSUPPORTED_PARAM_MESSAGE_TEMPLATE.format(param="n"))
+    logprobs: Optional[int] = Field(None, description=UNSUPPORTED_PARAM_MESSAGE_TEMPLATE.format(param="logprobs"))
+    best_of: Optional[int] = Field(1, description=UNSUPPORTED_PARAM_MESSAGE_TEMPLATE.format(param="best_of"))
+    logit_bias: Optional[Dict[str, float]] = Field(None, description=UNSUPPORTED_PARAM_MESSAGE_TEMPLATE.format(param="logit_bias"))
+    user: Optional[str] = Field(None, description=UNSUPPORTED_PARAM_MESSAGE_TEMPLATE.format(param="user"))
 
     # llama.cpp specific parameters
     top_k: int = top_k_field
@@ -320,9 +321,9 @@ class CreateChatCompletionRequest(BaseModel):
 
     # ignored or currently unsupported
     model: Optional[str] = model_field
-    n: Optional[int] = 1
-    logit_bias: Optional[Dict[str, float]] = Field(None)
-    user: Optional[str] = Field(None)
+    n: Optional[int] = Field(1, description=UNSUPPORTED_PARAM_MESSAGE_TEMPLATE.format(param="n"))
+    logit_bias: Optional[Dict[str, float]] = Field(None, description=UNSUPPORTED_PARAM_MESSAGE_TEMPLATE.format(param="logit_bias"))
+    user: Optional[str] = Field(None, description=UNSUPPORTED_PARAM_MESSAGE_TEMPLATE.format(param="user"))
 
     # llama.cpp specific parameters
     top_k: int = top_k_field
