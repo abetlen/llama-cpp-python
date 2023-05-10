@@ -709,6 +709,9 @@ class Llama:
                 print("Llama._create_completion: cache save", file=sys.stderr)
             self.cache[prompt_tokens + completion_tokens] = self.save_state()
 
+        if self.verbose:
+            llama_cpp.llama_print_timings(self.ctx)
+
         if stream:
             yield {
                 "id": completion_id,
@@ -779,9 +782,6 @@ class Llama:
                 "token_logprobs": token_logprobs,
                 "top_logprobs": top_logprobs,
             }
-
-        if self.verbose:
-            llama_cpp.llama_print_timings(self.ctx)
 
         yield {
             "id": completion_id,
