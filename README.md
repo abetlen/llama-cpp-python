@@ -35,19 +35,19 @@ Use the `FORCE_CMAKE=1` environment variable to force the use of `cmake` and ins
 To install with OpenBLAS, set the `LLAMA_OPENBLAS=1` environment variable before installing:
 
 ```bash
-LLAMA_OPENBLAS=1 FORCE_CMAKE=1 pip install llama-cpp-python
+CMAKE_ARGS="-DLLAMA_OPENBLAS=on" FORCE_CMAKE=1 pip install llama-cpp-python
 ```
 
 To install with cuBLAS, set the `LLAMA_CUBLAS=1` environment variable before installing:
 
 ```bash
-LLAMA_CUBLAS=1 FORCE_CMAKE=1 pip install llama-cpp-python
+CMAKE_ARGS="-DLLAMA_CUBLAS=on" FORCE_CMAKE=1 pip install llama-cpp-python
 ```
 
 To install with CLBlast, set the `LLAMA_CLBLAST=1` environment variable before installing:
 
 ```bash
-LLAMA_CLBLAST=1 FORCE_CMAKE=1 pip install llama-cpp-python
+CMAKE_ARGS="-DLLAMA_CLBLAST=on" FORCE_CMAKE=1 pip install llama-cpp-python
 ```
 
 
