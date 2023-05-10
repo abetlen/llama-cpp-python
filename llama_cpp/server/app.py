@@ -152,6 +152,19 @@ repeat_penalty_field = Field(
     + "Repeat penalty is a hyperparameter used to penalize the repetition of token sequences during text generation. It helps prevent the model from generating repetitive or monotonous text. A higher value (e.g., 1.5) will penalize repetitions more strongly, while a lower value (e.g., 0.9) will be more lenient.",
 )
 
+presence_penalty_field = Field(
+    default=0.0,
+    ge=-2.0,
+    le=2.0,
+    description="Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics.",
+)
+
+frequency_penalty_field = Field(
+    default=0.0,
+    ge=-2.0,
+    le=2.0,
+    description="Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim.",
+)
 
 class CreateCompletionRequest(BaseModel):
     prompt: Optional[str] = Field(
@@ -175,13 +188,13 @@ class CreateCompletionRequest(BaseModel):
         ge=0,
         description="The number of logprobs to generate. If None, no logprobs are generated.",
     )
+    presence_penalty: Optional[float] = presence_penalty_field
+    frequency_penalty: Optional[float] = frequency_penalty_field
 
     # ignored or currently unsupported
     model: Optional[str] = model_field
     n: Optional[int] = 1
     logprobs: Optional[int] = Field(None)
-    presence_penalty: Optional[float] = 0
-    frequency_penalty: Optional[float] = 0
     best_of: Optional[int] = 1
     logit_bias: Optional[Dict[str, float]] = Field(None)
     user: Optional[str] = Field(None)
@@ -269,12 +282,12 @@ class CreateChatCompletionRequest(BaseModel):
     top_p: float = top_p_field
     stop: Optional[List[str]] = stop_field
     stream: bool = stream_field
+    presence_penalty: Optional[float] = presence_penalty_field
+    frequency_penalty: Optional[float] = frequency_penalty_field
 
     # ignored or currently unsupported
     model: Optional[str] = model_field
     n: Optional[int] = 1
-    presence_penalty: Optional[float] = 0
-    frequency_penalty: Optional[float] = 0
     logit_bias: Optional[Dict[str, float]] = Field(None)
     user: Optional[str] = Field(None)
 
