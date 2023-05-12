@@ -166,10 +166,10 @@ frequency_penalty_field = Field(
     description="Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim.",
 )
 
+
 class CreateCompletionRequest(BaseModel):
     prompt: Union[str, List[str]] = Field(
-        default="",
-        description="The prompt to generate completions for."
+        default="", description="The prompt to generate completions for."
     )
     suffix: Optional[str] = Field(
         default=None,
@@ -224,7 +224,8 @@ def create_completion(
     request: CreateCompletionRequest, llama: llama_cpp.Llama = Depends(get_llama)
 ):
     if isinstance(request.prompt, list):
-        request.prompt = "".join(request.prompt)
+        assert len(request.prompt) <= 1
+        request.prompt = request.prompt[0] if len(request.prompt) > 0 else ""
 
     completion_or_chunks = llama(
         **request.dict(
