@@ -3,7 +3,9 @@ FROM python:3-slim-bullseye
 # We need to set the host to 0.0.0.0 to allow outside access
 ENV HOST 0.0.0.0
 
-COPY . .
+WORKDIR /app
+
+COPY . /app
 
 # Install the package
 RUN apt update && apt install -y libopenblas-dev ninja-build build-essential
@@ -11,5 +13,8 @@ RUN python -m pip install --upgrade pip pytest cmake scikit-build setuptools fas
 
 RUN LLAMA_OPENBLAS=1 python3 setup.py develop
 
+# Setting a env variable MODEL
+ENV MODEL ggml.bin
+
 # Run the server
-CMD python3 -m llama_cpp.server
+CMD python3 -m llama_cpp.server --model $[MODEL}
