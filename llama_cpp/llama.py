@@ -124,7 +124,7 @@ class Llama:
             A Llama instance.
         """
         self.verbose = verbose
-        self.model_path = model_path
+        self.model_path = os.path.abspath(os.path.expanduser(os.path.expandvars(model_path)))
 
         self.params = llama_cpp.llama_context_default_params()
         self.params.n_ctx = n_ctx
@@ -149,8 +149,8 @@ class Llama:
         self.lora_base = lora_base
         self.lora_path = lora_path
 
-        if not os.path.exists(model_path):
-            raise ValueError(f"Model path does not exist: {model_path}")
+        if not os.path.exists(self.model_path):
+            raise ValueError(f"Model path does not exist: {self.model_path}")
 
         self.ctx = llama_cpp.llama_init_from_file(
             self.model_path.encode("utf-8"), self.params
