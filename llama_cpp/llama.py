@@ -83,6 +83,7 @@ class Llama:
         # NOTE: These parameters are likely to change in the future.
         n_ctx: int = 512,
         n_parts: int = -1,
+        n_gpu_layers: int = 0,
         seed: int = 1337,
         f16_kv: bool = True,
         logits_all: bool = False,
@@ -129,6 +130,7 @@ class Llama:
         self.params = llama_cpp.llama_context_default_params()
         self.params.n_ctx = n_ctx
         self.params.n_parts = n_parts
+        self.params.n_gpu_layers = n_gpu_layers
         self.params.seed = seed
         self.params.f16_kv = f16_kv
         self.params.logits_all = logits_all
@@ -1081,6 +1083,7 @@ class Llama:
             model_path=self.model_path,
             n_ctx=self.params.n_ctx,
             n_parts=self.params.n_parts,
+            n_gpu_layers=self.params.n_gpu_layers,
             seed=self.params.seed,
             f16_kv=self.params.f16_kv,
             logits_all=self.params.logits_all,
@@ -1100,6 +1103,7 @@ class Llama:
             model_path=state["model_path"],
             n_ctx=state["n_ctx"],
             n_parts=state["n_parts"],
+            n_gpu_layers=state["n_gpu_layers"],
             seed=state["seed"],
             f16_kv=state["f16_kv"],
             logits_all=state["logits_all"],

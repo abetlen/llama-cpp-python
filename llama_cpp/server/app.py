@@ -17,6 +17,11 @@ class Settings(BaseSettings):
         description="The path to the model to use for generating completions."
     )
     n_ctx: int = Field(default=2048, ge=1, description="The context size.")
+    n_gpu_layers: int = Field(
+        default=0,
+        ge=0,
+        description="The number of layers to put on the GPU. The rest will be on the CPU.",
+    )
     n_batch: int = Field(
         default=512, ge=1, description="The batch size to use per eval."
     )
@@ -80,6 +85,7 @@ def create_app(settings: Optional[Settings] = None):
     global llama
     llama = llama_cpp.Llama(
         model_path=settings.model,
+        n_gpu_layers=settings.n_gpu_layers,
         f16_kv=settings.f16_kv,
         use_mlock=settings.use_mlock,
         use_mmap=settings.use_mmap,
