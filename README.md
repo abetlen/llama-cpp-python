@@ -126,7 +126,7 @@ Below is a short example demonstrating how to use the low-level API to tokenize 
 >>> ctx = llama_cpp.llama_init_from_file(b"./models/7b/ggml-model.bin", params)
 >>> max_tokens = params.n_ctx
 # use ctypes arrays for array params
->>> tokens = (llama_cppp.llama_token * int(max_tokens))()
+>>> tokens = (llama_cpp.llama_token * int(max_tokens))()
 >>> n_tokens = llama_cpp.llama_tokenize(ctx, b"Q: Name the planets in the solar system? A: ", tokens, max_tokens, add_bos=llama_cpp.c_bool(True))
 >>> llama_cpp.llama_free(ctx)
 ```
