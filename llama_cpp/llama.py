@@ -532,7 +532,7 @@ class Llama:
             An embedding object.
         """
         assert self.ctx is not None
-        _model: str = model if model is not None else self.model_path
+        model_name: str = model if model is not None else self.model_path
 
         if self.params.embedding == False:
             raise RuntimeError(
@@ -562,7 +562,7 @@ class Llama:
                     "index": 0,
                 }
             ],
-            "model": _model,
+            "model": model_name,
             "usage": {
                 "prompt_tokens": n_tokens,
                 "total_tokens": n_tokens,
@@ -612,7 +612,7 @@ class Llama:
         text: bytes = b""
         returned_characters: int = 0
         stop = stop if stop is not None else []
-        _model: str = model if model is not None else self.model_path
+        model_name: str = model if model is not None else self.model_path
 
         if self.verbose:
             llama_cpp.llama_reset_timings(self.ctx)
@@ -711,7 +711,7 @@ class Llama:
                     "id": completion_id,
                     "object": "text_completion",
                     "created": created,
-                    "model": _model,
+                    "model": model_name,
                     "choices": [
                         {
                             "text": text[start:].decode("utf-8", errors="ignore"),
@@ -740,7 +740,7 @@ class Llama:
                 "id": completion_id,
                 "object": "text_completion",
                 "created": created,
-                "model": _model,
+                "model": model_name,
                 "choices": [
                     {
                         "text": text[returned_characters:].decode(
@@ -810,7 +810,7 @@ class Llama:
             "id": completion_id,
             "object": "text_completion",
             "created": created,
-            "model": _model,
+            "model": model_name,
             "choices": [
                 {
                     "text": text_str,
