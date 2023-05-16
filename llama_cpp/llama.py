@@ -522,7 +522,7 @@ class Llama:
             if tokens_or_none is not None:
                 tokens.extend(tokens_or_none)
 
-    def create_embedding(self, input: str) -> Embedding:
+    def create_embedding(self, input: str, model: Optional[str] = None) -> Embedding:
         """Embed a string.
 
         Args:
@@ -532,6 +532,7 @@ class Llama:
             An embedding object.
         """
         assert self.ctx is not None
+        _model: str = model if model is not None else self.model_path
 
         if self.params.embedding == False:
             raise RuntimeError(
@@ -561,7 +562,7 @@ class Llama:
                     "index": 0,
                 }
             ],
-            "model": self.model_path,
+            "model": _model,
             "usage": {
                 "prompt_tokens": n_tokens,
                 "total_tokens": n_tokens,
@@ -598,6 +599,7 @@ class Llama:
         mirostat_mode: int = 0,
         mirostat_tau: float = 5.0,
         mirostat_eta: float = 0.1,
+        model: Optional[str] = None,
     ) -> Union[Iterator[Completion], Iterator[CompletionChunk]]:
         assert self.ctx is not None
         completion_id: str = f"cmpl-{str(uuid.uuid4())}"
@@ -610,6 +612,7 @@ class Llama:
         text: bytes = b""
         returned_characters: int = 0
         stop = stop if stop is not None else []
+        _model: str = model if model is not None else self.model_path
 
         if self.verbose:
             llama_cpp.llama_reset_timings(self.ctx)
@@ -708,7 +711,7 @@ class Llama:
                     "id": completion_id,
                     "object": "text_completion",
                     "created": created,
-                    "model": self.model_path,
+                    "model": _model,
                     "choices": [
                         {
                             "text": text[start:].decode("utf-8", errors="ignore"),
@@ -737,7 +740,7 @@ class Llama:
                 "id": completion_id,
                 "object": "text_completion",
                 "created": created,
-                "model": self.model_path,
+                "model": _model,
                 "choices": [
                     {
                         "text": text[returned_characters:].decode(
@@ -807,7 +810,7 @@ class Llama:
             "id": completion_id,
             "object": "text_completion",
             "created": created,
-            "model": self.model_path,
+            "model": _model,
             "choices": [
                 {
                     "text": text_str,
@@ -842,6 +845,7 @@ class Llama:
         mirostat_mode: int = 0,
         mirostat_tau: float = 5.0,
         mirostat_eta: float = 0.1,
+        model: Optional[str] = None,
     ) -> Union[Completion, Iterator[CompletionChunk]]:
         """Generate text from a prompt.
 
@@ -883,6 +887,7 @@ class Llama:
             mirostat_mode=mirostat_mode,
             mirostat_tau=mirostat_tau,
             mirostat_eta=mirostat_eta,
+            model=model,
         )
         if stream:
             chunks: Iterator[CompletionChunk] = completion_or_chunks
@@ -909,6 +914,7 @@ class Llama:
         mirostat_mode: int = 0,
         mirostat_tau: float = 5.0,
         mirostat_eta: float = 0.1,
+        model: Optional[str] = None,
     ) -> Union[Completion, Iterator[CompletionChunk]]:
         """Generate text from a prompt.
 
@@ -950,6 +956,7 @@ class Llama:
             mirostat_mode=mirostat_mode,
             mirostat_tau=mirostat_tau,
             mirostat_eta=mirostat_eta,
+            model=model,
         )
 
     def _convert_text_completion_to_chat(
@@ -1026,6 +1033,7 @@ class Llama:
         mirostat_mode: int = 0,
         mirostat_tau: float = 5.0,
         mirostat_eta: float = 0.1,
+        model: Optional[str] = None,
     ) -> Union[ChatCompletion, Iterator[ChatCompletionChunk]]:
         """Generate a chat completion from a list of messages.
 
@@ -1064,6 +1072,7 @@ class Llama:
             mirostat_mode=mirostat_mode,
             mirostat_tau=mirostat_tau,
             mirostat_eta=mirostat_eta,
+            model=model,
         )
         if stream:
             chunks: Iterator[CompletionChunk] = completion_or_chunks  # type: ignore
