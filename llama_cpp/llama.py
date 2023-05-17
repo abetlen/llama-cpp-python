@@ -298,7 +298,11 @@ class Llama:
         n_vocab = int(llama_cpp.llama_n_vocab(self.ctx))
         n_ctx = int(llama_cpp.llama_n_ctx(self.ctx))
         top_k = llama_cpp.c_int(n_vocab) if top_k.value <= 0 else top_k
-        last_n_tokens_size = llama_cpp.c_int(n_ctx) if last_n_tokens_size.value < 0 else last_n_tokens_size
+        last_n_tokens_size = (
+            llama_cpp.c_int(n_ctx)
+            if last_n_tokens_size.value < 0
+            else last_n_tokens_size
+        )
         logits = self.eval_logits[-1]
         nl_logit = logits[llama_cpp.llama_token_nl().value]
         data = (llama_cpp.llama_token_data * n_vocab)(
