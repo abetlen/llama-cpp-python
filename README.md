@@ -26,6 +26,12 @@ pip install llama-cpp-python
 The above command will attempt to install the package and build build `llama.cpp` from source.
 This is the recommended installation method as it ensures that `llama.cpp` is built with the available optimizations for your system.
 
+Note: If you are using Apple Silicon (M1) Mac, make sure you have installed a version of Python that supports arm64 architecture. For example:
+```
+wget https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-arm64.sh
+bash Miniforge3-MacOSX-arm64.sh
+```
+Otherwise, while installing it will build the llama.ccp x86 version which will be 10x slower on Apple Silicon (M1) Mac.
 
 ### Installation with OpenBLAS / cuBLAS / CLBlast
 
@@ -120,7 +126,7 @@ Below is a short example demonstrating how to use the low-level API to tokenize 
 >>> ctx = llama_cpp.llama_init_from_file(b"./models/7b/ggml-model.bin", params)
 >>> max_tokens = params.n_ctx
 # use ctypes arrays for array params
->>> tokens = (llama_cppp.llama_token * int(max_tokens))()
+>>> tokens = (llama_cpp.llama_token * int(max_tokens))()
 >>> n_tokens = llama_cpp.llama_tokenize(ctx, b"Q: Name the planets in the solar system? A: ", tokens, max_tokens, add_bos=llama_cpp.c_bool(True))
 >>> llama_cpp.llama_free(ctx)
 ```
