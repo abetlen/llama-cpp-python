@@ -304,7 +304,7 @@ class Llama:
             else last_n_tokens_size
         )
         logits = self.eval_logits[-1]
-        nl_logit = logits[llama_cpp.llama_token_nl().value]
+        nl_logit = logits[int(Llama.token_nl())]
         data = (llama_cpp.llama_token_data * n_vocab)(
             *[
                 llama_cpp.llama_token_data(
@@ -338,7 +338,7 @@ class Llama:
             alpha_presence=presence_penalty,
         )
         if not penalize_nl:
-            candidates.data[llama_cpp.llama_token_nl().value].logit = nl_logit
+            candidates.data[int(Llama.token_nl())].logit = nl_logit
         if temp.value == 0.0:
             return llama_cpp.llama_sample_token_greedy(
                 ctx=self.ctx,
@@ -677,7 +677,7 @@ class Llama:
             presence_penalty=presence_penalty,
             repeat_penalty=repeat_penalty,
         ):
-            if token == llama_cpp.llama_token_eos():
+            if token == Llama.token_eos():
                 text = self.detokenize(completion_tokens)
                 finish_reason = "stop"
                 break
