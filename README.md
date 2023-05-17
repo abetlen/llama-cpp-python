@@ -15,6 +15,8 @@ This package provides:
   - OpenAI-like API
   - LangChain compatibility
 
+Documentation is available at [https://abetlen.github.io/llama-cpp-python](https://abetlen.github.io/llama-cpp-python).
+
 ## Installation from PyPI (recommended)
 
 Install from PyPI (requires a c compiler):
