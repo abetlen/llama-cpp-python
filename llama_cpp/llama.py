@@ -598,6 +598,7 @@ class Llama:
         prompt: str,
         suffix: Optional[str] = None,
         max_tokens: int = 16,
+        min_tokens: int = 0,
         temperature: float = 0.8,
         top_p: float = 0.95,
         logprobs: Optional[int] = None,
@@ -633,6 +634,11 @@ class Llama:
         if len(prompt_tokens) + max_tokens > int(llama_cpp.llama_n_ctx(self.ctx)):
             raise ValueError(
                 f"Requested tokens exceed context window of {llama_cpp.llama_n_ctx(self.ctx)}"
+            )
+
+        if min_tokens > max_tokens:
+            raise ValueError(
+                f"min_tokens {min_tokens} must be less than or equal to max_tokens {max_tokens}."
             )
 
         if stop != []:
@@ -678,11 +684,12 @@ class Llama:
             repeat_penalty=repeat_penalty,
         ):
             if token == Llama.token_eos():
-                text = self.detokenize(completion_tokens)
-                finish_reason = "stop"
-                break
-
-            completion_tokens.append(token)
+                if len(completion_tokens) >= min_tokens:
+                    text = self.detokenize(completion_tokens)
+                    finish_reason = "stop"
+                    break
+            else:
+                completion_tokens.append(token)
 
             all_text = self.detokenize(completion_tokens)
 
@@ -844,6 +851,7 @@ class Llama:
         prompt: str,
         suffix: Optional[str] = None,
         max_tokens: int = 128,
+        min_tokens: int = 0,
         temperature: float = 0.8,
         top_p: float = 0.95,
         logprobs: Optional[int] = None,
@@ -866,6 +874,7 @@ class Llama:
             prompt: The prompt to generate text from.
             suffix: A suffix to append to the generated text. If None, no suffix is appended.
             max_tokens: The maximum number of tokens to generate.
+            min_tokens: The minimum number of tokens to generate (by supressing the EOS token).
             temperature: The temperature to use for sampling.
             top_p: The top-p value to use for sampling.
             logprobs: The number of logprobs to return. If None, no logprobs are returned.
@@ -886,6 +895,7 @@ class Llama:
             prompt=prompt,
             suffix=suffix,
             max_tokens=max_tokens,
+            min_tokens=min_tokens,
             temperature=temperature,
             top_p=top_p,
             logprobs=logprobs,
@@ -913,6 +923,7 @@ class Llama:
         prompt: str,
         suffix: Optional[str] = None,
         max_tokens: int = 128,
+        min_tokens: int = 0,
         temperature: float = 0.8,
         top_p: float = 0.95,
         logprobs: Optional[int] = None,
@@ -935,6 +946,7 @@ class Llama:
             prompt: The prompt to generate text from.
             suffix: A suffix to append to the generated text. If None, no suffix is appended.
             max_tokens: The maximum number of tokens to generate.
+            min_tokens: The minimum number of tokens to generate (by supressing the EOS token).
             temperature: The temperature to use for sampling.
             top_p: The top-p value to use for sampling.
             logprobs: The number of logprobs to return. If None, no logprobs are returned.
@@ -955,6 +967,7 @@ class Llama:
             prompt=prompt,
             suffix=suffix,
             max_tokens=max_tokens,
+            min_tokens=min_tokens,
             temperature=temperature,
             top_p=top_p,
             logprobs=logprobs,
@@ -1039,6 +1052,7 @@ class Llama:
         stream: bool = False,
         stop: Optional[List[str]] = [],
         max_tokens: int = 256,
+        min_tokens: int = 0,
         presence_penalty: float = 0.0,
         frequency_penalty: float = 0.0,
         repeat_penalty: float = 1.1,
@@ -1058,6 +1072,7 @@ class Llama:
             stream: Whether to stream the results.
             stop: A list of strings to stop generation when encountered.
             max_tokens: The maximum number of tokens to generate.
+            min_tokens: The minimum number of tokens to generate (by supressing the EOS token).
             repeat_penalty: The penalty to apply to repeated tokens.
 
         Returns:
@@ -1078,6 +1093,7 @@ class Llama:
             top_k=top_k,
             stream=stream,
             max_tokens=max_tokens,
+            min_tokens=min_tokens,
             repeat_penalty=repeat_penalty,
             presence_penalty=presence_penalty,
             frequency_penalty=frequency_penalty,
