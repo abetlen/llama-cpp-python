@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.1.1-devel-ubuntu20.04
+FROM nvidia/cuda:12.0.1-devel-ubuntu22.04
 
 # We need to set the host to 0.0.0.0 to allow outside access
 ENV HOST 0.0.0.0
