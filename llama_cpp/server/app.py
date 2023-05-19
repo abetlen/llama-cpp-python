@@ -1,4 +1,5 @@
 import json
+import logging
 import multiprocessing
 from threading import Lock
 from typing import List, Optional, Union, Iterator, Dict
@@ -203,7 +204,7 @@ class CreateCompletionRequest(BaseModel):
         default=False,
         description="Whether to echo the prompt in the generated text. Useful for chatbots.",
     )
-    stop: Optional[List[str]] = stop_field
+    stop: Optional[Union[str, List[str]]] = stop_field
     stream: bool = stream_field
     logprobs: Optional[int] = Field(
         default=None,

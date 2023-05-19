@@ -602,7 +602,7 @@ class Llama:
         top_p: float = 0.95,
         logprobs: Optional[int] = None,
         echo: bool = False,
-        stop: Optional[List[str]] = [],
+        stop: Optional[Union[str, List[str]]] = [],
         frequency_penalty: float = 0.0,
         presence_penalty: float = 0.0,
         repeat_penalty: float = 1.1,
@@ -624,7 +624,7 @@ class Llama:
         )
         text: bytes = b""
         returned_tokens: int = 0
-        stop = stop if stop is not None else []
+        stop = stop if isinstance(stop, list) else [stop] if isinstance(stop, str) else []
         model_name: str = model if model is not None else self.model_path
 
         if self.verbose:
@@ -973,7 +973,7 @@ class Llama:
         top_p: float = 0.95,
         logprobs: Optional[int] = None,
         echo: bool = False,
-        stop: Optional[List[str]] = [],
+        stop: Optional[Union[str, List[str]]] = [],
         frequency_penalty: float = 0.0,
         presence_penalty: float = 0.0,
         repeat_penalty: float = 1.1,
@@ -1042,7 +1042,7 @@ class Llama:
         top_p: float = 0.95,
         logprobs: Optional[int] = None,
         echo: bool = False,
-        stop: Optional[List[str]] = [],
+        stop: Optional[Union[str, List[str]]] = [],
         frequency_penalty: float = 0.0,
         presence_penalty: float = 0.0,
         repeat_penalty: float = 1.1,
@@ -1162,7 +1162,7 @@ class Llama:
         top_p: float = 0.95,
         top_k: int = 40,
         stream: bool = False,
-        stop: Optional[List[str]] = [],
+        stop: Optional[Union[str, List[str]]] = [],
         max_tokens: int = 256,
         presence_penalty: float = 0.0,
         frequency_penalty: float = 0.0,
@@ -1188,7 +1188,7 @@ class Llama:
         Returns:
             Generated chat completion or a stream of chat completion chunks.
         """
-        stop = stop if stop is not None else []
+        stop = stop if isinstance(stop, list) else [stop] if isinstance(stop, str) else []
         chat_history = "".join(
             f'### {"Human" if message["role"] == "user" else "Assistant"}:{message["content"]}'
             for message in messages
