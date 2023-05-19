@@ -275,7 +275,7 @@ def create_completion(
 
 class CreateEmbeddingRequest(BaseModel):
     model: Optional[str] = model_field
-    input: str = Field(description="The input to embed.")
+    input: Union[str, List[str]] = Field(description="The input to embed.")
     user: Optional[str]
 
     class Config:
