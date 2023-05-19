@@ -58,7 +58,7 @@ class Completion(TypedDict):
 
 
 class ChatCompletionMessage(TypedDict):
-    role: Union[Literal["assistant"], Literal["user"], Literal["system"]]
+    role: Literal["assistant", "user", "system"]
     content: str
     user: NotRequired[str]
 

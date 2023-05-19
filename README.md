@@ -15,7 +15,9 @@ This package provides:
   - OpenAI-like API
   - LangChain compatibility
 
-## Installation
+Documentation is available at [https://abetlen.github.io/llama-cpp-python](https://abetlen.github.io/llama-cpp-python).
+
+## Installation from PyPI (recommended)
 
 Install from PyPI (requires a c compiler):
 
@@ -26,10 +28,42 @@ pip install llama-cpp-python
 The above command will attempt to install the package and build build `llama.cpp` from source.
 This is the recommended installation method as it ensures that `llama.cpp` is built with the available optimizations for your system.
 
-This method defaults to using `make` to build `llama.cpp` on Linux / MacOS and `cmake` on Windows.
-You can force the use of `cmake` on Linux / MacOS setting the `FORCE_CMAKE=1` environment variable before installing.
+Note: If you are using Apple Silicon (M1) Mac, make sure you have installed a version of Python that supports arm64 architecture. For example:
+```
+wget https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-arm64.sh
+bash Miniforge3-MacOSX-arm64.sh
+```
+Otherwise, while installing it will build the llama.ccp x86 version which will be 10x slower on Apple Silicon (M1) Mac.
+
+### Installation with OpenBLAS / cuBLAS / CLBlast
+
+`llama.cpp` supports multiple BLAS backends for faster processing.
+Use the `FORCE_CMAKE=1` environment variable to force the use of `cmake` and install the pip package for the desired BLAS backend.
+
+To install with OpenBLAS, set the `LLAMA_OPENBLAS=1` environment variable before installing:
+
+```bash
+CMAKE_ARGS="-DLLAMA_OPENBLAS=on" FORCE_CMAKE=1 pip install llama-cpp-python
+```
+
+To install with cuBLAS, set the `LLAMA_CUBLAS=1` environment variable before installing:
+
+```bash
+CMAKE_ARGS="-DLLAMA_CUBLAS=on" FORCE_CMAKE=1 pip install llama-cpp-python
+```
+
+To install with CLBlast, set the `LLAMA_CLBLAST=1` environment variable before installing:
+
+```bash
+CMAKE_ARGS="-DLLAMA_CLBLAST=on" FORCE_CMAKE=1 pip install llama-cpp-python
+```
+
 
 ## High-level API
+
+The high-level API provides a simple managed interface through the `Llama` class.
+
+Below is a short example demonstrating how to use the high-level API to generate text:
 
 ```python
 >>> from llama_cpp import Llama
@@ -66,8 +100,7 @@ To install the server package and get started:
 
 ```bash
 pip install llama-cpp-python[server]
-export MODEL=./models/7B/ggml-model.bin
-python3 -m llama_cpp.server
+python3 -m llama_cpp.server --model models/7B/ggml-model.bin
 ```
 
 Navigate to [http://localhost:8000/docs](http://localhost:8000/docs) to see the OpenAPI documentation.
@@ -77,13 +110,30 @@ Navigate to [http://localhost:8000/docs](http://localhost:8000/docs) to see the 
 A Docker image is available on [GHCR](https://ghcr.io/abetlen/llama-cpp-python). To run the server:
 
 ```bash
-docker run --rm -it -p8000:8000 -v /path/to/models:/models -eMODEL=/models/ggml-model-name.bin ghcr.io/abetlen/llama-cpp-python:latest
+docker run --rm -it -p 8000:8000 -v /path/to/models:/models -e MODEL=/models/ggml-model-name.bin ghcr.io/abetlen/llama-cpp-python:latest
 ```
 
 ## Low-level API
 
-The low-level API is a direct `ctypes` binding to the C API provided by `llama.cpp`.
-The entire API can be found in [llama_cpp/llama_cpp.py](https://github.com/abetlen/llama-cpp-python/blob/master/llama_cpp/llama_cpp.py) and should mirror [llama.h](https://github.com/ggerganov/llama.cpp/blob/master/llama.h).
+The low-level API is a direct [`ctypes`](https://docs.python.org/3/library/ctypes.html) binding to the C API provided by `llama.cpp`.
+The entire lowe-level API can be found in [llama_cpp/llama_cpp.py](https://github.com/abetlen/llama-cpp-python/blob/master/llama_cpp/llama_cpp.py) and directly mirrors the C API in [llama.h](https://github.com/ggerganov/llama.cpp/blob/master/llama.h).
+
+Below is a short example demonstrating how to use the low-level API to tokenize a prompt:
+
+```python
+>>> import llama_cpp
+>>> import ctypes
+>>> params = llama_cpp.llama_context_default_params()
+# use bytes for char * params
+>>> ctx = llama_cpp.llama_init_from_file(b"./models/7b/ggml-model.bin", params)
+>>> max_tokens = params.n_ctx
+# use ctypes arrays for array params
+>>> tokens = (llama_cpp.llama_token * int(max_tokens))()
+>>> n_tokens = llama_cpp.llama_tokenize(ctx, b"Q: Name the planets in the solar system? A: ", tokens, max_tokens, add_bos=llama_cpp.c_bool(True))
+>>> llama_cpp.llama_free(ctx)
+```
+
+Check out the [examples folder](examples/low_level_api) for more examples of using the low-level API.
 
 
 # Documentation

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "llama_cpp_python"
-version = "0.1.41"
+version = "0.1.50"
 description = "Python bindings for the llama.cpp library"
 authors = ["Andrei Betlen <abetlen@gmail.com>"]
 license = "MIT"
@@ -18,12 +18,12 @@ typing-extensions = "^4.5.0"
 
 
 [tool.poetry.group.dev.dependencies]
-black = "^23.1.0"
+black = "^23.3.0"
 twine = "^4.0.2"
-mkdocs = "^1.4.2"
-mkdocstrings = {extras = ["python"], version = "^0.20.0"}
-mkdocs-material = "^9.1.4"
-pytest = "^7.2.2"
+mkdocs = "^1.4.3"
+mkdocstrings = {extras = ["python"], version = "^0.21.2"}
+mkdocs-material = "^9.1.12"
+pytest = "^7.3.1"
 httpx = "^0.24.0"
 
 [build-system]

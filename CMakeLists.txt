@@ -28,4 +28,4 @@ else()
         LIBRARY DESTINATION llama_cpp
         RUNTIME DESTINATION llama_cpp
     )
-endif(UNIX)
+endif()
