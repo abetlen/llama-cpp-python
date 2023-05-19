@@ -22,9 +22,9 @@ class Embedding(TypedDict):
 
 class CompletionLogprobs(TypedDict):
     text_offset: List[int]
-    token_logprobs: List[float]
+    token_logprobs: List[Optional[float]]
     tokens: List[str]
-    top_logprobs: List[Dict[str, float]]
+    top_logprobs: List[Optional[Dict[str, float]]]
 
 
 class CompletionChoice(TypedDict):
