@@ -259,8 +259,15 @@ def create_completion(
         )
     )
     if request.stream:
+
+        async def server_sent_events(
+            chunks: Iterator[llama_cpp.CompletionChunk],
+        ):
+            for chunk in chunks:
+                yield dict(data=json.dumps(chunk))
+
         chunks: Iterator[llama_cpp.CompletionChunk] = completion_or_chunks  # type: ignore
-        return EventSourceResponse(dict(data=json.dumps(chunk)) for chunk in chunks)
+        return EventSourceResponse(server_sent_events(chunks))
     completion: llama_cpp.Completion = completion_or_chunks  # type: ignore
     return completion
 
