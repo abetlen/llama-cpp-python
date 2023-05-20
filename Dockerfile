@@ -12,4 +12,5 @@ RUN python -m pip install --upgrade pip pytest cmake scikit-build setuptools fas
 RUN LLAMA_OPENBLAS=1 python3 setup.py develop
 
 # Run the server
-CMD python3 -m llama_cpp.server
+ENTRYPOINT ["python3","-m","llama_cpp.server"]
+CMD ["--model","models/7B/ggml-model.bin"]
