@@ -113,7 +113,6 @@ llama_progress_callback = ctypes.CFUNCTYPE(None, c_float, c_void_p)
 class llama_context_params(Structure):
     _fields_ = [
         ("n_ctx", c_int),  # text context
-        ("n_parts", c_int),  # -1 for default
         ("n_gpu_layers", c_int),  # number of layers to store in VRAM
         ("seed", c_int),  # RNG seed, 0 for random
         ("f16_kv", c_bool),  # use fp16 for KV cache
