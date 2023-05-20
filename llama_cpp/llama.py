@@ -1291,6 +1291,24 @@ class Llama:
         if llama_cpp.llama_set_state_data(self.ctx, state.llama_state) != state_size:
             raise RuntimeError("Failed to set llama state data")
 
+    @property
+    def n_ctx(self) -> int:
+        """Return the context window size."""
+        assert self.ctx is not None
+        return llama_cpp.llama_n_ctx(self.ctx)
+
+    @property
+    def n_embd(self) -> int:
+        """Return the embedding size."""
+        assert self.ctx is not None
+        return llama_cpp.llama_n_embd(self.ctx)
+
+    @property
+    def n_vocab(self) -> int:
+        """Return the vocabulary size."""
+        assert self.ctx is not None
+        return llama_cpp.llama_n_vocab(self.ctx)
+
     @staticmethod
     def token_eos() -> int:
         """Return the end-of-sequence token."""
