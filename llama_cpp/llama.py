@@ -351,7 +351,7 @@ class Llama:
             alpha_presence=presence_penalty,
         )
         if not penalize_nl:
-            candidates.data[Llama.token_nl()].logit = nl_logit
+            candidates.data[Llama.token_nl()].logit = llama_cpp.c_float(nl_logit)
         if temp.value == 0.0:
             return llama_cpp.llama_sample_token_greedy(
                 ctx=self.ctx,
