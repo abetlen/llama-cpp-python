@@ -15,6 +15,8 @@ This package provides:
   - OpenAI-like API
   - LangChain compatibility
 
+Documentation is available at [https://abetlen.github.io/llama-cpp-python](https://abetlen.github.io/llama-cpp-python).
+
 ## Installation from PyPI (recommended)
 
 Install from PyPI (requires a c compiler):
@@ -26,6 +28,18 @@ pip install llama-cpp-python
 The above command will attempt to install the package and build build `llama.cpp` from source.
 This is the recommended installation method as it ensures that `llama.cpp` is built with the available optimizations for your system.
 
+If you have previously installed `llama-cpp-python` through pip and want to upgrade your version or rebuild the package with different  compiler options, please add the following flags to ensure that the package is rebuilt correctly:
+
+```bash
+pip install llama-cpp-python --force-reinstall --upgrade --no-cache-dir
+```
+
+Note: If you are using Apple Silicon (M1) Mac, make sure you have installed a version of Python that supports arm64 architecture. For example:
+```
+wget https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-arm64.sh
+bash Miniforge3-MacOSX-arm64.sh
+```
+Otherwise, while installing it will build the llama.ccp x86 version which will be 10x slower on Apple Silicon (M1) Mac.
 
 ### Installation with OpenBLAS / cuBLAS / CLBlast
 
@@ -35,19 +49,19 @@ Use the `FORCE_CMAKE=1` environment variable to force the use of `cmake` and ins
 To install with OpenBLAS, set the `LLAMA_OPENBLAS=1` environment variable before installing:
 
 ```bash
-LLAMA_OPENBLAS=1 FORCE_CMAKE=1 pip install llama-cpp-python
+CMAKE_ARGS="-DLLAMA_OPENBLAS=on" FORCE_CMAKE=1 pip install llama-cpp-python
 ```
 
 To install with cuBLAS, set the `LLAMA_CUBLAS=1` environment variable before installing:
 
 ```bash
-LLAMA_CUBLAS=1 FORCE_CMAKE=1 pip install llama-cpp-python
+CMAKE_ARGS="-DLLAMA_CUBLAS=on" FORCE_CMAKE=1 pip install llama-cpp-python
 ```
 
 To install with CLBlast, set the `LLAMA_CLBLAST=1` environment variable before installing:
 
 ```bash
-LLAMA_CLBLAST=1 FORCE_CMAKE=1 pip install llama-cpp-python
+CMAKE_ARGS="-DLLAMA_CLBLAST=on" FORCE_CMAKE=1 pip install llama-cpp-python
 ```
 
 
@@ -102,7 +116,7 @@ Navigate to [http://localhost:8000/docs](http://localhost:8000/docs) to see the 
 A Docker image is available on [GHCR](https://ghcr.io/abetlen/llama-cpp-python). To run the server:
 
 ```bash
-docker run --rm -it -p8000:8000 -v /path/to/models:/models -eMODEL=/models/ggml-model-name.bin ghcr.io/abetlen/llama-cpp-python:latest
+docker run --rm -it -p 8000:8000 -v /path/to/models:/models -e MODEL=/models/ggml-model-name.bin ghcr.io/abetlen/llama-cpp-python:latest
 ```
 
 ## Low-level API
@@ -120,7 +134,7 @@ Below is a short example demonstrating how to use the low-level API to tokenize 
 >>> ctx = llama_cpp.llama_init_from_file(b"./models/7b/ggml-model.bin", params)
 >>> max_tokens = params.n_ctx
 # use ctypes arrays for array params
->>> tokens = (llama_cppp.llama_token * int(max_tokens))()
+>>> tokens = (llama_cpp.llama_token * int(max_tokens))()
 >>> n_tokens = llama_cpp.llama_tokenize(ctx, b"Q: Name the planets in the solar system? A: ", tokens, max_tokens, add_bos=llama_cpp.c_bool(True))
 >>> llama_cpp.llama_free(ctx)
 ```

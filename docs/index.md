@@ -112,8 +112,12 @@ python3 setup.py develop
         show_root_heading: true
 
 ::: llama_cpp.LlamaCache
+    options:
+        show_root_heading: true
 
 ::: llama_cpp.LlamaState
+    options:
+        show_root_heading: true
 
 ::: llama_cpp.llama_cpp
     options:
