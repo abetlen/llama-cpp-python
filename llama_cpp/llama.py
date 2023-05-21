@@ -127,7 +127,6 @@ class Llama:
 
         self.params = llama_cpp.llama_context_default_params()
         self.params.n_ctx = n_ctx
-        self.params.n_parts = n_parts
         self.params.n_gpu_layers = n_gpu_layers
         self.params.seed = seed
         self.params.f16_kv = f16_kv
@@ -148,6 +147,10 @@ class Llama:
 
         self.lora_base = lora_base
         self.lora_path = lora_path
+
+        ### DEPRECATED ###
+        self.n_parts = n_parts
+        ### DEPRECATED ###
 
         if not os.path.exists(model_path):
             raise ValueError(f"Model path does not exist: {model_path}")
@@ -1225,7 +1228,6 @@ class Llama:
             verbose=self.verbose,
             model_path=self.model_path,
             n_ctx=self.params.n_ctx,
-            n_parts=self.params.n_parts,
             n_gpu_layers=self.params.n_gpu_layers,
             seed=self.params.seed,
             f16_kv=self.params.f16_kv,
@@ -1239,6 +1241,9 @@ class Llama:
             n_threads=self.n_threads,
             lora_base=self.lora_base,
             lora_path=self.lora_path,
+            ### DEPRECATED ###
+            n_parts=self.n_parts,
+            ### DEPRECATED ###
         )
 
     def __setstate__(self, state):
