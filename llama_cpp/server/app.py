@@ -191,7 +191,7 @@ frequency_penalty_field = Field(
 
 
 class CreateCompletionRequest(BaseModel):
-    prompt: Union[str, List[str]] = Field(
+    prompt: str = Field(
         default="", description="The prompt to generate completions for."
     )
     suffix: Optional[str] = Field(
@@ -276,7 +276,7 @@ def create_completion(
 
 class CreateEmbeddingRequest(BaseModel):
     model: Optional[str] = model_field
-    input: Union[str, List[str]] = Field(description="The input to embed.")
+    input: str = Field(description="The input to embed.")
     user: Optional[str]
 
     class Config:
