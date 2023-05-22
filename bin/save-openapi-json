@@ -1,0 +1,69 @@
+#!/usr/bin/env python3
+
+import subprocess
+import os
+import time
+import urllib.request
+
+LLAMA_SERVER_PORT = 8000
+LLAMA_SERVER_BASE_URL = f"http://localhost:{LLAMA_SERVER_PORT}"
+MODEL = "./vendor/llama.cpp/models/ggml-vocab.bin"
+
+
+def start_llama_server() -> subprocess.Popen:
+    print(f"Starting llama_cpp server")
+
+    env = os.environ.copy()
+    env["PORT"] = str(LLAMA_SERVER_PORT)
+    env["MODEL"] = MODEL
+    env["VOCAB_ONLY"] = "true"
+    server_process = subprocess.Popen(
+        ["python3", "-m", "llama_cpp.server"],
+        env=env,
+    )
+
+    # Wait for the server to start
+    while not is_llama_server_running():
+        if server_process.poll() is not None:
+            raise RuntimeError("llama_cpp server failed to start")
+        else:
+            time.sleep(0.1)
+            print("Waiting for llama_cpp server to start...")
+
+    return server_process
+
+
+def stop_llama_server(server_process: subprocess.Popen):
+    print(f"Stopping llama_cpp server")
+    server_process.kill()
+
+
+def is_llama_server_running():
+    try:
+        with urllib.request.urlopen(f"{LLAMA_SERVER_BASE_URL}/v1/models") as response:
+            return True
+    except:
+        return False
+
+
+def scrape(url, path):
+    with urllib.request.urlopen(url) as response:
+        data = response.read()
+        data_str = data.decode("utf-8")
+
+        dir = os.path.dirname(path)
+        os.makedirs(dir, exist_ok=True)
+        with open(path, "w") as f:
+            f.write(data_str)
+
+
+def scrape_llama_server_openapi_json():
+    llama_server_process = start_llama_server()
+
+    scrape(f"{LLAMA_SERVER_BASE_URL}/openapi.json", ".tmp/llama_server_openapi.json")
+
+    stop_llama_server(llama_server_process)
+
+
+if __name__ == "__main__":
+    scrape_llama_server_openapi_json()
