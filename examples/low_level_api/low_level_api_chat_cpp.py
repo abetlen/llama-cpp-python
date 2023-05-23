@@ -493,7 +493,7 @@ n_keep = {self.params.n_keep}
 			# Contains multi-byte UTF8
 			for num, pattern in [(2, 192), (3, 224), (4, 240)]:
 				# Bitwise AND check
-				if pattern & int.from_bytes(cur_char) == pattern:
+				if pattern & int.from_bytes(cur_char, 'little') == pattern:
 					self.multibyte_fix = [cur_char] + ([None] * (num-1))
 
 			# Stop incomplete bytes from passing
