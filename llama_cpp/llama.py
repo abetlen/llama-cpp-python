@@ -320,6 +320,10 @@ class Llama:
     ):
         assert self.ctx is not None
         assert len(self.eval_logits) > 0
+
+        if logits_processors == None:
+            logits_processors = []
+
         n_vocab = self.n_vocab()
         n_ctx = self.n_ctx()
         top_k = llama_cpp.c_int(n_vocab) if top_k.value <= 0 else top_k
@@ -652,6 +656,10 @@ class Llama:
         stopping_criterias=None
     ) -> Union[Iterator[Completion], Iterator[CompletionChunk]]:
         assert self.ctx is not None
+
+        if stopping_criterias == None:
+            stopping_criterias = []
+
         completion_id: str = f"cmpl-{str(uuid.uuid4())}"
         created: int = int(time.time())
         completion_tokens: List[int] = []
