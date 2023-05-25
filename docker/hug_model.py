@@ -25,9 +25,6 @@ def check_magic_and_version(filename):
 
     return magic, version
 
-import os
-import requests
-
 def download_file(url, destination):
     print(f"Downloading {url} to {destination}...")
     response = requests.get(url, stream=True)
