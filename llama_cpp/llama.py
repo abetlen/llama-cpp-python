@@ -1380,6 +1380,11 @@ class Llama:
         assert self.ctx is not None
         return llama_cpp.llama_n_vocab(self.ctx)
 
+    def tokenizer(self) -> "LlamaTokenizer":
+        """Return the tokenizer for this model."""
+        assert self.ctx is not None
+        return LlamaTokenizer(self)
+
     @staticmethod
     def token_eos() -> int:
         """Return the end-of-sequence token."""
@@ -1410,3 +1415,18 @@ class Llama:
             else:
                 break
         return longest_prefix
+
+
+class LlamaTokenizer:
+    def __init__(self, llama: Llama):
+        self.llama = llama
+
+    def encode(self, text: str) -> List[int]:
+        return self.llama.tokenize(text.encode("utf-8", errors="ignore"))
+
+    def decode(self, tokens: List[int]) -> str:
+        return self.llama.detokenize(tokens).decode("utf-8", errors="ignore")
+
+    @classmethod
+    def from_ggml_file(cls, path: str) -> "LlamaTokenizer":
+        return cls(Llama(model_path=path, vocab_only=True))
