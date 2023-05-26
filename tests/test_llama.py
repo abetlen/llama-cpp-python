@@ -17,7 +17,7 @@ def test_llama():
 # @pytest.mark.skip(reason="need to update sample mocking")
 def test_llama_patch(monkeypatch):
     llama = llama_cpp.Llama(model_path=MODEL, vocab_only=True)
-    n_vocab = int(llama_cpp.llama_n_vocab(llama.ctx))
+    n_vocab = llama_cpp.llama_n_vocab(llama.ctx)
 
     ## Set up mock function
     def mock_eval(*args, **kwargs):
@@ -107,7 +107,7 @@ def test_llama_pickle():
 
 def test_utf8(monkeypatch):
     llama = llama_cpp.Llama(model_path=MODEL, vocab_only=True)
-    n_vocab = int(llama_cpp.llama_n_vocab(llama.ctx))
+    n_vocab = llama_cpp.llama_n_vocab(llama.ctx)
 
     ## Set up mock function
     def mock_eval(*args, **kwargs):
