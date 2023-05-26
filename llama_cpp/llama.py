@@ -1416,8 +1416,10 @@ class LlamaTokenizer:
     def __init__(self, llama: Llama):
         self.llama = llama
 
-    def encode(self, text: str) -> List[int]:
-        return self.llama.tokenize(text.encode("utf-8", errors="ignore"))
+    def encode(self, text: str, add_bos: bool = True) -> List[int]:
+        return self.llama.tokenize(
+            text.encode("utf-8", errors="ignore"), add_bos=add_bos
+        )
 
     def decode(self, tokens: List[int]) -> str:
         return self.llama.detokenize(tokens).decode("utf-8", errors="ignore")
