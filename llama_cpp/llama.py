@@ -848,11 +848,6 @@ class Llama:
                 finish_reason = "length"
                 break
 
-        if self.cache:
-            if self.verbose:
-                print("Llama._create_completion: cache save", file=sys.stderr)
-            self.cache[prompt_tokens + completion_tokens] = self.save_state()
-
         if self.verbose:
             llama_cpp.llama_print_timings(self.ctx)
 
@@ -941,7 +936,16 @@ class Llama:
                         }
                     ],
                 }
+            if self.cache:
+                if self.verbose:
+                    print("Llama._create_completion: cache save", file=sys.stderr)
+                self.cache[prompt_tokens + completion_tokens] = self.save_state()
             return
+
+        if self.cache:
+            if self.verbose:
+                print("Llama._create_completion: cache save", file=sys.stderr)
+            self.cache[prompt_tokens + completion_tokens] = self.save_state()
 
         text_str = text.decode("utf-8", errors="ignore")
 
