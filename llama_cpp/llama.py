@@ -358,6 +358,7 @@ class Llama:
 
         if logits_processor is not None:
             logits = logits_processor(list(self.eval_tokens), logits)
+            self.eval_logits[-1] = logits
 
         nl_logit = logits[self._token_nl]
         candidates = self._candidates
@@ -855,6 +856,7 @@ class Llama:
         if stopping_criteria is not None and stopping_criteria(
             list(self.eval_tokens), self.eval_logits[-1]
         ):
+            text = self.detokenize(completion_tokens)
             finish_reason = "stop"
 
         if self.verbose:
