@@ -217,7 +217,10 @@ class Llama:
         size = llama_cpp.c_size_t(self._n_vocab)
         sorted = llama_cpp.c_bool(False)
         self._candidates_data = np.array(
-            [], dtype=np.dtype([("id", np.intc), ("logit", np.single), ("p", np.single)], align=True)
+            [],
+            dtype=np.dtype(
+                [("id", np.intc), ("logit", np.single), ("p", np.single)], align=True
+            ),
         )
         self._candidates_data.resize(3, self._n_vocab)
         candidates = llama_cpp.llama_token_data_array(
