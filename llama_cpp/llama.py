@@ -795,20 +795,22 @@ class Llama:
                 break
 
             if stream:
+                remaining_tokens = completion_tokens[returned_tokens:]
+                remaining_text = self.detokenize(remaining_tokens)
+                remaining_length = len(remaining_text)
+
                 # We want to avoid yielding any characters from
                 # the generated text if they are part of a stop
                 # sequence.
                 first_stop_position = 0
                 for s in stop_sequences:
-                    for i in range(len(s), 0, -1):
-                        if all_text.endswith(s[:i]):
+                    for i in range(min(len(s), remaining_length), 0, -1):
+                        if remaining_text.endswith(s[:i]):
                             if i > first_stop_position:
                                 first_stop_position = i
                             break
 
                 token_end_position = 0
-                remaining_tokens = completion_tokens[returned_tokens:]
-                remaining_length = len(self.detokenize(remaining_tokens))
                 for token in remaining_tokens:
                     token_end_position += len(self.detokenize([token]))
                     # Check if stop sequence is in the token
