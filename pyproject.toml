@@ -23,7 +23,7 @@ sse-starlette = { version = "^1.3.3", optional = true }
 black = "^23.3.0"
 twine = "^4.0.2"
 mkdocs = "^1.4.3"
-mkdocstrings = {extras = ["python"], version = "^0.21.2"}
+mkdocstrings = {extras = ["python"], version = "^0.22.0"}
 mkdocs-material = "^9.1.14"
 pytest = "^7.3.1"
 httpx = "^0.24.1"
