@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added first version of the changelog
+- Use numpy for internal buffers to reduce memory usage and improve performance.
 
 ### Fixed
 
