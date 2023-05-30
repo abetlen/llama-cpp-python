@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added first version of the changelog
 - Server: Use async routes
+- Use numpy for internal buffers to reduce memory usage and improve performance.
 
 ### Fixed
 
