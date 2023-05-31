@@ -2,6 +2,7 @@ import requests
 import json
 import os
 import struct
+import argparse
 
 def make_request(url, params=None):
     print(f"Making request to {url}...")
@@ -69,21 +70,28 @@ def get_user_choice(model_list):
     
     return None
 
-import argparse
-
 def main():
     # Create an argument parser
-    parser = argparse.ArgumentParser(description='Process the model version.')
+    parser = argparse.ArgumentParser(description='Process some parameters.')
+
+    # Arguments
     parser.add_argument('-v', '--version', type=int, default=0x0003,
                         help='an integer for the version to be used')
+    parser.add_argument('-a', '--author', type=str, default='TheBloke',
+                        help='an author to be filtered')
+    parser.add_argument('-t', '--tags', type=str, default='llama',
+                        help='tags for the content')
+    parser.add_argument('-s', '--search', type=str, default='',
+                        help='search term')
 
     # Parse the arguments
     args = parser.parse_args()
 
     # Define the parameters
     params = {
-        "author": "TheBloke",  # Filter by author
-        "tags": "llama"
+        "author": args.author,
+        "tags": args.tags,
+        "search": args.search
     }
 
     models = make_request('https://huggingface.co/api/models', params=params)
@@ -103,14 +111,22 @@ def main():
             if rfilename and 'q5_1' in rfilename:
                 model_list.append((model_id, rfilename))
 
-    model_choice = get_user_choice(model_list)
+    # Choose the model
+    if len(model_list) == 1:
+        model_choice = model_list[0]
+    else:
+        model_choice = get_user_choice(model_list)
+
     if model_choice is not None:
         model_id, rfilename = model_choice
         url = f"https://huggingface.co/{model_id}/resolve/main/{rfilename}"
         download_file(url, rfilename)
         _, version = check_magic_and_version(rfilename)
         if version != args.version:
-            print(f"Warning: Expected version {args.version}, but found different version in the file.")
+             print(f"Warning: Expected version {args.version}, but found different version in the file.")
+    else:
+        print("Error - model choice was None")
+        exit(1)
 
 if __name__ == '__main__':
     main()

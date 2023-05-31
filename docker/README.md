@@ -1,3 +1,11 @@
+# Install Docker Server
+
+**Note #1:** This was tested with Docker running on Linux. If you can get it working on Windows or MacOS, please update this `README.md` with a PR!
+
+[Install Docker Engine](https://docs.docker.com/engine/install)
+
+**Note #2:** NVidia GPU CuBLAS support requires a NVidia GPU with sufficient VRAM (approximately as much as the size above) and Docker NVidia support (see [container-toolkit/install-guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html))
+
 # Simple Dockerfiles for building the llama-cpp-python server with external model bin files
 - `./openblas_simple/Dockerfile` - a simple Dockerfile for non-GPU OpenBLAS, where the model is located outside the Docker image
  - `cd ./openblas_simple`
@@ -15,14 +23,14 @@
  - `hug_model.py` - a Python utility for interactively choosing and downloading the latest `5_1` quantized models from [huggingface.co/TheBloke]( https://huggingface.co/TheBloke)
 - `Dockerfile` - a single OpenBLAS and CuBLAS combined Dockerfile that automatically installs a previously downloaded model `model.bin`
  
-## Get model from Hugging Face
-`python3 ./hug_model.py`
-
-You should now have a model in the current directory and `model.bin` symlinked to it for the subsequent Docker build and copy step. e.g.
+## Download a Llama Model from Hugging Face
+- To download a MIT licensed Llama model run: `python3 ./hug_model.py -a vihangd -s open_llama_7b_700bt_ggml`
+- To select and install a restricted license Llama model run: `python3 ./hug_model.py -a TheBloke -t llama`
+- You should now have a model in the current directory and `model.bin` symlinked to it for the subsequent Docker build and copy step. e.g.
 ```
 docker $ ls -lh *.bin
--rw-rw-r-- 1 user user 4.8G May 23 18:30 <downloaded-model-file>.q5_1.bin
-lrwxrwxrwx 1 user user   24 May 23 18:30 model.bin -> <downloaded-model-file>.q5_1.bin
+-rw-rw-r-- 1 user user 4.8G May 23 18:30 <downloaded-model-file>q5_1.bin
+lrwxrwxrwx 1 user user   24 May 23 18:30 model.bin -> <downloaded-model-file>q5_1.bin
 ```
 **Note #1:** Make sure you have enough disk space to download the model. As the model is then copied into the image you will need at least
 **TWICE** as much disk space as the size of the model:
@@ -36,22 +44,15 @@ lrwxrwxrwx 1 user user   24 May 23 18:30 model.bin -> <downloaded-model-file>.q5
 
 **Note #2:** If you want to pass or tune additional parameters, customise `./start_server.sh` before running `docker build ...`
 
-# Install Docker Server
-
-**Note #3:** This was tested with Docker running on Linux. If you can get it working on Windows or MacOS, please update this `README.md` with a PR!
-
-[Install Docker Engine](https://docs.docker.com/engine/install)
-
-# Use OpenBLAS
+## Use OpenBLAS
 Use if you don't have a NVidia GPU. Defaults to `python:3-slim-bullseye` Docker base image and OpenBLAS:
-## Build:
-`docker build --build-arg -t openblas .`
-## Run:
+### Build:
+`docker build -t openblas .`
+### Run:
 `docker run --cap-add SYS_RESOURCE -t openblas`
 
-# Use CuBLAS
-Requires a NVidia GPU with sufficient VRAM (approximately as much as the size above) and Docker NVidia support (see [container-toolkit/install-guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html))
-## Build:
+## Use CuBLAS
+### Build:
 `docker build --build-arg IMAGE=nvidia/cuda:12.1.1-devel-ubuntu22.04 -t cublas .`
-## Run:
+### Run:
 `docker run --cap-add SYS_RESOURCE -t cublas`
