@@ -1,10 +1,21 @@
-# Dockerfiles for building the llama-cpp-python server
-- `Dockerfile.openblas_simple` - a simple Dockerfile for non-GPU OpenBLAS
-- `Dockerfile.cuda_simple` - a simple Dockerfile for CUDA accelerated CuBLAS
-- `hug_model.py` - a Python utility for interactively choosing and downloading the latest `5_1` quantized models from [huggingface.co/TheBloke]( https://huggingface.co/TheBloke)
+# Simple Dockerfiles for building the llama-cpp-python server with external model bin files
+- `./openblas_simple/Dockerfile` - a simple Dockerfile for non-GPU OpenBLAS, where the model is located outside the Docker image
+ - `cd ./openblas_simple`
+ - `docker build -t openblas_simple .`
+ - `docker run -e USE_MLOCK=0 -e MODEL=/var/model/<model-path> -v <model-root-path>:/var/model -t openblas_simple`
+   where `<model-root-path>/<model-path>` is the full path to the model file on the Docker host system.
+- `./cuda_simple/Dockerfile` - a simple Dockerfile for CUDA accelerated CuBLAS, where the model is located outside the Docker image
+ - `cd ./cuda_simple`
+ - `docker build -t cuda_simple .`
+ - `docker run -e USE_MLOCK=0 -e MODEL=/var/model/<model-path> -v <model-root-path>:/var/model -t cuda_simple`
+   where `<model-root-path>/<model-path>` is the full path to the model file on the Docker host system.
+
+# "Bot-in-a-box" - a method to build a Docker image by choosing a model to be downloaded and loading into a Docker image
+ - `cd ./auto_docker`:
+ - `hug_model.py` - a Python utility for interactively choosing and downloading the latest `5_1` quantized models from [huggingface.co/TheBloke]( https://huggingface.co/TheBloke)
 - `Dockerfile` - a single OpenBLAS and CuBLAS combined Dockerfile that automatically installs a previously downloaded model `model.bin`
  
-# Get model from Hugging Face
+## Get model from Hugging Face
 `python3 ./hug_model.py`
 
 You should now have a model in the current directory and `model.bin` symlinked to it for the subsequent Docker build and copy step. e.g.
