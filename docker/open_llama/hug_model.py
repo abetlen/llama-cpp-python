@@ -76,13 +76,15 @@ def main():
 
     # Arguments
     parser.add_argument('-v', '--version', type=int, default=0x0003,
-                        help='an integer for the version to be used')
+                        help='hexadecimal version number of ggml file')
     parser.add_argument('-a', '--author', type=str, default='TheBloke',
-                        help='an author to be filtered')
-    parser.add_argument('-t', '--tags', type=str, default='llama',
-                        help='tags for the content')
+                        help='HuggingFace author filter')
+    parser.add_argument('-t', '--tag', type=str, default='llama',
+                        help='HuggingFace tag filter')
     parser.add_argument('-s', '--search', type=str, default='',
-                        help='search term')
+                        help='HuggingFace search filter')
+    parser.add_argument('-f', '--filename', type=str, default='q5_1',
+                        help='HuggingFace model repository filename substring match')
 
     # Parse the arguments
     args = parser.parse_args()
@@ -90,7 +92,7 @@ def main():
     # Define the parameters
     params = {
         "author": args.author,
-        "tags": args.tags,
+        "tags": args.tag,
         "search": args.search
     }
 
@@ -108,11 +110,15 @@ def main():
 
         for sibling in model_info.get('siblings', []):
             rfilename = sibling.get('rfilename')
-            if rfilename and 'q5_1' in rfilename:
+            if rfilename and args.filename in rfilename:
                 model_list.append((model_id, rfilename))
 
     # Choose the model
-    if len(model_list) == 1:
+    model_list.sort(key=lambda x: x[0])
+    if len(model_list) == 0:
+        print("No models found")
+        exit(1)
+    elif len(model_list) == 1:
         model_choice = model_list[0]
     else:
         model_choice = get_user_choice(model_list)
@@ -120,13 +126,14 @@ def main():
     if model_choice is not None:
         model_id, rfilename = model_choice
         url = f"https://huggingface.co/{model_id}/resolve/main/{rfilename}"
-        download_file(url, rfilename)
-        _, version = check_magic_and_version(rfilename)
+        dest = f"{model_id.replace('/', '_')}_{rfilename}"
+        download_file(url, dest)
+        _, version = check_magic_and_version(dest)
         if version != args.version:
              print(f"Warning: Expected version {args.version}, but found different version in the file.")
     else:
         print("Error - model choice was None")
-        exit(1)
+        exit(2)
 
 if __name__ == '__main__':
     main()

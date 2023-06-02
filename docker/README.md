@@ -24,7 +24,7 @@
 - `Dockerfile` - a single OpenBLAS and CuBLAS combined Dockerfile that automatically installs a previously downloaded model `model.bin`
  
 ## Download a Llama Model from Hugging Face
-- To download a MIT licensed Llama model run: `python3 ./hug_model.py -a vihangd -s open_llama_7b_700bt_ggml`
+- To download a MIT licensed Llama model you can run: `python3 ./hug_model.py -a vihangd -s open_llama_7b_700bt_ggml -f ggml-model-q5_1.bin`
 - To select and install a restricted license Llama model run: `python3 ./hug_model.py -a TheBloke -t llama`
 - You should now have a model in the current directory and `model.bin` symlinked to it for the subsequent Docker build and copy step. e.g.
 ```
@@ -37,9 +37,10 @@ lrwxrwxrwx 1 user user   24 May 23 18:30 model.bin -> <downloaded-model-file>q5_
 
 | Model |  Quantized size |
 |------:|----------------:|
+|    3B |            3 GB |
 |    7B |            5 GB |
 |   13B |           10 GB |
-|   30B |           25 GB |
+|   33B |           25 GB |
 |   65B |           50 GB |
 
 **Note #2:** If you want to pass or tune additional parameters, customise `./start_server.sh` before running `docker build ...`
