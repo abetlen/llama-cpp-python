@@ -9,7 +9,7 @@ COPY . .
 RUN apt update && apt install -y libopenblas-dev ninja-build build-essential
 RUN python -m pip install --upgrade pip pytest cmake scikit-build setuptools fastapi uvicorn sse-starlette
 
-RUN LLAMA_OPENBLAS=1 python3 setup.py develop
+RUN LLAMA_OPENBLAS=1 pip install llama_cpp_python --verbose
 
 # Run the server
 CMD python3 -m llama_cpp.server
