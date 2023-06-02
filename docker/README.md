@@ -7,16 +7,21 @@
 **Note #2:** NVidia GPU CuBLAS support requires a NVidia GPU with sufficient VRAM (approximately as much as the size above) and Docker NVidia support (see [container-toolkit/install-guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html))
 
 # Simple Dockerfiles for building the llama-cpp-python server with external model bin files
-- `./openblas_simple/Dockerfile` - a simple Dockerfile for non-GPU OpenBLAS, where the model is located outside the Docker image
- - `cd ./openblas_simple`
- - `docker build -t openblas_simple .`
- - `docker run -e USE_MLOCK=0 -e MODEL=/var/model/<model-path> -v <model-root-path>:/var/model -t openblas_simple`
-   where `<model-root-path>/<model-path>` is the full path to the model file on the Docker host system.
-- `./cuda_simple/Dockerfile` - a simple Dockerfile for CUDA accelerated CuBLAS, where the model is located outside the Docker image
- - `cd ./cuda_simple`
- - `docker build -t cuda_simple .`
- - `docker run -e USE_MLOCK=0 -e MODEL=/var/model/<model-path> -v <model-root-path>:/var/model -t cuda_simple`
-   where `<model-root-path>/<model-path>` is the full path to the model file on the Docker host system.
+## openblas_simple - a simple Dockerfile for non-GPU OpenBLAS, where the model is located outside the Docker image
+```
+cd ./openblas_simple
+docker build -t openblas_simple .
+docker run -e USE_MLOCK=0 -e MODEL=/var/model/<model-path> -v <model-root-path>:/var/model -t openblas_simple
+```
+where `<model-root-path>/<model-path>` is the full path to the model file on the Docker host system.
+
+## cuda_simple - a simple Dockerfile for CUDA accelerated CuBLAS, where the model is located outside the Docker image
+```
+cd ./cuda_simple
+docker build -t cuda_simple .
+docker run -e USE_MLOCK=0 -e MODEL=/var/model/<model-path> -v <model-root-path>:/var/model -t cuda_simple
+```
+where `<model-root-path>/<model-path>` is the full path to the model file on the Docker host system.
 
 # "Open-Llama-in-a-box" - Download a MIT licensed Open Llama model and install into a Docker image that runs an OpenBLAS-enabled llama-cpp-python server
 ```

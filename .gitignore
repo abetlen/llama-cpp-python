@@ -165,5 +165,5 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 .idea/
 
-# model .bin files
-docker/auto_docker/*.bin
+# downloaded model .bin files
+docker/open_llama/*.bin
