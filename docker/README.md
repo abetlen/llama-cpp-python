@@ -4,7 +4,7 @@
 
 [Install Docker Engine](https://docs.docker.com/engine/install)
 
-**Note #2:** NVidia GPU CuBLAS support requires a NVidia GPU with sufficient VRAM (approximately as much as the size above) and Docker NVidia support (see [container-toolkit/install-guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html))
+**Note #2:** NVidia GPU CuBLAS support requires a NVidia GPU with sufficient VRAM (approximately as much as the size in the table below) and Docker NVidia support (see [container-toolkit/install-guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html))
 
 # Simple Dockerfiles for building the llama-cpp-python server with external model bin files
 ## openblas_simple - a simple Dockerfile for non-GPU OpenBLAS, where the model is located outside the Docker image
@@ -23,7 +23,8 @@ docker run -e USE_MLOCK=0 -e MODEL=/var/model/<model-path> -v <model-root-path>:
 ```
 where `<model-root-path>/<model-path>` is the full path to the model file on the Docker host system.
 
-# "Open-Llama-in-a-box" - Download a MIT licensed Open Llama model and install into a Docker image that runs an OpenBLAS-enabled llama-cpp-python server
+# "Open-Llama-in-a-box"
+## Download an Apache V2.0 licensed 3B paramter Open Llama model and install into a Docker image that runs an OpenBLAS-enabled llama-cpp-python server
 ```
 $ cd ./open_llama
 ./build.sh
@@ -31,8 +32,8 @@ $ cd ./open_llama
 ```
 
 # Manually choose your own Llama model from Hugging Face
-- `python3 ./hug_model.py -a TheBloke -t llama`
-- You should now have a model in the current directory and `model.bin` symlinked to it for the subsequent Docker build and copy step. e.g.
+`python3 ./hug_model.py -a TheBloke -t llama`
+You should now have a model in the current directory and `model.bin` symlinked to it for the subsequent Docker build and copy step. e.g.
 ```
 docker $ ls -lh *.bin
 -rw-rw-r-- 1 user user 4.8G May 23 18:30 <downloaded-model-file>q5_1.bin
