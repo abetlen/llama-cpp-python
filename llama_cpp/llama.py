@@ -814,48 +814,22 @@ class Llama:
                             break
 
                 token_end_position = 0
-                for token in remaining_tokens:
-                    token_end_position += len(self.detokenize([token]))
-                    # Check if stop sequence is in the token
-                    if token_end_position >= (
-                        remaining_length - first_stop_position - 1
-                    ):
+                idx = 0
+                while idx < len(remaining_tokens):
+                    tokens = []
+                    for i in range(0, len(remaining_tokens) - idx):
+                        tokens.append(remaining_tokens[idx+i])
+                        try:
+                            bs = self.detokenize(tokens)
+                            text = bs.decode('utf-8')
+                            break
+                        except Exception as _e:
+                            pass
+                    idx += len(tokens)
+                    token_end_position += len(bs)
+                    if token_end_position >= (remaining_length - first_stop_position - 1):
                         break
-                    logprobs_or_none: Optional[CompletionLogprobs] = None
-                    if logprobs is not None:
-                        token_str = self.detokenize([token]).decode(
-                            "utf-8", errors="ignore"
-                        )
-                        text_offset = len(prompt) + len(
-                            self.detokenize(completion_tokens[:returned_tokens])
-                        )
-                        token_offset = len(prompt_tokens) + returned_tokens
-                        logits = self._scores[token_offset - 1, :].tolist()
-                        current_logprobs = Llama.logits_to_logprobs(logits)
-                        sorted_logprobs = list(
-                            sorted(
-                                zip(current_logprobs, range(len(current_logprobs))),
-                                reverse=True,
-                            )
-                        )
-                        top_logprob = {
-                            self.detokenize([i]).decode(
-                                "utf-8", errors="ignore"
-                            ): logprob
-                            for logprob, i in sorted_logprobs[:logprobs]
-                        }
-                        top_logprob.update({token_str: current_logprobs[int(token)]})
-                        logprobs_or_none = {
-                            "tokens": [
-                                self.detokenize([token]).decode(
-                                    "utf-8", errors="ignore"
-                                )
-                            ],
-                            "text_offset": [text_offset],
-                            "token_logprobs": [sorted_logprobs[int(token)][0]],
-                            "top_logprobs": [top_logprob],
-                        }
-                    returned_tokens += 1
+                    returned_tokens += len(tokens)
                     yield {
                         "id": completion_id,
                         "object": "text_completion",
@@ -863,11 +837,9 @@ class Llama:
                         "model": model_name,
                         "choices": [
                             {
-                                "text": self.detokenize([token]).decode(
-                                    "utf-8", errors="ignore"
-                                ),
+                                "text": text,
                                 "index": 0,
-                                "logprobs": logprobs_or_none,
+                                "logprobs": None,
                                 "finish_reason": None,
                             }
                         ],
