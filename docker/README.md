@@ -18,14 +18,15 @@
  - `docker run -e USE_MLOCK=0 -e MODEL=/var/model/<model-path> -v <model-root-path>:/var/model -t cuda_simple`
    where `<model-root-path>/<model-path>` is the full path to the model file on the Docker host system.
 
-# "Bot-in-a-box" - a method to build a Docker image by choosing a model to be downloaded and loading into a Docker image
- - `cd ./auto_docker`:
- - `hug_model.py` - a Python utility for interactively choosing and downloading the latest `5_1` quantized models from [huggingface.co/TheBloke]( https://huggingface.co/TheBloke)
-- `Dockerfile` - a single OpenBLAS and CuBLAS combined Dockerfile that automatically installs a previously downloaded model `model.bin`
- 
-## Download a Llama Model from Hugging Face
-- To download a MIT licensed Llama model you can run: `python3 ./hug_model.py -a vihangd -s open_llama_7b_700bt_ggml -f ggml-model-q5_1.bin`
-- To select and install a restricted license Llama model run: `python3 ./hug_model.py -a TheBloke -t llama`
+# "Open-Llama-in-a-box" - Download a MIT licensed Open Llama model and install into a Docker image that runs an OpenBLAS-enabled llama-cpp-python server
+```
+$ cd ./open_llama
+./build.sh
+./start.sh
+```
+
+# Manually choose your own Llama model from Hugging Face
+- `python3 ./hug_model.py -a TheBloke -t llama`
 - You should now have a model in the current directory and `model.bin` symlinked to it for the subsequent Docker build and copy step. e.g.
 ```
 docker $ ls -lh *.bin
