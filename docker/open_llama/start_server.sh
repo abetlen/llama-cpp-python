@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# For mmap support
+# For mlock support
 ulimit -l unlimited
 
 if [ "$IMAGE" = "python:3-slim-bullseye" ]; then
