@@ -191,6 +191,15 @@ llama_context_params_p = POINTER(llama_context_params)
 #     LLAMA_FTYPE_MOSTLY_Q8_0          = 7, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_Q5_0          = 8, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_Q5_1          = 9, // except 1d tensors
+#     LLAMA_FTYPE_MOSTLY_Q2_K          = 10,// except 1d tensors
+#     LLAMA_FTYPE_MOSTLY_Q3_K_S        = 11,// except 1d tensors
+#     LLAMA_FTYPE_MOSTLY_Q3_K_M        = 12,// except 1d tensors
+#     LLAMA_FTYPE_MOSTLY_Q3_K_L        = 13,// except 1d tensors
+#     LLAMA_FTYPE_MOSTLY_Q4_K_S        = 14,// except 1d tensors
+#     LLAMA_FTYPE_MOSTLY_Q4_K_M        = 15,// except 1d tensors
+#     LLAMA_FTYPE_MOSTLY_Q5_K_S        = 16,// except 1d tensors
+#     LLAMA_FTYPE_MOSTLY_Q5_K_M        = 17,// except 1d tensors
+#     LLAMA_FTYPE_MOSTLY_Q6_K          = 18,// except 1d tensors
 # };
 LLAMA_FTYPE_ALL_F32 = c_int(0)
 LLAMA_FTYPE_MOSTLY_F16 = c_int(1)
@@ -200,6 +209,15 @@ LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16 = c_int(4)
 LLAMA_FTYPE_MOSTLY_Q8_0 = c_int(7)
 LLAMA_FTYPE_MOSTLY_Q5_0 = c_int(8)
 LLAMA_FTYPE_MOSTLY_Q5_1 = c_int(9)
+LLAMA_FTYPE_MOSTLY_Q2_K = c_int(10)
+LLAMA_FTYPE_MOSTLY_Q3_K_S = c_int(11)
+LLAMA_FTYPE_MOSTLY_Q3_K_M = c_int(12)
+LLAMA_FTYPE_MOSTLY_Q3_K_L = c_int(13)
+LLAMA_FTYPE_MOSTLY_Q4_K_S = c_int(14)
+LLAMA_FTYPE_MOSTLY_Q4_K_M = c_int(15)
+LLAMA_FTYPE_MOSTLY_Q5_K_S = c_int(16)
+LLAMA_FTYPE_MOSTLY_Q5_K_M = c_int(17)
+LLAMA_FTYPE_MOSTLY_Q6_K = c_int(18)
 
 
 # LLAMA_API struct llama_context_params llama_context_default_params();
