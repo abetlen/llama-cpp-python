@@ -14,7 +14,7 @@ include = [
 
 [tool.poetry.dependencies]
 python = "^3.8.1"
-typing-extensions = "^4.6.2"
+typing-extensions = "^4.6.3"
 numpy = "^1.20.0"
 uvicorn = { version = "^0.22.0", optional = true }
 fastapi = { version = "^0.96.0", optional = true }
