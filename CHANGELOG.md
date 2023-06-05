@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.1.57]
+
+- Added: OpenLlama 3B support
+
 ## [v0.1.56]
 
 ### Added
