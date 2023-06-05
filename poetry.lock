@@ -1413,14 +1413,14 @@ jupyter = ["ipywidgets (>=7.5.1,<9)"]
 
 [[package]]
 name = "scikit-build"
-version = "0.17.5"
+version = "0.17.6"
 description = "Improved build system generator for Python C/C++/Fortran/Cython extensions"
 category = "dev"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "scikit_build-0.17.5-py3-none-any.whl", hash = "sha256:18861286b34fd2d685327d3bec6ebf4d33303adfaef28a08dd856710d16cf20f"},
-    {file = "scikit_build-0.17.5.tar.gz", hash = "sha256:76856e7631d9e8887a7aa71913d5f184a6177246225391af96ce4801d89fa254"},
+    {file = "scikit_build-0.17.6-py3-none-any.whl", hash = "sha256:18bd55e81841106eec93f30a297df4f301003791c41be46ef6428d58bd42d6b3"},
+    {file = "scikit_build-0.17.6.tar.gz", hash = "sha256:b51a51a36b37c42650994b5047912f59b22e3210b23e321f287611f9ef6e5c9d"},
 ]
 
 [package.dependencies]
@@ -1434,7 +1434,7 @@ wheel = ">=0.32.0"
 cov = ["coverage[toml] (>=4.2)", "pytest-cov (>=2.7.1)"]
 docs = ["pygments", "sphinx (>=4)", "sphinx-issues", "sphinx-rtd-theme (>=1.0)", "sphinxcontrib-moderncmakedomain (>=3.19)"]
 doctest = ["ubelt (>=0.8.2)", "xdoctest (>=0.10.0)"]
-test = ["build (>=0.7)", "cython (>=0.25.1)", "importlib-metadata", "pytest (>=6.0.0)", "pytest-mock (>=1.10.4)", "pytest-virtualenv (>=1.2.5)", "requests", "virtualenv"]
+test = ["build (>=0.7)", "cython (>=0.25.1)", "importlib-metadata", "pytest (>=6.0.0)", "pytest-mock (>=1.10.4)", "requests", "virtualenv"]
 
 [[package]]
 name = "secretstorage"
@@ -1700,4 +1700,4 @@ server = ["uvicorn", "fastapi", "sse-starlette"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8.1"
-content-hash = "4eefe8dc7ed2ae6262828e6f4329d0539b667ac113221dc3e927b166b8bb8619"
+content-hash = "64bfca53778d0ca567082252ee03d951ed9e3f14dde336db0fbd3f2f384e8184"
