@@ -222,7 +222,7 @@ class Llama:
                 [("id", np.intc), ("logit", np.single), ("p", np.single)], align=True
             ),
         )
-        self._candidates_data.resize(3, self._n_vocab)
+        self._candidates_data.resize(3, self._n_vocab, refcheck=False)
         candidates = llama_cpp.llama_token_data_array(
             data=self._candidates_data.ctypes.data_as(llama_cpp.llama_token_data_p),
             size=size,
