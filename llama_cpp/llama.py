@@ -130,6 +130,9 @@ class Llama:
         lora_base: Optional[str] = None,
         lora_path: Optional[str] = None,
         verbose: bool = True,
+        mirostat_mode: Optional[int] = 0,
+        mirostat_tau: Optional[float] = 5.0,
+        mirostat_eta: Optional[float] = 0.1,
     ):
         """Load a llama.cpp model from `model_path`.
 
@@ -170,6 +173,9 @@ class Llama:
         self.params.use_mmap = use_mmap if lora_path is None else False
         self.params.use_mlock = use_mlock
         self.params.embedding = embedding
+        self.params.mirostat_mode = mirostat_mode
+        self.params.mirostat_tau = mirostat_tau
+        self.params.mirostat_eta = mirostat_eta
 
         self.last_n_tokens_size = last_n_tokens_size
         self.n_batch = min(n_ctx, n_batch)
