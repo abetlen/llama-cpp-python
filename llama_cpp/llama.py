@@ -1637,12 +1637,14 @@ class Llama:
         )
         return self._convert_completion_to_chat(completion_or_chunks, stream=stream)  # type: ignore
 
-    def _free_model(self):
-        if hasattr(self, "model") and self.model is not None:
-            llama_cpp.llama_free_model(self.model)
+    def _free_model(self, *, _lfree_model=llama_cpp._lib.llama_free_model, _free=llama_cpp._lib.llama_free):
+        model = getattr(self, 'model', None)
+        if model is not None:
+            _lfree_model(model)
             self.model = None
-        if hasattr(self, "ctx") and self.ctx is not None:
-            llama_cpp.llama_free(self.ctx)
+        ctx = getattr(self, 'ctx', None)
+        if ctx is not None:
+            _free(ctx)
             self.ctx = None
 
     def __del__(self):
