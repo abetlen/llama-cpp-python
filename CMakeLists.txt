@@ -27,5 +27,7 @@ else()
         TARGETS llama 
         LIBRARY DESTINATION llama_cpp
         RUNTIME DESTINATION llama_cpp
+        ARCHIVE DESTINATION llama_cpp
+        FRAMEWORK DESTINATION llama_cpp
     )
 endif()
