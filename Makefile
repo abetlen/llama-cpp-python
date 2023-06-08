@@ -20,6 +20,9 @@ build.openblas:
 build.blis:
 	CMAKE_ARGS="-DLLAMA_OPENBLAS=on -DLLAMA_OPENBLAS_VENDOR=blis" FORCE_CMAKE=1 python3 setup.py develop
 
+build.metal:
+	CMAKE_ARGS="-DLLAMA_METAL=on" FORCE_CMAKE=1 python3 setup.py develop
+
 build.sdist:
 	python3 setup.py sdist
 
