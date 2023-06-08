@@ -58,6 +58,10 @@ class Settings(BaseSettings):
         default=False,
         description="Use a cache to reduce processing times for evaluated prompts.",
     )
+    cache_type: Literal["ram", "disk"] = Field(
+        default="ram",
+        description="The type of cache to use. Only used if cache is True.",
+    )
     cache_size: int = Field(
         default=2 << 30,
         description="The size of the cache in bytes. Only used if cache is True.",
@@ -108,6 +112,11 @@ def create_app(settings: Optional[Settings] = None):
         verbose=settings.verbose,
     )
     if settings.cache:
+        if settings.cache_type == "disk":
+            cache = llama_cpp.LlamaDiskCache(capacity_bytes=settings.cache_size)
+        else:
+            cache = llama_cpp.LlamaRAMCache(capacity_bytes=settings.cache_size)
+
         cache = llama_cpp.LlamaCache(capacity_bytes=settings.cache_size)
         llama.set_cache(cache)
 
