@@ -7,10 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.1.59]
+
 ### Added
 
 - (llama.cpp) k-quants support
 - (server) mirostat sampling parameters to server
+
+### Fixed
+
+- Support both `.so` and `.dylib` for `libllama` on MacOS
 
 ## [v0.1.58]
 
