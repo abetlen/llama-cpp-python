@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.60]
+
 #### Addeed
 
 - (build-system) Migrate from scikit-build to scikit-build-core

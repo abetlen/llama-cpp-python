@@ -8,7 +8,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "llama_cpp_python"
-version = "0.1.59"
+version = "0.1.60"
 description = "Python bindings for the llama.cpp library"
 readme = "README.md"
 license = { text = "MIT" }
@@ -45,7 +45,7 @@ test = ["pytest", "httpx"]
 
 [tool.poetry]
 name = "llama_cpp_python"
-version = "0.1.59"
+version = "0.1.60"
 description = "Python bindings for the llama.cpp library"
 authors = ["Andrei Betlen <abetlen@gmail.com>"]
 
