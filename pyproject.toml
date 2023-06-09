@@ -41,7 +41,7 @@ server = [
     "fastapi",
     "sse-starlette",
 ]
-test = ["pytest"]
+test = ["pytest", "httpx"]
 
 [tool.poetry.dependencies]
 python = "^3.8.1"
