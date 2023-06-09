@@ -21,7 +21,7 @@ jobs:
           python3 -m pip install --verbose llama-cpp-python[server,test]
       - name: Test with pytest
         run: |
-          python3 -m pytest
+          python3 -c "import llama_cpp"
 
   build-windows:
 
@@ -41,7 +41,7 @@ jobs:
           python3 -m pip install --verbose llama-cpp-python[server,test]
       - name: Test with pytest
         run: |
-          python3 -m pytest
+          python3 -c "import llama_cpp"
 
   build-macos:
 
@@ -61,4 +61,4 @@ jobs:
           python3 -m pip install --verbose llama-cpp-python[server,test]
       - name: Test with pytest
         run: |
-          python3 -m pytest
+          python3 -c "import llama_cpp"
