@@ -30,6 +30,13 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
 ]
 
+[project.urls]
+Homepage = "https://github.com/abetlen/llama-cpp-python"
+Documentation = "https://abetlen.github.io/llama-cpp-python"
+Discussions = "https://github.com/abetlen/llama-cpp-python/discussions"
+Issues = "https://github.com/abetlen/llama-cpp-python/issues"
+Changelog = "https://github.com/abetlen/llama-cpp-python/blob/main/CHANGELOG.md"
+
 [tool.scikit-build]
 wheel.packages = ["llama_cpp", "llama_cpp.server"]
 wheel.expand-macos-universal-tags = true
