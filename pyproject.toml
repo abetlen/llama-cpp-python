@@ -37,9 +37,9 @@ cmake.verbose = true
 
 [project.optional-dependencies]
 server = [
-    "uvicorn>=0.21.1",
-    "fastapi>=0.95.0",
-    "sse-starlette>=1.3.3",
+    "uvicorn>=0.22.0",
+    "fastapi>=0.96.0",
+    "sse-starlette>=1.6.1",
 ]
 test = ["pytest"]
 
