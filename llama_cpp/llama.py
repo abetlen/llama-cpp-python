@@ -831,7 +831,9 @@ class Llama:
                 "logprobs is not supported for models created with logits_all=False"
             )
 
-        if self.cache:
+        # Temporarily disable usage of the cache
+        # See: https://github.com/abetlen/llama-cpp-python/issues/348#issuecomment-1583072408
+        if self.cache and False:
             try:
                 cache_item = self.cache[prompt_tokens]
                 cache_prefix_len = Llama.longest_token_prefix(
@@ -1069,14 +1071,14 @@ class Llama:
                         }
                     ],
                 }
-            if self.cache:
+            if self.cache and False:
                 if self.verbose:
                     print("Llama._create_completion: cache save", file=sys.stderr)
                 self.cache[prompt_tokens + completion_tokens] = self.save_state()
                 print("Llama._create_completion: cache saved", file=sys.stderr)
             return
 
-        if self.cache:
+        if self.cache and False:
             if self.verbose:
                 print("Llama._create_completion: cache save", file=sys.stderr)
             self.cache[prompt_tokens + completion_tokens] = self.save_state()

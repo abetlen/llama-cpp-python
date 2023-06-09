@@ -12,7 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - (build-system) Migrate from scikit-build to scikit-build-core
 
 ### Fixed
+
 - Truncate max_tokens in create_completion so requested tokens doesn't exceed context size.
+- Temporarily disable cache for completion requests
 
 ## [v0.1.59]
 
