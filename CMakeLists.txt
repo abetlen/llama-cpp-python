@@ -18,7 +18,7 @@ if (UNIX AND NOT FORCE_CMAKE)
     )
     install(
         FILES ${CMAKE_CURRENT_SOURCE_DIR}/vendor/llama.cpp/libllama.so
-        DESTINATION llama_cpp
+        DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
     )
 else()
     set(BUILD_SHARED_LIBS "On")
