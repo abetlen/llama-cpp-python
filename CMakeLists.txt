@@ -25,9 +25,9 @@ else()
     add_subdirectory(vendor/llama.cpp)
     install(
         TARGETS llama 
-        LIBRARY DESTINATION llama_cpp
-        RUNTIME DESTINATION llama_cpp
-        ARCHIVE DESTINATION llama_cpp
-        FRAMEWORK DESTINATION llama_cpp
+        LIBRARY DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
+        RUNTIME DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
+        ARCHIVE DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
+        FRAMEWORK DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
     )
 endif()
