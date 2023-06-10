@@ -7,11 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.61]
+
+### Fixed
+
+- Fix broken pip installation
+
 ## [0.1.60]
 
-#### Addeed
+### NOTE
 
-- (build-system) Migrate from scikit-build to scikit-build-core
+- This release was deleted due to a bug  with the packaging system that caused pip installations to fail.
 
 ### Fixed
 

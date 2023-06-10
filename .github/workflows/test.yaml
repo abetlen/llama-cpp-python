@@ -26,11 +26,11 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install --verbose --editable .[server,test]
+          python -m pip install --upgrade pip pytest cmake scikit-build setuptools fastapi sse-starlette httpx uvicorn
+          pip install . -v
       - name: Test with pytest
         run: |
-          python3 -m pytest
+          pytest
 
   build-windows:
 
@@ -49,11 +49,11 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install --verbose --editable .[server,test]
+          python -m pip install --upgrade pip pytest cmake scikit-build setuptools fastapi sse-starlette httpx uvicorn
+          pip install . -v
       - name: Test with pytest
         run: |
-          python3 -m pytest
+          pytest
 
   build-macos:
 
@@ -72,8 +72,8 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install --verbose --editable .[server,test]
+          python -m pip install --upgrade pip pytest cmake scikit-build setuptools fastapi sse-starlette httpx uvicorn
+          pip install . -v
       - name: Test with pytest
         run: |
-          python3 -m pytest
+          pytest
