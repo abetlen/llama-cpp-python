@@ -4,6 +4,7 @@ import uuid
 import time
 import math
 import multiprocessing
+from abc import ABC, abstractmethod
 from typing import (
     List,
     Optional,
@@ -17,6 +18,8 @@ from typing import (
 )
 from collections import deque, OrderedDict
 
+import diskcache
+
 from . import llama_cpp
 from .llama_types import *
 
@@ -24,12 +27,43 @@ import numpy as np
 import numpy.typing as npt
 
 
-class LlamaCache:
-    """Cache for a llama.cpp model."""
+class BaseLlamaCache(ABC):
+    """Base cache class for a llama.cpp model."""
 
     def __init__(self, capacity_bytes: int = (2 << 30)):
-        self.cache_state: OrderedDict[Tuple[int, ...], "LlamaState"] = OrderedDict()
         self.capacity_bytes = capacity_bytes
+
+    @property
+    @abstractmethod
+    def cache_size(self) -> int:
+        raise NotImplementedError
+
+    def _find_longest_prefix_key(
+        self,
+        key: Tuple[int, ...],
+    ) -> Optional[Tuple[int, ...]]:
+        pass
+
+    @abstractmethod
+    def __getitem__(self, key: Sequence[int]) -> "LlamaState":
+        raise NotImplementedError
+
+    @abstractmethod
+    def __contains__(self, key: Sequence[int]) -> bool:
+        raise NotImplementedError
+
+    @abstractmethod
+    def __setitem__(self, key: Sequence[int], value: "LlamaState") -> None:
+        raise NotImplementedError
+
+
+class LlamaRAMCache(BaseLlamaCache):
+    """Cache for a llama.cpp model using RAM."""
+
+    def __init__(self, capacity_bytes: int = (2 << 30)):
+        super().__init__(capacity_bytes)
+        self.capacity_bytes = capacity_bytes
+        self.cache_state: OrderedDict[Tuple[int, ...], "LlamaState"] = OrderedDict()
 
     @property
     def cache_size(self):
@@ -54,7 +88,7 @@ class LlamaCache:
         key = tuple(key)
         _key = self._find_longest_prefix_key(key)
         if _key is None:
-            raise KeyError(f"Key not found")
+            raise KeyError("Key not found")
         value = self.cache_state[_key]
         self.cache_state.move_to_end(_key)
         return value
@@ -67,8 +101,64 @@ class LlamaCache:
         if key in self.cache_state:
             del self.cache_state[key]
         self.cache_state[key] = value
-        while self.cache_size > self.capacity_bytes:
+        while self.cache_size > self.capacity_bytes and len(self.cache_state) > 0:
             self.cache_state.popitem(last=False)
+
+
+# Alias for backwards compatibility
+LlamaCache = LlamaRAMCache
+
+
+class LlamaDiskCache(BaseLlamaCache):
+    """Cache for a llama.cpp model using disk."""
+
+    def __init__(
+        self, cache_dir: str = ".cache/llama_cache", capacity_bytes: int = (2 << 30)
+    ):
+        super().__init__(capacity_bytes)
+        self.cache = diskcache.Cache(cache_dir)
+
+    @property
+    def cache_size(self):
+        return int(self.cache.volume())  # type: ignore
+
+    def _find_longest_prefix_key(
+        self,
+        key: Tuple[int, ...],
+    ) -> Optional[Tuple[int, ...]]:
+        min_len = 0
+        min_key: Optional[Tuple[int, ...]] = None
+        for k in self.cache.iterkeys():  # type: ignore
+            prefix_len = Llama.longest_token_prefix(k, key)
+            if prefix_len > min_len:
+                min_len = prefix_len
+                min_key = k  # type: ignore
+        return min_key
+
+    def __getitem__(self, key: Sequence[int]) -> "LlamaState":
+        key = tuple(key)
+        _key = self._find_longest_prefix_key(key)
+        if _key is None:
+            raise KeyError("Key not found")
+        value: "LlamaState" = self.cache.pop(_key)  # type: ignore
+        self.cache.push(_key, side="front")  # type: ignore
+        return value
+
+    def __contains__(self, key: Sequence[int]) -> bool:
+        return self._find_longest_prefix_key(tuple(key)) is not None
+
+    def __setitem__(self, key: Sequence[int], value: "LlamaState"):
+        print("LlamaDiskCache.__setitem__: called", file=sys.stderr)
+        key = tuple(key)
+        if key in self.cache:
+            print("LlamaDiskCache.__setitem__: delete", file=sys.stderr)
+            del self.cache[key]
+        self.cache[key] = value
+        print("LlamaDiskCache.__setitem__: set", file=sys.stderr)
+        while self.cache_size > self.capacity_bytes and len(self.cache) > 0:
+            key_to_remove = next(iter(self.cache))
+            del self.cache[key_to_remove]
+        print("LlamaDiskCache.__setitem__: trim", file=sys.stderr)
 
 
 class LlamaState:
@@ -182,7 +272,7 @@ class Llama:
         self.eval_tokens: Deque[int] = deque(maxlen=n_ctx)
         self.eval_logits: Deque[List[float]] = deque(maxlen=n_ctx if logits_all else 1)
 
-        self.cache: Optional[LlamaCache] = None
+        self.cache: Optional[BaseLlamaCache] = None
 
         self.n_threads = n_threads or max(multiprocessing.cpu_count() // 2, 1)
 
@@ -228,7 +318,7 @@ class Llama:
                 [("id", np.intc), ("logit", np.single), ("p", np.single)], align=True
             ),
         )
-        self._candidates_data.resize(3, self._n_vocab)
+        self._candidates_data.resize(3, self._n_vocab, refcheck=False)
         candidates = llama_cpp.llama_token_data_array(
             data=self._candidates_data.ctypes.data_as(llama_cpp.llama_token_data_p),
             size=size,
@@ -296,7 +386,7 @@ class Llama:
             )
         return output
 
-    def set_cache(self, cache: Optional[LlamaCache]):
+    def set_cache(self, cache: Optional[BaseLlamaCache]):
         """Set the cache.
 
         Args:
@@ -727,8 +817,15 @@ class Llama:
         if self.verbose:
             llama_cpp.llama_reset_timings(self.ctx)
 
-        if len(prompt_tokens) + max_tokens > self._n_ctx:
+        if len(prompt_tokens) > self._n_ctx:
             raise ValueError(f"Requested tokens exceed context window of {self._n_ctx}")
+
+        # Truncate max_tokens if requested tokens would exceed the context window
+        max_tokens = (
+            max_tokens
+            if max_tokens + len(prompt_tokens) < self._n_ctx
+            else (self._n_ctx - len(prompt_tokens))
+        )
 
         if stop != []:
             stop_sequences = [s.encode("utf-8") for s in stop]
@@ -740,7 +837,9 @@ class Llama:
                 "logprobs is not supported for models created with logits_all=False"
             )
 
-        if self.cache:
+        # Temporarily disable usage of the cache
+        # See: https://github.com/abetlen/llama-cpp-python/issues/348#issuecomment-1583072408
+        if self.cache and False:
             try:
                 cache_item = self.cache[prompt_tokens]
                 cache_prefix_len = Llama.longest_token_prefix(
@@ -978,13 +1077,14 @@ class Llama:
                         }
                     ],
                 }
-            if self.cache:
+            if self.cache and False:
                 if self.verbose:
                     print("Llama._create_completion: cache save", file=sys.stderr)
                 self.cache[prompt_tokens + completion_tokens] = self.save_state()
+                print("Llama._create_completion: cache saved", file=sys.stderr)
             return
 
-        if self.cache:
+        if self.cache and False:
             if self.verbose:
                 print("Llama._create_completion: cache save", file=sys.stderr)
             self.cache[prompt_tokens + completion_tokens] = self.save_state()
@@ -1386,9 +1486,17 @@ class Llama:
 
     def save_state(self) -> LlamaState:
         assert self.ctx is not None
+        if self.verbose:
+            print("Llama.save_state: saving llama state", file=sys.stderr)
         state_size = llama_cpp.llama_get_state_size(self.ctx)
+        if self.verbose:
+            print(f"Llama.save_state: got state size: {state_size}", file=sys.stderr)
         llama_state = (llama_cpp.c_uint8 * int(state_size))()
+        if self.verbose:
+            print("Llama.save_state: allocated state", file=sys.stderr)
         n_bytes = llama_cpp.llama_copy_state_data(self.ctx, llama_state)
+        if self.verbose:
+            print(f"Llama.save_state: copied llama state: {n_bytes}", file=sys.stderr)
         if int(n_bytes) > int(state_size):
             raise RuntimeError("Failed to copy llama state data")
         llama_state_compact = (llama_cpp.c_uint8 * int(n_bytes))()

@@ -1,21 +1,66 @@
+[build-system]
+requires = [
+    "scikit-build-core>=0.4.4",
+    "cmake>=3.18",
+    "ninja",
+]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "llama_cpp_python"
+version = "0.1.60"
+description = "Python bindings for the llama.cpp library"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "Andrei Betlen", email = "abetlen@gmail.com" },
+]
+requires-python = ">=3.7"
+dependencies = [
+    "typing-extensions>=4.5.0",
+    "numpy>=1.20.0",
+    "diskcache>=5.6.1",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+
+[project.urls]
+Homepage = "https://github.com/abetlen/llama-cpp-python"
+Documentation = "https://abetlen.github.io/llama-cpp-python"
+Discussions = "https://github.com/abetlen/llama-cpp-python/discussions"
+Issues = "https://github.com/abetlen/llama-cpp-python/issues"
+Changelog = "https://github.com/abetlen/llama-cpp-python/blob/main/CHANGELOG.md"
+
+[tool.scikit-build]
+wheel.packages = ["llama_cpp", "llama_cpp.server"]
+wheel.expand-macos-universal-tags = true
+cmake.verbose = true
+
+[project.optional-dependencies]
+server = [
+    "uvicorn",
+    "fastapi",
+    "sse-starlette",
+]
+test = ["pytest", "httpx"]
+
 [tool.poetry]
 name = "llama_cpp_python"
-version = "0.1.58"
+version = "0.1.60"
 description = "Python bindings for the llama.cpp library"
 authors = ["Andrei Betlen <abetlen@gmail.com>"]
-license = "MIT"
-readme = "README.md"
-homepage = "https://github.com/abetlen/llama-cpp-python"
-repository = "https://github.com/abetlen/llama-cpp-python"
-packages = [{include = "llama_cpp"}]
-include = [
-    "LICENSE.md",
-]
 
 [tool.poetry.dependencies]
 python = "^3.8.1"
 typing-extensions = "^4.6.3"
 numpy = "^1.20.0"
+diskcache = "^5.6.1"
 uvicorn = { version = "^0.22.0", optional = true }
 fastapi = { version = "^0.96.0", optional = true }
 sse-starlette = { version = "^1.6.1", optional = true }
@@ -32,12 +77,3 @@ scikit-build = "0.17.6"
 
 [tool.poetry.extras]
 server = ["uvicorn", "fastapi", "sse-starlette"]
-
-[build-system]
-requires = [
-    "setuptools>=42",
-    "scikit-build>=0.13",
-    "cmake>=3.18",
-    "ninja",
-]
-build-backend = "setuptools.build_meta"

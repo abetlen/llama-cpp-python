@@ -58,6 +58,10 @@ class Settings(BaseSettings):
         default=False,
         description="Use a cache to reduce processing times for evaluated prompts.",
     )
+    cache_type: Literal["ram", "disk"] = Field(
+        default="ram",
+        description="The type of cache to use. Only used if cache is True.",
+    )
     cache_size: int = Field(
         default=2 << 30,
         description="The size of the cache in bytes. Only used if cache is True.",
@@ -108,6 +112,11 @@ def create_app(settings: Optional[Settings] = None):
         verbose=settings.verbose,
     )
     if settings.cache:
+        if settings.cache_type == "disk":
+            cache = llama_cpp.LlamaDiskCache(capacity_bytes=settings.cache_size)
+        else:
+            cache = llama_cpp.LlamaRAMCache(capacity_bytes=settings.cache_size)
+
         cache = llama_cpp.LlamaCache(capacity_bytes=settings.cache_size)
         llama.set_cache(cache)
 
@@ -191,6 +200,27 @@ frequency_penalty_field = Field(
     description="Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim.",
 )
 
+mirostat_mode_field = Field(
+    default=0,
+    ge=0,
+    le=2,
+    description="Enable Mirostat constant-perplexity algorithm of the specified version (1 or 2; 0 = disabled)"
+)
+
+mirostat_tau_field = Field(
+    default=5.0,
+    ge=0.0,
+    le=10.0,
+    description="Mirostat target entropy, i.e. the target perplexity - lower values produce focused and coherent text, larger values produce more diverse and less coherent text"
+)
+
+mirostat_eta_field = Field(
+    default=0.1,
+    ge=0.001,
+    le=1.0,
+    description="Mirostat learning rate"
+)
+
 
 class CreateCompletionRequest(BaseModel):
     prompt: Union[str, List[str]] = Field(
@@ -203,6 +233,9 @@ class CreateCompletionRequest(BaseModel):
     max_tokens: int = max_tokens_field
     temperature: float = temperature_field
     top_p: float = top_p_field
+    mirostat_mode: int = mirostat_mode_field
+    mirostat_tau: float = mirostat_tau_field
+    mirostat_eta: float = mirostat_eta_field
     echo: bool = Field(
         default=False,
         description="Whether to echo the prompt in the generated text. Useful for chatbots.",
@@ -332,6 +365,9 @@ class CreateChatCompletionRequest(BaseModel):
     max_tokens: int = max_tokens_field
     temperature: float = temperature_field
     top_p: float = top_p_field
+    mirostat_mode: int = mirostat_mode_field
+    mirostat_tau: float = mirostat_tau_field
+    mirostat_eta: float = mirostat_eta_field
     stop: Optional[List[str]] = stop_field
     stream: bool = stream_field
     presence_penalty: Optional[float] = presence_penalty_field

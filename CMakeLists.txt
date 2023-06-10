@@ -18,14 +18,16 @@ if (UNIX AND NOT FORCE_CMAKE)
     )
     install(
         FILES ${CMAKE_CURRENT_SOURCE_DIR}/vendor/llama.cpp/libllama.so
-        DESTINATION llama_cpp
+        DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
     )
 else()
     set(BUILD_SHARED_LIBS "On")
     add_subdirectory(vendor/llama.cpp)
     install(
         TARGETS llama 
-        LIBRARY DESTINATION llama_cpp
-        RUNTIME DESTINATION llama_cpp
+        LIBRARY DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
+        RUNTIME DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
+        ARCHIVE DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
+        FRAMEWORK DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
     )
 endif()
