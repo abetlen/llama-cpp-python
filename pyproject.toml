@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "llama_cpp_python"
-version = "0.1.60"
+version = "0.1.61"
 description = "Python bindings for the llama.cpp library"
 authors = ["Andrei Betlen <abetlen@gmail.com>"]
 license = "MIT"
@@ -11,12 +11,6 @@ packages = [{include = "llama_cpp"}]
 include = [
     "LICENSE.md",
 ]
-
-[tool.poetry]
-name = "llama_cpp_python"
-version = "0.1.60"
-description = "Python bindings for the llama.cpp library"
-authors = ["Andrei Betlen <abetlen@gmail.com>"]
 
 [tool.poetry.dependencies]
 python = "^3.8.1"
