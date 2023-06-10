@@ -22,15 +22,14 @@ jobs:
       - uses: actions/setup-python@v3
 
       - name: Install cibuildwheel
-        run: python3 -m pip install cibuildwheel==2.12.1
+        run: python -m pip install cibuildwheel==2.12.1
 
       - name: Install dependencies
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install --verbose --editable .
+          python -m pip install --upgrade pip pytest cmake scikit-build setuptools
 
       - name: Build wheels
-        run: python3 -m cibuildwheel --output-dir wheelhouse
+        run: python -m cibuildwheel --output-dir wheelhouse
 
       - uses: actions/upload-artifact@v3
         with:
@@ -47,11 +46,10 @@ jobs:
       - uses: actions/setup-python@v3
       - name: Install dependencies
         run: |
-          python3 -m pip install --upgrade pip build
-          python3 -m pip install --verbose --editable .
+          python -m pip install --upgrade pip pytest cmake scikit-build setuptools
       - name: Build source distribution
         run: |
-          python3 -m build --sdist
+          python setup.py sdist
       - uses: actions/upload-artifact@v3
         with:
           path: ./dist/*.tar.gz
