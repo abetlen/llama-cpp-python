@@ -72,6 +72,12 @@ class Settings(BaseSettings):
     verbose: bool = Field(
         default=True, description="Whether to print debug information."
     )
+    host: str = Field(
+        default="localhost", description="Listen address"
+    )
+    port: int = Field(
+        default=8000, description="Listen port"
+    )
 
 
 router = APIRouter()
