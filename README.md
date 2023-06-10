@@ -41,7 +41,7 @@ bash Miniforge3-MacOSX-arm64.sh
 ```
 Otherwise, while installing it will build the llama.ccp x86 version which will be 10x slower on Apple Silicon (M1) Mac.
 
-### Installation with OpenBLAS / cuBLAS / CLBlast
+### Installation with OpenBLAS / cuBLAS / CLBlast / Metal
 
 `llama.cpp` supports multiple BLAS backends for faster processing.
 Use the `FORCE_CMAKE=1` environment variable to force the use of `cmake` and install the pip package for the desired BLAS backend.
@@ -64,6 +64,11 @@ To install with CLBlast, set the `LLAMA_CLBLAST=1` environment variable before i
 CMAKE_ARGS="-DLLAMA_CLBLAST=on" FORCE_CMAKE=1 pip install llama-cpp-python
 ```
 
+To install with Metal (MPS), set the `LLAMA_METAL=on` environment variable before installing:
+
+```bash
+CMAKE_ARGS="-DLLAMA_METAL=on" FORCE_CMAKE=1 pip install llama-cpp-python
+```
 
 ## High-level API
 
