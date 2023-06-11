@@ -39,7 +39,9 @@ clean:
 	- rm -rf _skbuild
 	- rm llama_cpp/*.so
 	- rm llama_cpp/*.dylib
+	- rm llama_cpp/*.metal
 	- rm llama_cpp/*.dll
+	- rm llama_cpp/*.lib
 
 .PHONY: \
 	update \

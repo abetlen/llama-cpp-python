@@ -29,5 +29,6 @@ else()
         RUNTIME DESTINATION llama_cpp
         ARCHIVE DESTINATION llama_cpp
         FRAMEWORK DESTINATION llama_cpp
+        RESOURCE DESTINATION llama_cpp
     )
 endif()

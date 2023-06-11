@@ -234,6 +234,22 @@ LLAMA_FTYPE_MOSTLY_Q5_K_M = c_int(17)
 LLAMA_FTYPE_MOSTLY_Q6_K = c_int(18)
 
 
+# // model quantization parameters
+# typedef struct llama_model_quantize_params {
+#     int nthread;                 // number of threads to use for quantizing, if <=0 will use std::thread::hardware_concurrency()
+#     enum llama_ftype   ftype;    // quantize to this llama_ftype
+#     bool allow_requantize;       // allow quantizing non-f32/f16 tensors
+#     bool quantize_output_tensor; // quantize output.weight
+# } llama_model_quantize_params;
+class llama_model_quantize_params(Structure):
+    _fields_ = [
+        ("nthread", c_int),
+        ("ftype", c_int),
+        ("allow_requantize", c_bool),
+        ("quantize_output_tensor", c_bool),
+    ]
+
+
 # LLAMA_API struct llama_context_params llama_context_default_params();
 def llama_context_default_params() -> llama_context_params:
     return _lib.llama_context_default_params()
@@ -241,6 +257,15 @@ def llama_context_default_params() -> llama_context_params:
 
 _lib.llama_context_default_params.argtypes = []
 _lib.llama_context_default_params.restype = llama_context_params
+
+
+# LLAMA_API struct llama_model_quantize_params llama_model_quantize_default_params();
+def llama_model_quantize_default_params() -> llama_model_quantize_params:
+    return _lib.llama_model_quantize_default_params()
+
+
+_lib.llama_model_quantize_default_params.argtypes = []
+_lib.llama_model_quantize_default_params.restype = llama_model_quantize_params
 
 
 # LLAMA_API bool llama_mmap_supported();
@@ -308,21 +333,24 @@ _lib.llama_free.argtypes = [llama_context_p]
 _lib.llama_free.restype = None
 
 
-# TODO: not great API - very likely to change
-# Returns 0 on success
-# nthread - how many threads to use. If <=0, will use std::thread::hardware_concurrency(), else the number given
+# // Returns 0 on success
 # LLAMA_API int llama_model_quantize(
 #         const char * fname_inp,
 #         const char * fname_out,
-#     enum llama_ftype   ftype,
-#         int          nthread);
+#         const llama_model_quantize_params * params);
 def llama_model_quantize(
-    fname_inp: bytes, fname_out: bytes, ftype: c_int, nthread: c_int
+    fname_inp: bytes,
+    fname_out: bytes,
+    params,  # type: POINTER(llama_model_quantize_params) # type: ignore
 ) -> int:
-    return _lib.llama_model_quantize(fname_inp, fname_out, ftype, nthread)
+    return _lib.llama_model_quantize(fname_inp, fname_out, params)
 
 
-_lib.llama_model_quantize.argtypes = [c_char_p, c_char_p, c_int, c_int]
+_lib.llama_model_quantize.argtypes = [
+    c_char_p,
+    c_char_p,
+    POINTER(llama_model_quantize_params),
+]
 _lib.llama_model_quantize.restype = c_int
 
 
