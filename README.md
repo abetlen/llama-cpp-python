@@ -17,6 +17,9 @@ This package provides:
 
 Documentation is available at [https://abetlen.github.io/llama-cpp-python](https://abetlen.github.io/llama-cpp-python).
 
+Detailed MacOS Metal GPU install documentation is available at [docs/macos_install.md](docs/macos_install.md)
+
+
 ## Installation from PyPI (recommended)
 
 Install from PyPI (requires a c compiler):
