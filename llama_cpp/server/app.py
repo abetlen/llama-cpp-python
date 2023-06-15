@@ -48,6 +48,10 @@ class Settings(BaseSettings):
         description="Use mmap.",
     )
     embedding: bool = Field(default=True, description="Whether to use embeddings.")
+    low_vram: bool = Field(
+        default=False,
+        description="Whether to use less VRAM. This will reduce performance.",
+    )
     last_n_tokens_size: int = Field(
         default=64,
         ge=0,
