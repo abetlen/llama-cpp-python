@@ -119,8 +119,12 @@ def create_app(settings: Optional[Settings] = None):
     )
     if settings.cache:
         if settings.cache_type == "disk":
+            if settings.verbose:
+                print(f"Using disk cache with size {settings.cache_size}")
             cache = llama_cpp.LlamaDiskCache(capacity_bytes=settings.cache_size)
         else:
+            if settings.verbose:
+                print(f"Using ram cache with size {settings.cache_size}")
             cache = llama_cpp.LlamaRAMCache(capacity_bytes=settings.cache_size)
 
         cache = llama_cpp.LlamaCache(capacity_bytes=settings.cache_size)
