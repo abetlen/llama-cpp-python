@@ -155,6 +155,7 @@ llama_progress_callback = ctypes.CFUNCTYPE(None, c_float, c_void_p)
 #     int n_gpu_layers;                      // number of layers to store in VRAM
 #     int main_gpu;                          // the GPU that is used for scratch and small tensors
 #     float tensor_split[LLAMA_MAX_DEVICES]; // how to split layers across multiple GPUs
+#     bool low_vram;                         // if true, reduce VRAM usage at the cost of performance
 #     int seed;                              // RNG seed, -1 for random
 
 #     bool f16_kv;     // use fp16 for KV cache
@@ -177,6 +178,7 @@ class llama_context_params(Structure):
         ("n_gpu_layers", c_int),
         ("main_gpu", c_int),
         ("tensor_split", c_float * LLAMA_MAX_DEVICES.value),
+        ("low_vram", c_bool),
         ("seed", c_int),
         ("f16_kv", c_bool),
         (
@@ -553,6 +555,26 @@ def llama_n_embd(ctx: llama_context_p) -> int:
 
 _lib.llama_n_embd.argtypes = [llama_context_p]
 _lib.llama_n_embd.restype = c_int
+
+
+# // Get the vocabulary as output parameters.
+# // Returns number of results.
+# LLAMA_API int llama_get_vocab(
+#         const struct llama_context * ctx,
+#                         const char * * strings,
+#                                 float * scores,
+#                                 int   capacity);
+def llama_get_vocab(
+    ctx: llama_context_p,
+    strings,  # type: Array[c_char_p] # type: ignore
+    scores,  # type: Array[c_float] # type: ignore
+    capacity: c_int,
+) -> int:
+    return _lib.llama_get_vocab(ctx, strings, scores, capacity)
+
+
+_lib.llama_get_vocab.argtypes = [llama_context_p, c_char_p, c_float, c_int]
+_lib.llama_get_vocab.restype = c_int
 
 
 # Token logits obtained from the last call to llama_eval()
