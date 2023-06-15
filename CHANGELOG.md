@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- (llama.cpp) Add full gpu utilisation in CUDA
+- (llama.cpp) Add get_vocab
+- (llama.cpp) Add low_vram parameter
+- (server) Add logit_bias parameter
+
 ## [0.1.62]
 
 ### Fixed
