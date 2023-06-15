@@ -17,8 +17,6 @@ This package provides:
 
 Documentation is available at [https://abetlen.github.io/llama-cpp-python](https://abetlen.github.io/llama-cpp-python).
 
-Detailed MacOS Metal GPU install documentation is available at [docs/macos_install.md](docs/macos_install.md)
-
 
 ## Installation from PyPI (recommended)
 
@@ -72,6 +70,8 @@ To install with Metal (MPS), set the `LLAMA_METAL=on` environment variable befor
 ```bash
 CMAKE_ARGS="-DLLAMA_METAL=on" FORCE_CMAKE=1 pip install llama-cpp-python
 ```
+
+Detailed MacOS Metal GPU install documentation is available at [docs/macos_install.md](docs/macos_install.md)
 
 ## High-level API
 
