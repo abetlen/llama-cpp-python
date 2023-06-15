@@ -17,6 +17,9 @@ This package provides:
 
 Documentation is available at [https://abetlen.github.io/llama-cpp-python](https://abetlen.github.io/llama-cpp-python).
 
+Detailed MacOS Metal GPU install documentation is available at [docs/macos_install.md](docs/macos_install.md)
+
+
 ## Installation from PyPI (recommended)
 
 Install from PyPI (requires a c compiler):
@@ -25,7 +28,7 @@ Install from PyPI (requires a c compiler):
 pip install llama-cpp-python
 ```
 
-The above command will attempt to install the package and build build `llama.cpp` from source.
+The above command will attempt to install the package and build `llama.cpp` from source.
 This is the recommended installation method as it ensures that `llama.cpp` is built with the available optimizations for your system.
 
 If you have previously installed `llama-cpp-python` through pip and want to upgrade your version or rebuild the package with different  compiler options, please add the following flags to ensure that the package is rebuilt correctly:
