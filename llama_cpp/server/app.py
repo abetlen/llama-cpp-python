@@ -260,18 +260,18 @@ class CreateCompletionRequest(BaseModel):
     presence_penalty: Optional[float] = presence_penalty_field
     frequency_penalty: Optional[float] = frequency_penalty_field
     logit_bias: Optional[Dict[str, float]] = Field(None)
-    logit_bias_type: Optional[Literal["input_ids", "tokens"]] = Field(None)
+    logprobs: Optional[int] = Field(None)
 
     # ignored or currently unsupported
     model: Optional[str] = model_field
     n: Optional[int] = 1
-    logprobs: Optional[int] = Field(None)
     best_of: Optional[int] = 1
     user: Optional[str] = Field(None)
 
     # llama.cpp specific parameters
     top_k: int = top_k_field
     repeat_penalty: float = repeat_penalty_field
+    logit_bias_type: Optional[Literal["input_ids", "tokens"]] = Field(None)
 
     class Config:
         schema_extra = {
@@ -424,7 +424,6 @@ class CreateChatCompletionRequest(BaseModel):
     presence_penalty: Optional[float] = presence_penalty_field
     frequency_penalty: Optional[float] = frequency_penalty_field
     logit_bias: Optional[Dict[str, float]] = Field(None)
-    logit_bias_type: Optional[Literal["input_ids", "tokens"]] = Field(None)
 
     # ignored or currently unsupported
     model: Optional[str] = model_field
@@ -434,6 +433,7 @@ class CreateChatCompletionRequest(BaseModel):
     # llama.cpp specific parameters
     top_k: int = top_k_field
     repeat_penalty: float = repeat_penalty_field
+    logit_bias_type: Optional[Literal["input_ids", "tokens"]] = Field(None)
 
     class Config:
         schema_extra = {
