@@ -38,14 +38,11 @@ llama-cpp-python         0.1.62     
 
 ```
 
-**(4) Download a v3 ggml llama/vicuna/alpaca model**
+**(4) Download a v3 ggml model**
  - **ggmlv3**
  - file name ends with **q4_0.bin** - indicating it is 4bit quantized, with quantisation method 0
 
-https://huggingface.co/vicuna/ggml-vicuna-13b-1.1/blob/main/ggml-vic13b-q4_0.bin
-https://huggingface.co/vicuna/ggml-vicuna-13b-1.1/blob/main/ggml-vic13b-uncensored-q4_0.bin
-https://huggingface.co/TheBloke/LLaMa-7B-GGML/blob/main/llama-7b.ggmlv3.q4_0.bin
-https://huggingface.co/TheBloke/LLaMa-13B-GGML/blob/main/llama-13b.ggmlv3.q4_0.bin
+https://huggingface.co/TheBloke/open-llama-7b-open-instruct-GGML
 
 
 **(6) run the llama-cpp-python API server with MacOS Metal GPU support**
