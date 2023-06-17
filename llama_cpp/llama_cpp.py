@@ -618,7 +618,7 @@ _lib.llama_token_to_str.restype = c_char_p
 # Special tokens
 
 
-# LLAMA_API llama_token llama_token_bos();
+# LLAMA_API llama_token llama_token_bos(); // beginning-of-sentence
 def llama_token_bos() -> int:
     return _lib.llama_token_bos()
 
@@ -627,7 +627,7 @@ _lib.llama_token_bos.argtypes = []
 _lib.llama_token_bos.restype = llama_token
 
 
-# LLAMA_API llama_token llama_token_eos();
+# LLAMA_API llama_token llama_token_eos(); // end-of-sentence
 def llama_token_eos() -> int:
     return _lib.llama_token_eos()
 
@@ -636,7 +636,7 @@ _lib.llama_token_eos.argtypes = []
 _lib.llama_token_eos.restype = llama_token
 
 
-# LLAMA_API llama_token llama_token_nl();
+# LLAMA_API llama_token llama_token_nl(); // next-line
 def llama_token_nl() -> int:
     return _lib.llama_token_nl()
 
