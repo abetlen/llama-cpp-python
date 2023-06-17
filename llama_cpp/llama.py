@@ -814,7 +814,7 @@ class Llama:
             llama_cpp.llama_reset_timings(self.ctx)
 
         if len(prompt_tokens) > self._n_ctx:
-            raise ValueError(f"Requested tokens exceed context window of {self._n_ctx}")
+            raise ValueError(f"Requested tokens ({len(prompt_tokens)}) exceed context window of {self._n_ctx}")
 
         # Truncate max_tokens if requested tokens would exceed the context window
         max_tokens = (
