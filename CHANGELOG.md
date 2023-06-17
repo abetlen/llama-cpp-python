@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- (llama.cpp) Update llama.cpp
+
+## [0.1.63]
+
+### Added
+
 - (llama.cpp) Add full gpu utilisation in CUDA
 - (llama.cpp) Add get_vocab
 - (llama.cpp) Add low_vram parameter
