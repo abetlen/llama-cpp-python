@@ -228,7 +228,7 @@ class Llama:
             model_path: Path to the model.
             n_ctx: Maximum context size.
             n_parts: Number of parts to split the model into. If -1, the number of parts is automatically determined.
-            seed: Random seed. 0 for random.
+            seed: Random seed. -1 for random.
             f16_kv: Use half-precision for key/value cache.
             logits_all: Return logits for all tokens, not just the last token.
             vocab_only: Only load the vocabulary no weights.
