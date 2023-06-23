@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.65]
+
+### Added
+
+- (llama.cpp) Fix struct misalignment bug
+
+## [0.1.64]
+
+### Added
+
+- (llama.cpp) Update llama.cpp
+- Fix docs for seed. Set -1 for random.
+
+## [0.1.63]
+
+### Added
+
+- (llama.cpp) Add full gpu utilisation in CUDA
+- (llama.cpp) Add get_vocab
+- (llama.cpp) Add low_vram parameter
+- (server) Add logit_bias parameter
+
 ## [0.1.62]
 
 ### Fixed

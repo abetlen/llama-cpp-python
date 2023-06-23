@@ -150,45 +150,43 @@ llama_progress_callback = ctypes.CFUNCTYPE(None, c_float, c_void_p)
 
 
 # struct llama_context_params {
+#     int seed;                              // RNG seed, -1 for random
 #     int n_ctx;                             // text context
 #     int n_batch;                           // prompt processing batch size
 #     int n_gpu_layers;                      // number of layers to store in VRAM
 #     int main_gpu;                          // the GPU that is used for scratch and small tensors
 #     float tensor_split[LLAMA_MAX_DEVICES]; // how to split layers across multiple GPUs
-#     int seed;                              // RNG seed, -1 for random
+#     // called with a progress value between 0 and 1, pass NULL to disable
+#     llama_progress_callback progress_callback;
+#     // context pointer passed to the progress callback
+#     void * progress_callback_user_data;
 
+#     // Keep the booleans together to avoid misalignment during copy-by-value.
+#     bool low_vram;   // if true, reduce VRAM usage at the cost of performance
 #     bool f16_kv;     // use fp16 for KV cache
 #     bool logits_all; // the llama_eval() call computes all logits, not just the last one
 #     bool vocab_only; // only load the vocabulary, no weights
 #     bool use_mmap;   // use mmap if possible
 #     bool use_mlock;  // force system to keep model in RAM
 #     bool embedding;  // embedding mode only
-
-
-#     // called with a progress value between 0 and 1, pass NULL to disable
-#     llama_progress_callback progress_callback;
-#     // context pointer passed to the progress callback
-#     void * progress_callback_user_data;
 # };
 class llama_context_params(Structure):
     _fields_ = [
+        ("seed", c_int),
         ("n_ctx", c_int),
         ("n_batch", c_int),
         ("n_gpu_layers", c_int),
         ("main_gpu", c_int),
         ("tensor_split", c_float * LLAMA_MAX_DEVICES.value),
-        ("seed", c_int),
+        ("progress_callback", llama_progress_callback),
+        ("progress_callback_user_data", c_void_p),
+        ("low_vram", c_bool),
         ("f16_kv", c_bool),
-        (
-            "logits_all",
-            c_bool,
-        ),
+        ("logits_all", c_bool),
         ("vocab_only", c_bool),
         ("use_mmap", c_bool),
         ("use_mlock", c_bool),
         ("embedding", c_bool),
-        ("progress_callback", llama_progress_callback),
-        ("progress_callback_user_data", c_void_p),
     ]
 
 
@@ -555,6 +553,26 @@ _lib.llama_n_embd.argtypes = [llama_context_p]
 _lib.llama_n_embd.restype = c_int
 
 
+# // Get the vocabulary as output parameters.
+# // Returns number of results.
+# LLAMA_API int llama_get_vocab(
+#         const struct llama_context * ctx,
+#                         const char * * strings,
+#                                 float * scores,
+#                                 int   capacity);
+def llama_get_vocab(
+    ctx: llama_context_p,
+    strings,  # type: Array[c_char_p] # type: ignore
+    scores,  # type: Array[c_float] # type: ignore
+    capacity: c_int,
+) -> int:
+    return _lib.llama_get_vocab(ctx, strings, scores, capacity)
+
+
+_lib.llama_get_vocab.argtypes = [llama_context_p, c_char_p, c_float, c_int]
+_lib.llama_get_vocab.restype = c_int
+
+
 # Token logits obtained from the last call to llama_eval()
 # The logits for the last token are stored in the last row
 # Can be mutated in order to change the probabilities of the next token
@@ -596,7 +614,7 @@ _lib.llama_token_to_str.restype = c_char_p
 # Special tokens
 
 
-# LLAMA_API llama_token llama_token_bos();
+# LLAMA_API llama_token llama_token_bos(); // beginning-of-sentence
 def llama_token_bos() -> int:
     return _lib.llama_token_bos()
 
@@ -605,7 +623,7 @@ _lib.llama_token_bos.argtypes = []
 _lib.llama_token_bos.restype = llama_token
 
 
-# LLAMA_API llama_token llama_token_eos();
+# LLAMA_API llama_token llama_token_eos(); // end-of-sentence
 def llama_token_eos() -> int:
     return _lib.llama_token_eos()
 
@@ -614,7 +632,7 @@ _lib.llama_token_eos.argtypes = []
 _lib.llama_token_eos.restype = llama_token
 
 
-# LLAMA_API llama_token llama_token_nl();
+# LLAMA_API llama_token llama_token_nl(); // next-line
 def llama_token_nl() -> int:
     return _lib.llama_token_nl()
 

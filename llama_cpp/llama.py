@@ -221,6 +221,7 @@ class Llama:
         last_n_tokens_size: int = 64,
         lora_base: Optional[str] = None,
         lora_path: Optional[str] = None,
+        low_vram: bool = False,
         verbose: bool = True,
     ):
         """Load a llama.cpp model from `model_path`.
@@ -229,7 +230,7 @@ class Llama:
             model_path: Path to the model.
             n_ctx: Maximum context size.
             n_parts: Number of parts to split the model into. If -1, the number of parts is automatically determined.
-            seed: Random seed. 0 for random.
+            seed: Random seed. -1 for random.
             f16_kv: Use half-precision for key/value cache.
             logits_all: Return logits for all tokens, not just the last token.
             vocab_only: Only load the vocabulary no weights.
@@ -262,6 +263,7 @@ class Llama:
         self.params.use_mmap = use_mmap if lora_path is None else False
         self.params.use_mlock = use_mlock
         self.params.embedding = embedding
+        self.params.low_vram = low_vram
 
         self.last_n_tokens_size = last_n_tokens_size
         self.n_batch = min(n_ctx, n_batch)
@@ -814,7 +816,7 @@ class Llama:
             llama_cpp.llama_reset_timings(self.ctx)
 
         if len(prompt_tokens) > self._n_ctx:
-            raise ValueError(f"Requested tokens exceed context window of {self._n_ctx}")
+            raise ValueError(f"Requested tokens ({len(prompt_tokens)}) exceed context window of {self._n_ctx}")
 
         # Truncate max_tokens if requested tokens would exceed the context window
         max_tokens = (
@@ -1380,6 +1382,7 @@ class Llama:
         mirostat_tau: float = 5.0,
         mirostat_eta: float = 0.1,
         model: Optional[str] = None,
+        logits_processor: Optional[LogitsProcessorList] = None,
     ) -> Union[ChatCompletion, Iterator[ChatCompletionChunk]]:
         """Generate a chat completion from a list of messages.
 
@@ -1421,6 +1424,7 @@ class Llama:
             mirostat_tau=mirostat_tau,
             mirostat_eta=mirostat_eta,
             model=model,
+            logits_processor=logits_processor,
         )
         if stream:
             chunks: Iterator[CompletionChunk] = completion_or_chunks  # type: ignore
@@ -1447,6 +1451,7 @@ class Llama:
             use_mmap=self.params.use_mmap,
             use_mlock=self.params.use_mlock,
             embedding=self.params.embedding,
+            low_vram=self.params.low_vram,
             last_n_tokens_size=self.last_n_tokens_size,
             n_batch=self.n_batch,
             n_threads=self.n_threads,
@@ -1470,6 +1475,7 @@ class Llama:
             use_mmap=state["use_mmap"],
             use_mlock=state["use_mlock"],
             embedding=state["embedding"],
+            low_vram=state["low_vram"],
             n_threads=state["n_threads"],
             n_batch=state["n_batch"],
             last_n_tokens_size=state["last_n_tokens_size"],
