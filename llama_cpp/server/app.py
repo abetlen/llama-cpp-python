@@ -30,6 +30,9 @@ class Settings(BaseSettings):
         ge=0,
         description="The number of layers to put on the GPU. The rest will be on the CPU.",
     )
+    seed: int = Field(
+        default=1337, description="Random seed. -1 for random."
+    )
     n_batch: int = Field(
         default=512, ge=1, description="The batch size to use per eval."
     )
@@ -109,6 +112,7 @@ def create_app(settings: Optional[Settings] = None):
     llama = llama_cpp.Llama(
         model_path=settings.model,
         n_gpu_layers=settings.n_gpu_layers,
+        seed=settings.seed,
         f16_kv=settings.f16_kv,
         use_mlock=settings.use_mlock,
         use_mmap=settings.use_mmap,
