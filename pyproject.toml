@@ -42,8 +42,3 @@ requires = [
     "ninja",
 ]
 build-backend = "setuptools.build_meta"
-
-[project.optional-dependencies]
-server = ["uvicorn", "fastapi", "sse-starlette"]
-test = ["pytest"]
-docs = ["mkdocs", "mkdocstrings[python]", "mkdocs-material"]
