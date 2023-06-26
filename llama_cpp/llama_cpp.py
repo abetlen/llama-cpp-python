@@ -15,7 +15,7 @@ from ctypes import (
     c_size_t,
 )
 import pathlib
-from typing import List
+from typing import List, Union
 
 
 # Load the library
@@ -105,6 +105,9 @@ LLAMA_FILE_MAGIC_UNVERSIONED = LLAMA_FILE_MAGIC_GGML
 LLAMA_SESSION_MAGIC = LLAMA_FILE_MAGIC_GGSN
 LLAMA_SESSION_VERSION = c_int(1)
 
+# struct llama_model;
+llama_model_p = c_void_p
+
 # struct llama_context;
 llama_context_p = c_void_p
 
@@ -160,6 +163,7 @@ llama_progress_callback = ctypes.CFUNCTYPE(None, c_float, c_void_p)
 #     llama_progress_callback progress_callback;
 #     // context pointer passed to the progress callback
 #     void * progress_callback_user_data;
+
 
 #     // Keep the booleans together to avoid misalignment during copy-by-value.
 #     bool low_vram;   // if true, reduce VRAM usage at the cost of performance
@@ -296,6 +300,41 @@ _lib.llama_init_backend.argtypes = []
 _lib.llama_init_backend.restype = None
 
 
+# LLAMA_API struct llama_model * llama_load_model_from_file(
+#                             const char * path_model,
+#         struct llama_context_params   params);
+def llama_load_model_from_file(
+    path_model: bytes, params: llama_context_params
+) -> llama_model_p:
+    return _lib.llama_load_model_from_file(path_model, params)
+
+
+_lib.llama_load_model_from_file.argtypes = [c_char_p, llama_context_params]
+_lib.llama_load_model_from_file.restype = llama_model_p
+
+
+# LLAMA_API void llama_free_model(struct llama_model * model);
+def llama_free_model(model: llama_model_p):
+    return _lib.llama_free_model(model)
+
+
+_lib.llama_free_model.argtypes = [llama_model_p]
+_lib.llama_free_model.restype = None
+
+
+# LLAMA_API struct llama_context * llama_new_context_with_model(
+#                     struct llama_model * model,
+#         struct llama_context_params   params);
+def llama_new_context_with_model(
+    model: llama_model_p, params: llama_context_params
+) -> llama_context_p:
+    return _lib.llama_new_context_with_model(model, params)
+
+
+_lib.llama_new_context_with_model.argtypes = [llama_model_p, llama_context_params]
+_lib.llama_new_context_with_model.restype = llama_context_p
+
+
 # LLAMA_API int64_t llama_time_us();
 def llama_time_us() -> int:
     return _lib.llama_time_us()
@@ -374,6 +413,31 @@ def llama_apply_lora_from_file(
 
 _lib.llama_apply_lora_from_file.argtypes = [llama_context_p, c_char_p, c_char_p, c_int]
 _lib.llama_apply_lora_from_file.restype = c_int
+
+
+# LLAMA_API int llama_model_apply_lora_from_file(
+#         const struct llama_model * model,
+#                     const char * path_lora,
+#                     const char * path_base_model,
+#                             int   n_threads);
+def llama_model_apply_lora_from_file(
+    model: llama_model_p,
+    path_lora: Union[c_char_p, bytes],
+    path_base_model: Union[c_char_p, bytes],
+    n_threads: c_int,
+) -> int:
+    return _lib.llama_model_apply_lora_from_file(
+        model, path_lora, path_base_model, n_threads
+    )
+
+
+_lib.llama_model_apply_lora_from_file.argtypes = [
+    llama_model_p,
+    c_char_p,
+    c_char_p,
+    c_int,
+]
+_lib.llama_model_apply_lora_from_file.restype = c_int
 
 
 # Returns the number of tokens in the KV cache

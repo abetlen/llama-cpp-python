@@ -282,15 +282,18 @@ class Llama:
         if not os.path.exists(model_path):
             raise ValueError(f"Model path does not exist: {model_path}")
 
-        self.ctx = llama_cpp.llama_init_from_file(
+        self.model = llama_cpp.llama_load_model_from_file(
             self.model_path.encode("utf-8"), self.params
         )
+        assert self.model is not None
+
+        self.ctx = llama_cpp.llama_new_context_with_model(self.model, self.params)
 
         assert self.ctx is not None
 
         if self.lora_path:
-            if llama_cpp.llama_apply_lora_from_file(
-                self.ctx,
+            if llama_cpp.llama_model_apply_lora_from_file(
+                self.model,
                 llama_cpp.c_char_p(self.lora_path.encode("utf-8")),
                 llama_cpp.c_char_p(self.lora_base.encode("utf-8"))
                 if self.lora_base is not None
