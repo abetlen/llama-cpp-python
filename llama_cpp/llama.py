@@ -325,7 +325,7 @@ class Llama:
         self._token_eos = Llama.token_eos()
 
         self._input_ids = np.array([], dtype=np.intc)
-        self._scores = np.ndarray((0, self._n_vocab), dtype=np.single)
+        self._scores: npt.NDArray[np.single] = np.ndarray((0, self._n_vocab), dtype=np.single)
 
     def tokenize(self, text: bytes, add_bos: bool = True) -> List[int]:
         """Tokenize a string.
@@ -405,7 +405,7 @@ class Llama:
         """
         assert self.ctx is not None
         n_ctx = self._n_ctx
-        scores = []
+        scores: List[npt.NDArray[np.single]] = []
         for i in range(0, len(tokens), self.n_batch):
             batch = tokens[i : min(len(tokens), i + self.n_batch)]
             n_past = min(n_ctx - len(batch), len(self._input_ids))
