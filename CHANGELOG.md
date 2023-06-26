@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.66]
+
+## Added
+
+- (llama.cpp) New model API
+
+## Fixed
+
+- Performance issue during eval caused by looped np.concatenate call
+- State pickling issue when saving cache to disk
+
 ## [0.1.65]
 
 ### Added
