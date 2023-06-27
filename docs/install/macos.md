@@ -1,6 +1,6 @@
-
-# llama-cpp-python - MacOS Install with Metal GPU
-
+---
+title: MacOS Install with Metal GPU
+---
 
 **(1) Make sure you have xcode installed... at least the command line parts**
 ```
