@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.67]
+
+## Fixed
+
+- Fix performance bug in Llama model by pre-allocating memory tokens and logits.
+- Fix bug in Llama model where the model was not free'd after use.
+
 ## [0.1.66]
 
 ## Added
