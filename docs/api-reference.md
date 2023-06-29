@@ -32,6 +32,22 @@ title: API Reference
     options:
         show_root_heading: true
 
+::: llama_cpp.LogitsProcessor
+    options:
+        show_root_heading: true
+
+::: llama_cpp.LogitsProcessorList
+    options:
+        show_root_heading: true
+
+::: llama_cpp.StoppingCriteria
+    options:
+        show_root_heading: true
+
+::: llama_cpp.StoppingCriteriaList
+    options:
+        show_root_heading: true
+
 ::: llama_cpp.llama_cpp
     options:
         show_if_no_docstring: true
