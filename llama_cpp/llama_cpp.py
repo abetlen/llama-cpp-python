@@ -290,13 +290,14 @@ _lib.llama_mlock_supported.restype = c_bool
 
 # // TODO: not great API - very likely to change
 # // Initialize the llama + ggml backend
+# // If numa is true, use NUMA optimizations
 # // Call once at the start of the program
-# LLAMA_API void llama_init_backend();
-def llama_init_backend():
-    return _lib.llama_init_backend()
+# LLAMA_API void llama_init_backend(bool numa);
+def llama_init_backend(numa: c_bool):
+    return _lib.llama_init_backend(numa)
 
 
-_lib.llama_init_backend.argtypes = []
+_lib.llama_init_backend.argtypes = [c_bool]
 _lib.llama_init_backend.restype = None
 
 
@@ -563,6 +564,27 @@ def llama_eval(
 
 _lib.llama_eval.argtypes = [llama_context_p, llama_token_p, c_int, c_int, c_int]
 _lib.llama_eval.restype = c_int
+
+
+# // Same as llama_eval, but use float matrix input directly.
+# LLAMA_API int llama_eval_embd(
+#         struct llama_context * ctx,
+#                     const float * embd,
+#                             int   n_tokens,
+#                             int   n_past,
+#                             int   n_threads);
+def llama_eval_embd(
+    ctx: llama_context_p,
+    embd,  # type: Array[c_float]
+    n_tokens: c_int,
+    n_past: c_int,
+    n_threads: c_int,
+) -> int:
+    return _lib.llama_eval_embd(ctx, embd, n_tokens, n_past, n_threads)
+
+
+_lib.llama_eval_embd.argtypes = [llama_context_p, c_float_p, c_int, c_int, c_int]
+_lib.llama_eval_embd.restype = c_int
 
 
 # Convert the provided text into tokens.
@@ -998,5 +1020,5 @@ _lib.llama_print_system_info.restype = c_char_p
 _llama_initialized = False
 
 if not _llama_initialized:
-    llama_init_backend()
+    llama_init_backend(c_bool(False))
     _llama_initialized = True
