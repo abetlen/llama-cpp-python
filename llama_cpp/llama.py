@@ -305,6 +305,51 @@ class Llama:
         if self.verbose:
             print(llama_cpp.llama_print_system_info().decode("utf-8"), file=sys.stderr)
 
+        self._n_vocab = self.n_vocab()
+        self._n_ctx = self.n_ctx()
+        size = llama_cpp.c_size_t(self._n_vocab)
+        sorted = llama_cpp.c_bool(False)
+        self._candidates_data = np.array(
+            [],
+            dtype=np.dtype(
+                [("id", np.intc), ("logit", np.single), ("p", np.single)], align=True
+            ),
+        )
+        self._candidates_data.resize(3, self._n_vocab, refcheck=False)
+        candidates = llama_cpp.llama_token_data_array(
+            data=self._candidates_data.ctypes.data_as(llama_cpp.llama_token_data_p),
+            size=size,
+            sorted=sorted,
+        )
+        self._candidates = candidates
+        self._token_nl = Llama.token_nl()
+        self._token_eos = Llama.token_eos()
+
+        self.n_tokens = 0
+        self.input_ids: npt.NDArray[np.intc] = np.ndarray((n_ctx,), dtype=np.intc)
+        self.scores: npt.NDArray[np.single] = np.ndarray(
+            (n_ctx, self._n_vocab), dtype=np.single
+        )
+
+    @property
+    def _input_ids(self) -> npt.NDArray[np.intc]:
+        return self.input_ids[: self.n_tokens]
+
+    @property
+    def _scores(self) -> npt.NDArray[np.single]:
+        return self.scores[: self.n_tokens, :]
+
+    @property
+    def eval_tokens(self) -> Deque[int]:
+        return deque(self.input_ids[: self.n_tokens].tolist(), maxlen=self._n_ctx)
+
+    @property
+    def eval_logits(self) -> Deque[List[float]]:
+        return deque(
+            self.scores[: self.n_tokens, :].tolist(),
+            maxlen=self._n_ctx if self.params.logits_all else 1,
+        )
+
     def truncate(self, truncate_strategy: TruncateStrategy, prompt: str, missing_size: int, max_size: int):
         """Truncate a list
         
