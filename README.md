@@ -1,6 +1,6 @@
 # 🦙 Python Bindings for `llama.cpp`
 
-[![Documentation](https://img.shields.io/badge/docs-passing-green.svg)](https://abetlen.github.io/llama-cpp-python)
+[![Documentation Status](https://readthedocs.org/projects/llama-cpp-python/badge/?version=latest)](https://llama-cpp-python.readthedocs.io/en/latest/?badge=latest)
 [![Tests](https://github.com/abetlen/llama-cpp-python/actions/workflows/test.yaml/badge.svg?branch=main)](https://github.com/abetlen/llama-cpp-python/actions/workflows/test.yaml)
 [![PyPI](https://img.shields.io/pypi/v/llama-cpp-python)](https://pypi.org/project/llama-cpp-python/)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/llama-cpp-python)](https://pypi.org/project/llama-cpp-python/)
@@ -15,7 +15,8 @@ This package provides:
   - OpenAI-like API
   - LangChain compatibility
 
-Documentation is available at [https://abetlen.github.io/llama-cpp-python](https://abetlen.github.io/llama-cpp-python).
+Documentation is available at [https://llama-cpp-python.readthedocs.io/en/latest](https://llama-cpp-python.readthedocs.io/en/latest).
+
 
 ## Installation from PyPI (recommended)
 
@@ -25,7 +26,7 @@ Install from PyPI (requires a c compiler):
 pip install llama-cpp-python
 ```
 
-The above command will attempt to install the package and build build `llama.cpp` from source.
+The above command will attempt to install the package and build `llama.cpp` from source.
 This is the recommended installation method as it ensures that `llama.cpp` is built with the available optimizations for your system.
 
 If you have previously installed `llama-cpp-python` through pip and want to upgrade your version or rebuild the package with different  compiler options, please add the following flags to ensure that the package is rebuilt correctly:
@@ -41,7 +42,7 @@ bash Miniforge3-MacOSX-arm64.sh
 ```
 Otherwise, while installing it will build the llama.ccp x86 version which will be 10x slower on Apple Silicon (M1) Mac.
 
-### Installation with OpenBLAS / cuBLAS / CLBlast
+### Installation with OpenBLAS / cuBLAS / CLBlast / Metal
 
 `llama.cpp` supports multiple BLAS backends for faster processing.
 Use the `FORCE_CMAKE=1` environment variable to force the use of `cmake` and install the pip package for the desired BLAS backend.
@@ -64,6 +65,13 @@ To install with CLBlast, set the `LLAMA_CLBLAST=1` environment variable before i
 CMAKE_ARGS="-DLLAMA_CLBLAST=on" FORCE_CMAKE=1 pip install llama-cpp-python
 ```
 
+To install with Metal (MPS), set the `LLAMA_METAL=on` environment variable before installing:
+
+```bash
+CMAKE_ARGS="-DLLAMA_METAL=on" FORCE_CMAKE=1 pip install llama-cpp-python
+```
+
+Detailed MacOS Metal GPU install documentation is available at [docs/macos_install.md](docs/macos_install.md)
 
 ## High-level API
 
@@ -155,6 +163,17 @@ To get started, clone the repository and install the package in development mode
 
 ```bash
 git clone --recurse-submodules git@github.com:abetlen/llama-cpp-python.git
+
+# Install with pip
+pip install -e .
+
+# if you want to use the fastapi / openapi server
+pip install -e .[server]
+
+# If you're a poetry user, installing will also include a virtual environment
+poetry install --all-extras
+. .venv/bin/activate
+
 # Will need to be re-run any time vendor/llama.cpp is updated
 python3 setup.py develop
 ```

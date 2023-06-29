@@ -1,13 +1,16 @@
 import json
-import logging
 import multiprocessing
 from threading import Lock
-from typing import List, Optional, Union, Iterator, Dict
+from functools import partial
+from typing import Iterator, List, Optional, Union, Dict
 from typing_extensions import TypedDict, Literal
 
 import llama_cpp
 
-from fastapi import Depends, FastAPI, APIRouter
+import anyio
+from anyio.streams.memory import MemoryObjectSendStream
+from starlette.concurrency import run_in_threadpool, iterate_in_threadpool
+from fastapi import Depends, FastAPI, APIRouter, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, BaseSettings, Field, create_model_from_typeddict
 from sse_starlette.sse import EventSourceResponse
@@ -27,6 +30,9 @@ class Settings(BaseSettings):
         ge=0,
         description="The number of layers to put on the GPU. The rest will be on the CPU.",
     )
+    seed: int = Field(
+        default=1337, description="Random seed. -1 for random."
+    )
     n_batch: int = Field(
         default=512, ge=1, description="The batch size to use per eval."
     )
@@ -45,6 +51,10 @@ class Settings(BaseSettings):
         description="Use mmap.",
     )
     embedding: bool = Field(default=True, description="Whether to use embeddings.")
+    low_vram: bool = Field(
+        default=False,
+        description="Whether to use less VRAM. This will reduce performance.",
+    )
     last_n_tokens_size: int = Field(
         default=64,
         ge=0,
@@ -55,6 +65,10 @@ class Settings(BaseSettings):
         default=False,
         description="Use a cache to reduce processing times for evaluated prompts.",
     )
+    cache_type: Literal["ram", "disk"] = Field(
+        default="ram",
+        description="The type of cache to use. Only used if cache is True.",
+    )
     cache_size: int = Field(
         default=2 << 30,
         description="The size of the cache in bytes. Only used if cache is True.",
@@ -64,6 +78,12 @@ class Settings(BaseSettings):
     )
     verbose: bool = Field(
         default=True, description="Whether to print debug information."
+    )
+    host: str = Field(
+        default="localhost", description="Listen address"
+    )
+    port: int = Field(
+        default=8000, description="Listen port"
     )
 
 
@@ -92,6 +112,7 @@ def create_app(settings: Optional[Settings] = None):
     llama = llama_cpp.Llama(
         model_path=settings.model,
         n_gpu_layers=settings.n_gpu_layers,
+        seed=settings.seed,
         f16_kv=settings.f16_kv,
         use_mlock=settings.use_mlock,
         use_mmap=settings.use_mmap,
@@ -105,6 +126,15 @@ def create_app(settings: Optional[Settings] = None):
         verbose=settings.verbose,
     )
     if settings.cache:
+        if settings.cache_type == "disk":
+            if settings.verbose:
+                print(f"Using disk cache with size {settings.cache_size}")
+            cache = llama_cpp.LlamaDiskCache(capacity_bytes=settings.cache_size)
+        else:
+            if settings.verbose:
+                print(f"Using ram cache with size {settings.cache_size}")
+            cache = llama_cpp.LlamaRAMCache(capacity_bytes=settings.cache_size)
+
         cache = llama_cpp.LlamaCache(capacity_bytes=settings.cache_size)
         llama.set_cache(cache)
 
@@ -188,6 +218,27 @@ frequency_penalty_field = Field(
     description="Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim.",
 )
 
+mirostat_mode_field = Field(
+    default=0,
+    ge=0,
+    le=2,
+    description="Enable Mirostat constant-perplexity algorithm of the specified version (1 or 2; 0 = disabled)"
+)
+
+mirostat_tau_field = Field(
+    default=5.0,
+    ge=0.0,
+    le=10.0,
+    description="Mirostat target entropy, i.e. the target perplexity - lower values produce focused and coherent text, larger values produce more diverse and less coherent text"
+)
+
+mirostat_eta_field = Field(
+    default=0.1,
+    ge=0.001,
+    le=1.0,
+    description="Mirostat learning rate"
+)
+
 
 class CreateCompletionRequest(BaseModel):
     prompt: Union[str, List[str]] = Field(
@@ -200,6 +251,9 @@ class CreateCompletionRequest(BaseModel):
     max_tokens: int = max_tokens_field
     temperature: float = temperature_field
     top_p: float = top_p_field
+    mirostat_mode: int = mirostat_mode_field
+    mirostat_tau: float = mirostat_tau_field
+    mirostat_eta: float = mirostat_eta_field
     echo: bool = Field(
         default=False,
         description="Whether to echo the prompt in the generated text. Useful for chatbots.",
@@ -213,18 +267,19 @@ class CreateCompletionRequest(BaseModel):
     )
     presence_penalty: Optional[float] = presence_penalty_field
     frequency_penalty: Optional[float] = frequency_penalty_field
+    logit_bias: Optional[Dict[str, float]] = Field(None)
+    logprobs: Optional[int] = Field(None)
 
     # ignored or currently unsupported
     model: Optional[str] = model_field
     n: Optional[int] = 1
-    logprobs: Optional[int] = Field(None)
     best_of: Optional[int] = 1
-    logit_bias: Optional[Dict[str, float]] = Field(None)
     user: Optional[str] = Field(None)
 
     # llama.cpp specific parameters
     top_k: int = top_k_field
     repeat_penalty: float = repeat_penalty_field
+    logit_bias_type: Optional[Literal["input_ids", "tokens"]] = Field(None)
 
     class Config:
         schema_extra = {
@@ -238,44 +293,98 @@ class CreateCompletionRequest(BaseModel):
 CreateCompletionResponse = create_model_from_typeddict(llama_cpp.Completion)
 
 
+def make_logit_bias_processor(
+    llama: llama_cpp.Llama,
+    logit_bias: Dict[str, float],
+    logit_bias_type: Optional[Literal["input_ids", "tokens"]],
+):
+    if logit_bias_type is None:
+        logit_bias_type = "input_ids"
+
+    to_bias: Dict[int, float] = {}
+    if logit_bias_type == "input_ids":
+        for input_id, score in logit_bias.items():
+            input_id = int(input_id)
+            to_bias[input_id] = score
+
+    elif logit_bias_type == "tokens":
+        for token, score in logit_bias.items():
+            token = token.encode('utf-8')
+            for input_id in llama.tokenize(token, add_bos=False):
+                to_bias[input_id] = score
+
+    def logit_bias_processor(
+        input_ids: List[int],
+        scores: List[float],
+    ) -> List[float]:
+        new_scores = [None] * len(scores)
+        for input_id, score in enumerate(scores):
+            new_scores[input_id] = score + to_bias.get(input_id, 0.0)
+
+        return new_scores
+
+    return logit_bias_processor
+
+
 @router.post(
     "/v1/completions",
     response_model=CreateCompletionResponse,
 )
-def create_completion(
-    request: CreateCompletionRequest, llama: llama_cpp.Llama = Depends(get_llama)
+async def create_completion(
+    request: Request,
+    body: CreateCompletionRequest,
+    llama: llama_cpp.Llama = Depends(get_llama),
 ):
-    if isinstance(request.prompt, list):
-        assert len(request.prompt) <= 1
-        request.prompt = request.prompt[0] if len(request.prompt) > 0 else ""
+    if isinstance(body.prompt, list):
+        assert len(body.prompt) <= 1
+        body.prompt = body.prompt[0] if len(body.prompt) > 0 else ""
 
-    completion_or_chunks = llama(
-        **request.dict(
-            exclude={
-                "n",
-                "best_of",
-                "logit_bias",
-                "user",
-            }
+    exclude = {
+        "n",
+        "best_of",
+        "logit_bias",
+        "logit_bias_type",
+        "user",
+    }
+    kwargs = body.dict(exclude=exclude)
+
+    if body.logit_bias is not None:
+        kwargs['logits_processor'] = llama_cpp.LogitsProcessorList([
+            make_logit_bias_processor(llama, body.logit_bias, body.logit_bias_type),
+        ])
+
+    if body.stream:
+        send_chan, recv_chan = anyio.create_memory_object_stream(10)
+
+        async def event_publisher(inner_send_chan: MemoryObjectSendStream):
+            async with inner_send_chan:
+                try:
+                    iterator: Iterator[llama_cpp.CompletionChunk] = await run_in_threadpool(llama, **kwargs)  # type: ignore
+                    async for chunk in iterate_in_threadpool(iterator):
+                        await inner_send_chan.send(dict(data=json.dumps(chunk)))
+                        if await request.is_disconnected():
+                            raise anyio.get_cancelled_exc_class()()
+                    await inner_send_chan.send(dict(data="[DONE]"))
+                except anyio.get_cancelled_exc_class() as e:
+                    print("disconnected")
+                    with anyio.move_on_after(1, shield=True):
+                        print(
+                            f"Disconnected from client (via refresh/close) {request.client}"
+                        )
+                        await inner_send_chan.send(dict(closing=True))
+                        raise e
+
+        return EventSourceResponse(
+            recv_chan, data_sender_callable=partial(event_publisher, send_chan)
         )
-    )
-    if request.stream:
-
-        async def server_sent_events(
-            chunks: Iterator[llama_cpp.CompletionChunk],
-        ):
-            for chunk in chunks:
-                yield dict(data=json.dumps(chunk))
-
-        chunks: Iterator[llama_cpp.CompletionChunk] = completion_or_chunks  # type: ignore
-        return EventSourceResponse(server_sent_events(chunks))
-    completion: llama_cpp.Completion = completion_or_chunks  # type: ignore
-    return completion
+    else:
+        completion: llama_cpp.Completion = await run_in_threadpool(llama, **kwargs)  # type: ignore
+        return completion
 
 
 class CreateEmbeddingRequest(BaseModel):
     model: Optional[str] = model_field
-    input: str = Field(description="The input to embed.")
+    input: Union[str, List[str]] = Field(description="The input to embed.")
     user: Optional[str]
 
     class Config:
@@ -293,10 +402,12 @@ CreateEmbeddingResponse = create_model_from_typeddict(llama_cpp.Embedding)
     "/v1/embeddings",
     response_model=CreateEmbeddingResponse,
 )
-def create_embedding(
+async def create_embedding(
     request: CreateEmbeddingRequest, llama: llama_cpp.Llama = Depends(get_llama)
 ):
-    return llama.create_embedding(**request.dict(exclude={"user"}))
+    return await run_in_threadpool(
+        llama.create_embedding, **request.dict(exclude={"user"})
+    )
 
 
 class ChatCompletionRequestMessage(BaseModel):
@@ -313,20 +424,24 @@ class CreateChatCompletionRequest(BaseModel):
     max_tokens: int = max_tokens_field
     temperature: float = temperature_field
     top_p: float = top_p_field
+    mirostat_mode: int = mirostat_mode_field
+    mirostat_tau: float = mirostat_tau_field
+    mirostat_eta: float = mirostat_eta_field
     stop: Optional[List[str]] = stop_field
     stream: bool = stream_field
     presence_penalty: Optional[float] = presence_penalty_field
     frequency_penalty: Optional[float] = frequency_penalty_field
+    logit_bias: Optional[Dict[str, float]] = Field(None)
 
     # ignored or currently unsupported
     model: Optional[str] = model_field
     n: Optional[int] = 1
-    logit_bias: Optional[Dict[str, float]] = Field(None)
     user: Optional[str] = Field(None)
 
     # llama.cpp specific parameters
     top_k: int = top_k_field
     repeat_penalty: float = repeat_penalty_field
+    logit_bias_type: Optional[Literal["input_ids", "tokens"]] = Field(None)
 
     class Config:
         schema_extra = {
@@ -350,36 +465,54 @@ CreateChatCompletionResponse = create_model_from_typeddict(llama_cpp.ChatComplet
     "/v1/chat/completions",
     response_model=CreateChatCompletionResponse,
 )
-def create_chat_completion(
-    request: CreateChatCompletionRequest,
+async def create_chat_completion(
+    request: Request,
+    body: CreateChatCompletionRequest,
     llama: llama_cpp.Llama = Depends(get_llama),
 ) -> Union[llama_cpp.ChatCompletion, EventSourceResponse]:
-    completion_or_chunks = llama.create_chat_completion(
-        **request.dict(
-            exclude={
-                "n",
-                "logit_bias",
-                "user",
-            }
-        ),
-    )
+    exclude = {
+        "n",
+        "logit_bias",
+        "logit_bias_type",
+        "user",
+    }
+    kwargs = body.dict(exclude=exclude)
 
-    if request.stream:
+    if body.logit_bias is not None:
+        kwargs['logits_processor'] = llama_cpp.LogitsProcessorList([
+            make_logit_bias_processor(llama, body.logit_bias, body.logit_bias_type),
+        ])
 
-        async def server_sent_events(
-            chat_chunks: Iterator[llama_cpp.ChatCompletionChunk],
-        ):
-            for chat_chunk in chat_chunks:
-                yield dict(data=json.dumps(chat_chunk))
-            yield dict(data="[DONE]")
+    if body.stream:
+        send_chan, recv_chan = anyio.create_memory_object_stream(10)
 
-        chunks: Iterator[llama_cpp.ChatCompletionChunk] = completion_or_chunks  # type: ignore
+        async def event_publisher(inner_send_chan: MemoryObjectSendStream):
+            async with inner_send_chan:
+                try:
+                    iterator: Iterator[llama_cpp.ChatCompletionChunk] = await run_in_threadpool(llama.create_chat_completion, **kwargs)  # type: ignore
+                    async for chat_chunk in iterate_in_threadpool(iterator):
+                        await inner_send_chan.send(dict(data=json.dumps(chat_chunk)))
+                        if await request.is_disconnected():
+                            raise anyio.get_cancelled_exc_class()()
+                    await inner_send_chan.send(dict(data="[DONE]"))
+                except anyio.get_cancelled_exc_class() as e:
+                    print("disconnected")
+                    with anyio.move_on_after(1, shield=True):
+                        print(
+                            f"Disconnected from client (via refresh/close) {request.client}"
+                        )
+                        await inner_send_chan.send(dict(closing=True))
+                        raise e
 
         return EventSourceResponse(
-            server_sent_events(chunks),
+            recv_chan,
+            data_sender_callable=partial(event_publisher, send_chan),
         )
-    completion: llama_cpp.ChatCompletion = completion_or_chunks  # type: ignore
-    return completion
+    else:
+        completion: llama_cpp.ChatCompletion = await run_in_threadpool(
+            llama.create_chat_completion, **kwargs  # type: ignore
+        )
+        return completion
 
 
 class ModelData(TypedDict):
@@ -398,7 +531,7 @@ GetModelResponse = create_model_from_typeddict(ModelList)
 
 
 @router.get("/v1/models", response_model=GetModelResponse)
-def get_models(
+async def get_models(
     settings: Settings = Depends(get_settings),
     llama: llama_cpp.Llama = Depends(get_llama),
 ) -> ModelList:
