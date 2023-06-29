@@ -71,7 +71,7 @@ To install with Metal (MPS), set the `LLAMA_METAL=on` environment variable befor
 CMAKE_ARGS="-DLLAMA_METAL=on" FORCE_CMAKE=1 pip install llama-cpp-python
 ```
 
-Detailed MacOS Metal GPU install documentation is available at [docs/macos_install.md](docs/macos_install.md)
+Detailed MacOS Metal GPU install documentation is available at [docs/install/macos.md](docs/install/macos.md)
 
 ## High-level API
 
