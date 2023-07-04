@@ -18,7 +18,7 @@ typing-extensions = "^4.6.3"
 numpy = "^1.24.4"
 diskcache = "^5.6.1"
 uvicorn = { version = "^0.22.0", optional = true }
-fastapi = { version = "^0.98.0", optional = true }
+fastapi = { version = "^0.99.1", optional = true }
 sse-starlette = { version = "^1.6.1", optional = true }
 
 [tool.poetry.group.dev.dependencies]
