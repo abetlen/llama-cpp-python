@@ -5,6 +5,8 @@ from ctypes import (
     c_int,
     c_float,
     c_char_p,
+    c_int32,
+    c_uint32,
     c_void_p,
     c_bool,
     POINTER,
@@ -105,6 +107,9 @@ LLAMA_FILE_MAGIC_UNVERSIONED = LLAMA_FILE_MAGIC_GGML
 LLAMA_SESSION_MAGIC = LLAMA_FILE_MAGIC_GGSN
 LLAMA_SESSION_VERSION = c_int(1)
 
+# #define LLAMA_DEFAULT_SEED           0xFFFFFFFF
+LLAMA_DEFAULT_SEED = c_int(0xFFFFFFFF)
+
 # struct llama_model;
 llama_model_p = c_void_p
 
@@ -153,17 +158,16 @@ llama_progress_callback = ctypes.CFUNCTYPE(None, c_float, c_void_p)
 
 
 # struct llama_context_params {
-#     int seed;                              // RNG seed, -1 for random
-#     int n_ctx;                             // text context
-#     int n_batch;                           // prompt processing batch size
-#     int n_gpu_layers;                      // number of layers to store in VRAM
-#     int main_gpu;                          // the GPU that is used for scratch and small tensors
+#     uint32_t seed;                         // RNG seed, -1 for random
+#     int32_t  n_ctx;                        // text context
+#     int32_t  n_batch;                      // prompt processing batch size
+#     int32_t  n_gpu_layers;                 // number of layers to store in VRAM
+#     int32_t  main_gpu;                     // the GPU that is used for scratch and small tensors
 #     float tensor_split[LLAMA_MAX_DEVICES]; // how to split layers across multiple GPUs
 #     // called with a progress value between 0 and 1, pass NULL to disable
 #     llama_progress_callback progress_callback;
 #     // context pointer passed to the progress callback
 #     void * progress_callback_user_data;
-
 
 #     // Keep the booleans together to avoid misalignment during copy-by-value.
 #     bool low_vram;   // if true, reduce VRAM usage at the cost of performance
@@ -176,11 +180,11 @@ llama_progress_callback = ctypes.CFUNCTYPE(None, c_float, c_void_p)
 # };
 class llama_context_params(Structure):
     _fields_ = [
-        ("seed", c_int),
-        ("n_ctx", c_int),
-        ("n_batch", c_int),
-        ("n_gpu_layers", c_int),
-        ("main_gpu", c_int),
+        ("seed", c_uint32),
+        ("n_ctx", c_int32),
+        ("n_batch", c_int32),
+        ("n_gpu_layers", c_int32),
+        ("main_gpu", c_int32),
         ("tensor_split", c_float * LLAMA_MAX_DEVICES.value),
         ("progress_callback", llama_progress_callback),
         ("progress_callback_user_data", c_void_p),
@@ -453,7 +457,7 @@ _lib.llama_get_kv_cache_token_count.restype = c_int
 
 # Sets the current rng seed.
 # LLAMA_API void llama_set_rng_seed(struct llama_context * ctx, int seed);
-def llama_set_rng_seed(ctx: llama_context_p, seed: c_int):
+def llama_set_rng_seed(ctx: llama_context_p, seed: c_uint32):
     return _lib.llama_set_rng_seed(ctx, seed)
 
 
