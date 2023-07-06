@@ -2,6 +2,7 @@ import sys
 import os
 import ctypes
 from ctypes import (
+    c_double,
     c_int,
     c_float,
     c_char_p,
@@ -169,6 +170,7 @@ llama_progress_callback = ctypes.CFUNCTYPE(None, c_float, c_void_p)
 #     // context pointer passed to the progress callback
 #     void * progress_callback_user_data;
 
+
 #     // Keep the booleans together to avoid misalignment during copy-by-value.
 #     bool low_vram;   // if true, reduce VRAM usage at the cost of performance
 #     bool f16_kv;     // use fp16 for KV cache
@@ -253,6 +255,34 @@ class llama_model_quantize_params(Structure):
         ("ftype", c_int),
         ("allow_requantize", c_bool),
         ("quantize_output_tensor", c_bool),
+    ]
+
+
+# // performance timing information
+# struct llama_timings {
+#     double t_start_ms;
+#     double t_end_ms;
+#     double t_load_ms;
+#     double t_sample_ms;
+#     double t_p_eval_ms;
+#     double t_eval_ms;
+
+
+#     int32_t n_sample;
+#     int32_t n_p_eval;
+#     int32_t n_eval;
+# };
+class llama_timings(Structure):
+    _fields_ = [
+        ("t_start_ms", c_double),
+        ("t_end_ms", c_double),
+        ("t_load_ms", c_double),
+        ("t_sample_ms", c_double),
+        ("t_p_eval_ms", c_double),
+        ("t_eval_ms", c_double),
+        ("n_sample", c_int32),
+        ("n_p_eval", c_int32),
+        ("n_eval", c_int32),
     ]
 
 
@@ -989,6 +1019,15 @@ _lib.llama_sample_token.restype = llama_token
 
 
 # Performance information
+
+
+# LLAMA_API struct llama_timings llama_get_timings(struct llama_context * ctx);
+def llama_get_timings(ctx: llama_context_p) -> llama_timings:
+    return _lib.llama_get_timings(ctx)
+
+
+_lib.llama_get_timings.argtypes = [llama_context_p]
+_lib.llama_get_timings.restype = llama_timings
 
 
 # LLAMA_API void llama_print_timings(struct llama_context * ctx);

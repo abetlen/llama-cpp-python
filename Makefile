@@ -33,6 +33,9 @@ deploy.gh-docs:
 	mkdocs build
 	mkdocs gh-deploy
 
+test:
+	python3 -m pytest
+
 clean:
 	- cd vendor/llama.cpp && make clean
 	- cd vendor/llama.cpp && rm libllama.so
