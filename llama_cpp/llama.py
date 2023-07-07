@@ -958,7 +958,7 @@ class Llama:
                                 )
                             ],
                             "text_offset": [text_offset],
-                            "token_logprobs": [sorted_logprobs[int(token)][0]],
+                            "token_logprobs": [current_logprobs[int(token)]],
                             "top_logprobs": [top_logprob],
                         }
                     returned_tokens += 1
@@ -1033,7 +1033,7 @@ class Llama:
                             self.detokenize([token]).decode("utf-8", errors="ignore")
                         ],
                         "text_offset": [text_offset],
-                        "token_logprobs": [sorted_logprobs[int(token)][0]],
+                        "token_logprobs": [current_logprobs[int(token)]],
                         "top_logprobs": [top_logprob],
                     }
 
@@ -1131,7 +1131,7 @@ class Llama:
                         zip(logprobs_token, range(len(logprobs_token))), reverse=True
                     )
                 )
-                token_logprobs.append(sorted_logprobs[int(token)][0])
+                token_logprobs.append(logprobs_token[int(token)])
                 top_logprob: Optional[Dict[str, float]] = {
                     self.detokenize([i]).decode("utf-8", errors="ignore"): logprob
                     for logprob, i in sorted_logprobs[:logprobs]
