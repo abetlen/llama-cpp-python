@@ -26,19 +26,19 @@ conda create -n llama python=3.9.16
 conda activate llama
 ```
 
-**(4) Install the LATEST llama-cpp-python.. which, as of just today, happily supports MacOS Metal GPU**  
+**(4) Install the LATEST llama-cpp-python...which happily supports MacOS Metal GPU as of version 0.1.62**  
     *(you needed xcode installed in order pip to build/compile the C++ code)*
 ```
 pip uninstall llama-cpp-python -y
 CMAKE_ARGS="-DLLAMA_METAL=on" FORCE_CMAKE=1 pip install -U llama-cpp-python --no-cache-dir
 pip install 'llama-cpp-python[server]'
 
-# you should now have llama-cpp-python v0.1.62 installed
-llama-cpp-python         0.1.62      
+# you should now have llama-cpp-python v0.1.62 or higher installed
+llama-cpp-python         0.1.68
 
 ```
 
-**(4) Download a v3 ggml model**
+**(5) Download a v3 ggml model**
  - **ggmlv3**
  - file name ends with **q4_0.bin** - indicating it is 4bit quantized, with quantisation method 0
 
