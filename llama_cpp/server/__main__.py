@@ -3,7 +3,7 @@
 To run this example:
 
 ```bash
-pip install fastapi uvicorn sse-starlette
+pip install fastapi uvicorn sse-starlette pydantic-settings
 export MODEL=../models/7B/...
 ```
 
@@ -30,7 +30,7 @@ from llama_cpp.server.app import create_app, Settings
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    for name, field in Settings.__fields__.items():
+    for name, field in Settings.__model_fields__.items():
         description = field.field_info.description
         if field.default is not None and description is not None:
             description += f" (default: {field.default})"

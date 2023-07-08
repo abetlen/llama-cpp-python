@@ -18,7 +18,7 @@ RUN mkdir /app
 WORKDIR /app
 COPY . /app
 
-RUN python3 -m pip install --upgrade pip pytest cmake scikit-build setuptools fastapi uvicorn sse-starlette
+RUN python3 -m pip install --upgrade pip pytest cmake scikit-build setuptools fastapi uvicorn sse-starlette pydantic-settings
 
 RUN make build && make clean
 
