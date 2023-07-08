@@ -824,7 +824,15 @@ class Llama:
         if self.verbose:
             llama_cpp.llama_reset_timings(self.ctx)
 
-        if len(prompt_tokens) > self._n_ctx:
+        if max_tokens <= 0:
+            # Unlimited, depending on n_ctx.
+            if len(prompt_tokens) >= int(llama_cpp.llama_n_ctx(self.ctx)):
+                raise ValueError(
+                    f"Requested tokens exceed context window of {llama_cpp.llama_n_ctx(self.ctx)}"
+                )
+            else:
+                max_tokens = int(llama_cpp.llama_n_ctx(self.ctx)) - len(prompt_tokens)
+        elif len(prompt_tokens) + max_tokens > int(llama_cpp.llama_n_ctx(self.ctx)):
             raise ValueError(
                 f"Requested tokens ({len(prompt_tokens)}) exceed context window of {self._n_ctx}"
             )
@@ -1231,7 +1239,7 @@ class Llama:
         Args:
             prompt: The prompt to generate text from.
             suffix: A suffix to append to the generated text. If None, no suffix is appended.
-            max_tokens: The maximum number of tokens to generate.
+            max_tokens: The maximum number of tokens to generate. If max_tokens <= 0, the maximum number of tokens to generate is unlimited and depends on n_ctx.
             temperature: The temperature to use for sampling.
             top_p: The top-p value to use for sampling.
             logprobs: The number of logprobs to return. If None, no logprobs are returned.
@@ -1304,7 +1312,7 @@ class Llama:
         Args:
             prompt: The prompt to generate text from.
             suffix: A suffix to append to the generated text. If None, no suffix is appended.
-            max_tokens: The maximum number of tokens to generate.
+            max_tokens: The maximum number of tokens to generate. If max_tokens <= 0, the maximum number of tokens to generate is unlimited and depends on n_ctx.
             temperature: The temperature to use for sampling.
             top_p: The top-p value to use for sampling.
             logprobs: The number of logprobs to return. If None, no logprobs are returned.
@@ -1432,7 +1440,7 @@ class Llama:
             top_k: The top-k value to use for sampling.
             stream: Whether to stream the results.
             stop: A list of strings to stop generation when encountered.
-            max_tokens: The maximum number of tokens to generate.
+            max_tokens: The maximum number of tokens to generate. If max_tokens <= 0, the maximum number of tokens to generate is unlimited and depends on n_ctx.
             repeat_penalty: The penalty to apply to repeated tokens.
 
         Returns:
