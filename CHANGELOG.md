@@ -7,30 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [Added]
+### Added
 
 - (server) Streaming requests can are now interrupted pre-maturely when a concurrent request is made. Can be controlled with the `interrupt_requests` setting.
+- (server) Moved to fastapi v0.100.0 and pydantic v2
+- (docker) Added a new "simple" image that builds llama.cpp from source when started.
+
+## Fixed
+
+- (server) performance improvements by avoiding unnecessary memory allocations during sampling
 
 ## [0.1.68]
 
-## [Added]
+### Added
 
 - (llama.cpp) Update llama.cpp
 
 ## [0.1.67]
 
-## Fixed
+### Fixed
 
 - Fix performance bug in Llama model by pre-allocating memory tokens and logits.
 - Fix bug in Llama model where the model was not free'd after use.
 
 ## [0.1.66]
 
-## Added
+### Added
 
 - (llama.cpp) New model API
 
-## Fixed
+### Fixed
 
 - Performance issue during eval caused by looped np.concatenate call
 - State pickling issue when saving cache to disk
