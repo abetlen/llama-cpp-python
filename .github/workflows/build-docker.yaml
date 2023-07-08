@@ -33,7 +33,7 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: .
-          path: ./docker/simple/Dockerfile
+          path: "{context}/docker/simple/Dockerfile"
           push: true # push to registry
           pull: true # always fetch the latest base images
           platforms: linux/amd64,linux/arm64 # build for both amd64 and arm64
