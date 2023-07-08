@@ -352,6 +352,30 @@ class Llama:
             maxlen=self._n_ctx if self.params.logits_all else 1,
         )
 
+    def truncate(self, truncate_strategy: TruncateStrategy, prompt: str, missing_size: int, max_size: int):
+        """Truncate a list
+        
+        Args:
+            truncate_strategy: How the truncation should be done
+            prompt: The input list
+            missing_size: What number of excess to spare
+            max_size: The maximum list length
+        
+        Returns:
+            A truncated list
+        """
+        n_missing = (len(prompt) + missing_size) - max_size
+        if n_missing > 0:
+            if truncate_strategy == TruncateStrategy.START:
+                # Dont remove BOS token
+                prompt = prompt[0] + prompt[n_missing+1:]
+            elif truncate_strategy == TruncateStrategy.END:
+                prompt = prompt[:-n_missing]
+            elif truncate_strategy == TruncateStrategy.MIDDLE:
+                middle = int(len(prompt)/2)
+                prompt = prompt[:int(middle-(n_missing/2))] + prompt[int(middle+(n_missing/2)):]
+        return prompt
+
     def tokenize(self, text: bytes, add_bos: bool = True) -> List[int]:
         """Tokenize a string.
 
@@ -806,6 +830,7 @@ class Llama:
         model: Optional[str] = None,
         stopping_criteria: Optional[StoppingCriteriaList] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
+        truncate_strategy: TruncateStrategy = None,
     ) -> Union[Iterator[Completion], Iterator[CompletionChunk]]:
         assert self.ctx is not None
 
@@ -823,6 +848,8 @@ class Llama:
 
         if self.verbose:
             llama_cpp.llama_reset_timings(self.ctx)
+
+        prompt_tokens = self.truncate(truncate_strategy, prompt_tokens, max_tokens, self._n_ctx)
 
         if len(prompt_tokens) > self._n_ctx:
             raise ValueError(
@@ -1225,6 +1252,7 @@ class Llama:
         model: Optional[str] = None,
         stopping_criteria: Optional[StoppingCriteriaList] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
+        truncate_strategy: TruncateStrategy = None,
     ) -> Union[Completion, Iterator[CompletionChunk]]:
         """Generate text from a prompt.
 
@@ -1269,6 +1297,7 @@ class Llama:
             model=model,
             stopping_criteria=stopping_criteria,
             logits_processor=logits_processor,
+            truncate_strategy=truncate_strategy,
         )
         if stream:
             chunks: Iterator[CompletionChunk] = completion_or_chunks
@@ -1298,6 +1327,7 @@ class Llama:
         model: Optional[str] = None,
         stopping_criteria: Optional[StoppingCriteriaList] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
+        truncate_strategy: TruncateStrategy = None,
     ) -> Union[Completion, Iterator[CompletionChunk]]:
         """Generate text from a prompt.
 
@@ -1342,6 +1372,7 @@ class Llama:
             model=model,
             stopping_criteria=stopping_criteria,
             logits_processor=logits_processor,
+            truncate_strategy=truncate_strategy
         )
 
     def _convert_text_completion_to_chat(

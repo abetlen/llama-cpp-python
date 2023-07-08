@@ -1,5 +1,7 @@
 from typing import Any, List, Optional, Dict, Union
 from typing_extensions import TypedDict, NotRequired, Literal
+from enum import Enum
+
 
 
 class EmbeddingUsage(TypedDict):
@@ -97,3 +99,9 @@ class ChatCompletionChunk(TypedDict):
     object: Literal["chat.completion.chunk"]
     created: int
     choices: List[ChatCompletionChunkChoice]
+
+
+class TruncateStrategy(Enum):
+    START = 0
+    MIDDLE = 1
+    END = 2
