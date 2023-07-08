@@ -537,7 +537,7 @@ class Llama:
             mirostat_mu = llama_cpp.c_float(2.0 * mirostat_tau.value)
             llama_cpp.llama_sample_temperature(
                 ctx=self.ctx,
-                candidates=llama_cpp.ctypes.pointer(candidates),
+                candidates=llama_cpp.ctypes.byref(candidates), # type: ignore
                 temp=temp,
             )
             return llama_cpp.llama_sample_token_mirostat_v2(
