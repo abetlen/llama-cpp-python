@@ -11,10 +11,6 @@ jobs:
     name: Build and push Docker image
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          submodules: "true"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
@@ -33,6 +29,7 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: .
+          path: ./docker/simple/Dockerfile
           push: true # push to registry
           pull: true # always fetch the latest base images
           platforms: linux/amd64,linux/arm64 # build for both amd64 and arm64
