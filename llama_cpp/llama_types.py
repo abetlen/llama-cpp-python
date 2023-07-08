@@ -1,4 +1,4 @@
-from typing import List, Optional, Dict
+from typing import Any, List, Optional, Dict, Union
 from typing_extensions import TypedDict, NotRequired, Literal
 
 
@@ -77,6 +77,8 @@ class ChatCompletion(TypedDict):
     choices: List[ChatCompletionChoice]
     usage: CompletionUsage
 
+class ChatCompletionChunkDeltaEmpty(TypedDict):
+    pass
 
 class ChatCompletionChunkDelta(TypedDict):
     role: NotRequired[Literal["assistant"]]
@@ -85,7 +87,7 @@ class ChatCompletionChunkDelta(TypedDict):
 
 class ChatCompletionChunkChoice(TypedDict):
     index: int
-    delta: ChatCompletionChunkDelta
+    delta: Union[ChatCompletionChunkDelta, ChatCompletionChunkDeltaEmpty]
     finish_reason: Optional[str]
 
 

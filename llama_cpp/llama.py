@@ -1060,6 +1060,20 @@ class Llama:
                                 ].decode("utf-8", errors="ignore"),
                                 "index": 0,
                                 "logprobs": logprobs_or_none,
+                                "finish_reason": None,
+                            }
+                        ],
+                    }
+                    yield {
+                        "id": completion_id,
+                        "object": "text_completion",
+                        "created": created,
+                        "model": model_name,
+                        "choices": [
+                            {
+                                "text": "",
+                                "index": 0,
+                                "logprobs": None,
                                 "finish_reason": finish_reason,
                             }
                         ],
@@ -1078,9 +1092,21 @@ class Llama:
                             ),
                             "index": 0,
                             "logprobs": logprobs_or_none,
-                            "finish_reason": finish_reason
-                            if returned_tokens == len(completion_tokens)
-                            else None,
+                            "finish_reason": None,
+                        }
+                    ],
+                }
+                yield {
+                    "id": completion_id,
+                    "object": "text_completion",
+                    "created": created,
+                    "model": model_name,
+                    "choices": [
+                        {
+                            "text": "",
+                            "index": 0,
+                            "logprobs": None,
+                            "finish_reason": finish_reason,
                         }
                     ],
                 }
@@ -1370,7 +1396,9 @@ class Llama:
                         "index": 0,
                         "delta": {
                             "content": chunk["choices"][0]["text"],
-                        },
+                        }
+                        if chunk["choices"][0]["finish_reason"] is None
+                        else {},
                         "finish_reason": chunk["choices"][0]["finish_reason"],
                     }
                 ],
