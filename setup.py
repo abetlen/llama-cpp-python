@@ -10,17 +10,15 @@ setup(
     description="A Python wrapper for llama.cpp",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    version="0.1.30",
+    version="0.1.68",
     author="Andrei Betlen",
     author_email="abetlen@gmail.com",
     license="MIT",
     package_dir={"llama_cpp": "llama_cpp", "llama_cpp.server": "llama_cpp/server"},
     packages=["llama_cpp", "llama_cpp.server"],
-    install_requires=[
-        "typing-extensions>=4.5.0",
-    ],
+    install_requires=["typing-extensions>=4.5.0", "numpy>=1.20.0", "diskcache>=5.6.1"],
     extras_require={
-        "server": ["uvicorn>=0.21.1", "fastapi>=0.95.0", "sse-starlette>=1.3.3"],
+        "server": ["uvicorn>=0.22.1", "fastapi>=0.100.0", "pydantic-settings>=2.0.1", "sse-starlette>=1.6.1"],
     },
     python_requires=">=3.7",
     classifiers=[

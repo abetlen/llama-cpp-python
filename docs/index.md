@@ -87,31 +87,6 @@ git submodule update --init --recursive
 python3 setup.py develop
 ```
 
-## API Reference
-
-::: llama_cpp.Llama
-    options:
-        members:
-            - __init__
-            - tokenize
-            - detokenize
-            - reset
-            - eval
-            - sample
-            - generate
-            - create_embedding
-            - embed
-            - create_completion
-            - __call__
-            - create_chat_completion
-            - token_bos
-            - token_eos
-        show_root_heading: true
-
-::: llama_cpp.llama_cpp
-    options:
-        show_if_no_docstring: true
-
 ## License
 
 This project is licensed under the terms of the MIT license.

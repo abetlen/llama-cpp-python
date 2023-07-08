@@ -1,4 +1,4 @@
-from typing import List, Optional, Dict, Union
+from typing import Any, List, Optional, Dict, Union
 from typing_extensions import TypedDict, NotRequired, Literal
 
 
@@ -22,9 +22,9 @@ class Embedding(TypedDict):
 
 class CompletionLogprobs(TypedDict):
     text_offset: List[int]
-    token_logprobs: List[float]
+    token_logprobs: List[Optional[float]]
     tokens: List[str]
-    top_logprobs: List[Dict[str, float]]
+    top_logprobs: List[Optional[Dict[str, float]]]
 
 
 class CompletionChoice(TypedDict):
@@ -58,7 +58,7 @@ class Completion(TypedDict):
 
 
 class ChatCompletionMessage(TypedDict):
-    role: Union[Literal["assistant"], Literal["user"], Literal["system"]]
+    role: Literal["assistant", "user", "system"]
     content: str
     user: NotRequired[str]
 
@@ -77,6 +77,8 @@ class ChatCompletion(TypedDict):
     choices: List[ChatCompletionChoice]
     usage: CompletionUsage
 
+class ChatCompletionChunkDeltaEmpty(TypedDict):
+    pass
 
 class ChatCompletionChunkDelta(TypedDict):
     role: NotRequired[Literal["assistant"]]
@@ -85,7 +87,7 @@ class ChatCompletionChunkDelta(TypedDict):
 
 class ChatCompletionChunkChoice(TypedDict):
     index: int
-    delta: ChatCompletionChunkDelta
+    delta: Union[ChatCompletionChunkDelta, ChatCompletionChunkDeltaEmpty]
     finish_reason: Optional[str]
 
 
