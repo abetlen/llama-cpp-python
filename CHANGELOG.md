@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- (Llama.create_completion) Revert change so that `max_tokens` is not truncated to `context_size` in `create_completion`
+- (server) Fixed changed settings field names from pydantic v2 migration
+
 ## [0.1.69]
 
 ### Added
