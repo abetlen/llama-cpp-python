@@ -12,6 +12,7 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
     python3 \
     python3-pip \
     ninja-build \
+    libopenblas-dev \
     build-essential
 
 RUN mkdir /app
