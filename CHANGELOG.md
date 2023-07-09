@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.70]
+
 ### Fixed
 
 - (Llama.create_completion) Revert change so that `max_tokens` is not truncated to `context_size` in `create_completion`
