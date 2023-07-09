@@ -19,13 +19,13 @@ from typing import (
 from collections import deque, OrderedDict
 
 import diskcache
+import ctypes
 
 from . import llama_cpp
 from .llama_types import *
 
 import numpy as np
 import numpy.typing as npt
-
 
 class BaseLlamaCache(ABC):
     """Base cache class for a llama.cpp model."""
@@ -207,6 +207,7 @@ class Llama:
         n_ctx: int = 512,
         n_parts: int = -1,
         n_gpu_layers: int = 0,
+        tensor_split: list[float] = None,
         seed: int = 1337,
         f16_kv: bool = True,
         logits_all: bool = False,
@@ -248,12 +249,20 @@ class Llama:
         Returns:
             A Llama instance.
         """
+        if tensor_split is None:
+            tensor_split = [0.0] * llama_cpp.LLAMA_MAX_DEVICES.value
+
+        #Type conversion and expand the list to the length of LLAMA_MAX_DEVICES
+        FloatArray = ctypes.c_float * llama_cpp.LLAMA_MAX_DEVICES.value
+        c_tensor_split = FloatArray(*tensor_split)
+
         self.verbose = verbose
         self.model_path = model_path
 
         self.params = llama_cpp.llama_context_default_params()
         self.params.n_ctx = n_ctx
         self.params.n_gpu_layers = n_gpu_layers
+        self.params.tensor_split = c_tensor_split
         self.params.seed = seed
         self.params.f16_kv = f16_kv
         self.params.logits_all = logits_all
@@ -1490,6 +1499,7 @@ class Llama:
             model_path=self.model_path,
             n_ctx=self.params.n_ctx,
             n_gpu_layers=self.params.n_gpu_layers,
+            tensor_split=self.params.tensor_split,
             seed=self.params.seed,
             f16_kv=self.params.f16_kv,
             logits_all=self.params.logits_all,
@@ -1514,6 +1524,7 @@ class Llama:
             n_ctx=state["n_ctx"],
             n_parts=state["n_parts"],
             n_gpu_layers=state["n_gpu_layers"],
+            tensor_split=state["tensor_split"],
             seed=state["seed"],
             f16_kv=state["f16_kv"],
             logits_all=state["logits_all"],
