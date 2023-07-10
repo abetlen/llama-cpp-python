@@ -184,6 +184,8 @@ class llama_context_params(Structure):
     _fields_ = [
         ("seed", c_uint32),
         ("n_ctx", c_int32),
+        ("rope_freq_base", c_float),
+        ("rope_freq_scale", c_float),
         ("n_batch", c_int32),
         ("n_gpu_layers", c_int32),
         ("main_gpu", c_int32),

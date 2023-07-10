@@ -205,6 +205,8 @@ class Llama:
         model_path: str,
         # NOTE: These parameters are likely to change in the future.
         n_ctx: int = 512,
+        rope_freq_base: float = 10000.0,
+        rope_freq_scale: float = 1.0,
         n_parts: int = -1,
         n_gpu_layers: int = 0,
         seed: int = 1337,
@@ -227,6 +229,8 @@ class Llama:
         Args:
             model_path: Path to the model.
             n_ctx: Maximum context size.
+            rope_freq_base: RoPE base frequency.
+            rope_freq_scale: RoPE frequency scale.
             n_parts: Number of parts to split the model into. If -1, the number of parts is automatically determined.
             seed: Random seed. -1 for random.
             f16_kv: Use half-precision for key/value cache.
@@ -253,6 +257,8 @@ class Llama:
 
         self.params = llama_cpp.llama_context_default_params()
         self.params.n_ctx = n_ctx
+        self.params.rope_freq_base = rope_freq_base
+        self.params.rope_freq_scale = rope_freq_scale
         self.params.n_gpu_layers = n_gpu_layers
         self.params.seed = seed
         self.params.f16_kv = f16_kv
