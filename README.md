@@ -164,6 +164,10 @@ Check out the [examples folder](examples/low_level_api) for more examples of usi
 Documentation is available at [https://abetlen.github.io/llama-cpp-python](https://abetlen.github.io/llama-cpp-python).
 If you find any issues with the documentation, please open an issue or submit a PR.
 
+# Hugging Space
+
+Implementation available at Huggingface Space [here](https://huggingface.co/spaces/abhishekmamdapure/llama-cpp-python).
+
 # Development
 
 This package is under active development and I welcome any contributions.
@@ -187,6 +191,7 @@ poetry install --all-extras
 # Will need to be re-run any time vendor/llama.cpp is updated
 python3 setup.py develop
 ```
+
 
 # How does this compare to other Python bindings of `llama.cpp`?
 
