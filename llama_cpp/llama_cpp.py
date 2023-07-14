@@ -326,13 +326,23 @@ _lib.llama_mlock_supported.restype = c_bool
 # // Initialize the llama + ggml backend
 # // If numa is true, use NUMA optimizations
 # // Call once at the start of the program
-# LLAMA_API void llama_init_backend(bool numa);
-def llama_init_backend(numa: c_bool):
-    return _lib.llama_init_backend(numa)
+# LLAMA_API void llama_backend_init(bool numa);
+def llama_backend_init(numa: c_bool):
+    return _lib.llama_backend_init(numa)
 
 
-_lib.llama_init_backend.argtypes = [c_bool]
-_lib.llama_init_backend.restype = None
+_lib.llama_backend_init.argtypes = [c_bool]
+_lib.llama_backend_init.restype = None
+
+
+# // Call once at the end of the program - currently only used for MPI
+# LLAMA_API void llama_backend_free();
+def llama_backend_free():
+    return _lib.llama_backend_free()
+
+
+_lib.llama_backend_free.argtypes = []
+_lib.llama_backend_free.restype = None
 
 
 # LLAMA_API struct llama_model * llama_load_model_from_file(
@@ -819,6 +829,39 @@ _lib.llama_sample_frequency_and_presence_penalties.argtypes = [
 _lib.llama_sample_frequency_and_presence_penalties.restype = None
 
 
+# /// @details Apply classifier-free guidance to the logits as described in academic paper "Stay on topic with Classifier-Free Guidance" https://arxiv.org/abs/2306.17806
+# /// @param candidates A vector of `llama_token_data` containing the candidate tokens, the logits must be directly extracted from the original generation context without being sorted.
+# /// @params guidance_ctx A separate context from the same model. Other than a negative prompt at the beginning, it should have all generated and user input tokens copied from the main context.
+# /// @params scale Guidance strength. 1.0f means no guidance. Higher values mean stronger guidance.
+# /// @params smooth_factor Smooth factor between guidance logits and original logits. 1.0f means only use guidance logits. 0.0f means only original logits.
+# LLAMA_API void llama_sample_classifier_free_guidance(
+#             struct llama_context * ctx,
+#         llama_token_data_array * candidates,
+#             struct llama_context * guidance_ctx,
+#                             float   scale,
+#                             float   smooth_factor);
+def llama_sample_classifier_free_guidance(
+    ctx: llama_context_p,
+    candidates,  # type: _Pointer[llama_token_data_array]
+    guidance_ctx: llama_context_p,
+    scale: c_float,
+    smooth_factor: c_float,
+):
+    return _lib.llama_sample_classifier_free_guidance(
+        ctx, candidates, guidance_ctx, scale, smooth_factor
+    )
+
+
+_lib.llama_sample_classifier_free_guidance.argtypes = [
+    llama_context_p,
+    llama_token_data_array_p,
+    llama_context_p,
+    c_float,
+    c_float,
+]
+_lib.llama_sample_classifier_free_guidance.restype = None
+
+
 # @details Sorts candidate tokens by their logits in descending order and calculate probabilities based on logits.
 # LLAMA_API void llama_sample_softmax(struct llama_context * ctx, llama_token_data_array * candidates);
 def llama_sample_softmax(
@@ -1063,5 +1106,5 @@ _lib.llama_print_system_info.restype = c_char_p
 _llama_initialized = False
 
 if not _llama_initialized:
-    llama_init_backend(c_bool(False))
+    llama_backend_init(c_bool(False))
     _llama_initialized = True

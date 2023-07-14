@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.71]
+
+### Added
+
+- (llama.cpp) Update llama.cpp
+
+### Fixed
+
+- (server) Fix several pydantic v2 migration bugs
+
+## [0.1.70]
+
+### Fixed
+
+- (Llama.create_completion) Revert change so that `max_tokens` is not truncated to `context_size` in `create_completion`
+- (server) Fixed changed settings field names from pydantic v2 migration
+
+## [0.1.69]
+
 ### Added
 
 - (server) Streaming requests can are now interrupted pre-maturely when a concurrent request is made. Can be controlled with the `interrupt_requests` setting.
