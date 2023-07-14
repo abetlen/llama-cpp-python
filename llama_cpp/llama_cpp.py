@@ -656,6 +656,22 @@ _lib.llama_tokenize.argtypes = [llama_context_p, c_char_p, llama_token_p, c_int,
 _lib.llama_tokenize.restype = c_int
 
 
+# LLAMA_API int llama_tokenize_with_model(
+#     const struct llama_model * model,
+#                     const char * text,
+#                     llama_token * tokens,
+#                             int   n_max_tokens,
+#                         bool   add_bos);
+def llama_tokenize_with_model(
+    model: llama_model_p,
+    text: bytes,
+    tokens,  # type: Array[llama_token]
+    n_max_tokens: c_int,
+    add_bos: c_bool,
+) -> int:
+    return _lib.llama_tokenize_with_model(model, text, tokens, n_max_tokens, add_bos)
+
+
 # LLAMA_API int llama_n_vocab(const struct llama_context * ctx);
 def llama_n_vocab(ctx: llama_context_p) -> int:
     return _lib.llama_n_vocab(ctx)
@@ -683,6 +699,33 @@ _lib.llama_n_embd.argtypes = [llama_context_p]
 _lib.llama_n_embd.restype = c_int
 
 
+# LLAMA_API int llama_n_vocab_from_model(const struct llama_model * model);
+def llama_n_vocab_from_model(model: llama_model_p) -> int:
+    return _lib.llama_n_vocab_from_model(model)
+
+
+_lib.llama_n_vocab_from_model.argtypes = [llama_model_p]
+_lib.llama_n_vocab_from_model.restype = c_int
+
+
+# LLAMA_API int llama_n_ctx_from_model  (const struct llama_model * model);
+def llama_n_ctx_from_model(model: llama_model_p) -> int:
+    return _lib.llama_n_ctx_from_model(model)
+
+
+_lib.llama_n_ctx_from_model.argtypes = [llama_model_p]
+_lib.llama_n_ctx_from_model.restype = c_int
+
+
+# LLAMA_API int llama_n_embd_from_model (const struct llama_model * model);
+def llama_n_embd_from_model(model: llama_model_p) -> int:
+    return _lib.llama_n_embd_from_model(model)
+
+
+_lib.llama_n_embd_from_model.argtypes = [llama_model_p]
+_lib.llama_n_embd_from_model.restype = c_int
+
+
 # // Get the vocabulary as output parameters.
 # // Returns number of results.
 # LLAMA_API int llama_get_vocab(
@@ -701,6 +744,20 @@ def llama_get_vocab(
 
 _lib.llama_get_vocab.argtypes = [llama_context_p, c_char_p, c_float, c_int]
 _lib.llama_get_vocab.restype = c_int
+
+
+# LLAMA_API int llama_get_vocab_from_model(
+#             const struct llama_model * model,
+#                         const char * * strings,
+#                                 float * scores,
+#                                 int   capacity);
+def llama_get_vocab_from_model(
+    model: llama_model_p,
+    strings,  # type: Array[c_char_p] # type: ignore
+    scores,  # type: Array[c_float] # type: ignore
+    capacity: c_int,
+) -> int:
+    return _lib.llama_get_vocab_from_model(model, strings, scores, capacity)
 
 
 # Token logits obtained from the last call to llama_eval()
@@ -732,14 +789,27 @@ _lib.llama_get_embeddings.argtypes = [llama_context_p]
 _lib.llama_get_embeddings.restype = c_float_p
 
 
-# Token Id -> String. Uses the vocabulary in the provided context
-# LLAMA_API const char * llama_token_to_str(const struct llama_context * ctx, llama_token token);
+# // Token Id -> String. Uses the vocabulary in the provided context
+# LLAMA_API const char * llama_token_to_str(
+#         const struct llama_context * ctx,
+#                         llama_token   token);
 def llama_token_to_str(ctx: llama_context_p, token: llama_token) -> bytes:
     return _lib.llama_token_to_str(ctx, token)
 
 
 _lib.llama_token_to_str.argtypes = [llama_context_p, llama_token]
 _lib.llama_token_to_str.restype = c_char_p
+
+
+# LLAMA_API const char * llama_token_to_str_with_model(
+#             const struct llama_model * model,
+#                         llama_token   token);
+def llama_token_to_str_with_model(model: llama_model_p, token: llama_token) -> bytes:
+    return _lib.llama_token_to_str_with_model(model, token)
+
+
+_lib.llama_token_to_str_with_model.argtypes = [llama_model_p, llama_token]
+_lib.llama_token_to_str_with_model.restype = c_char_p
 
 # Special tokens
 
