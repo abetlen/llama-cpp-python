@@ -31,7 +31,7 @@ class Settings(BaseSettings):
         ge=0,
         description="The number of layers to put on the GPU. The rest will be on the CPU.",
     )
-    tensor_split: List[float] = Field(
+    tensor_split: Optional[List[float]] = Field(
         default=None,
         description="Split layers across multiple GPUs in proportion.",
     )
