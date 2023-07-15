@@ -3,6 +3,7 @@
 _skbuild/
 
 .envrc
+.direnv
 
 models/
 
