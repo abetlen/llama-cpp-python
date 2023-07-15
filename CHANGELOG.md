@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.71]
+
+### Added
+
+- (llama.cpp) Update llama.cpp
+
+### Fixed
+
+- (server) Fix several pydantic v2 migration bugs
+
 ## [0.1.70]
 
 ### Fixed

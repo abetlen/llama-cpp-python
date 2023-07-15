@@ -165,11 +165,15 @@ llama_progress_callback = ctypes.CFUNCTYPE(None, c_float, c_void_p)
 #     int32_t  n_gpu_layers;                 // number of layers to store in VRAM
 #     int32_t  main_gpu;                     // the GPU that is used for scratch and small tensors
 #     float tensor_split[LLAMA_MAX_DEVICES]; // how to split layers across multiple GPUs
+
+#     // ref: https://github.com/ggerganov/llama.cpp/pull/2054
+#     float    rope_freq_base;  // RoPE base frequency
+#     float    rope_freq_scale; // RoPE frequency scaling factor
+
 #     // called with a progress value between 0 and 1, pass NULL to disable
 #     llama_progress_callback progress_callback;
 #     // context pointer passed to the progress callback
 #     void * progress_callback_user_data;
-
 
 #     // Keep the booleans together to avoid misalignment during copy-by-value.
 #     bool low_vram;   // if true, reduce VRAM usage at the cost of performance
@@ -190,6 +194,8 @@ class llama_context_params(Structure):
         ("n_gpu_layers", c_int32),
         ("main_gpu", c_int32),
         ("tensor_split", c_float * LLAMA_MAX_DEVICES.value),
+        ("rope_freq_base", c_float),
+        ("rope_freq_scale", c_float),
         ("progress_callback", llama_progress_callback),
         ("progress_callback_user_data", c_void_p),
         ("low_vram", c_bool),
@@ -328,13 +334,23 @@ _lib.llama_mlock_supported.restype = c_bool
 # // Initialize the llama + ggml backend
 # // If numa is true, use NUMA optimizations
 # // Call once at the start of the program
-# LLAMA_API void llama_init_backend(bool numa);
-def llama_init_backend(numa: c_bool):
-    return _lib.llama_init_backend(numa)
+# LLAMA_API void llama_backend_init(bool numa);
+def llama_backend_init(numa: c_bool):
+    return _lib.llama_backend_init(numa)
 
 
-_lib.llama_init_backend.argtypes = [c_bool]
-_lib.llama_init_backend.restype = None
+_lib.llama_backend_init.argtypes = [c_bool]
+_lib.llama_backend_init.restype = None
+
+
+# // Call once at the end of the program - currently only used for MPI
+# LLAMA_API void llama_backend_free();
+def llama_backend_free():
+    return _lib.llama_backend_free()
+
+
+_lib.llama_backend_free.argtypes = []
+_lib.llama_backend_free.restype = None
 
 
 # LLAMA_API struct llama_model * llama_load_model_from_file(
@@ -648,6 +664,22 @@ _lib.llama_tokenize.argtypes = [llama_context_p, c_char_p, llama_token_p, c_int,
 _lib.llama_tokenize.restype = c_int
 
 
+# LLAMA_API int llama_tokenize_with_model(
+#     const struct llama_model * model,
+#                     const char * text,
+#                     llama_token * tokens,
+#                             int   n_max_tokens,
+#                         bool   add_bos);
+def llama_tokenize_with_model(
+    model: llama_model_p,
+    text: bytes,
+    tokens,  # type: Array[llama_token]
+    n_max_tokens: c_int,
+    add_bos: c_bool,
+) -> int:
+    return _lib.llama_tokenize_with_model(model, text, tokens, n_max_tokens, add_bos)
+
+
 # LLAMA_API int llama_n_vocab(const struct llama_context * ctx);
 def llama_n_vocab(ctx: llama_context_p) -> int:
     return _lib.llama_n_vocab(ctx)
@@ -675,6 +707,33 @@ _lib.llama_n_embd.argtypes = [llama_context_p]
 _lib.llama_n_embd.restype = c_int
 
 
+# LLAMA_API int llama_n_vocab_from_model(const struct llama_model * model);
+def llama_n_vocab_from_model(model: llama_model_p) -> int:
+    return _lib.llama_n_vocab_from_model(model)
+
+
+_lib.llama_n_vocab_from_model.argtypes = [llama_model_p]
+_lib.llama_n_vocab_from_model.restype = c_int
+
+
+# LLAMA_API int llama_n_ctx_from_model  (const struct llama_model * model);
+def llama_n_ctx_from_model(model: llama_model_p) -> int:
+    return _lib.llama_n_ctx_from_model(model)
+
+
+_lib.llama_n_ctx_from_model.argtypes = [llama_model_p]
+_lib.llama_n_ctx_from_model.restype = c_int
+
+
+# LLAMA_API int llama_n_embd_from_model (const struct llama_model * model);
+def llama_n_embd_from_model(model: llama_model_p) -> int:
+    return _lib.llama_n_embd_from_model(model)
+
+
+_lib.llama_n_embd_from_model.argtypes = [llama_model_p]
+_lib.llama_n_embd_from_model.restype = c_int
+
+
 # // Get the vocabulary as output parameters.
 # // Returns number of results.
 # LLAMA_API int llama_get_vocab(
@@ -693,6 +752,20 @@ def llama_get_vocab(
 
 _lib.llama_get_vocab.argtypes = [llama_context_p, c_char_p, c_float, c_int]
 _lib.llama_get_vocab.restype = c_int
+
+
+# LLAMA_API int llama_get_vocab_from_model(
+#             const struct llama_model * model,
+#                         const char * * strings,
+#                                 float * scores,
+#                                 int   capacity);
+def llama_get_vocab_from_model(
+    model: llama_model_p,
+    strings,  # type: Array[c_char_p] # type: ignore
+    scores,  # type: Array[c_float] # type: ignore
+    capacity: c_int,
+) -> int:
+    return _lib.llama_get_vocab_from_model(model, strings, scores, capacity)
 
 
 # Token logits obtained from the last call to llama_eval()
@@ -724,14 +797,27 @@ _lib.llama_get_embeddings.argtypes = [llama_context_p]
 _lib.llama_get_embeddings.restype = c_float_p
 
 
-# Token Id -> String. Uses the vocabulary in the provided context
-# LLAMA_API const char * llama_token_to_str(const struct llama_context * ctx, llama_token token);
+# // Token Id -> String. Uses the vocabulary in the provided context
+# LLAMA_API const char * llama_token_to_str(
+#         const struct llama_context * ctx,
+#                         llama_token   token);
 def llama_token_to_str(ctx: llama_context_p, token: llama_token) -> bytes:
     return _lib.llama_token_to_str(ctx, token)
 
 
 _lib.llama_token_to_str.argtypes = [llama_context_p, llama_token]
 _lib.llama_token_to_str.restype = c_char_p
+
+
+# LLAMA_API const char * llama_token_to_str_with_model(
+#             const struct llama_model * model,
+#                         llama_token   token);
+def llama_token_to_str_with_model(model: llama_model_p, token: llama_token) -> bytes:
+    return _lib.llama_token_to_str_with_model(model, token)
+
+
+_lib.llama_token_to_str_with_model.argtypes = [llama_model_p, llama_token]
+_lib.llama_token_to_str_with_model.restype = c_char_p
 
 # Special tokens
 
@@ -819,6 +905,39 @@ _lib.llama_sample_frequency_and_presence_penalties.argtypes = [
     c_float,
 ]
 _lib.llama_sample_frequency_and_presence_penalties.restype = None
+
+
+# /// @details Apply classifier-free guidance to the logits as described in academic paper "Stay on topic with Classifier-Free Guidance" https://arxiv.org/abs/2306.17806
+# /// @param candidates A vector of `llama_token_data` containing the candidate tokens, the logits must be directly extracted from the original generation context without being sorted.
+# /// @params guidance_ctx A separate context from the same model. Other than a negative prompt at the beginning, it should have all generated and user input tokens copied from the main context.
+# /// @params scale Guidance strength. 1.0f means no guidance. Higher values mean stronger guidance.
+# /// @params smooth_factor Smooth factor between guidance logits and original logits. 1.0f means only use guidance logits. 0.0f means only original logits.
+# LLAMA_API void llama_sample_classifier_free_guidance(
+#             struct llama_context * ctx,
+#         llama_token_data_array * candidates,
+#             struct llama_context * guidance_ctx,
+#                             float   scale,
+#                             float   smooth_factor);
+def llama_sample_classifier_free_guidance(
+    ctx: llama_context_p,
+    candidates,  # type: _Pointer[llama_token_data_array]
+    guidance_ctx: llama_context_p,
+    scale: c_float,
+    smooth_factor: c_float,
+):
+    return _lib.llama_sample_classifier_free_guidance(
+        ctx, candidates, guidance_ctx, scale, smooth_factor
+    )
+
+
+_lib.llama_sample_classifier_free_guidance.argtypes = [
+    llama_context_p,
+    llama_token_data_array_p,
+    llama_context_p,
+    c_float,
+    c_float,
+]
+_lib.llama_sample_classifier_free_guidance.restype = None
 
 
 # @details Sorts candidate tokens by their logits in descending order and calculate probabilities based on logits.
@@ -1065,5 +1184,5 @@ _lib.llama_print_system_info.restype = c_char_p
 _llama_initialized = False
 
 if not _llama_initialized:
-    llama_init_backend(c_bool(False))
+    llama_backend_init(c_bool(False))
     _llama_initialized = True
