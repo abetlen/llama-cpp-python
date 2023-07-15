@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.72]
+
+### Added
+
+- (llama.cpp) Update llama.cpp added custom_rope for extended context lengths
+
 ## [0.1.71]
 
 ### Added
