@@ -845,7 +845,7 @@ class Llama:
 
         if len(prompt_tokens) >= llama_cpp.llama_n_ctx(self.ctx):
             raise ValueError(
-                f"Requested tokens exceed context window of {llama_cpp.llama_n_ctx(self.ctx)}"
+                f"Requested tokens ({len(prompt_tokens)}) exceed context window of {llama_cpp.llama_n_ctx(self.ctx)}"
             )
 
         if max_tokens <= 0:
