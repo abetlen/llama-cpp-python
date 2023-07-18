@@ -16,6 +16,9 @@ from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 from sse_starlette.sse import EventSourceResponse
 
+import numpy as np
+import numpy.typing as npt
+
 
 class Settings(BaseSettings):
     model: str = Field(
@@ -336,9 +339,9 @@ def make_logit_bias_processor(
                 to_bias[input_id] = score
 
     def logit_bias_processor(
-        input_ids: List[int],
-        scores: List[float],
-    ) -> List[float]:
+        input_ids: npt.NDArray[np.intc],
+        scores: npt.NDArray[np.single],
+    ) -> npt.NDArray[np.single]:
         new_scores = [None] * len(scores)
         for input_id, score in enumerate(scores):
             new_scores[input_id] = score + to_bias.get(input_id, 0.0)

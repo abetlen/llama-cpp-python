@@ -27,6 +27,7 @@ from .llama_types import *
 import numpy as np
 import numpy.typing as npt
 
+
 class BaseLlamaCache(ABC):
     """Base cache class for a llama.cpp model."""
 
@@ -179,21 +180,27 @@ class LlamaState:
         self.llama_state_size = llama_state_size
 
 
-LogitsProcessor = Callable[[List[int], List[float]], List[float]]
+LogitsProcessor = Callable[
+    [npt.NDArray[np.intc], npt.NDArray[np.single]], npt.NDArray[np.single]
+]
 
 
 class LogitsProcessorList(List[LogitsProcessor]):
-    def __call__(self, input_ids: List[int], scores: List[float]) -> List[float]:
+    def __call__(
+        self, input_ids: npt.NDArray[np.intc], scores: npt.NDArray[np.single]
+    ) -> npt.NDArray[np.single]:
         for processor in self:
             scores = processor(input_ids, scores)
         return scores
 
 
-StoppingCriteria = Callable[[List[int], List[float]], bool]
+StoppingCriteria = Callable[[npt.NDArray[np.intc], npt.NDArray[np.single]], bool]
 
 
 class StoppingCriteriaList(List[StoppingCriteria]):
-    def __call__(self, input_ids: List[int], logits: List[float]) -> bool:
+    def __call__(
+        self, input_ids: npt.NDArray[np.intc], logits: npt.NDArray[np.single]
+    ) -> bool:
         return any([stopping_criteria(input_ids, logits) for stopping_criteria in self])
 
 
@@ -274,9 +281,11 @@ class Llama:
         self._c_tensor_split = None
 
         if self.tensor_split is not None:
-            #Type conversion and expand the list to the length of LLAMA_MAX_DEVICES
+            # Type conversion and expand the list to the length of LLAMA_MAX_DEVICES
             FloatArray = ctypes.c_float * llama_cpp.LLAMA_MAX_DEVICES.value
-            self._c_tensor_split = FloatArray(*tensor_split) # keep a reference to the array so it is not gc'd
+            self._c_tensor_split = FloatArray(
+                *tensor_split
+            )  # keep a reference to the array so it is not gc'd
             self.params.tensor_split = self._c_tensor_split
 
         self.params.rope_freq_base = rope_freq_base
@@ -503,11 +512,7 @@ class Llama:
         logits: npt.NDArray[np.single] = self._scores[-1, :]
 
         if logits_processor is not None:
-            logits = np.array(
-                logits_processor(self._input_ids.tolist(), logits.tolist()),
-                dtype=np.single,
-            )
-            self._scores[-1, :] = logits
+            logits[:] = logits_processor(self._input_ids, logits)
 
         nl_logit = logits[self._token_nl]
         candidates = self._candidates
@@ -725,7 +730,7 @@ class Llama:
                 logits_processor=logits_processor,
             )
             if stopping_criteria is not None and stopping_criteria(
-                self._input_ids.tolist(), self._scores[-1, :].tolist()
+                self._input_ids, self._scores[-1, :]
             ):
                 return
             tokens_or_none = yield token
@@ -1014,7 +1019,7 @@ class Llama:
                 break
 
         if stopping_criteria is not None and stopping_criteria(
-            self._input_ids.tolist(), self._scores[-1, :].tolist()
+            self._input_ids, self._scores[-1, :]
         ):
             text = self.detokenize(completion_tokens)
             finish_reason = "stop"
