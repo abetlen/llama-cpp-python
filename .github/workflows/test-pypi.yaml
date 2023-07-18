@@ -18,7 +18,7 @@ jobs:
       - name: Install dependencies
         run: |
           python3 -m pip install --upgrade pip
-          python3 -m pip install --verbose llama-cpp-python[server,test]
+          python3 -m pip install --verbose llama-cpp-python[all]
       - name: Test with pytest
         run: |
           python3 -c "import llama_cpp"
@@ -38,7 +38,7 @@ jobs:
       - name: Install dependencies
         run: |
           python3 -m pip install --upgrade pip
-          python3 -m pip install --verbose llama-cpp-python[server,test]
+          python3 -m pip install --verbose llama-cpp-python[all]
       - name: Test with pytest
         run: |
           python3 -c "import llama_cpp"
@@ -58,7 +58,7 @@ jobs:
       - name: Install dependencies
         run: |
           python3 -m pip install --upgrade pip
-          python3 -m pip install --verbose llama-cpp-python[server,test]
+          python3 -m pip install --verbose llama-cpp-python[all]
       - name: Test with pytest
         run: |
           python3 -c "import llama_cpp"

@@ -1,44 +1,53 @@
-[tool.poetry]
+[build-system]
+requires = ["scikit-build-core>=0.4.5"]
+build-backend = "scikit_build_core.build"
+
+[project]
 name = "llama_cpp_python"
 version = "0.1.73"
 description = "Python bindings for the llama.cpp library"
-authors = ["Andrei Betlen <abetlen@gmail.com>"]
-license = "MIT"
 readme = "README.md"
-homepage = "https://github.com/abetlen/llama-cpp-python"
-repository = "https://github.com/abetlen/llama-cpp-python"
-packages = [{include = "llama_cpp"}]
-include = [
-    "LICENSE.md",
+license = { text = "MIT" }
+authors = [
+    { name = "Andrei Betlen", email = "abetlen@gmail.com" },
+]
+dependencies = [
+    "typing-extensions>=4.7.1",
+    "numpy>=1.24.4",
+    "diskcache>=5.6.1",
+]
+requires-python = ">=3.7"
+
+
+[project.optional-dependencies]
+server = [
+    "uvicorn>=0.22.0",
+    "fastapi>=0.100.0",
+    "pydantic-settings>=2.0.1",
+    "sse-starlette>=1.6.1",
+]
+test = [
+    "pytest>=7.4.0",
+    "httpx>=0.24.1",
+]
+dev = [
+    "black>=23.3.0",
+    "twine>=4.0.2",
+    "mkdocs>=1.4.3",
+    "mkdocstrings[python]>=0.22.0",
+    "mkdocs-material>=9.1.18",
+    "pytest>=7.4.0",
+    "httpx>=0.24.1",
+]
+all = [
+    "llama_cpp_python[server,test,dev]",
 ]
 
-[tool.poetry.dependencies]
-python = "^3.8.1"
-typing-extensions = "^4.7.1"
-numpy = "^1.24.4"
-diskcache = "^5.6.1"
-uvicorn = { version = "^0.22.0", optional = true }
-fastapi = { version = "^0.99.1", optional = true }
-sse-starlette = { version = "^1.6.1", optional = true }
+[tool.scikit-build]
+wheel.packages = ["llama_cpp"]
+wheel.expand-macos-universal-tags = true
+cmake.verbose = true
 
-[tool.poetry.group.dev.dependencies]
-black = "^23.3.0"
-twine = "^4.0.2"
-mkdocs = "^1.4.3"
-mkdocstrings = {extras = ["python"], version = "^0.22.0"}
-mkdocs-material = "^9.1.18"
-pytest = "^7.4.0"
-httpx = "^0.24.1"
-scikit-build = "0.17.6"
-
-[tool.poetry.extras]
-server = ["uvicorn>=0.22.0", "fastapi>=0.100.0", "pydantic-settings>=2.0.1", "sse-starlette>=1.6.1"]
-
-[build-system]
-requires = [
-    "setuptools>=42",
-    "scikit-build>=0.13",
-    "cmake>=3.18",
-    "ninja",
-]
-build-backend = "setuptools.build_meta"
+[project.urls]
+Homepage = "https://github.com/abetlen/llama-cpp-python"
+Issues = "https://github.com/abetlen/llama-cpp-python/issues"

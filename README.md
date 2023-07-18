@@ -180,13 +180,6 @@ pip install -e .
 
 # if you want to use the fastapi / openapi server
 pip install -e .[server]
-
-# If you're a poetry user, installing will also include a virtual environment
-poetry install --all-extras
-. .venv/bin/activate
-
-# Will need to be re-run any time vendor/llama.cpp is updated
-python3 setup.py develop
 ```
 
 # How does this compare to other Python bindings of `llama.cpp`?
