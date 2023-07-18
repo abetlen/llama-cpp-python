@@ -71,6 +71,27 @@ To install with Metal (MPS), set the `LLAMA_METAL=on` environment variable befor
 CMAKE_ARGS="-DLLAMA_METAL=on" FORCE_CMAKE=1 pip install llama-cpp-python
 ```
 
+#### Windows remarks
+
+To set the variables `CMAKE_ARGS` and `FORCE_CMAKE` in PowerShell, follow the next steps (Example using, OpenBLAS):
+
+```ps
+$env:CMAKE_ARGS = "-DLLAMA_OPENBLAS=on"
+```
+
+```ps
+$env:FORCE_CMAKE = 1
+```
+
+Then, call `pip` after setting the variables:
+```
+pip install llama-cpp-python
+```
+
+See the above instructions and set `CMAKE_ARGS` to the BLAS backend you want to use.
+
+#### MacOS remarks
+
 Detailed MacOS Metal GPU install documentation is available at [docs/install/macos.md](docs/install/macos.md)
 
 ## High-level API
