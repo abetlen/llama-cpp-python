@@ -16,7 +16,7 @@ dependencies = [
     "numpy>=1.20.0",
     "diskcache>=5.6.1",
 ]
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 
 
 [project.optional-dependencies]
