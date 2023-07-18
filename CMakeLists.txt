@@ -3,10 +3,14 @@ cmake_minimum_required(VERSION 3.4...3.22)
 project(llama_cpp)
 
 option(FORCE_CMAKE "Force CMake build of Python bindings" OFF)
+option(DRY_RUN "Don't build any library" OFF)
 
 set(FORCE_CMAKE $ENV{FORCE_CMAKE})
 
-if (UNIX AND NOT FORCE_CMAKE)
+if(DRY_RUN)
+    message("Remember ln -s /usr/lib/libllama.so
+    /usr/lib/python3.11/site-packages/llama_cpp/libllama.so")
+elseif(UNIX AND NOT FORCE_CMAKE)
     add_custom_command(
         OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/vendor/llama.cpp/libllama.so
         COMMAND make libllama.so
@@ -24,7 +28,7 @@ else()
     set(BUILD_SHARED_LIBS "On")
     add_subdirectory(vendor/llama.cpp)
     install(
-        TARGETS llama 
+        TARGETS llama
         LIBRARY DESTINATION llama_cpp
         RUNTIME DESTINATION llama_cpp
         ARCHIVE DESTINATION llama_cpp
