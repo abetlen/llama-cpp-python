@@ -35,6 +35,8 @@ class Settings(BaseSettings):
         default=None,
         description="Split layers across multiple GPUs in proportion.",
     )
+    rope_freq_base: float = Field(default=10000, ge=1, description="RoPE base frequency")
+    rope_freq_scale: float = Field(default=1.0, description="RoPE frequency scaling factor")
     seed: int = Field(
         default=1337, description="Random seed. -1 for random."
     )
@@ -118,6 +120,8 @@ def create_app(settings: Optional[Settings] = None):
         model_path=settings.model,
         n_gpu_layers=settings.n_gpu_layers,
         tensor_split=settings.tensor_split,
+        rope_freq_base=settings.rope_freq_base,
+        rope_freq_scale=settings.rope_freq_scale,
         seed=settings.seed,
         f16_kv=settings.f16_kv,
         use_mlock=settings.use_mlock,
