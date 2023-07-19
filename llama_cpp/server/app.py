@@ -446,6 +446,14 @@ class CreateChatCompletionRequest(BaseModel):
     messages: List[ChatCompletionRequestMessage] = Field(
         default=[], description="A list of messages to generate completions for."
     )
+    functions: Optional[List[llama_cpp.ChatCompletionFunction]] = Field(
+        default=None,
+        description="A list of functions to apply to the generated completions.",
+    )
+    function_call: Optional[Union[str, llama_cpp.ChatCompletionFunctionCall]] = Field(
+        default=None,
+        description="A function to apply to the generated completions.",
+    )
     max_tokens: int = max_tokens_field
     temperature: float = temperature_field
     top_p: float = top_p_field

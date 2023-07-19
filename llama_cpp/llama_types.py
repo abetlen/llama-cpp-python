@@ -63,6 +63,16 @@ class ChatCompletionMessage(TypedDict):
     user: NotRequired[str]
 
 
+class ChatCompletionFunction(TypedDict):
+    name: str
+    description: NotRequired[str]
+    parameters: Dict[str, Any]  # TODO: make this more specific
+
+
+class ChatCompletionFunctionCall(TypedDict):
+    name: str
+
+
 class ChatCompletionChoice(TypedDict):
     index: int
     message: ChatCompletionMessage

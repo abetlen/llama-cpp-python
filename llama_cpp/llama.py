@@ -1435,6 +1435,8 @@ class Llama:
     def create_chat_completion(
         self,
         messages: List[ChatCompletionMessage],
+        functions: Optional[List[ChatCompletionFunction]] = None,
+        function_call: Optional[Union[str, ChatCompletionFunctionCall]] = None,
         temperature: float = 0.2,
         top_p: float = 0.95,
         top_k: int = 40,
