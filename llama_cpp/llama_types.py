@@ -87,8 +87,10 @@ class ChatCompletion(TypedDict):
     choices: List[ChatCompletionChoice]
     usage: CompletionUsage
 
+
 class ChatCompletionChunkDeltaEmpty(TypedDict):
     pass
+
 
 class ChatCompletionChunkDelta(TypedDict):
     role: NotRequired[Literal["assistant"]]
