@@ -82,9 +82,12 @@ To get started, clone the repository and install the package in development mode
 
 ```bash
 git clone git@github.com:abetlen/llama-cpp-python.git
+cd llama-cpp-python
 git submodule update --init --recursive
 # Will need to be re-run any time vendor/llama.cpp is updated
-python3 setup.py develop
+
+pip install --upgrade pip
+pip install -e .[all]
 ```
 
 ## License

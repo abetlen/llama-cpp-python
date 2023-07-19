@@ -190,17 +190,26 @@ If you find any issues with the documentation, please open an issue or submit a 
 
 This package is under active development and I welcome any contributions.
 
-To get started, clone the repository and install the package in development mode:
+To get started, clone the repository and install the package in editable / development mode:
 
 ```bash
 git clone --recurse-submodules git@github.com:abetlen/llama-cpp-python.git
 cd llama-cpp-python
+
+# Upgrade pip (required for editable mode)
+pip install --upgrade pip
 
 # Install with pip
 pip install -e .
 
 # if you want to use the fastapi / openapi server
 pip install -e .[server]
+
+# to install all optional dependencies
+pip install -e .[all]
+
+# to clear the local build cache
+make clean
 ```
 
 # How does this compare to other Python bindings of `llama.cpp`?
