@@ -3,7 +3,7 @@ import multiprocessing
 from re import compile, Match, Pattern
 from threading import Lock
 from functools import partial
-from typing import Callable, Coroutine, Iterator, List, Optional, Union, Dict
+from typing import Callable, Coroutine, Iterator, List, Optional, Tuple, Union, Dict
 from typing_extensions import TypedDict, Literal
 
 import llama_cpp
@@ -115,7 +115,7 @@ class ErrorResponseFormatters:
         match (Match[str]): Match object from regex pattern
 
     Returns:
-        tuple[int, ErrorResponse]: Status code and error response
+        Tuple[int, ErrorResponse]: Status code and error response
     """
 
     @staticmethod
@@ -123,8 +123,8 @@ class ErrorResponseFormatters:
         request: Union[
             "CreateCompletionRequest", "CreateChatCompletionRequest"
         ],
-        match: Match[str],
-    ) -> tuple[int, ErrorResponse]:
+        match, # type: Match[str] # type: ignore
+    ) -> Tuple[int, ErrorResponse]:
         """Formatter for context length exceeded error"""
 
         context_window = int(match.group(2))
@@ -163,8 +163,8 @@ class ErrorResponseFormatters:
         request: Union[
             "CreateCompletionRequest", "CreateChatCompletionRequest"
         ],
-        match: Match[str],
-    ) -> tuple[int, ErrorResponse]:
+        match # type: Match[str] # type: ignore
+    ) -> Tuple[int, ErrorResponse]:
         """Formatter for model_not_found error"""
 
         model_path = str(match.group(1))
@@ -182,14 +182,14 @@ class RouteErrorHandler(APIRoute):
 
     # key: regex pattern for original error message from llama_cpp
     # value: formatter function
-    pattern_and_formatters: dict[
+    pattern_and_formatters: Dict[
         "Pattern",
         Callable[
             [
                 Union["CreateCompletionRequest", "CreateChatCompletionRequest"],
-                Match[str],
+                "Match[str]",
             ],
-            tuple[int, ErrorResponse],
+            Tuple[int, ErrorResponse],
         ],
     ] = {
         compile(
@@ -210,7 +210,7 @@ class RouteErrorHandler(APIRoute):
                 "CreateEmbeddingRequest",
             ]
         ] = None,
-    ) -> tuple[int, ErrorResponse]:
+    ) -> Tuple[int, ErrorResponse]:
         """Wraps error message in OpenAI style error response"""
 
         if body is not None and isinstance(
