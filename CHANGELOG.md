@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.74]
+
+### Added
+
+- (server) OpenAI style error responses
+
 ## [0.1.73]
 
 ### Added
