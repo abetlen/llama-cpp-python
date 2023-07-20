@@ -293,6 +293,15 @@ class llama_timings(Structure):
     ]
 
 
+# LLAMA_API int llama_max_devices();
+def llama_max_devices() -> int:
+    return _lib.llama_max_devices()
+
+
+_lib.llama_max_devices.argtypes = []
+_lib.llama_max_devices.restype = c_int
+
+
 # LLAMA_API struct llama_context_params llama_context_default_params();
 def llama_context_default_params() -> llama_context_params:
     return _lib.llama_context_default_params()
