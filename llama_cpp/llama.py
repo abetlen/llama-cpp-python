@@ -953,7 +953,7 @@ class Llama:
                     token_end_position += len(self.detokenize([token]))
                     # Check if stop sequence is in the token
                     if token_end_position >= (
-                        remaining_length - first_stop_position - 1
+                        remaining_length - first_stop_position
                     ):
                         break
                     logprobs_or_none: Optional[CompletionLogprobs] = None
