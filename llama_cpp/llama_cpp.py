@@ -748,7 +748,7 @@ def llama_get_vocab(
     return _lib.llama_get_vocab(ctx, strings, scores, capacity)
 
 
-_lib.llama_get_vocab.argtypes = [llama_context_p, c_char_p, c_float, c_int]
+_lib.llama_get_vocab.argtypes = [llama_context_p, Array[c_char_p], Array[c_float], c_int]
 _lib.llama_get_vocab.restype = c_int
 
 
