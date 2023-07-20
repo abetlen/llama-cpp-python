@@ -47,10 +47,10 @@ Otherwise, while installing it will build the llama.ccp x86 version which will b
 `llama.cpp` supports multiple BLAS backends for faster processing.
 Use the `FORCE_CMAKE=1` environment variable to force the use of `cmake` and install the pip package for the desired BLAS backend.
 
-To install with OpenBLAS, set the `LLAMA_OPENBLAS=1` environment variable before installing:
+To install with OpenBLAS, set the `LLAMA_BLAS and LLAMA_BLAS_VENDOR` environment variables before installing:
 
 ```bash
-CMAKE_ARGS="-DLLAMA_OPENBLAS=on" FORCE_CMAKE=1 pip install llama-cpp-python
+CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS" FORCE_CMAKE=1 pip install llama-cpp-python
 ```
 
 To install with cuBLAS, set the `LLAMA_CUBLAS=1` environment variable before installing:

@@ -850,7 +850,7 @@ class Llama:
 
         if len(prompt_tokens) >= llama_cpp.llama_n_ctx(self.ctx):
             raise ValueError(
-                f"Requested tokens exceed context window of {llama_cpp.llama_n_ctx(self.ctx)}"
+                f"Requested tokens ({len(prompt_tokens)}) exceed context window of {llama_cpp.llama_n_ctx(self.ctx)}"
             )
 
         if max_tokens <= 0:
@@ -958,7 +958,7 @@ class Llama:
                     token_end_position += len(self.detokenize([token]))
                     # Check if stop sequence is in the token
                     if token_end_position >= (
-                        remaining_length - first_stop_position - 1
+                        remaining_length - first_stop_position
                     ):
                         break
                     logprobs_or_none: Optional[CompletionLogprobs] = None

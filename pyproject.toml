@@ -4,7 +4,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "llama_cpp_python"
-version = "0.1.73"
+version = "0.1.74"
 description = "Python bindings for the llama.cpp library"
 readme = "README.md"
 license = { text = "MIT" }

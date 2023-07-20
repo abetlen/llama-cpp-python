@@ -175,6 +175,7 @@ llama_progress_callback = ctypes.CFUNCTYPE(None, c_float, c_void_p)
 #     // context pointer passed to the progress callback
 #     void * progress_callback_user_data;
 
+
 #     // Keep the booleans together to avoid misalignment during copy-by-value.
 #     bool low_vram;   // if true, reduce VRAM usage at the cost of performance
 #     bool f16_kv;     // use fp16 for KV cache
@@ -290,6 +291,15 @@ class llama_timings(Structure):
         ("n_p_eval", c_int32),
         ("n_eval", c_int32),
     ]
+
+
+# LLAMA_API int llama_max_devices();
+def llama_max_devices() -> int:
+    return _lib.llama_max_devices()
+
+
+_lib.llama_max_devices.argtypes = []
+_lib.llama_max_devices.restype = c_int
 
 
 # LLAMA_API struct llama_context_params llama_context_default_params();
@@ -748,7 +758,12 @@ def llama_get_vocab(
     return _lib.llama_get_vocab(ctx, strings, scores, capacity)
 
 
-_lib.llama_get_vocab.argtypes = [llama_context_p, c_char_p, c_float, c_int]
+_lib.llama_get_vocab.argtypes = [
+    llama_context_p,
+    POINTER(c_char_p),
+    POINTER(c_float),
+    c_int,
+]
 _lib.llama_get_vocab.restype = c_int
 
 
@@ -764,6 +779,15 @@ def llama_get_vocab_from_model(
     capacity: c_int,
 ) -> int:
     return _lib.llama_get_vocab_from_model(model, strings, scores, capacity)
+
+
+_lib.llama_get_vocab_from_model.argtypes = [
+    llama_model_p,
+    POINTER(c_char_p),
+    POINTER(c_float),
+    c_int,
+]
+_lib.llama_get_vocab_from_model.restype = c_int
 
 
 # Token logits obtained from the last call to llama_eval()
