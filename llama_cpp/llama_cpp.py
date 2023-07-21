@@ -164,7 +164,7 @@ llama_progress_callback = ctypes.CFUNCTYPE(None, c_float, c_void_p)
 #     int32_t  n_batch;                      // prompt processing batch size
 #     int32_t  n_gpu_layers;                 // number of layers to store in VRAM
 #     int32_t  main_gpu;                     // the GPU that is used for scratch and small tensors
-#     float tensor_split[LLAMA_MAX_DEVICES]; // how to split layers across multiple GPUs
+#     const float * tensor_split; // how to split layers across multiple GPUs (size: LLAMA_MAX_DEVICES)
 
 #     // ref: https://github.com/ggerganov/llama.cpp/pull/2054
 #     float    rope_freq_base;  // RoPE base frequency
@@ -192,7 +192,7 @@ class llama_context_params(Structure):
         ("n_batch", c_int32),
         ("n_gpu_layers", c_int32),
         ("main_gpu", c_int32),
-        ("tensor_split", c_float * LLAMA_MAX_DEVICES.value),
+        ("tensor_split", POINTER(c_float)),
         ("rope_freq_base", c_float),
         ("rope_freq_scale", c_float),
         ("progress_callback", llama_progress_callback),
@@ -933,22 +933,19 @@ _lib.llama_sample_frequency_and_presence_penalties.restype = None
 # /// @param candidates A vector of `llama_token_data` containing the candidate tokens, the logits must be directly extracted from the original generation context without being sorted.
 # /// @params guidance_ctx A separate context from the same model. Other than a negative prompt at the beginning, it should have all generated and user input tokens copied from the main context.
 # /// @params scale Guidance strength. 1.0f means no guidance. Higher values mean stronger guidance.
-# /// @params smooth_factor Smooth factor between guidance logits and original logits. 1.0f means only use guidance logits. 0.0f means only original logits.
 # LLAMA_API void llama_sample_classifier_free_guidance(
 #             struct llama_context * ctx,
 #         llama_token_data_array * candidates,
 #             struct llama_context * guidance_ctx,
-#                             float   scale,
-#                             float   smooth_factor);
+#                             float   scale);
 def llama_sample_classifier_free_guidance(
     ctx: llama_context_p,
     candidates,  # type: _Pointer[llama_token_data_array]
     guidance_ctx: llama_context_p,
     scale: c_float,
-    smooth_factor: c_float,
 ):
     return _lib.llama_sample_classifier_free_guidance(
-        ctx, candidates, guidance_ctx, scale, smooth_factor
+        ctx, candidates, guidance_ctx, scale
     )
 
 
@@ -956,7 +953,6 @@ _lib.llama_sample_classifier_free_guidance.argtypes = [
     llama_context_p,
     llama_token_data_array_p,
     llama_context_p,
-    c_float,
     c_float,
 ]
 _lib.llama_sample_classifier_free_guidance.restype = None
