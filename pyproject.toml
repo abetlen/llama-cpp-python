@@ -22,6 +22,9 @@ fastapi = { version = ">=0.100.0", optional = true }
 sse-starlette = { version = ">=1.6.1", optional = true }
 pydantic-settings = { version = ">=2.0.1", optional = true }
 
+# build dependency for pydantic-core not otherwise included in poetry.lock
+maturin = { version = ">1,<2", optional = true }
+
 [tool.poetry.group.dev.dependencies]
 black = "^23.3.0"
 twine = "^4.0.2"
