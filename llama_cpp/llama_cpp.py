@@ -163,6 +163,7 @@ llama_progress_callback = ctypes.CFUNCTYPE(None, c_float, c_void_p)
 #     int32_t  n_ctx;        // text context
 #     int32_t  n_batch;      // prompt processing batch size
 #     int32_t  n_gqa;        // grouped-query attention (TEMP - will be moved to model hparams)
+#     float    rms_norm_eps; // rms norm epsilon (TEMP - will be moved to model hparams)
 #     int32_t  n_gpu_layers; // number of layers to store in VRAM
 #     int32_t  main_gpu;     // the GPU that is used for scratch and small tensors
 #
@@ -193,6 +194,7 @@ class llama_context_params(Structure):
         ("n_ctx", c_int32),
         ("n_batch", c_int32),
         ("n_gqa", c_int32),
+        ("rms_norm_eps", c_float),
         ("n_gpu_layers", c_int32),
         ("main_gpu", c_int32),
         ("tensor_split", POINTER(c_float)),
