@@ -230,6 +230,8 @@ class Llama:
         tensor_split: Optional[List[float]] = None,
         rope_freq_base: float = 10000.0,
         rope_freq_scale: float = 1.0,
+        n_gqa: Optional[int] = None,  # (TEMPORARY) must be 8 for llama2 70b
+        rms_norm_eps: Optional[float] = None, # (TEMPORARY)
         verbose: bool = True,
     ):
         """Load a llama.cpp model from `model_path`.
@@ -290,6 +292,12 @@ class Llama:
 
         self.params.rope_freq_base = rope_freq_base
         self.params.rope_freq_scale = rope_freq_scale
+
+        if n_gqa is not None:
+            self.params.n_gqa = n_gqa
+
+        if rms_norm_eps is not None:
+            self.params.rms_norm_eps = rms_norm_eps
 
         self.last_n_tokens_size = last_n_tokens_size
         self.n_batch = min(n_ctx, n_batch)
@@ -1530,6 +1538,10 @@ class Llama:
             lora_base=self.lora_base,
             lora_path=self.lora_path,
             tensor_split=self.tensor_split,
+            ### TEMPORARY ###
+            n_gqa=self.params.n_gqa,
+            rms_norm_eps=self.params.rms_norm_eps,
+            ### TEMPORARY ###
             ### DEPRECATED ###
             n_parts=self.n_parts,
             ### DEPRECATED ###
@@ -1539,7 +1551,6 @@ class Llama:
         self.__init__(
             model_path=state["model_path"],
             n_ctx=state["n_ctx"],
-            n_parts=state["n_parts"],
             n_gpu_layers=state["n_gpu_layers"],
             seed=state["seed"],
             f16_kv=state["f16_kv"],
@@ -1556,6 +1567,13 @@ class Llama:
             lora_path=state["lora_path"],
             tensor_split=state["tensor_split"],
             verbose=state["verbose"],
+            ### TEMPORARY ###
+            n_gqa=state["n_gqa"],
+            rms_norm_eps=state["rms_norm_eps"],
+            ### TEMPORARY ###
+            ### DEPRECATED ###
+            n_parts=state["n_parts"],
+            ### DEPRECATED ###
         )
 
     def save_state(self) -> LlamaState:

@@ -100,6 +100,14 @@ class Settings(BaseSettings):
         default=True,
         description="Whether to interrupt requests when a new request is received.",
     )
+    n_gqa: Optional[int] = Field(
+        default=None,
+        description="TEMPORARY: Set to 8 for Llama2 70B",
+    )
+    rms_norm_eps: Optional[float] = Field(
+        default=None,
+        description="TEMPORARY",
+    )
 
 
 class ErrorResponse(TypedDict):
@@ -325,6 +333,8 @@ def create_app(settings: Optional[Settings] = None):
         last_n_tokens_size=settings.last_n_tokens_size,
         vocab_only=settings.vocab_only,
         verbose=settings.verbose,
+        n_gqa=settings.n_gqa,
+        rms_norm_eps=settings.rms_norm_eps,
     )
     if settings.cache:
         if settings.cache_type == "disk":
