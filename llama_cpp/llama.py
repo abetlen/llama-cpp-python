@@ -216,6 +216,7 @@ class Llama:
         embedding: bool = False,
         n_threads: Optional[int] = None,
         n_batch: int = 512,
+        n_gqa: Optional[int] = None,  # must be 8 for llama2 70b
         last_n_tokens_size: int = 64,
         lora_base: Optional[str] = None,
         lora_path: Optional[str] = None,
@@ -260,6 +261,8 @@ class Llama:
 
         self.params = llama_cpp.llama_context_default_params()
         self.params.n_ctx = n_ctx
+        if n_gqa is not None:
+            self.params.n_gqa = n_gqa
         self.params.n_gpu_layers = n_gpu_layers
         self.params.seed = seed
         self.params.f16_kv = f16_kv
