@@ -87,29 +87,29 @@ c_size_t_p = POINTER(c_size_t)
 # llama.h bindings
 
 GGML_USE_CUBLAS = hasattr(_lib, "ggml_init_cublas")
-GGML_CUDA_MAX_DEVICES = ctypes.c_int(16)
-LLAMA_MAX_DEVICES = GGML_CUDA_MAX_DEVICES if GGML_USE_CUBLAS else ctypes.c_int(1)
+GGML_CUDA_MAX_DEVICES = 16
+LLAMA_MAX_DEVICES = GGML_CUDA_MAX_DEVICES if GGML_USE_CUBLAS else 1
 
 # #define LLAMA_FILE_MAGIC_GGJT        0x67676a74u // 'ggjt'
-LLAMA_FILE_MAGIC_GGJT = ctypes.c_uint(0x67676A74)
+LLAMA_FILE_MAGIC_GGJT = 0x67676A74
 # #define LLAMA_FILE_MAGIC_GGLA        0x67676c61u // 'ggla'
-LLAMA_FILE_MAGIC_GGLA = ctypes.c_uint(0x67676C61)
+LLAMA_FILE_MAGIC_GGLA = 0x67676C61
 # #define LLAMA_FILE_MAGIC_GGMF        0x67676d66u // 'ggmf'
-LLAMA_FILE_MAGIC_GGMF = ctypes.c_uint(0x67676D66)
+LLAMA_FILE_MAGIC_GGMF = 0x67676D66
 # #define LLAMA_FILE_MAGIC_GGML        0x67676d6cu // 'ggml'
-LLAMA_FILE_MAGIC_GGML = ctypes.c_uint(0x67676D6C)
+LLAMA_FILE_MAGIC_GGML = 0x67676D6C
 # #define LLAMA_FILE_MAGIC_GGSN        0x6767736eu // 'ggsn'
-LLAMA_FILE_MAGIC_GGSN = ctypes.c_uint(0x6767736E)
+LLAMA_FILE_MAGIC_GGSN = 0x6767736E
 
 # #define LLAMA_FILE_VERSION           3
-LLAMA_FILE_VERSION = c_int(3)
+LLAMA_FILE_VERSION = 3
 LLAMA_FILE_MAGIC = LLAMA_FILE_MAGIC_GGJT
 LLAMA_FILE_MAGIC_UNVERSIONED = LLAMA_FILE_MAGIC_GGML
 LLAMA_SESSION_MAGIC = LLAMA_FILE_MAGIC_GGSN
-LLAMA_SESSION_VERSION = c_int(1)
+LLAMA_SESSION_VERSION = 1
 
 # #define LLAMA_DEFAULT_SEED           0xFFFFFFFF
-LLAMA_DEFAULT_SEED = c_int(0xFFFFFFFF)
+LLAMA_DEFAULT_SEED = 0xFFFFFFFF
 
 # struct llama_model;
 llama_model_p = c_void_p
@@ -235,23 +235,23 @@ llama_context_params_p = POINTER(llama_context_params)
 #     LLAMA_FTYPE_MOSTLY_Q5_K_M        = 17,// except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_Q6_K          = 18,// except 1d tensors
 # };
-LLAMA_FTYPE_ALL_F32 = c_int(0)
-LLAMA_FTYPE_MOSTLY_F16 = c_int(1)
-LLAMA_FTYPE_MOSTLY_Q4_0 = c_int(2)
-LLAMA_FTYPE_MOSTLY_Q4_1 = c_int(3)
-LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16 = c_int(4)
-LLAMA_FTYPE_MOSTLY_Q8_0 = c_int(7)
-LLAMA_FTYPE_MOSTLY_Q5_0 = c_int(8)
-LLAMA_FTYPE_MOSTLY_Q5_1 = c_int(9)
-LLAMA_FTYPE_MOSTLY_Q2_K = c_int(10)
-LLAMA_FTYPE_MOSTLY_Q3_K_S = c_int(11)
-LLAMA_FTYPE_MOSTLY_Q3_K_M = c_int(12)
-LLAMA_FTYPE_MOSTLY_Q3_K_L = c_int(13)
-LLAMA_FTYPE_MOSTLY_Q4_K_S = c_int(14)
-LLAMA_FTYPE_MOSTLY_Q4_K_M = c_int(15)
-LLAMA_FTYPE_MOSTLY_Q5_K_S = c_int(16)
-LLAMA_FTYPE_MOSTLY_Q5_K_M = c_int(17)
-LLAMA_FTYPE_MOSTLY_Q6_K = c_int(18)
+LLAMA_FTYPE_ALL_F32 = 0
+LLAMA_FTYPE_MOSTLY_F16 = 1
+LLAMA_FTYPE_MOSTLY_Q4_0 = 2
+LLAMA_FTYPE_MOSTLY_Q4_1 = 3
+LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16 = 4
+LLAMA_FTYPE_MOSTLY_Q8_0 = 7
+LLAMA_FTYPE_MOSTLY_Q5_0 = 8
+LLAMA_FTYPE_MOSTLY_Q5_1 = 9
+LLAMA_FTYPE_MOSTLY_Q2_K = 10
+LLAMA_FTYPE_MOSTLY_Q3_K_S = 11
+LLAMA_FTYPE_MOSTLY_Q3_K_M = 12
+LLAMA_FTYPE_MOSTLY_Q3_K_L = 13
+LLAMA_FTYPE_MOSTLY_Q4_K_S = 14
+LLAMA_FTYPE_MOSTLY_Q4_K_M = 15
+LLAMA_FTYPE_MOSTLY_Q5_K_S = 16
+LLAMA_FTYPE_MOSTLY_Q5_K_M = 17
+LLAMA_FTYPE_MOSTLY_Q6_K = 18
 
 
 # // model quantization parameters
@@ -299,13 +299,13 @@ llama_grammar_p = c_void_p
 #     // LLAMA_GRETYPE_CHAR_RNG_UPPER to add an alternate char to match ([ab], [a-zA])
 #     LLAMA_GRETYPE_CHAR_ALT       = 6,
 # };
-LLAMA_GRETYPE_END = c_int(0)
-LLAMA_GRETYPE_ALT = c_int(1)
-LLAMA_GRETYPE_RULE_REF = c_int(2)
-LLAMA_GRETYPE_CHAR = c_int(3)
-LLAMA_GRETYPE_CHAR_NOT = c_int(4)
-LLAMA_GRETYPE_CHAR_RNG_UPPER = c_int(5)
-LLAMA_GRETYPE_CHAR_ALT = c_int(6)
+LLAMA_GRETYPE_END = 0
+LLAMA_GRETYPE_ALT = 1
+LLAMA_GRETYPE_RULE_REF = 2
+LLAMA_GRETYPE_CHAR = 3
+LLAMA_GRETYPE_CHAR_NOT = 4
+LLAMA_GRETYPE_CHAR_RNG_UPPER = 5
+LLAMA_GRETYPE_CHAR_ALT = 6
 
 
 # typedef struct llama_grammar_element {
@@ -399,7 +399,7 @@ _lib.llama_mlock_supported.restype = c_bool
 # // If numa is true, use NUMA optimizations
 # // Call once at the start of the program
 # LLAMA_API void llama_backend_init(bool numa);
-def llama_backend_init(numa: c_bool):
+def llama_backend_init(numa: Union[c_bool, bool]):
     return _lib.llama_backend_init(numa)
 
 
@@ -521,9 +521,9 @@ _lib.llama_model_quantize.restype = c_int
 #                          int   n_threads);
 def llama_apply_lora_from_file(
     ctx: llama_context_p,
-    path_lora: c_char_p,
-    path_base_model: c_char_p,
-    n_threads: c_int,
+    path_lora: Union[c_char_p, bytes],
+    path_base_model: Union[c_char_p, bytes],
+    n_threads: Union[c_int, int],
 ) -> int:
     return _lib.llama_apply_lora_from_file(ctx, path_lora, path_base_model, n_threads)
 
@@ -541,7 +541,7 @@ def llama_model_apply_lora_from_file(
     model: llama_model_p,
     path_lora: Union[c_char_p, bytes],
     path_base_model: Union[c_char_p, bytes],
-    n_threads: c_int,
+    n_threads: Union[c_int, int],
 ) -> int:
     return _lib.llama_model_apply_lora_from_file(
         model, path_lora, path_base_model, n_threads
@@ -621,7 +621,7 @@ def llama_load_session_file(
     ctx: llama_context_p,
     path_session: bytes,
     tokens_out,  # type: Array[llama_token]
-    n_token_capacity: c_size_t,
+    n_token_capacity: Union[c_size_t, int],
     n_token_count_out,  # type: _Pointer[c_size_t]
 ) -> int:
     return _lib.llama_load_session_file(
@@ -644,7 +644,7 @@ def llama_save_session_file(
     ctx: llama_context_p,
     path_session: bytes,
     tokens,  # type: Array[llama_token]
-    n_token_count: c_size_t,
+    n_token_count: Union[c_size_t, int],
 ) -> int:
     return _lib.llama_save_session_file(ctx, path_session, tokens, n_token_count)
 
@@ -671,9 +671,9 @@ _lib.llama_save_session_file.restype = c_size_t
 def llama_eval(
     ctx: llama_context_p,
     tokens,  # type: Array[llama_token]
-    n_tokens: c_int,
-    n_past: c_int,
-    n_threads: c_int,
+    n_tokens: Union[c_int, int],
+    n_past: Union[c_int, int],
+    n_threads: Union[c_int, int],
 ) -> int:
     return _lib.llama_eval(ctx, tokens, n_tokens, n_past, n_threads)
 
@@ -692,9 +692,9 @@ _lib.llama_eval.restype = c_int
 def llama_eval_embd(
     ctx: llama_context_p,
     embd,  # type: Array[c_float]
-    n_tokens: c_int,
-    n_past: c_int,
-    n_threads: c_int,
+    n_tokens: Union[c_int, int],
+    n_past: Union[c_int, int],
+    n_threads: Union[c_int, int],
 ) -> int:
     return _lib.llama_eval_embd(ctx, embd, n_tokens, n_past, n_threads)
 
@@ -718,8 +718,8 @@ def llama_tokenize(
     ctx: llama_context_p,
     text: bytes,
     tokens,  # type: Array[llama_token]
-    n_max_tokens: c_int,
-    add_bos: c_bool,
+    n_max_tokens: Union[c_int, int],
+    add_bos: Union[c_bool, bool],
 ) -> int:
     return _lib.llama_tokenize(ctx, text, tokens, n_max_tokens, add_bos)
 
@@ -738,8 +738,8 @@ def llama_tokenize_with_model(
     model: llama_model_p,
     text: bytes,
     tokens,  # type: Array[llama_token]
-    n_max_tokens: c_int,
-    add_bos: c_bool,
+    n_max_tokens: Union[c_int, int],
+    add_bos: Union[c_bool, bool],
 ) -> int:
     return _lib.llama_tokenize_with_model(model, text, tokens, n_max_tokens, add_bos)
 
@@ -809,7 +809,7 @@ def llama_get_vocab(
     ctx: llama_context_p,
     strings,  # type: Array[c_char_p] # type: ignore
     scores,  # type: Array[c_float] # type: ignore
-    capacity: c_int,
+    capacity: Union[c_int, int],
 ) -> int:
     return _lib.llama_get_vocab(ctx, strings, scores, capacity)
 
@@ -832,7 +832,7 @@ def llama_get_vocab_from_model(
     model: llama_model_p,
     strings,  # type: Array[c_char_p] # type: ignore
     scores,  # type: Array[c_float] # type: ignore
-    capacity: c_int,
+    capacity: Union[c_int, int],
 ) -> int:
     return _lib.llama_get_vocab_from_model(model, strings, scores, capacity)
 
@@ -935,8 +935,8 @@ _lib.llama_token_nl.restype = llama_token
 #                                 size_t    start_rule_index);
 def llama_grammar_init(
     rules,  # type: Array[llama_grammar_element_p] # type: ignore
-    n_rules: c_size_t,
-    start_rule_index: c_size_t,
+    n_rules: Union[c_size_t, int],
+    start_rule_index: Union[c_size_t, int],
 ) -> llama_grammar_p:
     return _lib.llama_grammar_init(rules, n_rules, start_rule_index)
 
@@ -967,8 +967,8 @@ def llama_sample_repetition_penalty(
     ctx: llama_context_p,
     candidates,  # type: _Pointer[llama_token_data_array]
     last_tokens_data,  # type: Array[llama_token]
-    last_tokens_size: c_int,
-    penalty: c_float,
+    last_tokens_size: Union[c_int, int],
+    penalty: Union[c_float, float],
 ):
     return _lib.llama_sample_repetition_penalty(
         ctx, candidates, last_tokens_data, last_tokens_size, penalty
@@ -991,9 +991,9 @@ def llama_sample_frequency_and_presence_penalties(
     ctx: llama_context_p,
     candidates,  # type: _Pointer[llama_token_data_array]
     last_tokens_data,  # type: Array[llama_token]
-    last_tokens_size: c_int,
-    alpha_frequency: c_float,
-    alpha_presence: c_float,
+    last_tokens_size: Union[c_int, int],
+    alpha_frequency: Union[c_float, float],
+    alpha_presence: Union[c_float, float],
 ):
     return _lib.llama_sample_frequency_and_presence_penalties(
         ctx,
@@ -1029,7 +1029,7 @@ def llama_sample_classifier_free_guidance(
     ctx: llama_context_p,
     candidates,  # type: _Pointer[llama_token_data_array]
     guidance_ctx: llama_context_p,
-    scale: c_float,
+    scale: Union[c_float, float],
 ):
     return _lib.llama_sample_classifier_free_guidance(
         ctx, candidates, guidance_ctx, scale
@@ -1065,8 +1065,8 @@ _lib.llama_sample_softmax.restype = None
 def llama_sample_top_k(
     ctx: llama_context_p,
     candidates,  # type: _Pointer[llama_token_data_array]
-    k: c_int,
-    min_keep: c_size_t,
+    k: Union[c_int, int],
+    min_keep: Union[c_size_t, int],
 ):
     return _lib.llama_sample_top_k(ctx, candidates, k, min_keep)
 
@@ -1085,8 +1085,8 @@ _lib.llama_sample_top_k.restype = None
 def llama_sample_top_p(
     ctx: llama_context_p,
     candidates,  # type: _Pointer[llama_token_data_array]
-    p: c_float,
-    min_keep: c_size_t,
+    p: Union[c_float, float],
+    min_keep: Union[c_size_t, int],
 ):
     return _lib.llama_sample_top_p(ctx, candidates, p, min_keep)
 
@@ -1105,8 +1105,8 @@ _lib.llama_sample_top_p.restype = None
 def llama_sample_tail_free(
     ctx: llama_context_p,
     candidates,  # type: _Pointer[llama_token_data_array]
-    z: c_float,
-    min_keep: c_size_t,
+    z: Union[c_float, float],
+    min_keep: Union[c_size_t, int],
 ):
     return _lib.llama_sample_tail_free(ctx, candidates, z, min_keep)
 
@@ -1125,8 +1125,8 @@ _lib.llama_sample_tail_free.restype = None
 def llama_sample_typical(
     ctx: llama_context_p,
     candidates,  # type: _Pointer[llama_token_data_array]
-    p: c_float,
-    min_keep: c_size_t,
+    p: Union[c_float, float],
+    min_keep: Union[c_size_t, int],
 ):
     return _lib.llama_sample_typical(ctx, candidates, p, min_keep)
 
@@ -1144,7 +1144,7 @@ _lib.llama_sample_typical.restype = None
 def llama_sample_temperature(
     ctx: llama_context_p,
     candidates,  # type: _Pointer[llama_token_data_array]
-    temp: c_float,
+    temp: Union[c_float, float],
 ):
     return _lib.llama_sample_temperature(ctx, candidates, temp)
 
@@ -1167,9 +1167,9 @@ _lib.llama_sample_temperature.restype = None
 def llama_sample_token_mirostat(
     ctx: llama_context_p,
     candidates,  # type: _Pointer[llama_token_data_array]
-    tau: c_float,
-    eta: c_float,
-    m: c_int,
+    tau: Union[c_float, float],
+    eta: Union[c_float, float],
+    m: Union[c_int, int],
     mu,  # type: _Pointer[c_float]
 ) -> int:
     return _lib.llama_sample_token_mirostat(ctx, candidates, tau, eta, m, mu)
@@ -1195,8 +1195,8 @@ _lib.llama_sample_token_mirostat.restype = llama_token
 def llama_sample_token_mirostat_v2(
     ctx: llama_context_p,
     candidates,  # type: _Pointer[llama_token_data_array]
-    tau: c_float,
-    eta: c_float,
+    tau: Union[c_float, float],
+    eta: Union[c_float, float],
     mu,  # type: _Pointer[c_float]
 ) -> int:
     return _lib.llama_sample_token_mirostat_v2(ctx, candidates, tau, eta, mu)
@@ -1289,5 +1289,5 @@ _lib.llama_print_system_info.restype = c_char_p
 _llama_initialized = False
 
 if not _llama_initialized:
-    llama_backend_init(c_bool(False))
+    llama_backend_init(False)
     _llama_initialized = True
