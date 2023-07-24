@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.77]
+
+- (llama.cpp) Update llama.cpp add support for LLaMa 2 70B
+- (server) Add temporary n_gqa and rms_norm_eps parameters required for LLaMa 2 70B
+
 ## [0.1.76]
 
 - (llama.cpp) Update llama.cpp add support for LLaMa 2 70B
