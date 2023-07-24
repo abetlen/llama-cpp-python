@@ -1262,6 +1262,21 @@ _lib.llama_sample_token.argtypes = [
 _lib.llama_sample_token.restype = llama_token
 
 
+# /// @details Accepts the sampled token into the grammar
+# LLAMA_API void llama_grammar_accept_token(struct llama_context * ctx, struct llama_grammar * grammar, llama_token token);
+def llama_grammar_accept_token(
+    ctx: llama_context_p, grammar: llama_grammar_p, token: llama_token
+):
+    return _lib.llama_grammar_accept_token(ctx, grammar, token)
+
+
+_lib.llama_grammar_accept_token.argtypes = [
+    llama_context_p,
+    llama_grammar_p,
+    llama_token,
+]
+_lib.llama_grammar_accept_token.restype = None
+
 # Performance information
 
 
