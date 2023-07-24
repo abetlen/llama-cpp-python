@@ -367,7 +367,10 @@ _lib.llama_backend_free.restype = None
 def llama_load_model_from_file(
     path_model: bytes, params: llama_context_params
 ) -> llama_model_p:
-    return _lib.llama_load_model_from_file(path_model, params)
+    result = _lib.llama_load_model_from_file(path_model, params)
+    if result is None:
+        raise Exception(f"Failed to load model from {path_model}")
+    return result
 
 
 _lib.llama_load_model_from_file.argtypes = [c_char_p, llama_context_params]
