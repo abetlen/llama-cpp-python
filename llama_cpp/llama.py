@@ -224,7 +224,7 @@ class Llama:
         rope_freq_base: float = 10000.0,
         rope_freq_scale: float = 1.0,
         n_gqa: Optional[int] = None,  # (TEMPORARY) must be 8 for llama2 70b
-        rms_eps_norm: Optional[float] = None, # (TEMPORARY)
+        rms_norm_eps: Optional[float] = None, # (TEMPORARY)
         verbose: bool = True,
     ):
         """Load a llama.cpp model from `model_path`.
@@ -287,8 +287,8 @@ class Llama:
         if n_gqa is not None:
             self.params.n_gqa = n_gqa
 
-        if rms_eps_norm is not None:
-            self.params.rms_eps_norm = rms_eps_norm
+        if rms_norm_eps is not None:
+            self.params.rms_norm_eps = rms_norm_eps
 
         self.last_n_tokens_size = last_n_tokens_size
         self.n_batch = min(n_ctx, n_batch)
@@ -1533,7 +1533,7 @@ class Llama:
             tensor_split=self.tensor_split,
             ### TEMPORARY ###
             n_gqa=self.params.n_gqa,
-            rms_eps_norm=self.params.rms_eps_norm,
+            rms_norm_eps=self.params.rms_norm_eps,
             ### TEMPORARY ###
             ### DEPRECATED ###
             n_parts=self.n_parts,
@@ -1559,10 +1559,10 @@ class Llama:
             lora_base=state["lora_base"],
             lora_path=state["lora_path"],
             tensor_split=state["tensor_split"],
-            n_gqa=state["n_gqa"],
-            ### TEMPORARY ###
-            rms_eps_norm=state["rms_eps_norm"],
             verbose=state["verbose"],
+            ### TEMPORARY ###
+            n_gqa=state["n_gqa"],
+            rms_norm_eps=state["rms_norm_eps"],
             ### TEMPORARY ###
             ### DEPRECATED ###
             n_parts=state["n_parts"],
