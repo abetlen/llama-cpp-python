@@ -140,7 +140,7 @@ llm = Llama(model_path="./models/7B/ggml-model.bin", n_ctx=2048)
 Llama2 70b must set the `n_gqa` parameter (grouped-query attention factor) to 8 when loading:
 
 ```python
-llm = Llama(model_path="./models/7B/ggml-model.bin", n_gqa=8)
+llm = Llama(model_path="./models/70B/ggml-model.bin", n_gqa=8)
 ```
 
 ## Web Server
