@@ -1503,10 +1503,10 @@ class Llama:
             return self._convert_text_completion_to_chat(completion)
 
     def __del__(self):
-        if self.model is not None:
+        if hasattr(self, "model") and self.model is not None:
             llama_cpp.llama_free_model(self.model)
             self.model = None
-        if self.ctx is not None:
+        if hasattr(self, "ctx") and self.ctx is not None:
             llama_cpp.llama_free(self.ctx)
             self.ctx = None
 
