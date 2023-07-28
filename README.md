@@ -53,10 +53,10 @@ To install with OpenBLAS, set the `LLAMA_BLAS and LLAMA_BLAS_VENDOR` environment
 CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS" FORCE_CMAKE=1 pip install llama-cpp-python
 ```
 
-To install with cuBLAS, set the `LLAMA_CUBLAS=1` environment variable before installing:
+To install with cuBLAS, you need cuda >11.8 &  set the `LLAMA_CUBLAS=1` environment variable before installing:
 
 ```bash
-CMAKE_ARGS="-DLLAMA_CUBLAS=on" FORCE_CMAKE=1 pip install llama-cpp-python
+conda install -y -k cuda ninja git gxx=11.3.0 -c nvidia/label/cuda-11.8.0 -c nvidia ; python -m pip install torch==2.0.1+cu118 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118 ; pip uninstall llama-cpp-python; CMAKE_ARGS="-DLLAMA_CUBLAS=on" FORCE_CMAKE=1 pip install llama-cpp-python --no-cache;
 ```
 
 To install with CLBlast, set the `LLAMA_CLBLAST=1` environment variable before installing:
