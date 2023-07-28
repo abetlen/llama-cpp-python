@@ -27,6 +27,8 @@ from .llama_types import *
 import numpy as np
 import numpy.typing as npt
 
+from .utils import suppress_stdout_stderr
+
 class BaseLlamaCache(ABC):
     """Base cache class for a llama.cpp model."""
 
@@ -308,12 +310,25 @@ class Llama:
         if not os.path.exists(model_path):
             raise ValueError(f"Model path does not exist: {model_path}")
 
-        self.model = llama_cpp.llama_load_model_from_file(
-            self.model_path.encode("utf-8"), self.params
-        )
+        if verbose:
+            self.model = llama_cpp.llama_load_model_from_file(
+                self.model_path.encode("utf-8"), self.params
+            )
+        else:
+            with suppress_stdout_stderr():
+                self.model = llama_cpp.llama_load_model_from_file(
+                    self.model_path.encode("utf-8"), self.params
+                )
         assert self.model is not None
 
-        self.ctx = llama_cpp.llama_new_context_with_model(self.model, self.params)
+        if verbose:
+            self.ctx = llama_cpp.llama_new_context_with_model(self.model, self.params)
+        else:
+            with suppress_stdout_stderr():
+                print("here")
+                self.ctx = llama_cpp.llama_new_context_with_model(
+                    self.model, self.params
+                )
 
         assert self.ctx is not None
 
