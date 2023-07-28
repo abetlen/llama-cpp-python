@@ -224,7 +224,7 @@ class Llama:
         rope_freq_base: float = 10000.0,
         rope_freq_scale: float = 1.0,
         n_gqa: Optional[int] = None,  # (TEMPORARY) must be 8 for llama2 70b
-        rms_norm_eps: Optional[float] = None, # (TEMPORARY)
+        rms_norm_eps: Optional[float] = None,  # (TEMPORARY)
         verbose: bool = True,
     ):
         """Load a llama.cpp model from `model_path`.
@@ -277,7 +277,9 @@ class Llama:
 
         if self.tensor_split is not None:
             FloatArray = (ctypes.c_float * len(self.tensor_split))(*self.tensor_split)
-            self._p_tensor_split = ctypes.POINTER(ctypes.c_float)(FloatArray) # keep a reference to the array so it is not gc'd
+            self._p_tensor_split = ctypes.POINTER(ctypes.c_float)(
+                FloatArray
+            )  # keep a reference to the array so it is not gc'd
             self.params.tensor_split = self._p_tensor_split
 
         self.params.rope_freq_base = rope_freq_base
@@ -959,9 +961,7 @@ class Llama:
                 for token in remaining_tokens:
                     token_end_position += len(self.detokenize([token]))
                     # Check if stop sequence is in the token
-                    if token_end_position >= (
-                        remaining_length - first_stop_position
-                    ):
+                    if token_end_position >= (remaining_length - first_stop_position):
                         break
                     logprobs_or_none: Optional[CompletionLogprobs] = None
                     if logprobs is not None:
