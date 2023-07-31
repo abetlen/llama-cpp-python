@@ -27,7 +27,7 @@ black = "^23.7.0"
 twine = "^4.0.2"
 mkdocs = "^1.4.3"
 mkdocstrings = {extras = ["python"], version = "^0.22.0"}
-mkdocs-material = "^9.1.19"
+mkdocs-material = "^9.1.21"
 pytest = "^7.4.0"
 httpx = "^0.24.1"
 scikit-build = "0.17.6"
