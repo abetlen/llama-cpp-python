@@ -11,7 +11,7 @@ A simple Dockerfile for non-GPU OpenBLAS, where the model is located outside the
 ```
 cd ./openblas_simple
 docker build -t openblas_simple .
-docker run -e USE_MLOCK=0 -e MODEL=/var/model/<model-path> -v <model-root-path>:/var/model -t openblas_simple
+docker run --cap-add SYS_RESOURCE -e USE_MLOCK=0 -e MODEL=/var/model/<model-path> -v <model-root-path>:/var/model -t openblas_simple
 ```
 where `<model-root-path>/<model-path>` is the full path to the model file on the Docker host system.
 
