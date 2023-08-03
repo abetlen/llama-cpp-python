@@ -181,6 +181,7 @@ llama_progress_callback = ctypes.CFUNCTYPE(None, c_float, c_void_p)
 
 #     // Keep the booleans together to avoid misalignment during copy-by-value.
 #     bool low_vram;   // if true, reduce VRAM usage at the cost of performance
+#     bool mul_mat_q;  // if true, use experimental mul_mat_q kernels
 #     bool f16_kv;     // use fp16 for KV cache
 #     bool logits_all; // the llama_eval() call computes all logits, not just the last one
 #     bool vocab_only; // only load the vocabulary, no weights
@@ -203,6 +204,7 @@ class llama_context_params(Structure):
         ("progress_callback", llama_progress_callback),
         ("progress_callback_user_data", c_void_p),
         ("low_vram", c_bool),
+        ("mul_mat_q", c_bool),
         ("f16_kv", c_bool),
         ("logits_all", c_bool),
         ("vocab_only", c_bool),
