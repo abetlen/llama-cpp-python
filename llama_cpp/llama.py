@@ -467,18 +467,18 @@ class Llama:
             if return_code != 0:
                 raise RuntimeError(f"llama_eval returned {return_code}")
             # Save tokens
-            self.input_ids[self.n_tokens : self.n_tokens + n_tokens] = batch
+            self.input_ids[i : i + n_tokens] = batch
             # Save logits
             rows = n_tokens if self.params.logits_all else 1
             cols = self._n_vocab
             offset = (
                 0 if self.params.logits_all else n_tokens - 1
             )  # NOTE: Only save the last token logits if logits_all is False
-            self.scores[self.n_tokens + offset : self.n_tokens + n_tokens, :].reshape(
+            self.scores[i + offset : i + n_tokens, :].reshape(
                 -1
             )[:] = llama_cpp.llama_get_logits(self.ctx)[: rows * cols]
             # Update n_tokens
-            self.n_tokens += n_tokens
+            self.n_tokens = n_tokens + i
 
     def _sample(
         self,
@@ -735,10 +735,12 @@ class Llama:
                 self._input_ids.tolist(), self._scores[-1, :].tolist()
             ):
                 return
-            tokens_or_none = yield token
-            tokens = [token]
-            if tokens_or_none is not None:
-                tokens.extend(tokens_or_none)
+            yield token
+            tokens.append(token)
+            # tokens_or_none = yield token
+            # tokens = [token]
+            # if tokens_or_none is not None:
+            #     tokens.extend(tokens_or_none)
 
     def create_embedding(
         self, input: Union[str, List[str]], model: Optional[str] = None
