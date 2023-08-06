@@ -2,7 +2,7 @@ from llama_cpp import ChatCompletionMessage, Llama
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-m", "--model", "--interactive", type=str, default="<your path to your ggml-model.bin>")
+parser.add_argument("-m", "--model", type=str, default="<your path to your ggml-model.bin>")
 args = parser.parse_args()
 
 llm = Llama(model_path=args.model)
@@ -10,7 +10,7 @@ llm = Llama(model_path=args.model)
 # Create a list of messages
 messages = [
     ChatCompletionMessage(role='system', content='start chat'),
-    ChatCompletionMessage(role='user', content='Hello)
+    ChatCompletionMessage(role='user', content='Hello')
 ]
 
 while True:
