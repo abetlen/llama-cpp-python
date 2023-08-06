@@ -3,7 +3,7 @@
 import argparse
 from pathlib import Path
 import sys
-from ctypes import Array, c_int, c_size_t, c_uint32, cast
+from ctypes import *  # type: ignore
 from enum import Enum
 from itertools import islice
 from typing import (
@@ -16,293 +16,379 @@ from typing import (
     Tuple,
     TypeVar,
     Union,
+    overload,
 )
 
 import llama_cpp
 
+# Type aliases
+llama_grammar_element = llama_cpp.llama_grammar_element
+llama_grammar_element_p = llama_cpp.llama_grammar_element_p
+llama_grammar_p = llama_cpp.llama_grammar_p
+
+# Type variables
+Ptr = TypeVar("Ptr", bound="const_char_p")
 T = TypeVar("T")
 U = TypeVar("U")
 V = TypeVar("V")
 W = TypeVar("W")
-size_t = uint8_t = uint32_t = int
-static_cast_uint8_t = ord
 
 
 class Sentinel:
-    pass
+    """Used to mark the end of a iterator of std::vector & std::map."""
+
+
+class LlamaGrammar:
+    """Keeps reference counts of all the arguments, so that they are not
+    garbage collected by Python."""
+
+    def __init__(
+        self,
+        parsed_grammar: "parse_state",
+    ) -> None:
+        grammar_rules = (
+            parsed_grammar.c_rules()
+        )  # type: std.vector[std.vector[llama_grammar_element]]
+
+        # Step 1: Convert each list to llama_grammar_element array and get pointer
+        self.element_arrays = [
+            (llama_grammar_element * len(sublist))(*sublist)
+            for sublist in grammar_rules
+        ]  # type: List[Array[llama_grammar_element]]
+
+        # Step 2: Get pointer of each array
+        self.element_array_pointers = [
+            cast(subarray, llama_grammar_element_p)
+            for subarray in self.element_arrays
+        ]  # type: List[llama_grammar_element_p]
+
+        # Step 3: Make array of these pointers and get its pointer
+        self.rules = (
+            llama_grammar_element_p * len(self.element_array_pointers)
+        )(*self.element_array_pointers)
+
+        self.n_rules = c_size_t(grammar_rules.size())
+        self.start_rule_index = c_size_t(parsed_grammar.symbol_ids.at("root"))
+        self.grammar = self.init_grammar()
+
+    @classmethod
+    def from_string(cls, grammar: str) -> "LlamaGrammar":
+        parsed_grammar = parse(const_char_p(grammar))  # type: parse_state
+        if parsed_grammar.rules.empty():
+            raise ValueError(
+                f"{cls.from_string.__name__}: error parsing grammar file: parsed_grammar.rules is empty"
+            )
+        print(f"{cls.from_string.__name__} grammar:", file=sys.stderr)
+        print_grammar(sys.stdout, parsed_grammar)
+        print(file=sys.stderr)
+        return cls(parsed_grammar)
+
+    @classmethod
+    def from_file(cls, file: Union[str, Path]) -> "LlamaGrammar":
+        try:
+            with open(file) as f:
+                grammar = f.read()
+        except Exception as err:
+            raise Exception(
+                f"{cls.from_file.__name__}: error reading grammar file: {err}"
+            )
+
+        if grammar:
+            return cls.from_string(grammar)
+
+        raise ValueError(
+            f"{cls.from_file.__name__}: error parsing grammar file: params_grammer is empty"
+        )
+
+    def init_grammar(self) -> llama_grammar_p:
+        return llama_cpp.llama_grammar_init(
+            self.rules, self.n_rules, self.start_rule_index
+        )
 
 
 class const_char_p:
-    """C++ implementation of const char*."""
+    """C++ implementation of const char *."""
 
-    def __init__(self, value: Union[str, "const_char_p"]):
+    def __init__(self, value: Union[str, Ptr], move: Optional[int] = None):
         if isinstance(value, const_char_p):
             # We're copying an existing const_char_p
             self.value = value.value
-            self.pos = value.pos
+            self.pos = value.pos + (move or 0)
             return
 
         # We're creating a new const_char_p
         self.value = value
-        self.pos = 0
+        self.pos = move or 0
 
     def __str__(self) -> str:
+        assert self.value is not None, "null pointer"
         return self.value[self.pos :]
 
-    def __add__(self, increment: int) -> "const_char_p":
-        # To avoid side effects, we create a new const_char_p object
-        new = self.__class__(self.value)
-        new.pos = self.pos + increment
-        return new
+    def __getitem__(self, index: int) -> str:
+        value = str(self)
+        return value[index] if index < len(value) else ""
 
-    def __sub__(self, decrement: int) -> "const_char_p":
-        # To avoid side effects, we create a new const_char_p object
-        new = self.__class__(self.value)
-        new.pos = self.pos - decrement
-        return new
+    @overload
+    def __add__(self: Ptr, other: int) -> Ptr:
+        ...
 
-    def __lt__(self, other: "const_char_p") -> bool:
-        return self.pos < other.pos and self.value == other.value
+    @overload
+    def __add__(self: Ptr, other: Ptr) -> int:
+        ...
 
-    def __gt__(self, other: "const_char_p") -> bool:
-        return self.pos > other.pos and self.value == other.value
-
-    def __eq__(self, other: "const_char_p") -> bool:
-        return self.pos == other.pos and self.value == other.value
-
-    def add(self, other: "const_char_p") -> int:
-        if self.value != other.value:
-            raise ValueError("Can't add pointers to different strings")
-        return self.pos + other.pos
-
-    def sub(self, other: "const_char_p") -> int:
-        if self.value != other.value:
-            raise ValueError("Can't subtract pointers to different strings")
-        return self.pos - other.pos
-
-    def plus_plus(self) -> None:
-        self.pos += 1
-
-    def minus_minus(self) -> None:
-        self.pos -= 1
-
-    @property
-    def derefer(self) -> Optional[str]:
-        if self.pos >= len(self.value):
-            # We've reached the end of the string
-            return None
-
-        return self.value[self.pos]
-
-
-class std__vector(Generic[T], List[T]):
-    """C++ implementation of std::vector."""
-
-    class iterator:
-        def __init__(self, vector: "std__vector[T]", index: int):
-            self._vector = vector
-            self._index = index
-            self._version = vector._version
-
-        def _check_version(self):
-            if self._version != self._vector._version:
-                raise RuntimeError("Iterator used after vector was modified.")
-
-        def __iter__(self):
-            return self
-
-        def __next__(self) -> T:
-            self._check_version()
-            if self._index >= self._vector.size():
-                raise StopIteration
-            value = self._vector[self._index]
-            self._index += 1
-            return value
-
-        def __add__(self, value: int) -> "std__vector[T].iterator":
-            return self.__class__(self._vector, self._index + value)
-
-        def __sub__(self, value: int) -> "std__vector[T].iterator":
-            return self.__class__(self._vector, self._index - value)
-
-    def __init__(self):
-        self._version = 0
-
-    def modify(self):
-        # This is a bit of a hack to make sure iterators are invalidated
-        self._version += 1
-
-    def push_back(self, value: T) -> None:
-        self.modify()
-        self.append(value)
-
-    def pop_back(self) -> None:
-        self.modify()
-        if not self.empty():
-            self.pop()
-
-    def back(self) -> T:
-        return self[-1]
-
-    def size(self) -> int:
-        return len(self)
-
-    # def clear(self) -> None:
-    #     super().clear()
-
-    def empty(self) -> bool:
-        return self.size() == 0
-
-    def data(self) -> "std__vector[T]":
-        return self
-
-    def resize(
-        self,
-        new_size: int,
-        fill_value_factory: Optional[Callable[[], T]] = None,
-    ) -> None:
-        if new_size > self.size():
-            if fill_value_factory is None:
-                raise ValueError(
-                    "A fill value factory function must be provided."
-                )
-            self.reserve(new_size, fill_value_factory)
-        elif new_size < self.size():
-            self[:] = self[:new_size]
-
-    def reserve(
-        self, capacity: int, fill_value_factory: Callable[[], T]
-    ) -> None:
-        if capacity > self.size():
-            fill_value = fill_value_factory()
-            self.extend([fill_value] * (capacity - self.size()))
-
-    def front(self) -> T:
-        if not self.empty():
-            return self[0]
-        else:
-            raise IndexError("Vector is empty.")
-
-    def assign(self, count: int, value: T) -> None:
-        self.clear()
-        self.extend([value] * count)
-
-    def insert(
-        self,
-        pos: "std__vector[T].iterator",
-        first: "std__vector[T].iterator",
-        last: "std__vector[T].iterator",
-    ) -> None:
-        self[pos._index : pos._index] = list(
-            islice(first._vector, first._index, last._index)
+    def __add__(self: Ptr, other: Union[int, Ptr]) -> Union[int, Ptr]:
+        return (
+            self.__class__(self.value, self.pos + other)
+            if isinstance(other, int)
+            else self.pos + other.pos
         )
 
-    def begin(self) -> "std__vector[T].iterator":
-        return self.iterator(self, 0)
+    @overload
+    def __sub__(self: Ptr, other: int) -> Ptr:
+        ...
 
-    def end(self) -> "std__vector[T].iterator":
-        return self.iterator(self, self.size())
+    @overload
+    def __sub__(self: Ptr, other: Ptr) -> int:
+        ...
 
+    def __sub__(self: Ptr, other: Union[int, Ptr]) -> Union[int, Ptr]:
+        return (
+            self.__class__(self.value, self.pos - other)
+            if isinstance(other, int)
+            else self.pos - other.pos
+        )
 
-class std__map(Generic[T, U], OrderedDict[T, U]):
-    """C++ implementation of std::map."""
+    def __eq__(self: Ptr, other: Ptr) -> bool:
+        assert (
+            self.value == other.value
+        ), "comparing pointers from different strings"
+        return self.pos == other.pos
 
-    class iterator(Generic[V, W]):
-        def __init__(self, _map: "std__map[T, U]", key: Union[T, Sentinel]):
-            self._map = _map
-            self.iter = iter(_map)
-            self.key = key
-            self._advance()
+    def __lt__(self: Ptr, other: Ptr) -> bool:
+        assert (
+            self.value == other.value
+        ), "comparing pointers from different strings"
+        return self.pos < other.pos
 
-        def _sanitize_key(self) -> T:
-            if isinstance(self.key, Sentinel):
-                raise StopIteration
-            return self.key
-
-        def _advance(self) -> None:
-            try:
-                while next(self.iter) != self.key:
-                    pass
-            except StopIteration:
-                self.key = Sentinel()
-
-        def __next__(self) -> Tuple[T, U]:
-            key = self._sanitize_key()
-            if key in self._map:
-                value = self._map[key]
-                self._advance()
-                return key, value
-            else:
-                raise StopIteration
-
-        def get(self) -> Tuple[T, U]:
-            key = self._sanitize_key()
-            return key, self._map[key]
-
-        @property
-        def first(self) -> T:
-            return self._sanitize_key()
-
-        @property
-        def second(self) -> U:
-            return self._map[self._sanitize_key()]
-
-    def insert(
-        self, key: T, value: U
-    ) -> Tuple["std__map[T, U].iterator[T, U]", bool]:
-        if key in self:
-            return self.iterator(self, key), False
-        else:
-            self[key] = value
-            return self.iterator(self, key), True
-
-    def find(self, key: T) -> "std__map[T, U].iterator[T, U]":
-        if key in self:
-            return self.iterator(self, key)
-        else:
-            return self.end()
-
-    def at(self, key: T) -> U:
-        if key in self:
-            return self[key]
-        else:
-            raise KeyError("The provided key is not found in the map.")
-
-    def erase(self, iterator: "std__map[T, U].iterator[T, U]") -> None:
-        key = iterator.first
-        if key in self:
-            del self[key]
-
-    def size(self) -> int:
-        return len(self)
-
-    def empty(self) -> bool:
-        return self.size() == 0
-
-    def lower_bound(self, key: T) -> "std__map[T, U].iterator[T, U]":
-        try:
-            keys = sorted(list(self.keys()))  # type: ignore
-            for k in keys:
-                if k >= key:
-                    return self.iterator(self, k)
-            raise ValueError(
-                "No key found that is not less than the input key"
-            )
-        except TypeError:
-            raise TypeError("Keys of type T cannot be sorted.")
-
-    def begin(self) -> "std__map[T, U].iterator[T, U]":
-        return self.iterator(self, next(iter(self)))
-
-    def end(self) -> "std__map[T, U].iterator[T, U]":
-        return self.iterator(self, Sentinel())
+    def __gt__(self: Ptr, other: Ptr) -> bool:
+        assert (
+            self.value == other.value
+        ), "comparing pointers from different strings"
+        return self.pos > other.pos
 
 
-class std__string(str):
-    def __new__(cls, ptr: const_char_p, length: Optional[int] = None):
+class std:
+    @staticmethod
+    def string(ptr: const_char_p, length: Optional[int] = None) -> str:
+        """C++ implementation of std::string constructor."""
+        value = str(ptr)
         if length is not None:
-            return super().__new__(cls, str(ptr)[:length])
-        return super().__new__(cls, str(ptr))
+            value = value[:length]
+        return value
+
+    class vector(Generic[T], List[T]):
+        """C++ implementation of std::vector."""
+
+        class iterator:
+            def __init__(self, vector: "std.vector[T]", index: int):
+                self._vector = vector
+                self._index = index
+                self._version = vector._version
+
+            def _check_version(self):
+                if self._version != self._vector._version:
+                    raise RuntimeError(
+                        "Iterator used after vector was modified."
+                    )
+
+            def __iter__(self):
+                return self
+
+            def __next__(self) -> T:
+                self._check_version()
+                if self._index >= self._vector.size():
+                    raise StopIteration
+                value = self._vector[self._index]
+                self._index += 1
+                return value
+
+            def __add__(self, value: int) -> "std.vector[T].iterator":
+                return self.__class__(self._vector, self._index + value)
+
+            def __sub__(self, value: int) -> "std.vector[T].iterator":
+                return self.__class__(self._vector, self._index - value)
+
+        def __init__(self):
+            self._version = 0
+
+        def modify(self):
+            # This is a bit of a hack to make sure iterators are invalidated
+            self._version += 1
+
+        def push_back(self, value: T) -> None:
+            self.modify()
+            self.append(value)
+
+        def pop_back(self) -> None:
+            self.modify()
+            if not self.empty():
+                self.pop()
+
+        def back(self) -> T:
+            return self[-1]
+
+        def size(self) -> int:
+            return len(self)
+
+        def clear(self) -> None:
+            self.modify()
+            super().clear()
+
+        def empty(self) -> bool:
+            return self.size() == 0
+
+        def data(self) -> "std.vector[T]":
+            return self
+
+        def resize(
+            self,
+            new_size: int,
+            fill_value_factory: Optional[Callable[[], T]] = None,
+        ) -> None:
+            if new_size > self.size():
+                if fill_value_factory is None:
+                    raise ValueError(
+                        "A fill value factory function must be provided."
+                    )
+                self.reserve(new_size, fill_value_factory)
+            elif new_size < self.size():
+                self[:] = self[:new_size]
+
+        def reserve(
+            self, capacity: int, fill_value_factory: Callable[[], T]
+        ) -> None:
+            if capacity > self.size():
+                fill_value = fill_value_factory()
+                self.extend([fill_value] * (capacity - self.size()))
+
+        def front(self) -> T:
+            if not self.empty():
+                return self[0]
+            else:
+                raise IndexError("Vector is empty.")
+
+        def assign(self, count: int, value: T) -> None:
+            self.clear()
+            self.extend([value] * count)
+
+        def insert(
+            self,
+            pos: "std.vector[T].iterator",
+            first: "std.vector[T].iterator",
+            last: "std.vector[T].iterator",
+        ) -> None:
+            self[pos._index : pos._index] = list(
+                islice(first._vector, first._index, last._index)
+            )
+
+        def begin(self) -> "std.vector[T].iterator":
+            return self.iterator(self, 0)
+
+        def end(self) -> "std.vector[T].iterator":
+            return self.iterator(self, self.size())
+
+    class map(Generic[T, U], OrderedDict[T, U]):
+        """C++ implementation of std::map."""
+
+        class iterator(Generic[V, W]):
+            def __init__(self, _map: "std.map[T, U]", key: Union[T, Sentinel]):
+                self._map = _map
+                self.iter = iter(_map)
+                self.key = key
+                self._advance()
+
+            def _sanitize_key(self) -> T:
+                if isinstance(self.key, Sentinel):
+                    raise StopIteration
+                return self.key
+
+            def _advance(self) -> None:
+                try:
+                    while next(self.iter) != self.key:
+                        pass
+                except StopIteration:
+                    self.key = Sentinel()
+
+            def __next__(self) -> Tuple[T, U]:
+                key = self._sanitize_key()
+                if key in self._map:
+                    value = self._map[key]
+                    self._advance()
+                    return key, value
+                else:
+                    raise StopIteration
+
+            def get(self) -> Tuple[T, U]:
+                key = self._sanitize_key()
+                return key, self._map[key]
+
+            @property
+            def first(self) -> T:
+                return self._sanitize_key()
+
+            @property
+            def second(self) -> U:
+                return self._map[self._sanitize_key()]
+
+        def insert(
+            self, key: T, value: U
+        ) -> Tuple["std.map[T, U].iterator[T, U]", bool]:
+            if key in self:
+                return self.iterator(self, key), False
+            else:
+                self[key] = value
+                return self.iterator(self, key), True
+
+        def find(self, key: T) -> "std.map[T, U].iterator[T, U]":
+            if key in self:
+                return self.iterator(self, key)
+            else:
+                return self.end()
+
+        def at(self, key: T) -> U:
+            if key in self:
+                return self[key]
+            else:
+                raise KeyError("The provided key is not found in the map.")
+
+        def erase(self, iterator: "std.map[T, U].iterator[T, U]") -> None:
+            key = iterator.first
+            if key in self:
+                del self[key]
+
+        def size(self) -> int:
+            return len(self)
+
+        def empty(self) -> bool:
+            return self.size() == 0
+
+        def lower_bound(self, key: T) -> "std.map[T, U].iterator[T, U]":
+            try:
+                keys = sorted(list(self.keys()))  # type: ignore
+                for k in keys:
+                    if k >= key:
+                        return self.iterator(self, k)
+                raise ValueError(
+                    "No key found that is not less than the input key"
+                )
+            except TypeError:
+                raise TypeError("Keys of type T cannot be sorted.")
+
+        def begin(self) -> "std.map[T, U].iterator[T, U]":
+            return self.iterator(self, next(iter(self)))
+
+        def end(self) -> "std.map[T, U].iterator[T, U]":
+            return self.iterator(self, Sentinel())
 
 
 # // grammar element type
@@ -343,28 +429,6 @@ class llama_gretype(Enum):
     LLAMA_GRETYPE_CHAR_ALT = 6  # modifies a preceding LLAMA_GRETYPE_CHAR or LLAMA_GRETYPE_CHAR_RNG_UPPER to add an alternate char to match ([ab], [a-zA])
 
 
-# typedef struct llama_grammar_element {
-#     enum llama_gretype type;
-#     uint32_t           value; // Unicode code point or rule ID
-# } llama_grammar_element;
-
-
-# class llama_grammar_element(Structure):
-#     _fields_ = [
-#         ("type", c_int),
-#         ("value", c_uint32),
-#     ]
-
-
-class llama_grammar_element:
-    def __init__(self, type: llama_gretype, value: uint32_t):
-        self.type = type
-        self.value = value  # Unicode code point or rule ID
-
-    def __repr__(self):  # debug
-        return f"llama_grammar_element({self.type}, {self.value})"
-
-
 # struct parse_state {
 #     std::map<std::string, uint32_t>                 symbol_ids;
 #     std::vector<std::vector<llama_grammar_element>> rules;
@@ -372,10 +436,10 @@ class llama_grammar_element:
 # };
 class parse_state:
     def __init__(self):
-        self.symbol_ids: std__map[str, uint32_t] = std__map()
-        self.rules: std__vector[
-            std__vector[llama_grammar_element]
-        ] = std__vector()
+        self.symbol_ids: std.map[str, int] = std.map()
+        self.rules: std.vector[
+            std.vector[llama_grammar_element]
+        ] = std.vector()
 
     # std::vector<const llama_grammar_element *> parse_state::c_rules() {
     #     std::vector<const llama_grammar_element *> ret;
@@ -384,27 +448,30 @@ class parse_state:
     #     }
     #     return ret;
     # }
-    def c_rules(self) -> std__vector[std__vector[llama_grammar_element]]:
+    def c_rules(self) -> std.vector[std.vector[llama_grammar_element]]:
         ret = (
-            std__vector()
-        )  # type: std__vector[std__vector[llama_grammar_element]]
+            std.vector()
+        )  # type: std.vector[std.vector[llama_grammar_element]]
         for rule in self.rules:
             ret.push_back(rule.data())
         return ret
+
+    def __repr__(self) -> str:
+        return f"parse_state(symbol_ids={len(self.symbol_ids)}, rules={len(self.rules)})"
 
 
 # struct llama_grammar {
 #     const std::vector<std::vector<llama_grammar_element>>   rules;
 #     std::vector<std::vector<const llama_grammar_element *>> stacks;
 # };
-class llama_grammar:
-    def __init__(
-        self,
-        rules: std__vector[std__vector[llama_grammar_element]],
-        stacks: std__vector[std__vector[llama_grammar_element]],
-    ):
-        self.rules = rules
-        self.stacks = stacks
+# class llama_grammar:
+#     def __init__(
+#         self,
+#         rules: std.vector[std.vector[llama_grammar_element]],
+#         stacks: std.vector[std.vector[llama_grammar_element]],
+#     ):
+#         self.rules = rules
+#         self.stacks = stacks
 
 
 # uint32_t get_symbol_id(parse_state & state, const char * src, size_t len) {
@@ -412,9 +479,9 @@ class llama_grammar:
 #     auto result = state.symbol_ids.insert(std::make_pair(std::string(src, len), next_id));
 #     return result.first->second;
 # }
-def get_symbol_id(state: parse_state, src: const_char_p, len: size_t) -> int:
-    next_id = uint32_t(state.symbol_ids.size())  # type: uint32_t
-    result = state.symbol_ids.insert(str(std__string(src, len)), next_id)
+def get_symbol_id(state: parse_state, src: const_char_p, len: int) -> int:
+    next_id = state.symbol_ids.size()  # type: int
+    result = state.symbol_ids.insert(std.string(src, len), next_id)
     return result[0].second  # type: ignore
 
 
@@ -423,8 +490,8 @@ def get_symbol_id(state: parse_state, src: const_char_p, len: size_t) -> int:
 #     state.symbol_ids[base_name + '_' + std::to_string(next_id)] = next_id;
 #     return next_id;
 # }
-def generate_symbol_id(state: parse_state, base_name: str) -> uint32_t:
-    next_id = state.symbol_ids.size()  # type: uint32_t
+def generate_symbol_id(state: parse_state, base_name: str) -> int:
+    next_id = state.symbol_ids.size()  # type: int
     state.symbol_ids[base_name + "_" + str(next_id)] = next_id
     return next_id
 
@@ -440,12 +507,13 @@ def generate_symbol_id(state: parse_state, base_name: str) -> uint32_t:
 # }
 def add_rule(
     state: parse_state,
-    rule_id: uint32_t,
-    rule: std__vector[llama_grammar_element],
+    rule_id: int,
+    rule: std.vector[llama_grammar_element],
 ) -> None:
     if state.rules.size() <= rule_id:
         state.rules.resize(
-            rule_id + 1, fill_value_factory=std__vector[llama_grammar_element]
+            rule_id + 1,
+            fill_value_factory=std.vector[llama_grammar_element],
         )
     state.rules[rule_id] = rule
 
@@ -464,19 +532,19 @@ def add_rule(
 #     }
 #     return std::make_pair(value, pos);
 # }
-def decode_utf8(src: const_char_p) -> Tuple[uint32_t, const_char_p]:
+def decode_utf8(src: const_char_p) -> Tuple[int, const_char_p]:
     """Decodes a UTF-8 character from the source string."""
     lookup = (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 4)
-    first_byte = static_cast_uint8_t(src.derefer or "")  # type: uint8_t
-    highbits = first_byte >> 4  # type: uint8_t
+    first_byte = ord(src[0])  # type: int
+    highbits = first_byte >> 4  # type: int
     len = lookup[highbits]  # type: int
-    mask = (1 << (8 - len)) - 1  # type: uint8_t
-    value = first_byte & mask  # type: uint32_t
+    mask = (1 << (8 - len)) - 1  # type: int
+    value = first_byte & mask  # type: int
     end = src + len  # type: const_char_p # may overrun!
     pos = src + 1  # type: const_char_p
-    while pos < end and pos.derefer:
-        value = (value << 6) + (static_cast_uint8_t(src.derefer or "") & 0x3F)
-        pos.plus_plus()
+    while pos < end and pos[0]:
+        value = (value << 6) + (ord(pos[0]) & 0x3F)
+        pos += 1
     return value, pos
 
 
@@ -511,22 +579,22 @@ def is_word_char(c: str) -> bool:
 #     }
 #     return std::make_pair(value, pos);
 # }
-def parse_hex(src: const_char_p, size: int) -> Tuple[uint32_t, const_char_p]:
+def parse_hex(src: const_char_p, size: int) -> Tuple[int, const_char_p]:
     pos = const_char_p(src)  # type: const_char_p
     end = src + size  # type: const_char_p
-    value = 0  # type: uint32_t
-    while pos < end and pos.derefer:
+    value = 0  # type: int
+    while pos < end and pos[0]:
         value <<= 4
-        c = pos.derefer  # type: str
+        c = pos[0]  # type: str
         if "a" <= c <= "f":
-            value += static_cast_uint8_t(c) - static_cast_uint8_t("a") + 10
+            value += ord(c) - ord("a") + 10
         elif "A" <= c <= "F":
-            value += static_cast_uint8_t(c) - static_cast_uint8_t("A") + 10
+            value += ord(c) - ord("A") + 10
         elif "0" <= c <= "9":
-            value += static_cast_uint8_t(c) - static_cast_uint8_t("0")
+            value += ord(c) - ord("0")
         else:
             break
-        pos.plus_plus()
+        pos += 1
     if pos != end:
         raise RuntimeError(
             "expecting " + str(size) + " hex chars at " + str(src)
@@ -556,26 +624,26 @@ def parse_hex(src: const_char_p, size: int) -> Tuple[uint32_t, const_char_p]:
 #     }
 #     throw std::runtime_error("unexpected end of input");
 # }
-def parse_char(src: const_char_p) -> Tuple[uint32_t, const_char_p]:
-    if src.derefer == "\\":
-        switch = (src + 1).derefer  # type: Optional[str]
-        if switch == "x":
+def parse_char(src: const_char_p) -> Tuple[int, const_char_p]:
+    if src[0] == "\\":
+        case = src[1]  # type: str
+        if case == "x":
             return parse_hex(src + 2, 2)
-        elif switch == "u":
+        elif case == "u":
             return parse_hex(src + 2, 4)
-        elif switch == "U":
+        elif case == "U":
             return parse_hex(src + 2, 8)
-        elif switch == "t":
-            return (static_cast_uint8_t("\t"), src + 2)  # implicit cast
-        elif switch == "r":
-            return (static_cast_uint8_t("\r"), src + 2)  # implicit cast
-        elif switch == "n":
-            return (static_cast_uint8_t("\n"), src + 2)  # implicit cast
-        elif switch in ("\\", '"', "[", "]"):
-            return (static_cast_uint8_t(switch), src + 2)  # implicit cast
+        elif case == "t":
+            return (ord("\t"), src + 2)  # implicit cast
+        elif case == "r":
+            return (ord("\r"), src + 2)  # implicit cast
+        elif case == "n":
+            return (ord("\n"), src + 2)  # implicit cast
+        elif case in ("\\", '"', "[", "]"):
+            return (ord(case), src + 2)  # implicit cast
         else:
             raise RuntimeError("unknown escape at " + str(src))
-    elif src.derefer:
+    elif src[0]:
         return decode_utf8(src)
     else:
         raise RuntimeError("unexpected end of input")
@@ -593,8 +661,8 @@ def parse_char(src: const_char_p) -> Tuple[uint32_t, const_char_p]:
 # }
 def parse_name(src: const_char_p) -> const_char_p:
     pos = const_char_p(src)  # type: const_char_p
-    while is_word_char(pos.derefer or ""):
-        pos.plus_plus()
+    while is_word_char(pos[0]):
+        pos += 1
     if pos == src:
         raise RuntimeError("expecting name at " + str(src))
     return pos
@@ -615,18 +683,15 @@ def parse_name(src: const_char_p) -> const_char_p:
 #     return pos;
 # }
 def parse_space(src: const_char_p, newline_ok: bool) -> const_char_p:
-    # Using a copy of `src` to avoid side effects
-    pos = const_char_p(src)
-
-    while pos.derefer in (" ", "\t", "#") or (
-        newline_ok and pos.derefer in ("\r", "\n")
+    pos = const_char_p(src)  # type: const_char_p
+    while pos[0] in (" ", "\t", "#") or (
+        newline_ok and pos[0] in ("\r", "\n")
     ):
-        if pos.derefer == "#":
-            while pos.derefer is not None and pos.derefer not in ("\r", "\n"):
-                pos.plus_plus()
+        if pos[0] == "#":
+            while pos[0] is not None and pos[0] not in ("\r", "\n"):
+                pos += 1
         else:
-            pos.plus_plus()
-
+            pos += 1
     return pos
 
 
@@ -640,15 +705,15 @@ def parse_sequence(
     state: parse_state,
     src: const_char_p,
     rule_name: str,
-    out_elements: std__vector[llama_grammar_element],
+    out_elements: std.vector[llama_grammar_element],
     is_nested: bool,
 ) -> const_char_p:
     # size_t last_sym_start = out_elements.size();
     # const char * pos = src;
-    last_sym_start = out_elements.size()  # type: size_t
+    last_sym_start = out_elements.size()  # type: int
     pos = const_char_p(src)  # type: const_char_p
     # while (*pos) {
-    while pos.derefer:
+    while pos[0]:
         # if (*pos == '"') { // literal string
         #     pos++;
         #     last_sym_start = out_elements.size();
@@ -658,25 +723,23 @@ def parse_sequence(
         #         out_elements.push_back({LLAMA_GRETYPE_CHAR, char_pair.first});
         #     }
         #     pos = parse_space(pos + 1, is_nested);
-        if pos.derefer == '"':  # literal string
-            pos.plus_plus()
+        if pos[0] == '"':  # literal string
+            pos += 1
             last_sym_start = out_elements.size()
-            while pos.derefer != '"':
-                char_pair = parse_char(
-                    pos
-                )  # type: Tuple[uint32_t, const_char_p]
+            while pos[0] != '"':
+                char_pair = parse_char(pos)  # type: Tuple[int, const_char_p]
                 pos = char_pair[1]
                 out_elements.push_back(
                     llama_grammar_element(
-                        llama_gretype.LLAMA_GRETYPE_CHAR, char_pair[0]
+                        llama_gretype.LLAMA_GRETYPE_CHAR.value, char_pair[0]
                     )
                 )
             pos = parse_space(pos + 1, is_nested)
         # } else if (*pos == '[') { // char range(s)
         #     pos++;
         #     enum llama_gretype start_type = LLAMA_GRETYPE_CHAR;
-        elif pos.derefer == "[":  # char range(s)
-            pos.plus_plus()
+        elif pos[0] == "[":  # char range(s)
+            pos += 1
             start_type = (
                 llama_gretype.LLAMA_GRETYPE_CHAR
             )  # type: llama_gretype
@@ -685,8 +748,8 @@ def parse_sequence(
             #     start_type = LLAMA_GRETYPE_CHAR_NOT;
             # }
             # last_sym_start = out_elements.size();
-            if pos.derefer == "^":
-                pos.plus_plus()
+            if pos[0] == "^":
+                pos += 1
                 start_type = llama_gretype.LLAMA_GRETYPE_CHAR_NOT
             last_sym_start = out_elements.size()
             # while (*pos != ']') {
@@ -696,10 +759,8 @@ def parse_sequence(
             #         ? LLAMA_GRETYPE_CHAR_ALT
             #         : start_type;
             #     out_elements.push_back({type, char_pair.first});
-            while pos.derefer != "]":
-                char_pair = parse_char(
-                    pos
-                )  # type: Tuple[uint32_t, const_char_p]
+            while pos[0] != "]":
+                char_pair = parse_char(pos)  # type: Tuple[int, const_char_p]
                 pos = char_pair[1]
                 type = (
                     llama_gretype.LLAMA_GRETYPE_CHAR_ALT
@@ -707,7 +768,7 @@ def parse_sequence(
                     else start_type
                 )  # type: llama_gretype
                 out_elements.push_back(
-                    llama_grammar_element(type, char_pair[0])
+                    llama_grammar_element(type.value, char_pair[0])
                 )
                 #     if (pos[0] == '-' && pos[1] != ']') {
                 #         auto endchar_pair = parse_char(pos + 1);
@@ -715,14 +776,14 @@ def parse_sequence(
                 #         out_elements.push_back({LLAMA_GRETYPE_CHAR_RNG_UPPER, endchar_pair.first});
                 #     }
                 # }
-                if pos.derefer == "-" and (pos + 1).derefer != "]":
+                if pos[0] == "-" and pos[1] != "]":
                     endchar_pair = parse_char(
                         pos + 1
-                    )  # type: Tuple[uint32_t, const_char_p]
+                    )  # type: Tuple[int, const_char_p]
                     pos = endchar_pair[1]
                     out_elements.push_back(
                         llama_grammar_element(
-                            llama_gretype.LLAMA_GRETYPE_CHAR_RNG_UPPER,
+                            llama_gretype.LLAMA_GRETYPE_CHAR_RNG_UPPER.value,
                             endchar_pair[0],
                         )
                     )
@@ -734,16 +795,16 @@ def parse_sequence(
         #     pos = parse_space(name_end, is_nested);
         #     last_sym_start = out_elements.size();
         #     out_elements.push_back({LLAMA_GRETYPE_RULE_REF, ref_rule_id});
-        elif is_word_char(pos.derefer):  # rule reference
+        elif is_word_char(pos[0]):  # rule reference
             name_end = parse_name(pos)  # type: const_char_p
             ref_rule_id = get_symbol_id(
-                state, pos, name_end.sub(pos)
-            )  # type: uint32_t
+                state, pos, name_end - pos
+            )  # type: int
             pos = parse_space(name_end, is_nested)
             last_sym_start = out_elements.size()
             out_elements.push_back(
                 llama_grammar_element(
-                    llama_gretype.LLAMA_GRETYPE_RULE_REF, ref_rule_id
+                    llama_gretype.LLAMA_GRETYPE_RULE_REF.value, ref_rule_id
                 )
             )
         # } else if (*pos == '(') { // grouping
@@ -758,26 +819,26 @@ def parse_sequence(
         #         throw std::runtime_error(std::string("expecting ')' at ") + pos);
         #     }
         #     pos = parse_space(pos + 1, is_nested);
-        elif pos.derefer == "(":  # grouping
+        elif pos[0] == "(":  # grouping
+            # parse nested alternates into synthesized rule
             pos = parse_space(pos + 1, True)
-            sub_rule_id = generate_symbol_id(
-                state, rule_name
-            )  # type: uint32_t
+            sub_rule_id = generate_symbol_id(state, rule_name)  # type: int
             pos = parse_alternates(state, pos, rule_name, sub_rule_id, True)
             last_sym_start = out_elements.size()
+            # output reference to synthesized rule
             out_elements.push_back(
                 llama_grammar_element(
-                    llama_gretype.LLAMA_GRETYPE_RULE_REF, sub_rule_id
+                    llama_gretype.LLAMA_GRETYPE_RULE_REF.value, sub_rule_id
                 )
             )
-            if pos.derefer != ")":
+            if pos[0] != ")":
                 raise RuntimeError("expecting ')' at " + str(pos))
             pos = parse_space(pos + 1, is_nested)
         # } else if (*pos == '*' || *pos == '+' || *pos == '?') { // repetition operator
         #     if (last_sym_start == out_elements.size()) {
         #         throw std::runtime_error(std::string("expecting preceeding item to */+/? at ") + pos);
         #     }
-        elif pos.derefer in ("*", "+", "?"):  # repetition operator
+        elif pos[0] in ("*", "+", "?"):  # repetition operator
             if last_sym_start == out_elements.size():
                 raise RuntimeError(
                     "expecting preceding item to */+/? at " + str(pos)
@@ -792,10 +853,10 @@ def parse_sequence(
             # // add preceding symbol to generated rule
             # sub_rule.insert(
             #     sub_rule.end(), out_elements.begin() + last_sym_start, out_elements.end());
-            sub_rule_id = generate_symbol_id(
-                state, rule_name
-            )  # type: uint32_t
-            sub_rule = std__vector[llama_grammar_element]()
+            sub_rule_id = generate_symbol_id(state, rule_name)  # type: int
+            sub_rule = std.vector[
+                llama_grammar_element
+            ]()  # type: std.vector[llama_grammar_element]
             sub_rule.insert(
                 sub_rule.end(),
                 out_elements.begin() + last_sym_start,
@@ -807,14 +868,14 @@ def parse_sequence(
             # }
             # // mark start of alternate def
             # sub_rule.push_back({LLAMA_GRETYPE_ALT, 0});
-            if pos.derefer in ("*", "+"):
+            if pos[0] in ("*", "+"):
                 sub_rule.push_back(
                     llama_grammar_element(
-                        llama_gretype.LLAMA_GRETYPE_RULE_REF, sub_rule_id
+                        llama_gretype.LLAMA_GRETYPE_RULE_REF.value, sub_rule_id
                     )
                 )
             sub_rule.push_back(
-                llama_grammar_element(llama_gretype.LLAMA_GRETYPE_ALT, 0)
+                llama_grammar_element(llama_gretype.LLAMA_GRETYPE_ALT.value, 0)
             )
             # if (*pos == '+') {
             #     // add preceding symbol as alternate only for '+' (otherwise empty)
@@ -827,20 +888,22 @@ def parse_sequence(
             # out_elements.resize(last_sym_start);
             # out_elements.push_back({LLAMA_GRETYPE_RULE_REF, sub_rule_id});
             # pos = parse_space(pos + 1, is_nested);
-            if pos.derefer == "+":
+            if pos[0] == "+":
+                # add preceding symbol as alternate only for '+' (otherwise empty)
                 sub_rule.insert(
                     sub_rule.end(),
                     out_elements.begin() + last_sym_start,
                     out_elements.end(),
                 )
             sub_rule.push_back(
-                llama_grammar_element(llama_gretype.LLAMA_GRETYPE_END, 0)
+                llama_grammar_element(llama_gretype.LLAMA_GRETYPE_END.value, 0)
             )
             add_rule(state, sub_rule_id, sub_rule)
+            # in original rule, replace previous symbol with reference to generated rule
             out_elements.resize(last_sym_start)
             out_elements.push_back(
                 llama_grammar_element(
-                    llama_gretype.LLAMA_GRETYPE_RULE_REF, sub_rule_id
+                    llama_gretype.LLAMA_GRETYPE_RULE_REF.value, sub_rule_id
                 )
             )
             pos = parse_space(pos + 1, is_nested)
@@ -876,20 +939,22 @@ def parse_alternates(
     state: parse_state,
     src: const_char_p,
     rule_name: str,
-    rule_id: uint32_t,
+    rule_id: int,
     is_nested: bool,
 ) -> const_char_p:
-    rule = std__vector()  # type: std__vector[llama_grammar_element]
+    rule = std.vector()  # type: std.vector[llama_grammar_element]
     pos = parse_sequence(
         state, src, rule_name, rule, is_nested
     )  # type: const_char_p
-    while pos.derefer == "|":
+    while pos[0] == "|":
         rule.push_back(
-            llama_grammar_element(llama_gretype.LLAMA_GRETYPE_ALT, 0)
+            llama_grammar_element(llama_gretype.LLAMA_GRETYPE_ALT.value, 0)
         )
         pos = parse_space(pos + 1, True)
         pos = parse_sequence(state, pos, rule_name, rule, is_nested)
-    rule.push_back(llama_grammar_element(llama_gretype.LLAMA_GRETYPE_END, 0))
+    rule.push_back(
+        llama_grammar_element(llama_gretype.LLAMA_GRETYPE_END.value, 0)
+    )
     add_rule(state, rule_id, rule)
     return pos
 
@@ -921,15 +986,11 @@ def parse_alternates(
 def parse_rule(state: parse_state, src: const_char_p) -> const_char_p:
     name_end = parse_name(src)  # type: const_char_p
     pos = parse_space(name_end, False)  # type: const_char_p
-    name_len = name_end.sub(src)  # type: size_t
-    rule_id = get_symbol_id(state, src, name_len)  # type: uint32_t
-    name = std__string(src, name_len)  # type: std__string
+    name_len = name_end - src  # type: int
+    rule_id = get_symbol_id(state, src, name_len)  # type: int
+    name = std.string(src, name_len)  # type: str
 
-    if not (
-        pos.derefer == ":"
-        and (pos + 1).derefer == ":"
-        and (pos + 2).derefer == "="
-    ):
+    if not (pos[0] == ":" and pos[1] == ":" and pos[2] == "="):
         raise RuntimeError("expecting ::= at " + str(pos))
 
     pos = parse_space(pos + 3, True)  # type: const_char_p
@@ -937,11 +998,11 @@ def parse_rule(state: parse_state, src: const_char_p) -> const_char_p:
         state, pos, name, rule_id, False
     )  # type: const_char_p
 
-    if pos.derefer == "\r":
-        pos += 2 if (pos + 1).derefer == "\n" else 1
-    elif pos.derefer == "\n":
-        pos.plus_plus()
-    elif pos.derefer:
+    if pos[0] == "\r":
+        pos += 2 if pos[1] == "\n" else 1
+    elif pos[0] == "\n":
+        pos += 1
+    elif pos[0]:
         raise RuntimeError("expecting newline or end at " + str(pos))
     return parse_space(pos, True)
 
@@ -963,7 +1024,7 @@ def parse(src: const_char_p) -> parse_state:
     try:
         state = parse_state()  # type: parse_state
         pos = parse_space(src, True)  # type: const_char_p
-        while pos.derefer:
+        while pos[0]:
             pos = parse_rule(state, pos)
         return state
     except Exception as err:
@@ -979,7 +1040,7 @@ def parse(src: const_char_p) -> parse_state:
 #         fprintf(file, "<U+%04X>", c);
 #     }
 # }
-def print_grammar_char(file: TextIO, c: uint32_t) -> None:
+def print_grammar_char(file: TextIO, c: int) -> None:
     if 0x20 <= c and c <= 0x7F:
         file.write(chr(c))
     else:
@@ -998,10 +1059,10 @@ def print_grammar_char(file: TextIO, c: uint32_t) -> None:
 # }
 def is_char_element(elem: llama_grammar_element) -> bool:
     return elem.type in (
-        llama_gretype.LLAMA_GRETYPE_CHAR,
-        llama_gretype.LLAMA_GRETYPE_CHAR_NOT,
-        llama_gretype.LLAMA_GRETYPE_CHAR_ALT,
-        llama_gretype.LLAMA_GRETYPE_CHAR_RNG_UPPER,
+        llama_gretype.LLAMA_GRETYPE_CHAR.value,
+        llama_gretype.LLAMA_GRETYPE_CHAR_NOT.value,
+        llama_gretype.LLAMA_GRETYPE_CHAR_ALT.value,
+        llama_gretype.LLAMA_GRETYPE_CHAR_RNG_UPPER.value,
     )
 
 
@@ -1012,16 +1073,19 @@ def is_char_element(elem: llama_grammar_element) -> bool:
 #         const std::map<uint32_t, std::string>    & symbol_id_names) {
 def print_rule(
     file: TextIO,
-    rule_id: uint32_t,
-    rule: std__vector[llama_grammar_element],
-    symbol_id_names: std__map[uint32_t, str],
+    rule_id: int,
+    rule: std.vector[llama_grammar_element],
+    symbol_id_names: std.map[int, str],
 ) -> None:
     #     if (rule.empty() || rule.back().type != LLAMA_GRETYPE_END) {
     #         throw std::runtime_error(
     #             "malformed rule, does not end with LLAMA_GRETYPE_END: " + std::to_string(rule_id));
     #     }
     #     fprintf(file, "%s ::= ", symbol_id_names.at(rule_id).c_str());
-    if rule.empty() or rule.back().type != llama_gretype.LLAMA_GRETYPE_END:
+    if (
+        rule.empty()
+        or rule.back().type != llama_gretype.LLAMA_GRETYPE_END.value
+    ):
         raise RuntimeError(
             "malformed rule, does not end with LLAMA_GRETYPE_END: "
             + str(rule_id)
@@ -1067,22 +1131,22 @@ def print_rule(
     #                 break;
     #         }
     for i, elem in enumerate(rule[:-1]):
-        switch = elem.type  # type: llama_gretype
-        if switch == llama_gretype.LLAMA_GRETYPE_END:
+        case = elem.type  # type: int
+        if case == llama_gretype.LLAMA_GRETYPE_END.value:
             raise RuntimeError(
                 "unexpected end of rule: " + str(rule_id) + "," + str(i)
             )
-        elif switch == llama_gretype.LLAMA_GRETYPE_ALT:
+        elif case == llama_gretype.LLAMA_GRETYPE_ALT.value:
             print("| ", file=file, end="")
-        elif switch == llama_gretype.LLAMA_GRETYPE_RULE_REF:
+        elif case == llama_gretype.LLAMA_GRETYPE_RULE_REF.value:
             print(f"{symbol_id_names.at(elem.value)} ", file=file, end="")
-        elif switch == llama_gretype.LLAMA_GRETYPE_CHAR:
+        elif case == llama_gretype.LLAMA_GRETYPE_CHAR.value:
             print("[", file=file, end="")
             print_grammar_char(file, elem.value)
-        elif switch == llama_gretype.LLAMA_GRETYPE_CHAR_NOT:
+        elif case == llama_gretype.LLAMA_GRETYPE_CHAR_NOT.value:
             print("[^", file=file, end="")
             print_grammar_char(file, elem.value)
-        elif switch == llama_gretype.LLAMA_GRETYPE_CHAR_RNG_UPPER:
+        elif case == llama_gretype.LLAMA_GRETYPE_CHAR_RNG_UPPER.value:
             if i == 0 or not is_char_element(rule[i - 1]):
                 raise RuntimeError(
                     "LLAMA_GRETYPE_CHAR_RNG_UPPER without preceding char: "
@@ -1092,7 +1156,7 @@ def print_rule(
                 )
             print("-", file=file, end="")
             print_grammar_char(file, elem.value)
-        elif switch == llama_gretype.LLAMA_GRETYPE_CHAR_ALT:
+        elif case == llama_gretype.LLAMA_GRETYPE_CHAR_ALT.value:
             if i == 0 or not is_char_element(rule[i - 1]):
                 raise RuntimeError(
                     "LLAMA_GRETYPE_CHAR_ALT without preceding char: "
@@ -1110,8 +1174,8 @@ def print_rule(
         #             fprintf(file, "] ");
         if is_char_element(elem):
             if rule[i + 1].type in (
-                llama_gretype.LLAMA_GRETYPE_CHAR_ALT,
-                llama_gretype.LLAMA_GRETYPE_CHAR_RNG_UPPER,
+                llama_gretype.LLAMA_GRETYPE_CHAR_ALT.value,
+                llama_gretype.LLAMA_GRETYPE_CHAR_RNG_UPPER.value,
             ):
                 pass
             else:
@@ -1142,7 +1206,7 @@ def print_rule(
 # }
 def print_grammar(file: TextIO, state: parse_state) -> None:
     try:
-        symbol_id_names = std__map()  # type: std__map[uint32_t, str]
+        symbol_id_names = std.map()  # type: std.map[int, str]
         for kv in state.symbol_ids.items():
             symbol_id_names[kv[1]] = kv[0]
 
@@ -1155,117 +1219,25 @@ def print_grammar(file: TextIO, state: parse_state) -> None:
         )
 
 
-def convert_to_rules(
-    llama_grammar_elements: std__vector[std__vector[llama_grammar_element]],
-) -> Array[llama_cpp.llama_grammar_element_p]:
-    """Make an Array object that is used for `llama_grammer_init`"""
+# def convert_to_rules(
+#     llama_grammar_elements: std.vector[std.vector[llama_grammar_element]],
+# ) -> Array[llama_grammar_element_p]:
+#     """Make an Array object that is used for `llama_grammer_init`"""
 
-    # Step 1: Convert to c_llama_grammar_element
-    llama_grammar_element_p_p = (
-        []
-    )  # type: List[List[llama_cpp.llama_grammar_element]]
-    for subvector in llama_grammar_elements:
-        llama_grammar_element_p_p.append([])
-        for elem in subvector:
-            c_llama_grammar_element = llama_cpp.llama_grammar_element()
-            c_llama_grammar_element.type = c_int(elem.type.value)
-            c_llama_grammar_element.value = c_uint32(elem.value)
-            llama_grammar_element_p_p[-1].append(c_llama_grammar_element)
+#     # Step 1: Convert each list to llama_grammar_element array and get pointer
+#     element_arrays = [
+#         (llama_grammar_element * len(subvector))(*subvector)
+#         for subvector in llama_grammar_elements
+#     ]  # type: List[Array[llama_grammar_element]]
 
-    # Step 2: Convert each list to llama_grammar_element array and get pointer
-    element_arrays = [
-        (llama_cpp.llama_grammar_element * len(sublist))(*sublist)
-        for sublist in llama_grammar_element_p_p
-    ]  # type: List[Array[llama_cpp.llama_grammar_element]]
+#     # Step 2: Get pointer of each array
+#     element_array_pointers = [
+#         cast(subarray, llama_grammar_element_p) for subarray in element_arrays
+#     ]  # type: List[llama_grammar_element_p]
 
-    # Step 3: Get pointer of each array
-    element_array_pointers = [
-        cast(sublist, llama_cpp.llama_grammar_element_p)
-        for sublist in element_arrays
-    ]  # type: List[llama_cpp.llama_grammar_element_p]
-
-    # Step 4: Make array of these pointers and get its pointer
-    return (llama_cpp.llama_grammar_element_p * len(element_array_pointers))(
-        *element_array_pointers
-    )
-
-
-def parse_grammar_init_args(
-    bnf: str,
-) -> Tuple[Array[llama_cpp.llama_grammar_element_p], c_size_t, c_size_t]:
-    """Parse a GBNF string and return tuple of `grammar rules` and `root symbol id`"""
-    parsed_grammar = parse(const_char_p(bnf))  # type: parse_state
-    if parsed_grammar.rules.empty():
-        raise Exception(
-            f"{parse_grammar_init_args.__name__}: error parsing grammar file: parsed_grammar.rules is empty"
-        )
-    print(f"{parse_grammar_init_args.__name__} grammar:", file=sys.stderr)
-    print_grammar(sys.stdout, parsed_grammar)
-    print(file=sys.stderr)
-    grammar_rules = (
-        parsed_grammar.c_rules()
-    )  # type: std__vector[std__vector[llama_grammar_element]]
-    return (
-        convert_to_rules(grammar_rules),
-        c_size_t(grammar_rules.size()),
-        c_size_t(parsed_grammar.symbol_ids.at("root")),
-    )
-
-
-def parse_grammar_init_args_from_file(
-    bnf_path: Union[str, Path]
-) -> Tuple[Array[llama_cpp.llama_grammar_element_p], c_size_t, c_size_t]:
-    """Parse a GBNF file and return tuple of `grammar rules` and `root symbol id`"""
-    try:
-        with open(bnf_path) as f:
-            params_grammer = f.read()
-    except Exception as err:
-        raise Exception(
-            f"{parse_grammar_init_args_from_file.__name__}: error reading grammar file: {err}"
-        )
-
-    if params_grammer:
-        return parse_grammar_init_args(params_grammer)
-
-    raise Exception(
-        f"{parse_grammar_init_args_from_file.__name__}: error parsing grammar file: params_grammer is empty"
-    )
-
-
-# def get_grammar_p(bnf: str) -> llama_cpp.llama_grammar_p:
-#     """Parse a GBNF string and return pointer to `llama_grammar`"""
-
-#     grammar_rules, root_symbol_id = parse_rules(bnf)
-
-#     grammar_element_p_p = convert_to_double_ptr(
-#         grammar_rules
-#     )  # type: llama_cpp.llama_grammar_element_p_p
-
-#     c_llama_grammar_p = llama_cpp.llama_grammar_init(
-#         grammar_element_p_p,
-#         c_size_t(grammar_rules.size()),
-#         c_size_t(root_symbol_id),
-#     )  # type: llama_cpp.llama_grammar_p
-#     return c_llama_grammar_p
-
-
-# def get_grammar_p_from_file(
-#     bnf_path: Union[str, Path]
-# ) -> llama_cpp.llama_grammar_p:
-#     """Parse a GBNF file and return pointer to `llama_grammar`"""
-#     try:
-#         with open(bnf_path) as f:
-#             params_grammer = f.read()
-#     except Exception as err:
-#         raise Exception(
-#             f"{get_grammar_p_from_file.__name__}: error reading grammar file: {err}"
-#         )
-
-#     if params_grammer:
-#         return get_grammar_p(params_grammer)
-
-#     raise Exception(
-#         f"{get_grammar_p_from_file.__name__}: error parsing grammar file: params_grammer is empty"
+#     # Step 3: Make array of these pointers and get its pointer
+#     return (llama_grammar_element_p * len(element_array_pointers))(
+#         *element_array_pointers
 #     )
 
 
@@ -1282,14 +1254,8 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    rules, n_rules, start_rule_index = parse_grammar_init_args_from_file(
-        args.grammar
-    )
-    llama_grammar_p = llama_cpp.llama_grammar_init(
-        rules,
-        n_rules,
-        start_rule_index,
-    )  # type: llama_cpp.llama_grammar_p
+    llama_grammar = LlamaGrammar.from_file(Path(args.grammar))
+    llama_grammar_ptr = llama_grammar.init_grammar()
 
     # ----- USAGE:
     # llama_cpp.llama_sample_grammar(ctx=..., candidates=..., grammar=llama_grammar_p)
