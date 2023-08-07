@@ -364,7 +364,7 @@ class Llama:
         )
         if grammar is not None:
             self.grammar = LlamaGrammar.from_file(
-                grammar
+                grammar, verbose=verbose
             )  # type: Optional[LlamaGrammar]
         else:
             self.grammar = None
@@ -723,7 +723,6 @@ class Llama:
             The generated tokens.
         """
         assert self.ctx is not None
-
         if reset and len(self._input_ids) > 0:
             longest_prefix = 0
             for a, b in zip(self._input_ids, tokens[:-1]):
@@ -740,6 +739,9 @@ class Llama:
 
         if reset:
             self.reset()
+
+        if self.grammar is not None:
+            self.grammar.reset()
 
         while True:
             self.eval(tokens)
@@ -1534,9 +1536,6 @@ class Llama:
         if self.ctx is not None:
             llama_cpp.llama_free(self.ctx)
             self.ctx = None
-        if self.grammar is not None:
-            llama_cpp.llama_grammar_free(self.grammar.grammar)
-            self.grammar = None
 
     def __getstate__(self):
         return dict(
