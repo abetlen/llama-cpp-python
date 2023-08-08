@@ -227,6 +227,7 @@ class Llama:
         rope_freq_scale: float = 1.0,
         n_gqa: Optional[int] = None,  # (TEMPORARY) must be 8 for llama2 70b
         rms_norm_eps: Optional[float] = None,  # (TEMPORARY)
+        mul_mat_q: Optional(bool) = None,  # (TEMPORARY)
         verbose: bool = True,
     ):
         """Load a llama.cpp model from `model_path`.
@@ -292,6 +293,9 @@ class Llama:
 
         if rms_norm_eps is not None:
             self.params.rms_norm_eps = rms_norm_eps
+
+        if mul_mat_q is not None:
+            self.params.mul_mat_q = mul_mat_q
 
         self.last_n_tokens_size = last_n_tokens_size
         self.n_batch = min(n_ctx, n_batch)
