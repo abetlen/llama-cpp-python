@@ -27,6 +27,8 @@ from .llama_types import *
 import numpy as np
 import numpy.typing as npt
 
+from .utils import suppress_stdout_stderr
+
 class BaseLlamaCache(ABC):
     """Base cache class for a llama.cpp model."""
 
@@ -224,7 +226,8 @@ class Llama:
         rope_freq_base: float = 10000.0,
         rope_freq_scale: float = 1.0,
         n_gqa: Optional[int] = None,  # (TEMPORARY) must be 8 for llama2 70b
-        rms_norm_eps: Optional[float] = None, # (TEMPORARY)
+        rms_norm_eps: Optional[float] = None,  # (TEMPORARY)
+        mul_mat_q: Optional(bool) = None,  # (TEMPORARY)
         verbose: bool = True,
     ):
         """Load a llama.cpp model from `model_path`.
@@ -277,7 +280,9 @@ class Llama:
 
         if self.tensor_split is not None:
             FloatArray = (ctypes.c_float * len(self.tensor_split))(*self.tensor_split)
-            self._p_tensor_split = ctypes.POINTER(ctypes.c_float)(FloatArray) # keep a reference to the array so it is not gc'd
+            self._p_tensor_split = ctypes.POINTER(ctypes.c_float)(
+                FloatArray
+            )  # keep a reference to the array so it is not gc'd
             self.params.tensor_split = self._p_tensor_split
 
         self.params.rope_freq_base = rope_freq_base
@@ -288,6 +293,9 @@ class Llama:
 
         if rms_norm_eps is not None:
             self.params.rms_norm_eps = rms_norm_eps
+
+        if mul_mat_q is not None:
+            self.params.mul_mat_q = mul_mat_q
 
         self.last_n_tokens_size = last_n_tokens_size
         self.n_batch = min(n_ctx, n_batch)
@@ -306,12 +314,25 @@ class Llama:
         if not os.path.exists(model_path):
             raise ValueError(f"Model path does not exist: {model_path}")
 
-        self.model = llama_cpp.llama_load_model_from_file(
-            self.model_path.encode("utf-8"), self.params
-        )
+        if verbose:
+            self.model = llama_cpp.llama_load_model_from_file(
+                self.model_path.encode("utf-8"), self.params
+            )
+        else:
+            with suppress_stdout_stderr():
+                self.model = llama_cpp.llama_load_model_from_file(
+                    self.model_path.encode("utf-8"), self.params
+                )
         assert self.model is not None
 
-        self.ctx = llama_cpp.llama_new_context_with_model(self.model, self.params)
+        if verbose:
+            self.ctx = llama_cpp.llama_new_context_with_model(self.model, self.params)
+        else:
+            with suppress_stdout_stderr():
+                print("here")
+                self.ctx = llama_cpp.llama_new_context_with_model(
+                    self.model, self.params
+                )
 
         assert self.ctx is not None
 
@@ -959,9 +980,7 @@ class Llama:
                 for token in remaining_tokens:
                     token_end_position += len(self.detokenize([token]))
                     # Check if stop sequence is in the token
-                    if token_end_position >= (
-                        remaining_length - first_stop_position
-                    ):
+                    if token_end_position >= (remaining_length - first_stop_position):
                         break
                     logprobs_or_none: Optional[CompletionLogprobs] = None
                     if logprobs is not None:
@@ -1503,10 +1522,10 @@ class Llama:
             return self._convert_text_completion_to_chat(completion)
 
     def __del__(self):
-        if self.model is not None:
+        if hasattr(self, "model") and self.model is not None:
             llama_cpp.llama_free_model(self.model)
             self.model = None
-        if self.ctx is not None:
+        if hasattr(self, "ctx") and self.ctx is not None:
             llama_cpp.llama_free(self.ctx)
             self.ctx = None
 

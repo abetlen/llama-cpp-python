@@ -103,6 +103,10 @@ class Settings(BaseSettings):
         default=None,
         description="TEMPORARY",
     )
+    mul_mat_q: Optional[bool] = Field(
+        default=None,
+        description="TEMPORARY",
+    )
 
 
 class ErrorResponse(TypedDict):
