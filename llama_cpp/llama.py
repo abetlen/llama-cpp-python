@@ -878,6 +878,7 @@ class Llama:
         stopping_criteria: Optional[StoppingCriteriaList] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
+        save_cache: bool = True
     ) -> Union[Iterator[Completion], Iterator[CompletionChunk]]:
         assert self.ctx is not None
 
@@ -1185,14 +1186,14 @@ class Llama:
                         }
                     ],
                 }
-            if self.cache:
+            if self.cache and save_cache:
                 if self.verbose:
                     print("Llama._create_completion: cache save", file=sys.stderr)
                 self.cache[prompt_tokens + completion_tokens] = self.save_state()
                 print("Llama._create_completion: cache saved", file=sys.stderr)
             return
 
-        if self.cache:
+        if self.cache and save_cache:
             if self.verbose:
                 print("Llama._create_completion: cache save", file=sys.stderr)
             self.cache[prompt_tokens + completion_tokens] = self.save_state()
@@ -1301,6 +1302,7 @@ class Llama:
         stopping_criteria: Optional[StoppingCriteriaList] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
+        save_cache: bool = True
     ) -> Union[Completion, Iterator[CompletionChunk]]:
         """Generate text from a prompt.
 
@@ -1345,7 +1347,8 @@ class Llama:
             model=model,
             stopping_criteria=stopping_criteria,
             logits_processor=logits_processor,
-            grammar=grammar
+            grammar=grammar,
+            save_cache=save_cache
         )
         if stream:
             chunks: Iterator[CompletionChunk] = completion_or_chunks
@@ -1376,6 +1379,7 @@ class Llama:
         stopping_criteria: Optional[StoppingCriteriaList] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
+        save_cache: bool = True,
     ) -> Union[Completion, Iterator[CompletionChunk]]:
         """Generate text from a prompt.
 
@@ -1421,6 +1425,7 @@ class Llama:
             stopping_criteria=stopping_criteria,
             logits_processor=logits_processor,
             grammar=grammar,
+            save_cache=save_cache
         )
 
     def _convert_text_completion_to_chat(
