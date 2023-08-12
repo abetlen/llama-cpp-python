@@ -239,6 +239,7 @@ class Llama:
             n_ctx: Maximum context size.
             n_parts: Number of parts to split the model into. If -1, the number of parts is automatically determined.
             seed: Random seed. -1 for random.
+            n_gpu_layers: Number of layers to offload to GPU (-ngl). If -1, all layers are offloaded.
             f16_kv: Use half-precision for key/value cache.
             logits_all: Return logits for all tokens, not just the last token.
             vocab_only: Only load the vocabulary no weights.
