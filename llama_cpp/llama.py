@@ -268,7 +268,7 @@ class Llama:
 
         self.params = llama_cpp.llama_context_default_params()
         self.params.n_ctx = n_ctx
-        self.params.n_gpu_layers = n_gpu_layers
+        self.params.n_gpu_layers = 0x7FFFFFFF if n_gpu_layers == -1 else n_gpu_layers  # 0x7FFFFFFF is INT32 max, will be auto set to all layers
         self.params.seed = seed
         self.params.f16_kv = f16_kv
         self.params.logits_all = logits_all
