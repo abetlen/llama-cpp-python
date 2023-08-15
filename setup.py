@@ -15,6 +15,7 @@ setup(
     author_email="abetlen@gmail.com",
     license="MIT",
     package_dir={"llama_cpp": "llama_cpp", "llama_cpp.server": "llama_cpp/server"},
+    package_data={"llama_cpp": ["py.typed"]},
     packages=["llama_cpp", "llama_cpp.server"],
     install_requires=["typing-extensions>=4.5.0", "numpy>=1.20.0", "diskcache>=5.6.1"],
     extras_require={

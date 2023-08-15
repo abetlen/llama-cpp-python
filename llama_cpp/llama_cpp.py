@@ -158,6 +158,25 @@ llama_token_data_array_p = POINTER(llama_token_data_array)
 llama_progress_callback = ctypes.CFUNCTYPE(None, c_float, c_void_p)
 
 
+# enum llama_log_level {
+#     LLAMA_LOG_LEVEL_ERROR = 2,
+#     LLAMA_LOG_LEVEL_WARN  = 3,
+#     LLAMA_LOG_LEVEL_INFO  = 4
+# };
+LLAMA_LOG_LEVEL_ERROR = c_int(2)
+LLAMA_LOG_LEVEL_WARN = c_int(3)
+LLAMA_LOG_LEVEL_INFO = c_int(4)
+
+
+# // Signature for logging events
+# // Note that text includes the new line character at the end for most events.
+# // If your logging mechanism cannot handle that, check if the last character is '\n' and strip it
+# // if it exists.
+# // It might not exist for progress report where '.' is output repeatedly.
+# typedef void (*llama_log_callback)(enum llama_log_level level, const char * text, void * user_data);
+llama_log_callback = ctypes.CFUNCTYPE(None, c_int, c_char_p, c_void_p)
+
+
 # struct llama_context_params {
 #     uint32_t seed;         // RNG seed, -1 for random
 #     int32_t  n_ctx;        // text context
@@ -349,6 +368,19 @@ class llama_timings(Structure):
         ("n_p_eval", c_int32),
         ("n_eval", c_int32),
     ]
+
+
+# // Set callback for all future logging events.
+# // If this is not called, or NULL is supplied, everything is output on stderr.
+# LLAMA_API void llama_log_set(llama_log_callback log_callback, void * user_data);
+def llama_log_set(
+    log_callback: "ctypes._FuncPointer", user_data: c_void_p  # type: ignore
+):
+    return _lib.llama_log_set(log_callback, user_data)
+
+
+_lib.llama_log_set.argtypes = [llama_log_callback, c_void_p]
+_lib.llama_log_set.restype = None
 
 
 # LLAMA_API int llama_max_devices();
