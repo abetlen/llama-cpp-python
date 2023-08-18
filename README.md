@@ -201,7 +201,7 @@ This package is under active development and I welcome any contributions.
 To get started, clone the repository and install the package in development mode:
 
 ```bash
-git clone --recurse-submodules git@github.com:abetlen/llama-cpp-python.git
+git clone --recurse-submodules https://github.com/abetlen/llama-cpp-python.git
 cd llama-cpp-python
 
 # Install with pip
