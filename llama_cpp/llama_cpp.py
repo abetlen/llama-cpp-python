@@ -1008,15 +1008,24 @@ _lib.llama_token_to_str_bpe.argtypes = [llama_context_p, llama_token, c_char_p, 
 _lib.llama_token_to_str_bpe.restype = c_int
 
 
-# LLAMA_API const char * llama_token_to_str_with_model(
-#             const struct llama_model * model,
-#                         llama_token   token);
-def llama_token_to_str_with_model(model: llama_model_p, token: llama_token) -> bytes:
-    return _lib.llama_token_to_str_with_model(model, token)
+# LLAMA_API int llama_token_to_str_with_model(
+#           const struct llama_model * model,
+#                        llama_token   token,
+#                               char * buf,
+#                               int    length);
+def llama_token_to_str_with_model(
+    model: llama_model_p, token: llama_token, buf: bytes, length: c_int
+) -> int:
+    return _lib.llama_token_to_str_with_model(model, token, buf, length)
 
 
-_lib.llama_token_to_str_with_model.argtypes = [llama_model_p, llama_token]
-_lib.llama_token_to_str_with_model.restype = c_char_p
+_lib.llama_token_to_str_with_model.argtypes = [
+    llama_model_p,
+    llama_token,
+    c_char_p,
+    c_int,
+]
+_lib.llama_token_to_str_with_model.restype = c_int
 
 
 # //
