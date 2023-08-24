@@ -228,7 +228,7 @@ class Llama:
         rope_freq_scale: float = 1.0,
         n_gqa: Optional[int] = None,  # (TEMPORARY) must be 8 for llama2 70b
         rms_norm_eps: Optional[float] = None,  # (TEMPORARY)
-        mul_mat_q: Optional[bool] = None,  # (TEMPORARY)
+        mul_mat_q: Optional[bool] = None,
         verbose: bool = True,
     ):
         """Load a llama.cpp model from `model_path`.
@@ -290,11 +290,6 @@ class Llama:
         self.params.rope_freq_base = rope_freq_base
         self.params.rope_freq_scale = rope_freq_scale
 
-        if n_gqa is not None:
-            self.params.n_gqa = n_gqa
-
-        if rms_norm_eps is not None:
-            self.params.rms_norm_eps = rms_norm_eps
 
         if mul_mat_q is not None:
             self.params.mul_mat_q = mul_mat_q
@@ -453,6 +448,8 @@ class Llama:
         buffer_size = 32
         buffer = (ctypes.c_char * buffer_size)()
         for token in tokens:
+            if token == llama_cpp.llama_token_bos(self.ctx):
+                continue
             n = llama_cpp.llama_token_to_str(
                 self.ctx, llama_cpp.llama_token(token), buffer, buffer_size
             )
@@ -1585,13 +1582,7 @@ class Llama:
             lora_base=self.lora_base,
             lora_path=self.lora_path,
             tensor_split=self.tensor_split,
-            ### TEMPORARY ###
-            n_gqa=self.params.n_gqa,
-            rms_norm_eps=self.params.rms_norm_eps,
-            ### TEMPORARY ###
-            ### DEPRECATED ###
-            n_parts=self.n_parts,
-            ### DEPRECATED ###
+            mul_mat_q=self.params.mul_mat_q,
         )
 
     def __setstate__(self, state):
@@ -1613,14 +1604,8 @@ class Llama:
             lora_base=state["lora_base"],
             lora_path=state["lora_path"],
             tensor_split=state["tensor_split"],
+            mul_mat_q=state["mul_mat_q"],
             verbose=state["verbose"],
-            ### TEMPORARY ###
-            n_gqa=state["n_gqa"],
-            rms_norm_eps=state["rms_norm_eps"],
-            ### TEMPORARY ###
-            ### DEPRECATED ###
-            n_parts=state["n_parts"],
-            ### DEPRECATED ###
         )
 
     def save_state(self) -> LlamaState:
