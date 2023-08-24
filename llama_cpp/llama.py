@@ -371,8 +371,8 @@ class Llama:
             sorted=sorted,
         )
         self._candidates = candidates
-        self._token_nl = Llama.token_nl()
-        self._token_eos = Llama.token_eos()
+        self._token_nl = self.token_nl()
+        self._token_eos = self.token_eos()
         self._candidates_data_id = np.arange(self._n_vocab, dtype=np.intc)  # type: ignore
         self._candidates_data_p = np.zeros(self._n_vocab, dtype=np.single)
 
@@ -450,10 +450,14 @@ class Llama:
         """
         assert self.ctx is not None
         output = b""
+        buffer_size = 32
+        buffer = (ctypes.c_char * buffer_size)()
         for token in tokens:
-            output += llama_cpp.llama_token_to_str(
-                self.ctx, llama_cpp.llama_token(token)
+            n = llama_cpp.llama_token_to_str(
+                self.ctx, llama_cpp.llama_token(token), buffer, buffer_size
             )
+            assert n <= buffer_size
+            output += bytes(buffer[:n])
         return output
 
     def set_cache(self, cache: Optional[BaseLlamaCache]):
@@ -1681,20 +1685,20 @@ class Llama:
         assert self.ctx is not None
         return LlamaTokenizer(self)
 
-    @staticmethod
-    def token_eos() -> int:
+    def token_eos(self) -> int:
         """Return the end-of-sequence token."""
-        return llama_cpp.llama_token_eos()
+        assert self.ctx is not None
+        return llama_cpp.llama_token_eos(self.ctx)
 
-    @staticmethod
-    def token_bos() -> int:
+    def token_bos(self) -> int:
         """Return the beginning-of-sequence token."""
-        return llama_cpp.llama_token_bos()
+        assert self.ctx is not None
+        return llama_cpp.llama_token_bos(self.ctx)
 
-    @staticmethod
-    def token_nl() -> int:
+    def token_nl(self) -> int:
         """Return the newline token."""
-        return llama_cpp.llama_token_nl()
+        assert self.ctx is not None
+        return llama_cpp.llama_token_nl(self.ctx)
 
     @staticmethod
     def logits_to_logprobs(logits: List[float]) -> List[float]:
