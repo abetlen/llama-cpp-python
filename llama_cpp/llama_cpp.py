@@ -531,6 +531,15 @@ _lib.llama_n_embd.argtypes = [llama_context_p]
 _lib.llama_n_embd.restype = c_int
 
 
+# LLAMA_API enum llama_vocab_type llama_vocab_type(const struct llama_context * ctx);
+def llama_vocab_type(ctx: llama_context_p) -> int:
+    return _lib.llama_vocab_type(ctx)
+
+
+_lib.llama_vocab_type.argtypes = [llama_context_p]
+_lib.llama_vocab_type.restype = c_int
+
+
 # LLAMA_API int llama_model_n_vocab(const struct llama_model * model);
 def llama_model_n_vocab(model: llama_model_p) -> int:
     return _lib.llama_model_n_vocab(model)
@@ -849,7 +858,7 @@ _lib.llama_token_get_score.argtypes = [llama_context_p, llama_token]
 _lib.llama_token_get_score.restype = c_float
 
 
-# LLAMA_API llama_token_type llama_token_get_type(const struct llama_context * ctx, llama_token token);
+# LLAMA_API enum llama_token_type llama_token_get_type(const struct llama_context * ctx, llama_token token);
 def llama_token_get_type(ctx: llama_context_p, token: llama_token) -> int:
     return _lib.llama_token_get_type(ctx, token)
 
@@ -918,32 +927,6 @@ _lib.llama_tokenize.argtypes = [llama_context_p, c_char_p, llama_token_p, c_int,
 _lib.llama_tokenize.restype = c_int
 
 
-# LLAMA_API int llama_tokenize_bpe(
-#         struct llama_context * ctx,
-#                   const char * text,
-#                  llama_token * tokens,
-#                          int   n_max_tokens,
-#                         bool   add_bos);
-def llama_tokenize_bpe(
-    ctx: llama_context_p,
-    text: bytes,
-    tokens,  # type: Array[llama_token]
-    n_max_tokens: c_int,
-    add_bos: c_bool,
-) -> int:
-    return _lib.llama_tokenize_bpe(ctx, text, tokens, n_max_tokens, add_bos)
-
-
-_lib.llama_tokenize_bpe.argtypes = [
-    llama_context_p,
-    c_char_p,
-    llama_token_p,
-    c_int,
-    c_bool,
-]
-_lib.llama_tokenize_bpe.restype = c_int
-
-
 # LLAMA_API int llama_tokenize_with_model(
 #     const struct llama_model * model,
 #                   const char * text,
@@ -991,21 +974,6 @@ _lib.llama_tokenize_with_model.argtypes = [
     c_bool,
 ]
 _lib.llama_tokenize_with_model.restype = c_int
-
-
-# LLAMA_API int llama_token_to_str_bpe(
-#         const struct llama_context * ctx,
-#                         llama_token   token,
-#                                 char * buf,
-#                                 int    length);
-def llama_token_to_str_bpe(
-    ctx: llama_context_p, token: llama_token, buf: bytes, length: c_int
-) -> int:
-    return _lib.llama_token_to_str_bpe(ctx, token, buf, length)
-
-
-_lib.llama_token_to_str_bpe.argtypes = [llama_context_p, llama_token, c_char_p, c_int]
-_lib.llama_token_to_str_bpe.restype = c_int
 
 
 # LLAMA_API int llama_token_to_str_with_model(
