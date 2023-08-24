@@ -1,6 +1,6 @@
 import llama_cpp
 
-MODEL = "./vendor/llama.cpp/models/ggml-vocab.bin"
+MODEL = "./vendor/llama.cpp/models/ggml-vocab-llama.gguf"
 
 
 def test_llama():
