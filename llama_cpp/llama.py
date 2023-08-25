@@ -445,17 +445,17 @@ class Llama:
         """
         assert self.ctx is not None
         output = b""
-        buffer_size = 32
+        buffer_size = 8
         buffer = (ctypes.c_char * buffer_size)()
         for token in tokens:
-            if token == llama_cpp.llama_token_bos(self.ctx):
-                continue
             n = llama_cpp.llama_token_to_str(
                 self.ctx, llama_cpp.llama_token(token), buffer, buffer_size
             )
             assert n <= buffer_size
             output += bytes(buffer[:n])
-        return output
+        # NOTE: Llama1 models automatically added a space at the start of the prompt
+        # this line removes a leading space if the first token is a beginning of sentence token
+        return output[1:] if len(tokens) > 0 and tokens[0] == self.token_bos() else output
 
     def set_cache(self, cache: Optional[BaseLlamaCache]):
         """Set the cache.
@@ -886,7 +886,7 @@ class Llama:
         created: int = int(time.time())
         completion_tokens: List[int] = []
         # Add blank space to start of prompt to match OG llama tokenizer
-        prompt_tokens: List[int] = self.tokenize(b" " + prompt.encode("utf-8"))
+        prompt_tokens: List[int] = self.tokenize(prompt.encode("utf-8")) if prompt != "" else [self.token_bos()]
         text: bytes = b""
         returned_tokens: int = 0
         stop = (
