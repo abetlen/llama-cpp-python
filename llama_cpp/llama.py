@@ -228,7 +228,7 @@ class Llama:
         rope_freq_scale: float = 1.0,
         n_gqa: Optional[int] = None,  # (TEMPORARY) must be 8 for llama2 70b
         rms_norm_eps: Optional[float] = None,  # (TEMPORARY)
-        mul_mat_q: Optional[bool] = None,  # (TEMPORARY)
+        mul_mat_q: Optional[bool] = None,
         verbose: bool = True,
     ):
         """Load a llama.cpp model from `model_path`.
@@ -290,11 +290,6 @@ class Llama:
         self.params.rope_freq_base = rope_freq_base
         self.params.rope_freq_scale = rope_freq_scale
 
-        if n_gqa is not None:
-            self.params.n_gqa = n_gqa
-
-        if rms_norm_eps is not None:
-            self.params.rms_norm_eps = rms_norm_eps
 
         if mul_mat_q is not None:
             self.params.mul_mat_q = mul_mat_q
@@ -371,8 +366,8 @@ class Llama:
             sorted=sorted,
         )
         self._candidates = candidates
-        self._token_nl = Llama.token_nl()
-        self._token_eos = Llama.token_eos()
+        self._token_nl = self.token_nl()
+        self._token_eos = self.token_eos()
         self._candidates_data_id = np.arange(self._n_vocab, dtype=np.intc)  # type: ignore
         self._candidates_data_p = np.zeros(self._n_vocab, dtype=np.single)
 
@@ -413,11 +408,11 @@ class Llama:
         Returns:
             A list of tokens.
         """
-        assert self.ctx is not None
+        assert self.model is not None
         n_ctx = self._n_ctx
         tokens = (llama_cpp.llama_token * n_ctx)()
-        n_tokens = llama_cpp.llama_tokenize(
-            self.ctx,
+        n_tokens = llama_cpp.llama_tokenize_with_model(
+            self.model,
             text,
             tokens,
             llama_cpp.c_int(n_ctx),
@@ -426,8 +421,8 @@ class Llama:
         if n_tokens < 0:
             n_tokens = abs(n_tokens)
             tokens = (llama_cpp.llama_token * n_tokens)()
-            n_tokens = llama_cpp.llama_tokenize(
-                self.ctx,
+            n_tokens = llama_cpp.llama_tokenize_with_model(
+                self.model,
                 text,
                 tokens,
                 llama_cpp.c_int(n_tokens),
@@ -448,13 +443,19 @@ class Llama:
         Returns:
             The detokenized string.
         """
-        assert self.ctx is not None
+        assert self.model is not None
         output = b""
+        size = 8
+        buffer = (ctypes.c_char * size)()
         for token in tokens:
-            output += llama_cpp.llama_token_to_str(
-                self.ctx, llama_cpp.llama_token(token)
+            n = llama_cpp.llama_token_to_str_with_model(
+                self.model, llama_cpp.llama_token(token), buffer, size
             )
-        return output
+            assert n <= size
+            output += bytes(buffer[:n])
+        # NOTE: Llama1 models automatically added a space at the start of the prompt
+        # this line removes a leading space if the first token is a beginning of sentence token
+        return output[1:] if len(tokens) > 0 and tokens[0] == self.token_bos() else output
 
     def set_cache(self, cache: Optional[BaseLlamaCache]):
         """Set the cache.
@@ -885,7 +886,7 @@ class Llama:
         created: int = int(time.time())
         completion_tokens: List[int] = []
         # Add blank space to start of prompt to match OG llama tokenizer
-        prompt_tokens: List[int] = self.tokenize(b" " + prompt.encode("utf-8"))
+        prompt_tokens: List[int] = self.tokenize(prompt.encode("utf-8")) if prompt != "" else [self.token_bos()]
         text: bytes = b""
         returned_tokens: int = 0
         stop = (
@@ -1581,13 +1582,7 @@ class Llama:
             lora_base=self.lora_base,
             lora_path=self.lora_path,
             tensor_split=self.tensor_split,
-            ### TEMPORARY ###
-            n_gqa=self.params.n_gqa,
-            rms_norm_eps=self.params.rms_norm_eps,
-            ### TEMPORARY ###
-            ### DEPRECATED ###
-            n_parts=self.n_parts,
-            ### DEPRECATED ###
+            mul_mat_q=self.params.mul_mat_q,
         )
 
     def __setstate__(self, state):
@@ -1609,14 +1604,8 @@ class Llama:
             lora_base=state["lora_base"],
             lora_path=state["lora_path"],
             tensor_split=state["tensor_split"],
+            mul_mat_q=state["mul_mat_q"],
             verbose=state["verbose"],
-            ### TEMPORARY ###
-            n_gqa=state["n_gqa"],
-            rms_norm_eps=state["rms_norm_eps"],
-            ### TEMPORARY ###
-            ### DEPRECATED ###
-            n_parts=state["n_parts"],
-            ### DEPRECATED ###
         )
 
     def save_state(self) -> LlamaState:
@@ -1681,20 +1670,20 @@ class Llama:
         assert self.ctx is not None
         return LlamaTokenizer(self)
 
-    @staticmethod
-    def token_eos() -> int:
+    def token_eos(self) -> int:
         """Return the end-of-sequence token."""
-        return llama_cpp.llama_token_eos()
+        assert self.ctx is not None
+        return llama_cpp.llama_token_eos(self.ctx)
 
-    @staticmethod
-    def token_bos() -> int:
+    def token_bos(self) -> int:
         """Return the beginning-of-sequence token."""
-        return llama_cpp.llama_token_bos()
+        assert self.ctx is not None
+        return llama_cpp.llama_token_bos(self.ctx)
 
-    @staticmethod
-    def token_nl() -> int:
+    def token_nl(self) -> int:
         """Return the newline token."""
-        return llama_cpp.llama_token_nl()
+        assert self.ctx is not None
+        return llama_cpp.llama_token_nl(self.ctx)
 
     @staticmethod
     def logits_to_logprobs(logits: List[float]) -> List[float]:

@@ -35,6 +35,9 @@ scikit-build = "0.17.6"
 [tool.poetry.extras]
 server = ["uvicorn", "fastapi", "pydantic-settings", "sse-starlette"]
 
+[tool.pytest.ini_options]
+addopts = "--ignore=vendor"
+
 [build-system]
 requires = [
     "setuptools>=42",
