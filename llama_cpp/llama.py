@@ -408,11 +408,11 @@ class Llama:
         Returns:
             A list of tokens.
         """
-        assert self.ctx is not None
+        assert self.model is not None
         n_ctx = self._n_ctx
         tokens = (llama_cpp.llama_token * n_ctx)()
-        n_tokens = llama_cpp.llama_tokenize(
-            self.ctx,
+        n_tokens = llama_cpp.llama_tokenize_with_model(
+            self.model,
             text,
             tokens,
             llama_cpp.c_int(n_ctx),
@@ -421,8 +421,8 @@ class Llama:
         if n_tokens < 0:
             n_tokens = abs(n_tokens)
             tokens = (llama_cpp.llama_token * n_tokens)()
-            n_tokens = llama_cpp.llama_tokenize(
-                self.ctx,
+            n_tokens = llama_cpp.llama_tokenize_with_model(
+                self.model,
                 text,
                 tokens,
                 llama_cpp.c_int(n_tokens),
@@ -443,15 +443,15 @@ class Llama:
         Returns:
             The detokenized string.
         """
-        assert self.ctx is not None
+        assert self.model is not None
         output = b""
-        buffer_size = 8
-        buffer = (ctypes.c_char * buffer_size)()
+        size = 8
+        buffer = (ctypes.c_char * size)()
         for token in tokens:
-            n = llama_cpp.llama_token_to_str(
-                self.ctx, llama_cpp.llama_token(token), buffer, buffer_size
+            n = llama_cpp.llama_token_to_str_with_model(
+                self.model, llama_cpp.llama_token(token), buffer, size
             )
-            assert n <= buffer_size
+            assert n <= size
             output += bytes(buffer[:n])
         # NOTE: Llama1 models automatically added a space at the start of the prompt
         # this line removes a leading space if the first token is a beginning of sentence token
