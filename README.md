@@ -17,6 +17,9 @@ This package provides:
 
 Documentation is available at [https://llama-cpp-python.readthedocs.io/en/latest](https://llama-cpp-python.readthedocs.io/en/latest).
 
+> [!WARNING]  
+> Starting with version 0.1.79 the model format has changed from `ggmlv3` to `gguf`. Old model files can be converted using the `convert-llama-ggmlv3-to-gguf.py` script in [`llama.cpp`](https://github.com/ggerganov/llama.cpp)
+
 
 ## Installation from PyPI (recommended)
 
@@ -201,7 +204,7 @@ This package is under active development and I welcome any contributions.
 To get started, clone the repository and install the package in editable / development mode:
 
 ```bash
-git clone --recurse-submodules git@github.com:abetlen/llama-cpp-python.git
+git clone --recurse-submodules https://github.com/abetlen/llama-cpp-python.git
 cd llama-cpp-python
 
 # Upgrade pip (required for editable mode)

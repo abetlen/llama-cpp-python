@@ -4,7 +4,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "llama_cpp_python"
-version = "0.1.78"
+version = "0.1.79"
 description = "Python bindings for the llama.cpp library"
 readme = "README.md"
 license = { text = "MIT" }
@@ -51,3 +51,7 @@ cmake.verbose = true
 [project.urls]
 Homepage = "https://github.com/abetlen/llama-cpp-python"
 Issues = "https://github.com/abetlen/llama-cpp-python/issues"
+
+[tool.pytest.ini_options]
+addopts = "--ignore=vendor"
+
