@@ -17,6 +17,9 @@ This package provides:
 
 Documentation is available at [https://llama-cpp-python.readthedocs.io/en/latest](https://llama-cpp-python.readthedocs.io/en/latest).
 
+> [!WARNING]  
+> Starting with version 0.1.79 the model format has changed from `ggmlv3` to `gguf`
+
 
 ## Installation from PyPI (recommended)
 
