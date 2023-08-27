@@ -14,16 +14,16 @@ def test_llama_cpp_tokenization():
 
     tokens = llama.tokenize(text)
     assert tokens[0] == llama.token_bos()
-    assert tokens == [1, 15043, 2787]
+    assert tokens == [1, 10994, 2787]
     detokenized = llama.detokenize(tokens)
     assert detokenized == text
 
     tokens = llama.tokenize(text, add_bos=False)
     assert tokens[0] != llama.token_bos()
-    assert tokens == [15043, 2787]
+    assert tokens == [10994, 2787]
 
     detokenized = llama.detokenize(tokens)
-    assert detokenized != text
+    assert detokenized == text
 
 
 @pytest.mark.skip(reason="bug in tokenization where leading space is always inserted even if not after eos")
