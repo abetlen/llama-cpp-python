@@ -445,7 +445,7 @@ class Llama:
         """
         assert self.model is not None
         output = b""
-        size = 8
+        size = 16
         buffer = (ctypes.c_char * size)()
         for token in tokens:
             n = llama_cpp.llama_token_to_str_with_model(
