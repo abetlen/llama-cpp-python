@@ -445,17 +445,17 @@ class Llama:
         """
         assert self.model is not None
         output = b""
-        size = 16
+        size = 32
         buffer = (ctypes.c_char * size)()
         for token in tokens:
-            n = llama_cpp.llama_token_to_str_with_model(
+            n = llama_cpp.llama_token_to_piece_with_model(
                 self.model, llama_cpp.llama_token(token), buffer, size
             )
             assert n <= size
             output += bytes(buffer[:n])
         # NOTE: Llama1 models automatically added a space at the start of the prompt
         # this line removes a leading space if the first token is a beginning of sentence token
-        return output
+        return output[1:] if len(tokens) > 0 and tokens[0] == self.token_bos() else output
 
     def set_cache(self, cache: Optional[BaseLlamaCache]):
         """Set the cache.
