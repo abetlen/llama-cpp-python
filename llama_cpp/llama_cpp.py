@@ -973,48 +973,43 @@ _lib.llama_tokenize_with_model.argtypes = [
 _lib.llama_tokenize_with_model.restype = c_int
 
 
-# // Token Id -> String. Uses the vocabulary in the provided context
-# // Does not write null terminator to the buffer
-# LLAMA_API int llama_token_to_str(
+# // Token Id -> Piece.
+# // Uses the vocabulary in the provided context.
+# // Does not write null terminator to the buffer.
+# // User code is responsible to remove the leading whitespace of the first non-BOS token when decoding multiple tokens.
+# LLAMA_API int llama_token_to_piece(
 #         const struct llama_context * ctx,
-#                        llama_token   token,
-#                               char * buf,
-#                               int    length);
-def llama_token_to_str(
+#                         llama_token   token,
+#                                 char * buf,
+#                                 int    length);
+def llama_token_to_piece(
     ctx: llama_context_p, token: llama_token, buf: bytes, length: c_int
 ) -> int:
-    return _lib.llama_token_to_str(ctx, token, buf, length)
+    return _lib.llama_token_to_piece(ctx, token, buf, length)
 
 
-_lib.llama_tokenize_with_model.argtypes = [
-    llama_model_p,
-    c_char_p,
-    llama_token_p,
-    c_int,
-    c_bool,
-]
-_lib.llama_tokenize_with_model.restype = c_int
+_lib.llama_token_to_piece.argtypes = [llama_context_p, llama_token, c_char_p, c_int]
+_lib.llama_token_to_piece.restype = c_int
 
 
-# LLAMA_API int llama_token_to_str_with_model(
-#           const struct llama_model * model,
-#                        llama_token   token,
-#                               char * buf,
-#                               int    length);
-def llama_token_to_str_with_model(
+# LLAMA_API int llama_token_to_piece_with_model(
+#             const struct llama_model * model,
+#                         llama_token   token,
+#                                 char * buf,
+#                                 int    length);
+def llama_token_to_piece_with_model(
     model: llama_model_p, token: llama_token, buf: bytes, length: c_int
 ) -> int:
-    return _lib.llama_token_to_str_with_model(model, token, buf, length)
+    return _lib.llama_token_to_piece_with_model(model, token, buf, length)
 
 
-_lib.llama_token_to_str_with_model.argtypes = [
+_lib.llama_token_to_piece_with_model.argtypes = [
     llama_model_p,
     llama_token,
     c_char_p,
     c_int,
 ]
-_lib.llama_token_to_str_with_model.restype = c_int
-
+_lib.llama_token_to_piece_with_model.restype = c_int
 
 # //
 # // Grammar
