@@ -956,13 +956,13 @@ mkdocs = ">=1.1"
 
 [[package]]
 name = "mkdocs-material"
-version = "9.2.0"
+version = "9.2.5"
 description = "Documentation that simply works"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "mkdocs_material-9.2.0-py3-none-any.whl", hash = "sha256:051e531c78e9cb7e0a6b8b786f0bae7a168e716bc688b5bb1872d9d34f7c2409"},
-    {file = "mkdocs_material-9.2.0.tar.gz", hash = "sha256:dfabc32ca49cbd21e456c60cc5c88e10bad17e7c254c23a24dc47d009a704133"},
+    {file = "mkdocs_material-9.2.5-py3-none-any.whl", hash = "sha256:315a59725f0565bccfec7f9d1313beae7658bf874a176264b98f804a0cbc1298"},
+    {file = "mkdocs_material-9.2.5.tar.gz", hash = "sha256:02b4d1f662bc022e9497411e679323c30185e031a08a7004c763aa8d47ae9a29"},
 ]
 
 [package.dependencies]
@@ -1992,4 +1992,4 @@ server = ["fastapi", "pydantic-settings", "sse-starlette", "uvicorn"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8.1"
-content-hash = "4f3d987c81e8a3a06416219b6078ca386164c8c09499720f5991a7b0f2aa8c71"
+content-hash = "2d6f31cfa093c4f9522a66101e3ea1d4092cfcdb983260e315ba5c80c9245a32"
