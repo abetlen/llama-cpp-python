@@ -1066,14 +1066,15 @@ class Llama:
                     while len(remaining_tokens) > 0:
                         decode_success = False
                         for i in range(1, len(remaining_tokens) + 1):
-                            tokens = remaining_tokens[:i]
                             try:
-                                bs = self.detokenize(tokens)
-                                text = bs.decode('utf-8')
+                                bs = self.detokenize(remaining_tokens[:i])
+                                ts = bs.decode('utf-8')
                                 decode_success = True
                                 break
                             except UnicodeError:
                                 pass
+                        else:
+                            break
                         if not decode_success:
                             # all remaining tokens cannot be decoded to a UTF-8 character
                             break
@@ -1090,7 +1091,7 @@ class Llama:
                             "model": model_name,
                             "choices": [
                                 {
-                                    "text": text,
+                                    "text": ts,
                                     "index": 0,
                                     "logprobs": None,
                                     "finish_reason": None,
