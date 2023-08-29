@@ -1487,6 +1487,15 @@ def llama_log_set(
 _lib.llama_log_set.argtypes = [llama_log_callback, c_void_p]
 _lib.llama_log_set.restype = None
 
+
+# LLAMA_API void llama_dump_timing_info_yaml(FILE * stream, const struct llama_context * ctx);
+def llama_dump_timing_info_yaml(stream: ctypes.c_void_p, ctx: llama_context_p):
+    return _lib.llama_dump_timing_info_yaml(stream, ctx)
+
+_lib.llama_dump_timing_info_yaml.argtypes = [ctypes.c_void_p, llama_context_p]
+_lib.llama_dump_timing_info_yaml.restype = None
+
+
 ###################################################################################################
 
 
