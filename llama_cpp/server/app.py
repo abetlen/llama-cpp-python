@@ -579,6 +579,7 @@ def make_logit_bias_processor(
 @router.post(
     "/v1/completions",
 )
+@router.post("/v1/engines/copilot-codex/completions")
 async def create_completion(
     request: Request,
     body: CreateCompletionRequest,

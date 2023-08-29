@@ -17,8 +17,11 @@ This package provides:
 
 Documentation is available at [https://llama-cpp-python.readthedocs.io/en/latest](https://llama-cpp-python.readthedocs.io/en/latest).
 
+> [!WARNING]  
+> Starting with version 0.1.79 the model format has changed from `ggmlv3` to `gguf`. Old model files can be converted using the `convert-llama-ggmlv3-to-gguf.py` script in [`llama.cpp`](https://github.com/ggerganov/llama.cpp)
 
-## Installation from PyPI (recommended)
+
+## Installation from PyPI
 
 Install from PyPI (requires a c compiler):
 
@@ -42,7 +45,7 @@ bash Miniforge3-MacOSX-arm64.sh
 ```
 Otherwise, while installing it will build the llama.ccp x86 version which will be 10x slower on Apple Silicon (M1) Mac.
 
-### Installation with OpenBLAS / cuBLAS / CLBlast / Metal
+### Installation with Hardware Acceleration
 
 `llama.cpp` supports multiple BLAS backends for faster processing.
 Use the `FORCE_CMAKE=1` environment variable to force the use of `cmake` and install the pip package for the desired BLAS backend.
@@ -69,6 +72,12 @@ To install with Metal (MPS), set the `LLAMA_METAL=on` environment variable befor
 
 ```bash
 CMAKE_ARGS="-DLLAMA_METAL=on" FORCE_CMAKE=1 pip install llama-cpp-python
+```
+
+To install with hipBLAS / ROCm support for AMD cards, set the `LLAMA_HIPBLAS=on` environment variable before installing:
+
+```bash
+CMAKE_ARGS="-DLLAMA_HIPBLAS=on" FORCE_CMAKE=1 pip install llama-cpp-python
 ```
 
 #### Windows remarks
