@@ -294,6 +294,7 @@ llama_log_callback = ctypes.CFUNCTYPE(None, c_int, c_char_p, c_void_p)
 #     enum llama_ftype ftype;      // quantize to this llama_ftype
 #     bool allow_requantize;       // allow quantizing non-f32/f16 tensors
 #     bool quantize_output_tensor; // quantize output.weight
+#     bool only_copy;              // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
 # } llama_model_quantize_params;
 class llama_model_quantize_params(Structure):
     _fields_ = [
@@ -301,6 +302,7 @@ class llama_model_quantize_params(Structure):
         ("ftype", c_int),
         ("allow_requantize", c_bool),
         ("quantize_output_tensor", c_bool),
+        ("only_copy", c_bool),
     ]
 
 
