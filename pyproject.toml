@@ -16,7 +16,7 @@ include = [
 python = "^3.8.1"
 typing-extensions = "^4.7.1"
 numpy = "^1.24.4"
-diskcache = "^5.6.1"
+diskcache = "^5.6.3"
 uvicorn = { version = "^0.23.2", optional = true }
 fastapi = { version = ">=0.100.0", optional = true }
 sse-starlette = { version = ">=1.6.1", optional = true }
