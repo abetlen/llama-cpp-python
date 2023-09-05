@@ -5,12 +5,14 @@ from pathlib import Path
 this_directory = Path(__file__).parent
 long_description = (this_directory / "README.md").read_text(encoding="utf-8")
 
+exec(open('llama_cpp/version.py').read())
+
 setup(
     name="llama_cpp_python",
     description="A Python wrapper for llama.cpp",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    version="0.1.83",
+    version=__version__,
     author="Andrei Betlen",
     author_email="abetlen@gmail.com",
     license="MIT",
