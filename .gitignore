@@ -174,3 +174,7 @@ cython_debug/
 
 # downloaded model .bin files
 docker/open_llama/*.bin
+
+# Helm
+/charts/llama-cpp-python/charts
+charts/llama-cpp-python/Chart.lock
