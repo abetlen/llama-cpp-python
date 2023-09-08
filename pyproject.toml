@@ -26,7 +26,7 @@ pydantic-settings = { version = ">=2.0.1", optional = true }
 black = "^23.7.0"
 twine = "^4.0.2"
 mkdocs = "^1.5.2"
-mkdocstrings = {extras = ["python"], version = "^0.22.0"}
+mkdocstrings = {extras = ["python"], version = "^0.23.0"}
 mkdocs-material = "^9.2.8"
 pytest = "^7.4.2"
 httpx = "^0.24.1"
