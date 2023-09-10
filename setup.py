@@ -13,7 +13,6 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     version=__version__,
-    version="0.1.84",
     author="Andrei Betlen",
     author_email="abetlen@gmail.com",
     license="MIT",
