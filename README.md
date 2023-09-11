@@ -111,14 +111,14 @@ Below is a short example demonstrating how to use the high-level API to generate
 
 ```python
 >>> from llama_cpp import Llama
->>> llm = Llama(model_path="./models/7B/ggml-model.bin")
+>>> llm = Llama(model_path="./models/7B/gguf-model.bin")
 >>> output = llm("Q: Name the planets in the solar system? A: ", max_tokens=32, stop=["Q:", "\n"], echo=True)
 >>> print(output)
 {
   "id": "cmpl-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
   "object": "text_completion",
   "created": 1679561337,
-  "model": "./models/7B/ggml-model.bin",
+  "model": "./models/7B/gguf-model.bin",
   "choices": [
     {
       "text": "Q: Name the planets in the solar system? A: Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, Neptune and Pluto.",
@@ -141,7 +141,7 @@ The context window of the Llama models determines the maximum number of tokens t
 For instance, if you want to work with larger contexts, you can expand the context window by setting the n_ctx parameter when initializing the Llama object:
 
 ```python
-llm = Llama(model_path="./models/7B/ggml-model.bin", n_ctx=2048)
+llm = Llama(model_path="./models/7B/gguf-model.bin", n_ctx=2048)
 ```
 
 ### Loading llama-2 70b
@@ -149,7 +149,7 @@ llm = Llama(model_path="./models/7B/ggml-model.bin", n_ctx=2048)
 Llama2 70b must set the `n_gqa` parameter (grouped-query attention factor) to 8 when loading:
 
 ```python
-llm = Llama(model_path="./models/70B/ggml-model.bin", n_gqa=8)
+llm = Llama(model_path="./models/70B/gguf-model.bin", n_gqa=8)
 ```
 
 ## Web Server
@@ -161,17 +161,24 @@ To install the server package and get started:
 
 ```bash
 pip install llama-cpp-python[server]
-python3 -m llama_cpp.server --model models/7B/ggml-model.bin
+python3 -m llama_cpp.server --model models/7B/gguf-model.bin
+```
+Similar to Hardware Acceleration section above, you can also install with GPU (cuBLAS) support like this:
+
+```bash
+CMAKE_ARGS="-DLLAMA_CUBLAS=on" FORCE_CMAKE=1 pip install llama-cpp-python[server]
+python3 -m llama_cpp.server --model models/7B/gguf-model.bin --n_gpu_layers 35
 ```
 
 Navigate to [http://localhost:8000/docs](http://localhost:8000/docs) to see the OpenAPI documentation.
+
 
 ## Docker image
 
 A Docker image is available on [GHCR](https://ghcr.io/abetlen/llama-cpp-python). To run the server:
 
 ```bash
-docker run --rm -it -p 8000:8000 -v /path/to/models:/models -e MODEL=/models/ggml-model-name.bin ghcr.io/abetlen/llama-cpp-python:latest
+docker run --rm -it -p 8000:8000 -v /path/to/models:/models -e MODEL=/models/gguf-model-name.bin ghcr.io/abetlen/llama-cpp-python:latest
 ```
 [Docker on termux (requires root)](https://gist.github.com/FreddieOliveira/efe850df7ff3951cb62d74bd770dce27) is currently the only known way to run this on phones, see [termux support issue](https://github.com/abetlen/llama-cpp-python/issues/389) 
 
@@ -187,7 +194,7 @@ Below is a short example demonstrating how to use the low-level API to tokenize 
 >>> import ctypes
 >>> params = llama_cpp.llama_context_default_params()
 # use bytes for char * params
->>> ctx = llama_cpp.llama_init_from_file(b"./models/7b/ggml-model.bin", params)
+>>> ctx = llama_cpp.llama_init_from_file(b"./models/7b/gguf-model.bin", params)
 >>> max_tokens = params.n_ctx
 # use ctypes arrays for array params
 >>> tokens = (llama_cpp.llama_token * int(max_tokens))()
