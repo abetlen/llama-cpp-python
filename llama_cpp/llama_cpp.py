@@ -294,6 +294,7 @@ llama_log_callback = ctypes.CFUNCTYPE(None, c_int, c_char_p, c_void_p)
 #     enum llama_ftype ftype;      // quantize to this llama_ftype
 #     bool allow_requantize;       // allow quantizing non-f32/f16 tensors
 #     bool quantize_output_tensor; // quantize output.weight
+#     bool only_copy;              // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
 # } llama_model_quantize_params;
 class llama_model_quantize_params(Structure):
     _fields_ = [
@@ -301,6 +302,7 @@ class llama_model_quantize_params(Structure):
         ("ftype", c_int),
         ("allow_requantize", c_bool),
         ("quantize_output_tensor", c_bool),
+        ("only_copy", c_bool),
     ]
 
 
@@ -504,7 +506,7 @@ _lib.llama_mlock_supported.argtypes = []
 _lib.llama_mlock_supported.restype = c_bool
 
 
-# LLAMA_API int llama_n_vocab(const struct llama_context * ctx);
+# LLAMA_API int llama_n_vocab    (const struct llama_context * ctx);
 def llama_n_vocab(ctx: llama_context_p) -> int:
     return _lib.llama_n_vocab(ctx)
 
@@ -513,7 +515,7 @@ _lib.llama_n_vocab.argtypes = [llama_context_p]
 _lib.llama_n_vocab.restype = c_int
 
 
-# LLAMA_API int llama_n_ctx  (const struct llama_context * ctx);
+# LLAMA_API int llama_n_ctx      (const struct llama_context * ctx);
 def llama_n_ctx(ctx: llama_context_p) -> int:
     return _lib.llama_n_ctx(ctx)
 
@@ -522,7 +524,16 @@ _lib.llama_n_ctx.argtypes = [llama_context_p]
 _lib.llama_n_ctx.restype = c_int
 
 
-# LLAMA_API int llama_n_embd (const struct llama_context * ctx);
+# LLAMA_API int llama_n_ctx_train(const struct llama_context * ctx);
+def llama_n_ctx_train(ctx: llama_context_p) -> int:
+    return _lib.llama_n_ctx_train(ctx)
+
+
+_lib.llama_n_ctx_train.argtypes = [llama_context_p]
+_lib.llama_n_ctx_train.restype = c_int
+
+
+# LLAMA_API int llama_n_embd     (const struct llama_context * ctx);
 def llama_n_embd(ctx: llama_context_p) -> int:
     return _lib.llama_n_embd(ctx)
 
@@ -540,7 +551,7 @@ _lib.llama_vocab_type.argtypes = [llama_context_p]
 _lib.llama_vocab_type.restype = c_int
 
 
-# LLAMA_API int llama_model_n_vocab(const struct llama_model * model);
+# LLAMA_API int llama_model_n_vocab    (const struct llama_model * model);
 def llama_model_n_vocab(model: llama_model_p) -> int:
     return _lib.llama_model_n_vocab(model)
 
@@ -549,7 +560,7 @@ _lib.llama_model_n_vocab.argtypes = [llama_model_p]
 _lib.llama_model_n_vocab.restype = c_int
 
 
-# LLAMA_API int llama_model_n_ctx  (const struct llama_model * model);
+# LLAMA_API int llama_model_n_ctx      (const struct llama_model * model);
 def llama_model_n_ctx(model: llama_model_p) -> int:
     return _lib.llama_model_n_ctx(model)
 
@@ -558,7 +569,16 @@ _lib.llama_model_n_ctx.argtypes = [llama_model_p]
 _lib.llama_model_n_ctx.restype = c_int
 
 
-# LLAMA_API int llama_model_n_embd (const struct llama_model * model);
+# LLAMA_API int llama_model_n_ctx_train(const struct llama_model * model);
+def llama_model_n_ctx_train(model: llama_model_p) -> int:
+    return _lib.llama_model_n_ctx_train(model)
+
+
+_lib.llama_model_n_ctx_train.argtypes = [llama_model_p]
+_lib.llama_model_n_ctx_train.restype = c_int
+
+
+# LLAMA_API int llama_model_n_embd     (const struct llama_model * model);
 def llama_model_n_embd(model: llama_model_p) -> int:
     return _lib.llama_model_n_embd(model)
 
@@ -973,48 +993,43 @@ _lib.llama_tokenize_with_model.argtypes = [
 _lib.llama_tokenize_with_model.restype = c_int
 
 
-# // Token Id -> String. Uses the vocabulary in the provided context
-# // Does not write null terminator to the buffer
-# LLAMA_API int llama_token_to_str(
+# // Token Id -> Piece.
+# // Uses the vocabulary in the provided context.
+# // Does not write null terminator to the buffer.
+# // User code is responsible to remove the leading whitespace of the first non-BOS token when decoding multiple tokens.
+# LLAMA_API int llama_token_to_piece(
 #         const struct llama_context * ctx,
-#                        llama_token   token,
-#                               char * buf,
-#                               int    length);
-def llama_token_to_str(
+#                         llama_token   token,
+#                                 char * buf,
+#                                 int    length);
+def llama_token_to_piece(
     ctx: llama_context_p, token: llama_token, buf: bytes, length: c_int
 ) -> int:
-    return _lib.llama_token_to_str(ctx, token, buf, length)
+    return _lib.llama_token_to_piece(ctx, token, buf, length)
 
 
-_lib.llama_tokenize_with_model.argtypes = [
-    llama_model_p,
-    c_char_p,
-    llama_token_p,
-    c_int,
-    c_bool,
-]
-_lib.llama_tokenize_with_model.restype = c_int
+_lib.llama_token_to_piece.argtypes = [llama_context_p, llama_token, c_char_p, c_int]
+_lib.llama_token_to_piece.restype = c_int
 
 
-# LLAMA_API int llama_token_to_str_with_model(
-#           const struct llama_model * model,
-#                        llama_token   token,
-#                               char * buf,
-#                               int    length);
-def llama_token_to_str_with_model(
+# LLAMA_API int llama_token_to_piece_with_model(
+#             const struct llama_model * model,
+#                         llama_token   token,
+#                                 char * buf,
+#                                 int    length);
+def llama_token_to_piece_with_model(
     model: llama_model_p, token: llama_token, buf: bytes, length: c_int
 ) -> int:
-    return _lib.llama_token_to_str_with_model(model, token, buf, length)
+    return _lib.llama_token_to_piece_with_model(model, token, buf, length)
 
 
-_lib.llama_token_to_str_with_model.argtypes = [
+_lib.llama_token_to_piece_with_model.argtypes = [
     llama_model_p,
     llama_token,
     c_char_p,
     c_int,
 ]
-_lib.llama_token_to_str_with_model.restype = c_int
-
+_lib.llama_token_to_piece_with_model.restype = c_int
 
 # //
 # // Grammar
@@ -1049,74 +1064,14 @@ def llama_grammar_free(grammar: llama_grammar_p):
 _lib.llama_grammar_free.argtypes = [llama_grammar_p]
 _lib.llama_grammar_free.restype = None
 
-# //
-# // Beam search
-# //
+
+# LLAMA_API struct llama_grammar * llama_grammar_copy(const struct llama_grammar * grammar);
+def llama_grammar_copy(grammar: llama_grammar_p) -> llama_grammar_p:
+    return _lib.llama_grammar_copy(grammar)
 
 
-# struct llama_beam_view {
-#     const llama_token * tokens;
-#     size_t n_tokens;
-#     float p;   // Cumulative beam probability (renormalized relative to all beams)
-#     bool eob;  // Callback should set this to true when a beam is at end-of-beam.
-# };
-class llama_beam_view(ctypes.Structure):
-    _fields_ = [
-        ("tokens", llama_token_p),
-        ("n_tokens", c_size_t),
-        ("p", c_float),
-        ("eob", c_bool),
-    ]
-
-
-# // Passed to beam_search_callback function.
-# // Whenever 0 < common_prefix_length, this number of tokens should be copied from any of the beams
-# // (e.g. beams[0]) as they will be removed (shifted) from all beams in all subsequent callbacks.
-# // These pointers are valid only during the synchronous callback, so should not be saved.
-# struct llama_beams_state {
-#     struct llama_beam_view * beam_views;
-#     size_t n_beams;               // Number of elements in beam_views[].
-#     size_t common_prefix_length;  // Current max length of prefix tokens shared by all beams.
-#     bool last_call;               // True iff this is the last callback invocation.
-# };
-class llama_beams_state(ctypes.Structure):
-    _fields_ = [
-        ("beam_views", POINTER(llama_beam_view)),
-        ("n_beams", c_size_t),
-        ("common_prefix_length", c_size_t),
-        ("last_call", c_bool),
-    ]
-
-
-# // Type of pointer to the beam_search_callback function.
-# // void* callback_data is any custom data passed to llama_beam_search, that is subsequently
-# // passed back to beam_search_callback. This avoids having to use global variables in the callback.
-# typedef void (*llama_beam_search_callback_fn_t)(void * callback_data, llama_beams_state);
-llama_beam_search_callback_fn_t = ctypes.CFUNCTYPE(None, c_void_p, llama_beams_state)
-
-
-# /// @details Deterministically returns entire sentence constructed by a beam search.
-# /// @param ctx Pointer to the llama_context.
-# /// @param callback Invoked for each iteration of the beam_search loop, passing in beams_state.
-# /// @param callback_data A pointer that is simply passed back to callback.
-# /// @param n_beams Number of beams to use.
-# /// @param n_past Number of tokens already evaluated.
-# /// @param n_predict Maximum number of tokens to predict. EOS may occur earlier.
-# /// @param n_threads Number of threads as passed to llama_eval().
-# LLAMA_API void llama_beam_search(struct llama_context * ctx, llama_beam_search_callback_fn_t callback, void * callback_data, size_t n_beams, int n_past, int n_predict, int n_threads);
-def llama_beam_search(
-    ctx: llama_context_p,
-    callback: "ctypes._CFuncPtr[None, c_void_p, llama_beams_state]",  # type: ignore
-    callback_data: c_void_p,
-    n_beams: c_size_t,
-    n_past: c_int,
-    n_predict: c_int,
-    n_threads: c_int,
-):
-    return _lib.llama_beam_search(
-        ctx, callback, callback_data, n_beams, n_past, n_predict, n_threads
-    )
-
+_lib.llama_grammar_copy.argtypes = [llama_grammar_p]
+_lib.llama_grammar_copy.restype = llama_grammar_p
 
 # //
 # // Sampling functions
@@ -1439,6 +1394,74 @@ _lib.llama_grammar_accept_token.argtypes = [
     llama_token,
 ]
 _lib.llama_grammar_accept_token.restype = None
+# //
+# // Beam search
+# //
+
+
+# struct llama_beam_view {
+#     const llama_token * tokens;
+#     size_t n_tokens;
+#     float p;   // Cumulative beam probability (renormalized relative to all beams)
+#     bool eob;  // Callback should set this to true when a beam is at end-of-beam.
+# };
+class llama_beam_view(ctypes.Structure):
+    _fields_ = [
+        ("tokens", llama_token_p),
+        ("n_tokens", c_size_t),
+        ("p", c_float),
+        ("eob", c_bool),
+    ]
+
+
+# // Passed to beam_search_callback function.
+# // Whenever 0 < common_prefix_length, this number of tokens should be copied from any of the beams
+# // (e.g. beams[0]) as they will be removed (shifted) from all beams in all subsequent callbacks.
+# // These pointers are valid only during the synchronous callback, so should not be saved.
+# struct llama_beams_state {
+#     struct llama_beam_view * beam_views;
+#     size_t n_beams;               // Number of elements in beam_views[].
+#     size_t common_prefix_length;  // Current max length of prefix tokens shared by all beams.
+#     bool last_call;               // True iff this is the last callback invocation.
+# };
+class llama_beams_state(ctypes.Structure):
+    _fields_ = [
+        ("beam_views", POINTER(llama_beam_view)),
+        ("n_beams", c_size_t),
+        ("common_prefix_length", c_size_t),
+        ("last_call", c_bool),
+    ]
+
+
+# // Type of pointer to the beam_search_callback function.
+# // void* callback_data is any custom data passed to llama_beam_search, that is subsequently
+# // passed back to beam_search_callback. This avoids having to use global variables in the callback.
+# typedef void (*llama_beam_search_callback_fn_t)(void * callback_data, struct llama_beams_state);
+llama_beam_search_callback_fn_t = ctypes.CFUNCTYPE(None, c_void_p, llama_beams_state)
+
+
+# /// @details Deterministically returns entire sentence constructed by a beam search.
+# /// @param ctx Pointer to the llama_context.
+# /// @param callback Invoked for each iteration of the beam_search loop, passing in beams_state.
+# /// @param callback_data A pointer that is simply passed back to callback.
+# /// @param n_beams Number of beams to use.
+# /// @param n_past Number of tokens already evaluated.
+# /// @param n_predict Maximum number of tokens to predict. EOS may occur earlier.
+# /// @param n_threads Number of threads as passed to llama_eval().
+# LLAMA_API void llama_beam_search(struct llama_context * ctx, llama_beam_search_callback_fn_t callback, void * callback_data, size_t n_beams, int n_past, int n_predict, int n_threads);
+def llama_beam_search(
+    ctx: llama_context_p,
+    callback: "ctypes._CFuncPtr[None, c_void_p, llama_beams_state]",  # type: ignore
+    callback_data: c_void_p,
+    n_beams: c_size_t,
+    n_past: c_int,
+    n_predict: c_int,
+    n_threads: c_int,
+):
+    return _lib.llama_beam_search(
+        ctx, callback, callback_data, n_beams, n_past, n_predict, n_threads
+    )
+
 
 # Performance information
 
@@ -1491,6 +1514,16 @@ def llama_log_set(
 
 _lib.llama_log_set.argtypes = [llama_log_callback, c_void_p]
 _lib.llama_log_set.restype = None
+
+
+# LLAMA_API void llama_dump_timing_info_yaml(FILE * stream, const struct llama_context * ctx);
+def llama_dump_timing_info_yaml(stream: ctypes.c_void_p, ctx: llama_context_p):
+    return _lib.llama_dump_timing_info_yaml(stream, ctx)
+
+
+_lib.llama_dump_timing_info_yaml.argtypes = [ctypes.c_void_p, llama_context_p]
+_lib.llama_dump_timing_info_yaml.restype = None
+
 
 ###################################################################################################
 
