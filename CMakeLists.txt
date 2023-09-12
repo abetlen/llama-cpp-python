@@ -2,12 +2,11 @@ cmake_minimum_required(VERSION 3.4...3.22)
 
 project(llama_cpp)
 
-option(BUILD_LLAMA_CPP "Build llama.cpp shared library and install alongside python package" ON)
+option(LLAMA_BUILD "Build llama.cpp shared library and install alongside python package" ON)
 
 
-if (BUILD_LLAMA_CPP)
+if (LLAMA_BUILD)
     set(BUILD_SHARED_LIBS "On")
-    add_subdirectory(vendor/llama.cpp)
     if (APPLE)
         set(LLAMA_AVX OFF)
         set(LLAMA_AVX2 OFF)
@@ -16,6 +15,7 @@ if (BUILD_LLAMA_CPP)
         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native -mtune=native")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -mtune=native")
     endif()
+    add_subdirectory(vendor/llama.cpp)
     install(
         TARGETS llama 
         LIBRARY DESTINATION ${SKBUILD_PLATLIB_DIR}/llama_cpp
