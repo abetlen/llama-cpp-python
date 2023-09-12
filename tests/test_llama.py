@@ -181,3 +181,6 @@ def test_llama_server():
             }
         ],
     }
+
+def test_llama_cpp_version():
+    assert llama_cpp.__version__
