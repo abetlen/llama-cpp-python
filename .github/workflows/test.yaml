@@ -73,7 +73,7 @@ jobs:
       - name: Install dependencies
         run: |
           python3 -m pip install --upgrade pip
-          python3 -m pip install .[all] -v
+          CMAKE_ARGS="LLAMA_METAL=OFF" python3 -m pip install .[all] -v
       - name: Test with pytest
         run: |
           python3 -m pytest
