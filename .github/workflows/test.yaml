@@ -73,7 +73,7 @@ jobs:
       - name: Install dependencies
         run: |
           python3 -m pip install --upgrade pip
-          CMAKE_ARGS="-DLLAMA_ACCELERATE=OFF -DLLAMA_METAL=OFF -DLLAMA_KQUANTS=OFF" python3 -m pip install .[all] -v
+          CMAKE_ARGS="-DLLAMA_ACCELERATE=OFF -DLLAMA_METAL=OFF -DLLAMA_K_QUANTS=OFF" python3 -m pip install .[all] -v
       - name: Test with pytest
         run: |
           python3 -m pytest
