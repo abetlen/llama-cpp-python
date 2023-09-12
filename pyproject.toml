@@ -23,7 +23,7 @@ sse-starlette = { version = ">=1.6.1", optional = true }
 pydantic-settings = { version = ">=2.0.1", optional = true }
 
 [tool.poetry.group.dev.dependencies]
-black = "^23.7.0"
+black = "^23.9.1"
 twine = "^4.0.2"
 mkdocs = "^1.5.2"
 mkdocstrings = {extras = ["python"], version = "^0.23.0"}
