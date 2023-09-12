@@ -21,7 +21,7 @@ ENV LLAMA_CUBLAS=1
 RUN python3 -m pip install --upgrade pip pytest cmake scikit-build setuptools fastapi uvicorn sse-starlette pydantic-settings
 
 # Install llama-cpp-python (build with cuda)
-RUN CMAKE_ARGS="-DLLAMA_CUBLAS=on" FORCE_CMAKE=1 pip install llama-cpp-python
+RUN CMAKE_ARGS="-DLLAMA_CUBLAS=on" pip install llama-cpp-python
 
 # Run the server
 CMD python3 -m llama_cpp.server

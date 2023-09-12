@@ -19,6 +19,9 @@ from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 from sse_starlette.sse import EventSourceResponse
 
+import numpy as np
+import numpy.typing as npt
+
 
 class Settings(BaseSettings):
     model: str = Field(
@@ -38,11 +41,13 @@ class Settings(BaseSettings):
         default=None,
         description="Split layers across multiple GPUs in proportion.",
     )
-    rope_freq_base: float = Field(default=10000, ge=1, description="RoPE base frequency")
-    rope_freq_scale: float = Field(default=1.0, description="RoPE frequency scaling factor")
-    seed: int = Field(
-        default=1337, description="Random seed. -1 for random."
+    rope_freq_base: float = Field(
+        default=10000, ge=1, description="RoPE base frequency"
     )
+    rope_freq_scale: float = Field(
+        default=1.0, description="RoPE frequency scaling factor"
+    )
+    seed: int = Field(default=1337, description="Random seed. -1 for random.")
     n_batch: int = Field(
         default=512, ge=1, description="The batch size to use per eval."
     )
@@ -559,9 +564,9 @@ def make_logit_bias_processor(
                 to_bias[input_id] = score
 
     def logit_bias_processor(
-        input_ids: List[int],
-        scores: List[float],
-    ) -> List[float]:
+        input_ids: npt.NDArray[np.intc],
+        scores: npt.NDArray[np.single],
+    ) -> npt.NDArray[np.single]:
         new_scores = [None] * len(scores)
         for input_id, score in enumerate(scores):
             new_scores[input_id] = score + to_bias.get(input_id, 0.0)
@@ -594,9 +599,11 @@ async def create_completion(
     kwargs = body.model_dump(exclude=exclude)
 
     if body.logit_bias is not None:
-        kwargs['logits_processor'] = llama_cpp.LogitsProcessorList([
-            make_logit_bias_processor(llama, body.logit_bias, body.logit_bias_type),
-        ])
+        kwargs["logits_processor"] = llama_cpp.LogitsProcessorList(
+            [
+                make_logit_bias_processor(llama, body.logit_bias, body.logit_bias_type),
+            ]
+        )
 
     iterator_or_completion: Union[llama_cpp.Completion, Iterator[
         llama_cpp.CompletionChunk
@@ -663,6 +670,14 @@ class CreateChatCompletionRequest(BaseModel):
     messages: List[ChatCompletionRequestMessage] = Field(
         default=[], description="A list of messages to generate completions for."
     )
+    functions: Optional[List[llama_cpp.ChatCompletionFunction]] = Field(
+        default=None,
+        description="A list of functions to apply to the generated completions.",
+    )
+    function_call: Optional[Union[str, llama_cpp.ChatCompletionFunctionCall]] = Field(
+        default=None,
+        description="A function to apply to the generated completions.",
+    )
     max_tokens: int = max_tokens_field
     temperature: float = temperature_field
     top_p: float = top_p_field
@@ -721,9 +736,11 @@ async def create_chat_completion(
     kwargs = body.model_dump(exclude=exclude)
 
     if body.logit_bias is not None:
-        kwargs['logits_processor'] = llama_cpp.LogitsProcessorList([
-            make_logit_bias_processor(llama, body.logit_bias, body.logit_bias_type),
-        ])
+        kwargs["logits_processor"] = llama_cpp.LogitsProcessorList(
+            [
+                make_logit_bias_processor(llama, body.logit_bias, body.logit_bias_type),
+            ]
+        )
 
     iterator_or_completion: Union[llama_cpp.ChatCompletion, Iterator[
         llama_cpp.ChatCompletionChunk

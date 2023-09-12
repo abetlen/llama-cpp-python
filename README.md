@@ -1,4 +1,4 @@
-# 🦙 Python Bindings for `llama.cpp`
+# 🦙 Python Bindings for [`llama.cpp`](https://github.com/ggerganov/llama.cpp)
 
 [![Documentation Status](https://readthedocs.org/projects/llama-cpp-python/badge/?version=latest)](https://llama-cpp-python.readthedocs.io/en/latest/?badge=latest)
 [![Tests](https://github.com/abetlen/llama-cpp-python/actions/workflows/test.yaml/badge.svg?branch=main)](https://github.com/abetlen/llama-cpp-python/actions/workflows/test.yaml)
@@ -48,7 +48,6 @@ Otherwise, while installing it will build the llama.ccp x86 version which will b
 ### Installation with Hardware Acceleration
 
 `llama.cpp` supports multiple BLAS backends for faster processing.
-Use the `FORCE_CMAKE=1` environment variable to force the use of `cmake` and install the pip package for the desired BLAS backend.
 
 To install with OpenBLAS, set the `LLAMA_BLAS and LLAMA_BLAS_VENDOR` environment variables before installing:
 
@@ -208,11 +207,14 @@ If you find any issues with the documentation, please open an issue or submit a 
 
 This package is under active development and I welcome any contributions.
 
-To get started, clone the repository and install the package in development mode:
+To get started, clone the repository and install the package in editable / development mode:
 
 ```bash
 git clone --recurse-submodules https://github.com/abetlen/llama-cpp-python.git
 cd llama-cpp-python
+
+# Upgrade pip (required for editable mode)
+pip install --upgrade pip
 
 # Install with pip
 pip install -e .
@@ -220,12 +222,11 @@ pip install -e .
 # if you want to use the fastapi / openapi server
 pip install -e .[server]
 
-# If you're a poetry user, installing will also include a virtual environment
-poetry install --all-extras
-. .venv/bin/activate
+# to install all optional dependencies
+pip install -e .[all]
 
-# Will need to be re-run any time vendor/llama.cpp is updated
-python3 setup.py develop
+# to clear the local build cache
+make clean
 ```
 
 # How does this compare to other Python bindings of `llama.cpp`?
