@@ -8,6 +8,8 @@ option(LLAMA_BUILD "Build llama.cpp shared library and install alongside python 
 if (LLAMA_BUILD)
     set(BUILD_SHARED_LIBS "On")
     if (APPLE)
+        # Need to disable these llama.cpp flags on Apple
+        # otherwise users may encounter invalid instruction errors
         set(LLAMA_AVX "Off" CACHE BOOL "llama: enable AVX" FORCE)
         set(LLAMA_AVX2 "Off" CACHE BOOL "llama: enable AVX2" FORCE)
         set(LLAMA_FMA "Off" CACHE BOOL "llama: enable FMA" FORCE)
