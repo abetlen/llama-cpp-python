@@ -4,6 +4,18 @@ project(llama_cpp)
 
 option(BUILD_LLAMA_CPP "Build llama.cpp shared library and install alongside python package" ON)
 
+if (APPLE)
+    set(LLAMA_AVX OFF)
+    set(LLAMA_AVX2 OFF)
+    set(LLAMA_AVX512 OFF)
+    set(LLAMA_AVX512_VBMI OFF)
+    set(LLAMA_AVX512_VNNI OFF)
+    set(LLAMA_FMA OFF)
+    set(LLAMA_F16C OFF)
+    set(LLAMA_ACCELERATE OFF)
+    set(LLAMA_METAL OFF)
+endif()
+
 if (BUILD_LLAMA_CPP)
     set(BUILD_SHARED_LIBS "On")
     add_subdirectory(vendor/llama.cpp)
