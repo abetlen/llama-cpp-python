@@ -4,7 +4,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "llama_cpp_python"
-version = "0.1.85"
+dynamic = ["version"]
 description = "Python bindings for the llama.cpp library"
 readme = "README.md"
 license = { text = "MIT" }
@@ -49,6 +49,10 @@ cmake.verbose = true
 cmake.minimum-version = "3.12"
 minimum-version = "0.5"
 ninja.make-fallback = false
+
+[tool.scikit-build.metadata.version]
+provider = "scikit_build_core.metadata.regex"
+input = "llama_cpp/__init__.py"
 
 [project.urls]
 Homepage = "https://github.com/abetlen/llama-cpp-python"
