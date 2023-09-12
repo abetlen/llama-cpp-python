@@ -187,7 +187,8 @@ Below is a short example demonstrating how to use the low-level API to tokenize 
 >>> import ctypes
 >>> params = llama_cpp.llama_context_default_params()
 # use bytes for char * params
->>> ctx = llama_cpp.llama_init_from_file(b"./models/7b/ggml-model.bin", params)
+>>> model = llama_cpp.llama_load_model_from_file(b"./models/7b/ggml-model.bin", params)
+>>> ctx = llama_cpp.llama_new_context_with_model(model, params)
 >>> max_tokens = params.n_ctx
 # use ctypes arrays for array params
 >>> tokens = (llama_cpp.llama_token * int(max_tokens))()

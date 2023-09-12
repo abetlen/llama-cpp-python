@@ -1,15 +1,17 @@
-import llama_cpp
-
+import ctypes
+import os
 import multiprocessing
 
 import llama_cpp
 
 N_THREADS = multiprocessing.cpu_count()
+MODEL_PATH = os.environ.get('MODEL', "../models/7B/ggml-model.bin")
 
 prompt = b"\n\n### Instruction:\nWhat is the capital of France?\n\n### Response:\n"
 
 lparams = llama_cpp.llama_context_default_params()
-ctx = llama_cpp.llama_init_from_file(b"../models/7B/ggml-model.bin", lparams)
+model = llama_cpp.llama_load_model_from_file(MODEL_PATH.encode('utf-8'), lparams)
+ctx = llama_cpp.llama_new_context_with_model(model, lparams)
 
 # determine the required inference memory per token:
 tmp = [0, 1, 2, 3]
@@ -58,7 +60,8 @@ while remaining_tokens > 0:
             llama_cpp.llama_token_data(token_id, logits[token_id], 0.0)
             for token_id in range(n_vocab)
         ])
-        candidates_p = llama_cpp.ctypes.pointer(llama_cpp.llama_token_data_array(_arr, len(_arr), False))
+        candidates_p = llama_cpp.ctypes.pointer(
+            llama_cpp.llama_token_data_array(_arr, len(_arr), False))
 
         _arr = (llama_cpp.c_int * len(last_n_tokens_data))(*last_n_tokens_data)
         llama_cpp.llama_sample_repetition_penalty(ctx, candidates_p,
@@ -68,9 +71,9 @@ while remaining_tokens > 0:
             _arr,
             last_n_repeat, frequency_penalty, presence_penalty)
 
-        llama_cpp.llama_sample_top_k(ctx, candidates_p, 40)
-        llama_cpp.llama_sample_top_p(ctx, candidates_p, 0.8)
-        llama_cpp.llama_sample_temperature(ctx, candidates_p, 0.2)
+        llama_cpp.llama_sample_top_k(ctx, candidates_p, k=40, min_keep=1)
+        llama_cpp.llama_sample_top_p(ctx, candidates_p, p=0.8, min_keep=1)
+        llama_cpp.llama_sample_temperature(ctx, candidates_p, temp=0.2)
         id = llama_cpp.llama_sample_token(ctx, candidates_p)
 
         last_n_tokens_data = last_n_tokens_data[1:] + [id]
@@ -86,13 +89,18 @@ while remaining_tokens > 0:
                 break
     if not input_noecho:
         for id in embd:
+            size = 32
+            buffer = (ctypes.c_char * size)()
+            n = llama_cpp.llama_token_to_piece_with_model(
+                model, llama_cpp.llama_token(id), buffer, size)
+            assert n <= size
             print(
-                llama_cpp.llama_token_to_str(ctx, id).decode("utf-8", errors="ignore"),
+                buffer[:n].decode('utf-8'),
                 end="",
                 flush=True,
             )
 
-    if len(embd) > 0 and embd[-1] == llama_cpp.llama_token_eos():
+    if len(embd) > 0 and embd[-1] == llama_cpp.llama_token_eos(ctx):
         break
 
 print()
