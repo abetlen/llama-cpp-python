@@ -48,36 +48,35 @@ Otherwise, while installing it will build the llama.ccp x86 version which will b
 ### Installation with Hardware Acceleration
 
 `llama.cpp` supports multiple BLAS backends for faster processing.
-Use the `FORCE_CMAKE=1` environment variable to force the use of `cmake` and install the pip package for the desired BLAS backend.
 
 To install with OpenBLAS, set the `LLAMA_BLAS and LLAMA_BLAS_VENDOR` environment variables before installing:
 
 ```bash
-CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS" FORCE_CMAKE=1 pip install llama-cpp-python
+CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS" pip install llama-cpp-python
 ```
 
 To install with cuBLAS, set the `LLAMA_CUBLAS=1` environment variable before installing:
 
 ```bash
-CMAKE_ARGS="-DLLAMA_CUBLAS=on" FORCE_CMAKE=1 pip install llama-cpp-python
+CMAKE_ARGS="-DLLAMA_CUBLAS=on" pip install llama-cpp-python
 ```
 
 To install with CLBlast, set the `LLAMA_CLBLAST=1` environment variable before installing:
 
 ```bash
-CMAKE_ARGS="-DLLAMA_CLBLAST=on" FORCE_CMAKE=1 pip install llama-cpp-python
+CMAKE_ARGS="-DLLAMA_CLBLAST=on" pip install llama-cpp-python
 ```
 
 To install with Metal (MPS), set the `LLAMA_METAL=on` environment variable before installing:
 
 ```bash
-CMAKE_ARGS="-DLLAMA_METAL=on" FORCE_CMAKE=1 pip install llama-cpp-python
+CMAKE_ARGS="-DLLAMA_METAL=on" pip install llama-cpp-python
 ```
 
 To install with hipBLAS / ROCm support for AMD cards, set the `LLAMA_HIPBLAS=on` environment variable before installing:
 
 ```bash
-CMAKE_ARGS="-DLLAMA_HIPBLAS=on" FORCE_CMAKE=1 pip install llama-cpp-python
+CMAKE_ARGS="-DLLAMA_HIPBLAS=on" pip install llama-cpp-python
 ```
 
 #### Windows remarks
