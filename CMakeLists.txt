@@ -4,6 +4,14 @@ project(llama_cpp)
 
 option(BUILD_LLAMA_CPP "Build llama.cpp shared library and install alongside python package" ON)
 
+if (APPLE)
+    set(LLAMA_AVX ON CACHE BOOL)
+    set(LLAMA_AVX2 OFF CACHE BOOL)
+    set(LLAMA_FMA OFF CACHE BOOL)
+    set(LLAMA_F16C OFF CACHE BOOL)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native -mtune=native")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -mtune=native")
+endif()
 
 if (BUILD_LLAMA_CPP)
     set(BUILD_SHARED_LIBS "On")
