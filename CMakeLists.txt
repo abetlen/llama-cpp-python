@@ -5,8 +5,8 @@ project(llama_cpp)
 option(BUILD_LLAMA_CPP "Build llama.cpp shared library and install alongside python package" ON)
 
 if (APPLE)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native -mtune=native")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -mtune=native")
 endif()
 
 if (BUILD_LLAMA_CPP)
