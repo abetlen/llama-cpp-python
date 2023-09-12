@@ -70,10 +70,11 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
+          architecture: x86
       - name: Install dependencies
         run: |
           python3 -m pip install --upgrade pip
-          CMAKE_ARGS="-DLLAMA_ACCELERATE=OFF -DLLAMA_METAL=OFF -DLLAMA_K_QUANTS=OFF" python3 -m pip install .[all] -v
+          python3 -m pip install .[all] -v
       - name: Test with pytest
         run: |
           python3 -m pytest
