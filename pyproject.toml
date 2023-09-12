@@ -45,8 +45,10 @@ all = [
 
 [tool.scikit-build]
 wheel.packages = ["llama_cpp"]
-wheel.expand-macos-universal-tags = true
 cmake.verbose = true
+cmake.minimum-version = "3.12"
+minimum-version = "0.5"
+ninja.make-fallback = false
 
 [project.urls]
 Homepage = "https://github.com/abetlen/llama-cpp-python"
