@@ -7,7 +7,7 @@
 
 
 from PyInstaller.utils.hooks import collect_data_files, get_package_paths
-import os
+import os, sys
 
 # Get the package path
 package_path = get_package_paths('llama_cpp')[0]
@@ -19,6 +19,9 @@ datas = collect_data_files('llama_cpp')
 if os.name == 'nt':  # Windows
     dll_path = os.path.join(package_path, 'llama_cpp', 'llama.dll')
     datas.append((dll_path, 'llama_cpp'))
-elif os.name == 'posix':  # Linux/Mac
+elif sys.platform == 'darwin':  # Mac
+    so_path = os.path.join(package_path, 'llama_cpp', 'llama.dylib')
+    datas.append((so_path, 'llama_cpp'))
+elif os.name == 'posix':  # Linux
     so_path = os.path.join(package_path, 'llama_cpp', 'llama.so')
     datas.append((so_path, 'llama_cpp'))
