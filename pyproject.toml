@@ -32,6 +32,7 @@ server = [
     "fastapi>=0.100.0",
     "pydantic-settings>=2.0.1",
     "sse-starlette>=1.6.1",
+    "starlette-context>=0.3.6,<0.4"
 ]
 test = [
     "pytest>=7.4.0",
