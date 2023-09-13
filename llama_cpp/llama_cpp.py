@@ -252,6 +252,7 @@ llama_progress_callback = ctypes.CFUNCTYPE(None, c_float, c_void_p)
 #     bool use_mmap;   // use mmap if possible
 #     bool use_mlock;  // force system to keep model in RAM
 #     bool embedding;  // embedding mode only
+#     bool numa;       // optimizations that help on some systems with non-uniform memory access
 # };
 class llama_context_params(Structure):
     _fields_ = [
@@ -273,6 +274,7 @@ class llama_context_params(Structure):
         ("use_mmap", c_bool),
         ("use_mlock", c_bool),
         ("embedding", c_bool),
+        ("numa", c_bool),
     ]
 
 
