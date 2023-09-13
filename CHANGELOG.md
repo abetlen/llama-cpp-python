@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3]
+
+- Update llama.cpp to ggerganov/llama.cpp@71ca2fad7d6c0ef95ef9944fb3a1a843e481f314
+- Add X-Request-ID request header for mirroring custom IDs by @devrimcavusoglu in #703
+- Add pyproject extra for scikit-build-core to ensure compatible pathspec version by @abetlen in 6cfc54284b99ef1bff8193e2d5e483dbd89ada02
+- Fix issue with Literal and Optional cli arguments not working by @abetlen in #702
+
 ## [0.2.2]
 
 - Fix bug in pip install of v0.2.1 due to scikit-build-core removing all `.metal` files in the source distribution (see #701)
