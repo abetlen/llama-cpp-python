@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1]
+
+- Fix bug in pip install of v0.2.0 due to .git folder being included in the source distribution
+
+## [0.2.0]
+
+- Migrated to scikit-build-core for building llama.cpp from source
+
 ## [0.1.79]
 
 ### Added
