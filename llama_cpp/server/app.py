@@ -23,6 +23,9 @@ import numpy as np
 import numpy.typing as npt
 
 
+BaseSettings.model_config['protected_namespaces'] = ()
+
+
 class Settings(BaseSettings):
     model: str = Field(
         description="The path to the model to use for generating completions."
