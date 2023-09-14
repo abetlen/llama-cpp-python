@@ -34,11 +34,20 @@ class Settings(BaseSettings):
         default=None,
         description="The alias of the model to use for generating completions.",
     )
+    seed: int = Field(default=llama_cpp.LLAMA_DEFAULT_SEED, description="Random seed. -1 for random.")
     n_ctx: int = Field(default=2048, ge=1, description="The context size.")
+    n_batch: int = Field(
+        default=512, ge=1, description="The batch size to use per eval."
+    )
     n_gpu_layers: int = Field(
         default=0,
         ge=0,
         description="The number of layers to put on the GPU. The rest will be on the CPU.",
+    )
+    main_gpu: int = Field(
+        default=0,
+        ge=0,
+        description="Main GPU to use.",
     )
     tensor_split: Optional[List[float]] = Field(
         default=None,
@@ -50,35 +59,45 @@ class Settings(BaseSettings):
     rope_freq_scale: float = Field(
         default=1.0, description="RoPE frequency scaling factor"
     )
-    seed: int = Field(default=1337, description="Random seed. -1 for random.")
-    n_batch: int = Field(
-        default=512, ge=1, description="The batch size to use per eval."
+    low_vram: bool = Field(
+        default=False,
+        description="Whether to use less VRAM. This will reduce performance.",
     )
-    n_threads: int = Field(
-        default=max(multiprocessing.cpu_count() // 2, 1),
-        ge=1,
-        description="The number of threads to use.",
+    mul_mat_q: bool = Field(
+        default=True, description="if true, use experimental mul_mat_q kernels"
     )
     f16_kv: bool = Field(default=True, description="Whether to use f16 key/value.")
-    use_mlock: bool = Field(
-        default=llama_cpp.llama_mlock_supported(),
-        description="Use mlock.",
+    logits_all: bool = Field(default=True, description="Whether to return logits.")
+    vocab_only: bool = Field(
+        default=False, description="Whether to only return the vocabulary."
     )
     use_mmap: bool = Field(
         default=llama_cpp.llama_mmap_supported(),
         description="Use mmap.",
     )
+    use_mlock: bool = Field(
+        default=llama_cpp.llama_mlock_supported(),
+        description="Use mlock.",
+    )
     embedding: bool = Field(default=True, description="Whether to use embeddings.")
-    low_vram: bool = Field(
-        default=False,
-        description="Whether to use less VRAM. This will reduce performance.",
+    n_threads: int = Field(
+        default=max(multiprocessing.cpu_count() // 2, 1),
+        ge=1,
+        description="The number of threads to use.",
     )
     last_n_tokens_size: int = Field(
         default=64,
         ge=0,
         description="Last n tokens to keep for repeat penalty calculation.",
     )
-    logits_all: bool = Field(default=True, description="Whether to return logits.")
+    lora_base: Optional[str] = Field(
+        default=None,
+        description="Optional path to base model, useful if using a quantized base model and you want to apply LoRA to an f16 model."
+    )
+    lora_path: Optional[str] = Field(
+        default=None,
+        description="Path to a LoRA file to apply to the model.",
+    )
     cache: bool = Field(
         default=False,
         description="Use a cache to reduce processing times for evaluated prompts.",
@@ -91,9 +110,6 @@ class Settings(BaseSettings):
         default=2 << 30,
         description="The size of the cache in bytes. Only used if cache is True.",
     )
-    vocab_only: bool = Field(
-        default=False, description="Whether to only return the vocabulary."
-    )
     verbose: bool = Field(
         default=True, description="Whether to print debug information."
     )
@@ -102,18 +118,6 @@ class Settings(BaseSettings):
     interrupt_requests: bool = Field(
         default=True,
         description="Whether to interrupt requests when a new request is received.",
-    )
-    n_gqa: Optional[int] = Field(
-        default=None,
-        description="TEMPORARY: Set to 8 for Llama2 70B",
-    )
-    rms_norm_eps: Optional[float] = Field(
-        default=None,
-        description="TEMPORARY",
-    )
-    mul_mat_q: Optional[bool] = Field(
-        default=None,
-        description="TEMPORARY",
     )
 
 
@@ -334,24 +338,27 @@ def create_app(settings: Optional[Settings] = None):
     global llama
     llama = llama_cpp.Llama(
         model_path=settings.model,
+        seed=settings.seed,
+        n_ctx=settings.n_ctx,
+        n_batch=settings.n_batch,
         n_gpu_layers=settings.n_gpu_layers,
+        main_gpu=settings.main_gpu,
         tensor_split=settings.tensor_split,
         rope_freq_base=settings.rope_freq_base,
         rope_freq_scale=settings.rope_freq_scale,
-        seed=settings.seed,
+        low_vram=settings.low_vram,
+        mul_mat_q=settings.mul_mat_q,
         f16_kv=settings.f16_kv,
-        use_mlock=settings.use_mlock,
-        use_mmap=settings.use_mmap,
-        embedding=settings.embedding,
         logits_all=settings.logits_all,
-        n_threads=settings.n_threads,
-        n_batch=settings.n_batch,
-        n_ctx=settings.n_ctx,
-        last_n_tokens_size=settings.last_n_tokens_size,
         vocab_only=settings.vocab_only,
+        use_mmap=settings.use_mmap,
+        use_mlock=settings.use_mlock,
+        embedding=settings.embedding,
+        n_threads=settings.n_threads,
+        last_n_tokens_size=settings.last_n_tokens_size,
+        lora_base=settings.lora_base,
+        lora_path=settings.lora_path,
         verbose=settings.verbose,
-        n_gqa=settings.n_gqa,
-        rms_norm_eps=settings.rms_norm_eps,
     )
     if settings.cache:
         if settings.cache_type == "disk":
