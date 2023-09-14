@@ -58,13 +58,31 @@ if __name__ == "__main__":
         description = field.description
         if field.default is not None and description is not None:
             description += f" (default: {field.default})"
-        parser.add_argument(
-            f"--{name}",
-            dest=name,
-            nargs="*" if contains_list_type(field.annotation) else None,
-            type=get_base_type(field.annotation) if field.annotation is not None else str,
-            help=description,
-        )
+        base_type = get_base_type(field.annotation) if field.annotation is not None else str
+        list_type = contains_list_type(field.annotation)
+        if base_type is not bool:
+            parser.add_argument(
+                f"--{name}",
+                dest=name,
+                nargs="*" if list_type else None,
+                type=base_type,
+                help=description,
+            )
+        if base_type is bool:
+            parser.add_argument(
+                f"--{name}",
+                dest=name,
+                action="store_true",
+                help=f"Disable {description}",
+                default=field.default,
+            )
+            parser.add_argument(
+                f"--no-{name}",
+                dest=name,
+                action="store_false",
+                help=f"Disable {description}",
+                default=field.default,
+            )
 
     args = parser.parse_args()
     settings = Settings(**{k: v for k, v in vars(args).items() if v is not None})
