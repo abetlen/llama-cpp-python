@@ -2,7 +2,7 @@ import operator
 import sys
 from functools import reduce
 from io import SEEK_CUR
-from typing import Dict, Any, Tuple, Union, BinaryIO
+from typing import Dict, Any, Tuple, Union, BinaryIO, List
 import os
 import struct
 from enum import IntEnum
@@ -103,7 +103,7 @@ class GGUFReader:
     gguf_version: int
     ti_data_count: int
     kv_data_count: int
-    kv_data: Dict[str, Union[int, float, str, bool, list[Any]]]
+    kv_data: Dict[str, Union[int, float, str, bool, List[Any]]]
     data_alignment = GGUF_DEFAULT_ALIGNMENT
 
     def __init__(self, path: os.PathLike[str] | str):
