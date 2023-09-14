@@ -106,7 +106,7 @@ class GGUFReader:
     kv_data: Dict[str, Union[int, float, str, bool, List[Any]]]
     data_alignment = GGUF_DEFAULT_ALIGNMENT
 
-    def __init__(self, path: os.PathLike[str] | str):
+    def __init__(self, path: Union[os.PathLike[str], str]):
         self.ti_info = []
         self.fin = open(path, "rb")
         self.read_header()
@@ -118,7 +118,7 @@ class GGUFReader:
     def ggml_pad(x: int, n: int) -> int:
         return ((x + n - 1) // n) * n
 
-    def skip_padding(self, fp: BinaryIO, n: int, align: int | None = None):
+    def skip_padding(self, fp: BinaryIO, n: int, align: Optional[int] = None):
         pad = GGUFReader.ggml_pad(n, align if align is not None else self.data_alignment) - n
         if pad != 0:
             fp.seek(pad, SEEK_CUR)
