@@ -129,6 +129,10 @@ class GGUFReader:
             raise ValueError("Invalid GGUF file magic number")
 
         self.gguf_version = struct.unpack("<I", self.fin.read(4))[0]
+
+        if self.gguf_version != 2:
+            raise ValueError("Can only summarize version 2 files")
+
         self.ti_data_count = struct.unpack("<Q", self.fin.read(8))[0]
         self.kv_data_count = struct.unpack("<Q", self.fin.read(8))[0]
 
