@@ -19,10 +19,11 @@ jobs:
         python-version: "3.8"
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip pytest cmake scikit-build setuptools
+        python3 -m pip install --upgrade pip build
+        python3 -m pip install -e .[all]
     - name: Build source distribution
       run: |
-        python setup.py sdist
+        python3 -m build --sdist
     - name: Publish to Test PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
       with:

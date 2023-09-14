@@ -7,15 +7,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.79]
+## [0.2.4]
 
-### Added
+- Add NUMA support. **NOTE** low level api users must call llama_backend_init at the start of their programs by abetlen in f4090a0bb2a2a25acfe28d31c82cc1aa273bedee
+- Fix tensor_split server cli argument by @abetlen in c4c440ba2dc86d9de728a751311fdd1c8e3756fa
+- Made all `Llama` init parameters into keyword-only parameters by @abetlen in c8f9b8a734b5b040379bbd93995ba177affab1fe
+- Added server params for `low_vram`, `main_gpu`, `lora_base`, and `lora_path` by @abetlen in 2920c4bf7ee1412d6bba7846e0e1b7ef6d34043b
+- Removed server params for `rms_norm_eps` and `n_gqa` by @abetlen in 2920c4bf7ee1412d6bba7846e0e1b7ef6d34043b
+- Fix boolean cli options by @abetlen in c999325e8e4507f6c6249dd2fb8de7f8bf57f71e and 0449d29b9f940e437231a07b9d56550226558bac
+- Silence Pydantic Settings warnings about `model_alias` setting by @earonesty in #705
+
+## [0.2.3]
+
+- Update llama.cpp to ggerganov/llama.cpp@71ca2fad7d6c0ef95ef9944fb3a1a843e481f314
+- Add X-Request-ID request header for mirroring custom IDs by @devrimcavusoglu in #703
+- Add pyproject extra for scikit-build-core to ensure compatible pathspec version by @abetlen in 6cfc54284b99ef1bff8193e2d5e483dbd89ada02
+- Fix issue with Literal and Optional cli arguments not working by @abetlen in #702
+
+## [0.2.2]
+
+- Fix bug in pip install of v0.2.1 due to scikit-build-core removing all `.metal` files in the source distribution (see #701)
+
+## [0.2.1]
+
+- Fix bug in pip install of v0.2.0 due to .git folder being included in the source distribution (see #701)
+
+## [0.2.0]
+
+- Migrated to scikit-build-core build system by @abetlen in #499
+- Use `numpy` views for `LogitsProcessor` and `StoppingCriteria` instead of python lists by @abetlen in #499
+- Drop support for end-of-life Python3.7 by @abetlen in #499
+- Convert low level `llama.cpp` constants to use basic python types instead of `ctypes` types by @abetlen in #499
+
+## [0.1.85]
+
+- Add `llama_cpp.__version__` attribute by @janvdp in #684
+- Fix low level api examples by @jbochi in #680
+
+## [0.1.84]
+
+- Update llama.cpp
+
+## [0.1.83]
+
+- Update llama.cpp
+
+## [0.1.82]
+
+- Update llama.cpp
+
+## [0.1.81]
+
+- Update llama.cpp
+
+## [0.1.80]
+
+- Update llama.cpp
+
+## [0.1.79]
 
 - GGUF Support (breaking change requiring new model format)
 
 ## [0.1.78]
-
-### Added
 
 - Grammar based sampling via LlamaGrammar which can be passed to completions
 - Make n_gpu_layers == -1 offload all layers
@@ -35,91 +88,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.74]
 
-### Added
-
 - (server) OpenAI style error responses
 
 ## [0.1.73]
-
-### Added
 
 - (server) Add rope parameters to server settings
 
 ## [0.1.72]
 
-### Added
-
 - (llama.cpp) Update llama.cpp added custom_rope for extended context lengths
 
 ## [0.1.71]
 
-### Added
-
 - (llama.cpp) Update llama.cpp
-
-### Fixed
 
 - (server) Fix several pydantic v2 migration bugs
 
 ## [0.1.70]
-
-### Fixed
 
 - (Llama.create_completion) Revert change so that `max_tokens` is not truncated to `context_size` in `create_completion`
 - (server) Fixed changed settings field names from pydantic v2 migration
 
 ## [0.1.69]
 
-### Added
-
 - (server) Streaming requests can are now interrupted pre-maturely when a concurrent request is made. Can be controlled with the `interrupt_requests` setting.
 - (server) Moved to fastapi v0.100.0 and pydantic v2
 - (docker) Added a new "simple" image that builds llama.cpp from source when started.
-
-## Fixed
-
 - (server) performance improvements by avoiding unnecessary memory allocations during sampling
 
 ## [0.1.68]
 
-### Added
-
 - (llama.cpp) Update llama.cpp
 
 ## [0.1.67]
-
-### Fixed
 
 - Fix performance bug in Llama model by pre-allocating memory tokens and logits.
 - Fix bug in Llama model where the model was not free'd after use.
 
 ## [0.1.66]
 
-### Added
-
 - (llama.cpp) New model API
-
-### Fixed
 
 - Performance issue during eval caused by looped np.concatenate call
 - State pickling issue when saving cache to disk
 
 ## [0.1.65]
 
-### Added
-
 - (llama.cpp) Fix struct misalignment bug
 
 ## [0.1.64]
-
-### Added
 
 - (llama.cpp) Update llama.cpp
 - Fix docs for seed. Set -1 for random.
 
 ## [0.1.63]
-
-### Added
 
 - (llama.cpp) Add full gpu utilisation in CUDA
 - (llama.cpp) Add get_vocab
@@ -128,59 +150,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.62]
 
-### Fixed
-
 - Metal support working
 - Cache re-enabled
 
 ## [0.1.61]
 
-### Fixed
-
 - Fix broken pip installation
 
 ## [0.1.60]
 
-### NOTE
-
-- This release was deleted due to a bug  with the packaging system that caused pip installations to fail.
-
-### Fixed
+NOTE: This release was deleted due to a bug  with the packaging system that caused pip installations to fail.
 
 - Truncate max_tokens in create_completion so requested tokens doesn't exceed context size.
 - Temporarily disable cache for completion requests
 
 ## [v0.1.59]
 
-### Added
-
 - (llama.cpp) k-quants support
 - (server) mirostat sampling parameters to server
-
-### Fixed
-
 - Support both `.so` and `.dylib` for `libllama` on MacOS
 
 ## [v0.1.58]
-
-### Added
 
 - (llama.cpp) Metal Silicon support
 
 ## [v0.1.57]
 
-### Added
-
 - (llama.cpp) OpenLlama 3B support
 
 ## [v0.1.56]
 
-### Added
-
 - (misc) Added first version of the changelog
 - (server) Use async routes
 - (python-api) Use numpy for internal buffers to reduce memory usage and improve performance.
-
-### Fixed
-
 - (python-api) Performance bug in stop sequence check slowing down streaming.

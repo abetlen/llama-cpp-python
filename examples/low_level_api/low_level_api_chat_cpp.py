@@ -24,6 +24,10 @@ class LLaMAInteract:
 	def __init__(self, params: GptParams) -> None:
 		# input args
 		self.params = params
+		if self.params.path_session is None:
+			self.params.path_session = ""
+		if self.params.antiprompt is None:
+			self.params.antiprompt = ""
 
 		if (self.params.perplexity):
 			raise NotImplementedError("""************
@@ -66,7 +70,9 @@ specified) expect poor results""", file=sys.stderr)
 		self.lparams.use_mlock = self.params.use_mlock
 		self.lparams.use_mmap = self.params.use_mmap
 
-		self.ctx = llama_cpp.llama_init_from_file(self.params.model.encode("utf8"), self.lparams)
+		self.model = llama_cpp.llama_load_model_from_file(
+			self.params.model.encode("utf8"), self.lparams)
+		self.ctx = llama_cpp.llama_new_context_with_model(self.model, self.lparams)
 		if (not self.ctx):
 			raise RuntimeError(f"error: failed to load model '{self.params.model}'")
 
@@ -181,12 +187,12 @@ prompt: '{self.params.prompt}'
 number of tokens in prompt = {len(self.embd_inp)}""", file=sys.stderr)
 
 			for i in range(len(self.embd_inp)):
-				print(f"{self.embd_inp[i]} -> '{llama_cpp.llama_token_to_str(self.ctx, self.embd_inp[i])}'", file=sys.stderr)
+				print(f"{self.embd_inp[i]} -> '{self.token_to_str(self.embd_inp[i])}'", file=sys.stderr)
 
 			if (self.params.n_keep > 0):
 				print("static prompt based on n_keep: '")
 				for i in range(self.params.n_keep):
-					print(llama_cpp.llama_token_to_str(self.ctx, self.embd_inp[i]), file=sys.stderr)
+					print(self.token_to_str(self.embd_inp[i]), file=sys.stderr)
 				print("'", file=sys.stderr)
 			print(file=sys.stderr)
 
@@ -339,7 +345,7 @@ n_keep = {self.params.n_keep}
 				candidates_p = llama_cpp.ctypes.pointer(llama_cpp.llama_token_data_array(_arr, len(_arr), False))
 
 				# Apply penalties
-				nl_logit = logits[llama_cpp.llama_token_nl()]
+				nl_logit = logits[llama_cpp.llama_token_nl(self.ctx)]
 				last_n_repeat = min(len(self.last_n_tokens), repeat_last_n, self.n_ctx)
 
 				_arr = (llama_cpp.llama_token * last_n_repeat)(*self.last_n_tokens[len(self.last_n_tokens) - last_n_repeat:])
@@ -380,7 +386,7 @@ n_keep = {self.params.n_keep}
 				self.last_n_tokens.append(id)
 
 				# replace end of text token with newline token when in interactive mode
-				if (id == llama_cpp.llama_token_eos() and self.params.interactive and not self.params.instruct):
+				if (id == llama_cpp.llama_token_eos(self.ctx) and self.params.interactive and not self.params.instruct):
 					id = self.llama_token_newline[0]
 					self.embd.append(id)
 					if (self.use_antiprompt()):
@@ -437,7 +443,7 @@ n_keep = {self.params.n_keep}
 					break
 
 			# end of text token
-			if len(self.embd) > 0 and self.embd[-1] == llama_cpp.llama_token_eos():
+			if len(self.embd) > 0 and self.embd[-1] == llama_cpp.llama_token_eos(self.ctx):
 				if (not self.params.instruct):
 					for i in self.llama_token_eot:
 						yield i
@@ -464,10 +470,18 @@ n_keep = {self.params.n_keep}
 		llama_cpp.llama_free(self.ctx)
 		self.set_color(util.CONSOLE_COLOR_DEFAULT)
 
+	def token_to_str(self, token_id: int) -> bytes:
+		size = 32
+		buffer = (ctypes.c_char * size)()
+		n = llama_cpp.llama_token_to_piece_with_model(
+			self.model, llama_cpp.llama_token(token_id), buffer, size)
+		assert n <= size
+		return bytes(buffer[:n])
+
 	# return past text
 	def past(self):
 		for id in self.last_n_tokens[-self.n_past:]:
-			yield llama_cpp.llama_token_to_str(self.ctx, id).decode("utf8", errors="ignore")
+			yield self.token_to_str(id).decode("utf8", errors="ignore")
 
 	# write input
 	def input(self, prompt: str):
@@ -481,7 +495,7 @@ n_keep = {self.params.n_keep}
 	def output(self):
 		self.remaining_tokens = self.params.n_predict
 		for id in self.generate():
-			cur_char = llama_cpp.llama_token_to_str(self.ctx, id)
+			cur_char = self.token_to_str(id)
 
 			# Add remainder of missing bytes
 			if None in self.multibyte_fix:

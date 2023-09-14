@@ -13,11 +13,11 @@ __pycache__/
 *$py.class
 
 # C extensions
-*.so
-*.dylib
-*.metal
-*.dll
-*.lib
+llama_cpp/*.so
+llama_cpp/*.dylib
+llama_cpp/*.metal
+llama_cpp/*.dll
+llama_cpp/*.lib
 
 # Distribution / packaging
 .Python

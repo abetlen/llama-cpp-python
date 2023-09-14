@@ -1,48 +1,73 @@
-[tool.poetry]
+[build-system]
+requires = ["scikit-build-core[pyproject]>=0.5.0"]
+build-backend = "scikit_build_core.build"
+
+[project]
 name = "llama_cpp_python"
-version = "0.1.84"
+dynamic = ["version"]
 description = "Python bindings for the llama.cpp library"
-authors = ["Andrei Betlen <abetlen@gmail.com>"]
-license = "MIT"
 readme = "README.md"
-homepage = "https://github.com/abetlen/llama-cpp-python"
-repository = "https://github.com/abetlen/llama-cpp-python"
-packages = [{include = "llama_cpp"}]
-include = [
-    "LICENSE.md",
+license = { text = "MIT" }
+authors = [
+    { name = "Andrei Betlen", email = "abetlen@gmail.com" },
+]
+dependencies = [
+    "typing-extensions>=4.5.0",
+    "numpy>=1.20.0",
+    "diskcache>=5.6.1",
+]
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
 ]
 
-[tool.poetry.dependencies]
-python = "^3.8.1"
-typing-extensions = "^4.7.1"
-numpy = "^1.24.4"
-diskcache = "^5.6.3"
-uvicorn = { version = "^0.23.2", optional = true }
-fastapi = { version = ">=0.100.0", optional = true }
-sse-starlette = { version = ">=1.6.1", optional = true }
-pydantic-settings = { version = ">=2.0.1", optional = true }
 
-[tool.poetry.group.dev.dependencies]
-black = "^23.7.0"
-twine = "^4.0.2"
-mkdocs = "^1.5.2"
-mkdocstrings = {extras = ["python"], version = "^0.23.0"}
-mkdocs-material = "^9.2.8"
-pytest = "^7.4.2"
-httpx = "^0.24.1"
-scikit-build = "0.17.6"
+[project.optional-dependencies]
+server = [
+    "uvicorn>=0.22.0",
+    "fastapi>=0.100.0",
+    "pydantic-settings>=2.0.1",
+    "sse-starlette>=1.6.1",
+    "starlette-context>=0.3.6,<0.4"
+]
+test = [
+    "pytest>=7.4.0",
+    "httpx>=0.24.1",
+]
+dev = [
+    "black>=23.3.0",
+    "twine>=4.0.2",
+    "mkdocs>=1.4.3",
+    "mkdocstrings[python]>=0.22.0",
+    "mkdocs-material>=9.1.18",
+    "pytest>=7.4.0",
+    "httpx>=0.24.1",
+]
+all = [
+    "llama_cpp_python[server,test,dev]",
+]
 
-[tool.poetry.extras]
-server = ["uvicorn", "fastapi", "pydantic-settings", "sse-starlette"]
+[tool.scikit-build]
+wheel.packages = ["llama_cpp"]
+cmake.verbose = true
+cmake.minimum-version = "3.12"
+minimum-version = "0.5"
+sdist.exclude = [".git", "vendor/llama.cpp/.git"]
+
+[tool.scikit-build.metadata.version]
+provider = "scikit_build_core.metadata.regex"
+input = "llama_cpp/__init__.py"
+
+[project.urls]
+Homepage = "https://github.com/abetlen/llama-cpp-python"
+Issues = "https://github.com/abetlen/llama-cpp-python/issues"
+Documentation = "https://llama-cpp-python.readthedocs.io/en/latest/"
+Changelog = "https://llama-cpp-python.readthedocs.io/en/latest/changelog/"
 
 [tool.pytest.ini_options]
 addopts = "--ignore=vendor"
 
-[build-system]
-requires = [
-    "setuptools>=42",
-    "scikit-build>=0.13",
-    "cmake>=3.18",
-    "ninja",
-]
-build-backend = "setuptools.build_meta"

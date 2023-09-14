@@ -5,26 +5,30 @@ update:
 update.vendor:
 	cd vendor/llama.cpp && git pull origin master
 
+deps:
+	python3 -m pip install --upgrade pip
+	python3 -m pip install -e ".[all]"
+
 build:
-	python3 setup.py develop
+	python3 -m pip install -e .
 
 build.cuda:
-	CMAKE_ARGS="-DLLAMA_CUBLAS=on" FORCE_CMAKE=1 python3 setup.py develop
+	CMAKE_ARGS="-DLLAMA_CUBLAS=on" python3 -m pip install -e .
 
 build.opencl:
-	CMAKE_ARGS="-DLLAMA_CLBLAST=on" FORCE_CMAKE=1 python3 setup.py develop
+	CMAKE_ARGS="-DLLAMA_CLBLAST=on" python3 -m pip install -e .
 
 build.openblas:
-	CMAKE_ARGS="-DLLAMA_OPENBLAS=on" FORCE_CMAKE=1 python3 setup.py develop
+	CMAKE_ARGS="-DLLAMA_CLBLAST=on" python3 -m pip install -e .
 
 build.blis:
-	CMAKE_ARGS="-DLLAMA_OPENBLAS=on -DLLAMA_OPENBLAS_VENDOR=blis" FORCE_CMAKE=1 python3 setup.py develop
+	CMAKE_ARGS="-DLLAMA_OPENBLAS=on -DLLAMA_OPENBLAS_VENDOR=blis" python3 -m pip install -e .
 
 build.metal:
-	CMAKE_ARGS="-DLLAMA_METAL=on" FORCE_CMAKE=1 python3 setup.py develop
+	CMAKE_ARGS="-DLLAMA_METAL=on" python3 -m pip install -e .
 
 build.sdist:
-	python3 setup.py sdist
+	python3 -m build --sdist
 
 deploy.pypi:
 	python3 -m twine upload dist/*

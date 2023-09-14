@@ -182,35 +182,50 @@ class LlamaState:
         self.llama_state_size = llama_state_size
 
 
-LogitsProcessor = Callable[[List[int], List[float]], List[float]]
+LogitsProcessor = Callable[
+    [npt.NDArray[np.intc], npt.NDArray[np.single]], npt.NDArray[np.single]
+]
 
 
 class LogitsProcessorList(List[LogitsProcessor]):
-    def __call__(self, input_ids: List[int], scores: List[float]) -> List[float]:
+    def __call__(
+        self, input_ids: npt.NDArray[np.intc], scores: npt.NDArray[np.single]
+    ) -> npt.NDArray[np.single]:
         for processor in self:
             scores = processor(input_ids, scores)
         return scores
 
 
-StoppingCriteria = Callable[[List[int], List[float]], bool]
+StoppingCriteria = Callable[[npt.NDArray[np.intc], npt.NDArray[np.single]], bool]
 
 
 class StoppingCriteriaList(List[StoppingCriteria]):
-    def __call__(self, input_ids: List[int], logits: List[float]) -> bool:
+    def __call__(
+        self, input_ids: npt.NDArray[np.intc], logits: npt.NDArray[np.single]
+    ) -> bool:
         return any([stopping_criteria(input_ids, logits) for stopping_criteria in self])
 
 
 class Llama:
     """High-level Python wrapper for a llama.cpp model."""
 
+    __backend_initialized = False
+
     def __init__(
         self,
         model_path: str,
+        *,
         # NOTE: These parameters are likely to change in the future.
+        seed: int = llama_cpp.LLAMA_DEFAULT_SEED,
         n_ctx: int = 512,
-        n_parts: int = -1,
+        n_batch: int = 512,
         n_gpu_layers: int = 0,
-        seed: int = 1337,
+        main_gpu: int = 0,
+        tensor_split: Optional[List[float]] = None,
+        rope_freq_base: float = 10000.0,
+        rope_freq_scale: float = 1.0,
+        low_vram: bool = False,
+        mul_mat_q: bool = True,
         f16_kv: bool = True,
         logits_all: bool = False,
         vocab_only: bool = False,
@@ -218,27 +233,27 @@ class Llama:
         use_mlock: bool = False,
         embedding: bool = False,
         n_threads: Optional[int] = None,
-        n_batch: int = 512,
         last_n_tokens_size: int = 64,
         lora_base: Optional[str] = None,
         lora_path: Optional[str] = None,
-        low_vram: bool = False,
-        tensor_split: Optional[List[float]] = None,
-        rope_freq_base: float = 10000.0,
-        rope_freq_scale: float = 1.0,
-        n_gqa: Optional[int] = None,  # (TEMPORARY) must be 8 for llama2 70b
-        rms_norm_eps: Optional[float] = None,  # (TEMPORARY)
-        mul_mat_q: Optional[bool] = None,
+        numa: bool = False,
         verbose: bool = True,
+        **kwargs # type: ignore
     ):
         """Load a llama.cpp model from `model_path`.
 
         Args:
             model_path: Path to the model.
-            n_ctx: Maximum context size.
-            n_parts: Number of parts to split the model into. If -1, the number of parts is automatically determined.
             seed: Random seed. -1 for random.
+            n_ctx: Maximum context size.
+            n_batch: Maximum number of prompt tokens to batch together when calling llama_eval.
             n_gpu_layers: Number of layers to offload to GPU (-ngl). If -1, all layers are offloaded.
+            main_gpu: Main GPU to use.
+            tensor_split: Optional list of floats to split the model across multiple GPUs. If None, the model is not split.
+            rope_freq_base: Base frequency for rope sampling.
+            rope_freq_scale: Scale factor for rope sampling.
+            low_vram: Use low VRAM mode.
+            mul_mat_q: if true, use experimental mul_mat_q kernels
             f16_kv: Use half-precision for key/value cache.
             logits_all: Return logits for all tokens, not just the last token.
             vocab_only: Only load the vocabulary no weights.
@@ -246,14 +261,12 @@ class Llama:
             use_mlock: Force the system to keep the model in RAM.
             embedding: Embedding mode only.
             n_threads: Number of threads to use. If None, the number of threads is automatically determined.
-            n_batch: Maximum number of prompt tokens to batch together when calling llama_eval.
             last_n_tokens_size: Maximum number of tokens to keep in the last_n_tokens deque.
             lora_base: Optional path to base model, useful if using a quantized base model and you want to apply LoRA to an f16 model.
             lora_path: Path to a LoRA file to apply to the model.
-            tensor_split: List of floats to split the model across multiple GPUs. If None, the model is not split.
-            rope_freq_base: Base frequency for rope sampling.
-            rope_freq_scale: Scale factor for rope sampling.
+            numa: Enable NUMA support. (NOTE: The initial value of this parameter is used for the remainder of the program as this value is set in llama_backend_init)
             verbose: Print verbose output to stderr.
+            kwargs: Unused keyword arguments (for additional backwards compatibility).
 
         Raises:
             ValueError: If the model path does not exist.
@@ -263,36 +276,44 @@ class Llama:
         """
 
         self.verbose = verbose
+
+        if not Llama.__backend_initialized:
+            if self.verbose:
+                llama_cpp.llama_backend_init(numa)
+            else:
+                with suppress_stdout_stderr():
+                    llama_cpp.llama_backend_init(numa)
+            Llama.__backend_initialized = True
+
         self.model_path = model_path
 
         self.params = llama_cpp.llama_context_default_params()
+        self.params.seed = seed
         self.params.n_ctx = n_ctx
         self.params.n_gpu_layers = 0x7FFFFFFF if n_gpu_layers == -1 else n_gpu_layers  # 0x7FFFFFFF is INT32 max, will be auto set to all layers
-        self.params.seed = seed
+        self.params.main_gpu = main_gpu
+        self.params.rope_freq_base = rope_freq_base
+        self.params.rope_freq_scale = rope_freq_scale
+        self.params.low_vram = low_vram
+        self.params.mul_mat_q = mul_mat_q
         self.params.f16_kv = f16_kv
         self.params.logits_all = logits_all
         self.params.vocab_only = vocab_only
         self.params.use_mmap = use_mmap if lora_path is None else False
         self.params.use_mlock = use_mlock
         self.params.embedding = embedding
-        self.params.low_vram = low_vram
 
         self.tensor_split = tensor_split
         self._p_tensor_split = None
 
         if self.tensor_split is not None:
-            FloatArray = (ctypes.c_float * len(self.tensor_split))(*self.tensor_split)
-            self._p_tensor_split = ctypes.POINTER(ctypes.c_float)(
-                FloatArray
+            # Type conversion and expand the list to the length of LLAMA_MAX_DEVICES
+            FloatArray = ctypes.c_float * llama_cpp.LLAMA_MAX_DEVICES
+            self._c_tensor_split = FloatArray(
+                *tensor_split
             )  # keep a reference to the array so it is not gc'd
-            self.params.tensor_split = self._p_tensor_split
+            self.params.tensor_split = self._c_tensor_split
 
-        self.params.rope_freq_base = rope_freq_base
-        self.params.rope_freq_scale = rope_freq_scale
-
-
-        if mul_mat_q is not None:
-            self.params.mul_mat_q = mul_mat_q
 
         self.last_n_tokens_size = last_n_tokens_size
         self.n_batch = min(n_ctx, n_batch)
@@ -303,10 +324,6 @@ class Llama:
 
         self.lora_base = lora_base
         self.lora_path = lora_path
-
-        ### DEPRECATED ###
-        self.n_parts = n_parts
-        ### DEPRECATED ###
 
         if not os.path.exists(model_path):
             raise ValueError(f"Model path does not exist: {model_path}")
@@ -326,7 +343,6 @@ class Llama:
             self.ctx = llama_cpp.llama_new_context_with_model(self.model, self.params)
         else:
             with suppress_stdout_stderr():
-                print("here")
                 self.ctx = llama_cpp.llama_new_context_with_model(
                     self.model, self.params
                 )
@@ -336,11 +352,11 @@ class Llama:
         if self.lora_path:
             if llama_cpp.llama_model_apply_lora_from_file(
                 self.model,
-                llama_cpp.c_char_p(self.lora_path.encode("utf-8")),
-                llama_cpp.c_char_p(self.lora_base.encode("utf-8"))
+                self.lora_path.encode("utf-8"),
+                self.lora_base.encode("utf-8")
                 if self.lora_base is not None
                 else llama_cpp.c_char_p(0),
-                llama_cpp.c_int(self.n_threads),
+                self.n_threads,
             ):
                 raise RuntimeError(
                     f"Failed to apply LoRA from lora path: {self.lora_path} to base path: {self.lora_base}"
@@ -351,8 +367,8 @@ class Llama:
 
         self._n_vocab = self.n_vocab()
         self._n_ctx = self.n_ctx()
-        size = llama_cpp.c_size_t(self._n_vocab)
-        sorted = llama_cpp.c_bool(False)
+        size = self._n_vocab
+        sorted = False
         self._candidates_data = np.array(
             [],
             dtype=np.dtype(
@@ -415,8 +431,8 @@ class Llama:
             self.model,
             text,
             tokens,
-            llama_cpp.c_int(n_ctx),
-            llama_cpp.c_bool(add_bos),
+            n_ctx,
+            add_bos,
         )
         if n_tokens < 0:
             n_tokens = abs(n_tokens)
@@ -425,8 +441,8 @@ class Llama:
                 self.model,
                 text,
                 tokens,
-                llama_cpp.c_int(n_tokens),
-                llama_cpp.c_bool(add_bos),
+                n_tokens,
+                add_bos,
             )
             if n_tokens < 0:
                 raise RuntimeError(
@@ -484,9 +500,9 @@ class Llama:
             return_code = llama_cpp.llama_eval(
                 ctx=self.ctx,
                 tokens=(llama_cpp.llama_token * len(batch))(*batch),
-                n_tokens=llama_cpp.c_int(n_tokens),
-                n_past=llama_cpp.c_int(n_past),
-                n_threads=llama_cpp.c_int(self.n_threads),
+                n_tokens=n_tokens,
+                n_past=n_past,
+                n_threads=self.n_threads,
             )
             if return_code != 0:
                 raise RuntimeError(f"llama_eval returned {return_code}")
@@ -507,17 +523,17 @@ class Llama:
     def _sample(
         self,
         last_n_tokens_data,  # type: llama_cpp.Array[llama_cpp.llama_token]
-        last_n_tokens_size: llama_cpp.c_int,
-        top_k: llama_cpp.c_int,
-        top_p: llama_cpp.c_float,
-        temp: llama_cpp.c_float,
-        tfs_z: llama_cpp.c_float,
-        repeat_penalty: llama_cpp.c_float,
-        frequency_penalty: llama_cpp.c_float,
-        presence_penalty: llama_cpp.c_float,
-        mirostat_mode: llama_cpp.c_int,
-        mirostat_tau: llama_cpp.c_float,
-        mirostat_eta: llama_cpp.c_float,
+        last_n_tokens_size: int,
+        top_k: int,
+        top_p: float,
+        temp: float,
+        tfs_z: float,
+        repeat_penalty: float,
+        frequency_penalty: float,
+        presence_penalty: float,
+        mirostat_mode: float,
+        mirostat_tau: float,
+        mirostat_eta: float,
         penalize_nl: bool = True,
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
@@ -526,20 +542,16 @@ class Llama:
         assert self.n_tokens > 0
         n_vocab = self._n_vocab
         n_ctx = self._n_ctx
-        top_k = llama_cpp.c_int(n_vocab) if top_k.value <= 0 else top_k
+        top_k = n_vocab if top_k <= 0 else top_k
         last_n_tokens_size = (
-            llama_cpp.c_int(n_ctx)
-            if last_n_tokens_size.value < 0
+            n_ctx
+            if last_n_tokens_size < 0
             else last_n_tokens_size
         )
         logits: npt.NDArray[np.single] = self._scores[-1, :]
 
         if logits_processor is not None:
-            logits = np.array(
-                logits_processor(self._input_ids.tolist(), logits.tolist()),
-                dtype=np.single,
-            )
-            self._scores[-1, :] = logits
+            logits[:] = logits_processor(self._input_ids, logits)
 
         nl_logit = logits[self._token_nl]
         candidates = self._candidates
@@ -575,13 +587,13 @@ class Llama:
                 grammar=grammar.grammar,
             )
 
-        if temp.value == 0.0:
+        if temp == 0.0:
             id = llama_cpp.llama_sample_token_greedy(
                 ctx=self.ctx,
                 candidates=llama_cpp.ctypes.byref(candidates),  # type: ignore
             )
-        elif mirostat_mode.value == 1:
-            mirostat_mu = llama_cpp.c_float(2.0 * mirostat_tau.value)
+        elif mirostat_mode == 1:
+            mirostat_mu = llama_cpp.c_float(2.0 * mirostat_tau)
             mirostat_m = llama_cpp.c_int(100)
             llama_cpp.llama_sample_temperature(
                 ctx=self.ctx,
@@ -596,8 +608,8 @@ class Llama:
                 mu=llama_cpp.ctypes.byref(mirostat_mu),  # type: ignore
                 m=mirostat_m,
             )
-        elif mirostat_mode.value == 2:
-            mirostat_mu = llama_cpp.c_float(2.0 * mirostat_tau.value)
+        elif mirostat_mode== 2:
+            mirostat_mu = llama_cpp.c_float(2.0 * mirostat_tau)
             llama_cpp.llama_sample_temperature(
                 ctx=self.ctx,
                 candidates=llama_cpp.ctypes.byref(candidates),  # type: ignore
@@ -687,17 +699,17 @@ class Llama:
             last_n_tokens_data=(llama_cpp.llama_token * self.last_n_tokens_size)(
                 *last_n_tokens_data
             ),
-            last_n_tokens_size=llama_cpp.c_int(self.last_n_tokens_size),
-            top_k=llama_cpp.c_int(top_k),
-            top_p=llama_cpp.c_float(top_p),
-            temp=llama_cpp.c_float(temp),
-            tfs_z=llama_cpp.c_float(tfs_z),
-            repeat_penalty=llama_cpp.c_float(repeat_penalty),
-            frequency_penalty=llama_cpp.c_float(frequency_penalty),
-            presence_penalty=llama_cpp.c_float(presence_penalty),
-            mirostat_mode=llama_cpp.c_int(mirostat_mode),
-            mirostat_tau=llama_cpp.c_float(mirostat_tau),
-            mirostat_eta=llama_cpp.c_float(mirostat_eta),
+            last_n_tokens_size=self.last_n_tokens_size,
+            top_k=top_k,
+            top_p=top_p,
+            temp=temp,
+            tfs_z=tfs_z,
+            repeat_penalty=repeat_penalty,
+            frequency_penalty=frequency_penalty,
+            presence_penalty=presence_penalty,
+            mirostat_mode=mirostat_mode,
+            mirostat_tau=mirostat_tau,
+            mirostat_eta=mirostat_eta,
             penalize_nl=penalize_nl,
             logits_processor=logits_processor,
             grammar=grammar,
@@ -778,7 +790,7 @@ class Llama:
                 grammar=grammar,
             )
             if stopping_criteria is not None and stopping_criteria(
-                self._input_ids.tolist(), self._scores[-1, :].tolist()
+                self._input_ids, self._scores[-1, :]
             ):
                 return
             tokens_or_none = yield token
@@ -1105,7 +1117,7 @@ class Llama:
                 break
 
         if stopping_criteria is not None and stopping_criteria(
-            self._input_ids.tolist(), self._scores[-1, :].tolist()
+            self._input_ids, self._scores[-1, :]
         ):
             text = self.detokenize(completion_tokens)
             finish_reason = "stop"
@@ -1525,6 +1537,8 @@ class Llama:
     def create_chat_completion(
         self,
         messages: List[ChatCompletionMessage],
+        functions: Optional[List[ChatCompletionFunction]] = None,
+        function_call: Optional[Union[str, ChatCompletionFunctionCall]] = None,
         temperature: float = 0.2,
         top_p: float = 0.95,
         top_k: int = 40,
