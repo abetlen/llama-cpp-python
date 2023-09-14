@@ -343,11 +343,11 @@ class Llama:
         if self.lora_path:
             if llama_cpp.llama_model_apply_lora_from_file(
                 self.model,
-                llama_cpp.c_char_p(self.lora_path.encode("utf-8")),
-                llama_cpp.c_char_p(self.lora_base.encode("utf-8"))
+                self.lora_path.encode("utf-8"),
+                self.lora_base.encode("utf-8")
                 if self.lora_base is not None
                 else llama_cpp.c_char_p(0),
-                llama_cpp.c_int(self.n_threads),
+                self.n_threads,
             ):
                 raise RuntimeError(
                     f"Failed to apply LoRA from lora path: {self.lora_path} to base path: {self.lora_base}"
@@ -358,8 +358,8 @@ class Llama:
 
         self._n_vocab = self.n_vocab()
         self._n_ctx = self.n_ctx()
-        size = llama_cpp.c_size_t(self._n_vocab)
-        sorted = llama_cpp.c_bool(False)
+        size = self._n_vocab
+        sorted = False
         self._candidates_data = np.array(
             [],
             dtype=np.dtype(
@@ -422,8 +422,8 @@ class Llama:
             self.model,
             text,
             tokens,
-            llama_cpp.c_int(n_ctx),
-            llama_cpp.c_bool(add_bos),
+            n_ctx,
+            add_bos,
         )
         if n_tokens < 0:
             n_tokens = abs(n_tokens)
@@ -432,8 +432,8 @@ class Llama:
                 self.model,
                 text,
                 tokens,
-                llama_cpp.c_int(n_tokens),
-                llama_cpp.c_bool(add_bos),
+                n_tokens,
+                add_bos,
             )
             if n_tokens < 0:
                 raise RuntimeError(
@@ -491,9 +491,9 @@ class Llama:
             return_code = llama_cpp.llama_eval(
                 ctx=self.ctx,
                 tokens=(llama_cpp.llama_token * len(batch))(*batch),
-                n_tokens=llama_cpp.c_int(n_tokens),
-                n_past=llama_cpp.c_int(n_past),
-                n_threads=llama_cpp.c_int(self.n_threads),
+                n_tokens=n_tokens,
+                n_past=n_past,
+                n_threads=self.n_threads,
             )
             if return_code != 0:
                 raise RuntimeError(f"llama_eval returned {return_code}")
@@ -514,17 +514,17 @@ class Llama:
     def _sample(
         self,
         last_n_tokens_data,  # type: llama_cpp.Array[llama_cpp.llama_token]
-        last_n_tokens_size: llama_cpp.c_int,
-        top_k: llama_cpp.c_int,
-        top_p: llama_cpp.c_float,
-        temp: llama_cpp.c_float,
-        tfs_z: llama_cpp.c_float,
-        repeat_penalty: llama_cpp.c_float,
-        frequency_penalty: llama_cpp.c_float,
-        presence_penalty: llama_cpp.c_float,
-        mirostat_mode: llama_cpp.c_int,
-        mirostat_tau: llama_cpp.c_float,
-        mirostat_eta: llama_cpp.c_float,
+        last_n_tokens_size: int,
+        top_k: int,
+        top_p: float,
+        temp: float,
+        tfs_z: float,
+        repeat_penalty: float,
+        frequency_penalty: float,
+        presence_penalty: float,
+        mirostat_mode: float,
+        mirostat_tau: float,
+        mirostat_eta: float,
         penalize_nl: bool = True,
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
@@ -533,10 +533,10 @@ class Llama:
         assert self.n_tokens > 0
         n_vocab = self._n_vocab
         n_ctx = self._n_ctx
-        top_k = llama_cpp.c_int(n_vocab) if top_k.value <= 0 else top_k
+        top_k = n_vocab if top_k <= 0 else top_k
         last_n_tokens_size = (
-            llama_cpp.c_int(n_ctx)
-            if last_n_tokens_size.value < 0
+            n_ctx
+            if last_n_tokens_size < 0
             else last_n_tokens_size
         )
         logits: npt.NDArray[np.single] = self._scores[-1, :]
@@ -578,13 +578,13 @@ class Llama:
                 grammar=grammar.grammar,
             )
 
-        if temp.value == 0.0:
+        if temp == 0.0:
             id = llama_cpp.llama_sample_token_greedy(
                 ctx=self.ctx,
                 candidates=llama_cpp.ctypes.byref(candidates),  # type: ignore
             )
-        elif mirostat_mode.value == 1:
-            mirostat_mu = llama_cpp.c_float(2.0 * mirostat_tau.value)
+        elif mirostat_mode == 1:
+            mirostat_mu = llama_cpp.c_float(2.0 * mirostat_tau)
             mirostat_m = llama_cpp.c_int(100)
             llama_cpp.llama_sample_temperature(
                 ctx=self.ctx,
@@ -599,8 +599,8 @@ class Llama:
                 mu=llama_cpp.ctypes.byref(mirostat_mu),  # type: ignore
                 m=mirostat_m,
             )
-        elif mirostat_mode.value == 2:
-            mirostat_mu = llama_cpp.c_float(2.0 * mirostat_tau.value)
+        elif mirostat_mode== 2:
+            mirostat_mu = llama_cpp.c_float(2.0 * mirostat_tau)
             llama_cpp.llama_sample_temperature(
                 ctx=self.ctx,
                 candidates=llama_cpp.ctypes.byref(candidates),  # type: ignore
@@ -690,17 +690,17 @@ class Llama:
             last_n_tokens_data=(llama_cpp.llama_token * self.last_n_tokens_size)(
                 *last_n_tokens_data
             ),
-            last_n_tokens_size=llama_cpp.c_int(self.last_n_tokens_size),
-            top_k=llama_cpp.c_int(top_k),
-            top_p=llama_cpp.c_float(top_p),
-            temp=llama_cpp.c_float(temp),
-            tfs_z=llama_cpp.c_float(tfs_z),
-            repeat_penalty=llama_cpp.c_float(repeat_penalty),
-            frequency_penalty=llama_cpp.c_float(frequency_penalty),
-            presence_penalty=llama_cpp.c_float(presence_penalty),
-            mirostat_mode=llama_cpp.c_int(mirostat_mode),
-            mirostat_tau=llama_cpp.c_float(mirostat_tau),
-            mirostat_eta=llama_cpp.c_float(mirostat_eta),
+            last_n_tokens_size=self.last_n_tokens_size,
+            top_k=top_k,
+            top_p=top_p,
+            temp=temp,
+            tfs_z=tfs_z,
+            repeat_penalty=repeat_penalty,
+            frequency_penalty=frequency_penalty,
+            presence_penalty=presence_penalty,
+            mirostat_mode=mirostat_mode,
+            mirostat_tau=mirostat_tau,
+            mirostat_eta=mirostat_eta,
             penalize_nl=penalize_nl,
             logits_processor=logits_processor,
             grammar=grammar,

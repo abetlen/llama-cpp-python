@@ -91,15 +91,15 @@ GGML_CUDA_MAX_DEVICES = 16
 LLAMA_MAX_DEVICES = GGML_CUDA_MAX_DEVICES if GGML_USE_CUBLAS else 1
 
 # define LLAMA_DEFAULT_SEED 0xFFFFFFFF
-LLAMA_DEFAULT_SEED = ctypes.c_int(0xFFFFFFFF)
+LLAMA_DEFAULT_SEED = 0xFFFFFFFF
 
 # define LLAMA_FILE_MAGIC_GGSN 0x6767736eu // 'ggsn'
-LLAMA_FILE_MAGIC_GGSN = ctypes.c_uint(0x6767736E)
+LLAMA_FILE_MAGIC_GGSN = 0x6767736E
 
 # define LLAMA_SESSION_MAGIC   LLAMA_FILE_MAGIC_GGSN
 LLAMA_SESSION_MAGIC = LLAMA_FILE_MAGIC_GGSN
 # define LLAMA_SESSION_VERSION 1
-LLAMA_SESSION_VERSION = ctypes.c_int(1)
+LLAMA_SESSION_VERSION = 1
 
 
 # struct llama_model;
@@ -118,16 +118,16 @@ llama_token_p = POINTER(llama_token)
 #     LLAMA_LOG_LEVEL_WARN  = 3,
 #     LLAMA_LOG_LEVEL_INFO  = 4
 # };
-LLAMA_LOG_LEVEL_ERROR = c_int(2)
-LLAMA_LOG_LEVEL_WARN = c_int(3)
-LLAMA_LOG_LEVEL_INFO = c_int(4)
+LLAMA_LOG_LEVEL_ERROR = 2
+LLAMA_LOG_LEVEL_WARN = 3
+LLAMA_LOG_LEVEL_INFO = 4
 
 # enum llama_vocab_type {
 #     LLAMA_VOCAB_TYPE_SPM = 0, // SentencePiece
 #     LLAMA_VOCAB_TYPE_BPE = 1, // Byte Pair Encoding
 # };
-LLAMA_VOCAB_TYPE_SPM = c_int(0)
-LLAMA_VOCAB_TYPE_BPE = c_int(1)
+LLAMA_VOCAB_TYPE_SPM = 0
+LLAMA_VOCAB_TYPE_BPE = 1
 
 
 # enum llama_token_type {
@@ -139,13 +139,13 @@ LLAMA_VOCAB_TYPE_BPE = c_int(1)
 #     LLAMA_TOKEN_TYPE_UNUSED       = 5,
 #     LLAMA_TOKEN_TYPE_BYTE         = 6,
 # };
-LLAMA_TOKEN_TYPE_UNDEFINED = c_int(0)
-LLAMA_TOKEN_TYPE_NORMAL = c_int(1)
-LLAMA_TOKEN_TYPE_UNKNOWN = c_int(2)
-LLAMA_TOKEN_TYPE_CONTROL = c_int(3)
-LLAMA_TOKEN_TYPE_USER_DEFINED = c_int(4)
-LLAMA_TOKEN_TYPE_UNUSED = c_int(5)
-LLAMA_TOKEN_TYPE_BYTE = c_int(6)
+LLAMA_TOKEN_TYPE_UNDEFINED = 0
+LLAMA_TOKEN_TYPE_NORMAL = 1
+LLAMA_TOKEN_TYPE_UNKNOWN = 2
+LLAMA_TOKEN_TYPE_CONTROL = 3
+LLAMA_TOKEN_TYPE_USER_DEFINED = 4
+LLAMA_TOKEN_TYPE_UNUSED = 5
+LLAMA_TOKEN_TYPE_BYTE = 6
 
 # enum llama_ftype {
 #     LLAMA_FTYPE_ALL_F32              = 0,
@@ -170,24 +170,24 @@ LLAMA_TOKEN_TYPE_BYTE = c_int(6)
 #
 #     LLAMA_FTYPE_GUESSED = 1024, // not specified in the model file
 # };
-LLAMA_FTYPE_ALL_F32 = c_int(0)
-LLAMA_FTYPE_MOSTLY_F16 = c_int(1)
-LLAMA_FTYPE_MOSTLY_Q4_0 = c_int(2)
-LLAMA_FTYPE_MOSTLY_Q4_1 = c_int(3)
-LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16 = c_int(4)
-LLAMA_FTYPE_MOSTLY_Q8_0 = c_int(7)
-LLAMA_FTYPE_MOSTLY_Q5_0 = c_int(8)
-LLAMA_FTYPE_MOSTLY_Q5_1 = c_int(9)
-LLAMA_FTYPE_MOSTLY_Q2_K = c_int(10)
-LLAMA_FTYPE_MOSTLY_Q3_K_S = c_int(11)
-LLAMA_FTYPE_MOSTLY_Q3_K_M = c_int(12)
-LLAMA_FTYPE_MOSTLY_Q3_K_L = c_int(13)
-LLAMA_FTYPE_MOSTLY_Q4_K_S = c_int(14)
-LLAMA_FTYPE_MOSTLY_Q4_K_M = c_int(15)
-LLAMA_FTYPE_MOSTLY_Q5_K_S = c_int(16)
-LLAMA_FTYPE_MOSTLY_Q5_K_M = c_int(17)
-LLAMA_FTYPE_MOSTLY_Q6_K = c_int(18)
-LLAMA_FTYPE_GUESSED = c_int(1024)
+LLAMA_FTYPE_ALL_F32 = 0
+LLAMA_FTYPE_MOSTLY_F16 = 1
+LLAMA_FTYPE_MOSTLY_Q4_0 = 2
+LLAMA_FTYPE_MOSTLY_Q4_1 = 3
+LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16 = 4
+LLAMA_FTYPE_MOSTLY_Q8_0 = 7
+LLAMA_FTYPE_MOSTLY_Q5_0 = 8
+LLAMA_FTYPE_MOSTLY_Q5_1 = 9
+LLAMA_FTYPE_MOSTLY_Q2_K = 10
+LLAMA_FTYPE_MOSTLY_Q3_K_S = 11
+LLAMA_FTYPE_MOSTLY_Q3_K_M = 12
+LLAMA_FTYPE_MOSTLY_Q3_K_L = 13
+LLAMA_FTYPE_MOSTLY_Q4_K_S = 14
+LLAMA_FTYPE_MOSTLY_Q4_K_M = 15
+LLAMA_FTYPE_MOSTLY_Q5_K_S = 16
+LLAMA_FTYPE_MOSTLY_Q5_K_M = 17
+LLAMA_FTYPE_MOSTLY_Q6_K = 18
+LLAMA_FTYPE_GUESSED = 1024
 
 
 # typedef struct llama_token_data {
@@ -589,7 +589,7 @@ _lib.llama_model_n_embd.restype = c_int
 
 # // Get a string describing the model type
 # LLAMA_API int llama_model_desc(const struct llama_model * model, char * buf, size_t buf_size);
-def llama_model_desc(model: llama_model_p, buf: bytes, buf_size: c_size_t) -> int:
+def llama_model_desc(model: llama_model_p, buf: bytes, buf_size: Union[c_size_t, int]) -> int:
     return _lib.llama_model_desc(model, buf, buf_size)
 
 
@@ -957,8 +957,8 @@ def llama_tokenize(
     ctx: llama_context_p,
     text: bytes,
     tokens,  # type: Array[llama_token]
-    n_max_tokens: c_int,
-    add_bos: c_bool,
+    n_max_tokens: Union[c_int, int],
+    add_bos: Union[c_bool, int],
 ) -> int:
     return _lib.llama_tokenize(ctx, text, tokens, n_max_tokens, add_bos)
 
@@ -977,8 +977,8 @@ def llama_tokenize_with_model(
     model: llama_model_p,
     text: bytes,
     tokens,  # type: Array[llama_token]
-    n_max_tokens: c_int,
-    add_bos: c_bool,
+    n_max_tokens: Union[c_int, int],
+    add_bos: Union[c_bool, bool],
 ) -> int:
     return _lib.llama_tokenize_with_model(model, text, tokens, n_max_tokens, add_bos)
 
@@ -1003,7 +1003,7 @@ _lib.llama_tokenize_with_model.restype = c_int
 #                                 char * buf,
 #                                 int    length);
 def llama_token_to_piece(
-    ctx: llama_context_p, token: llama_token, buf: bytes, length: c_int
+    ctx: llama_context_p, token: llama_token, buf: bytes, length: Union[c_int, int]
 ) -> int:
     return _lib.llama_token_to_piece(ctx, token, buf, length)
 
@@ -1018,7 +1018,7 @@ _lib.llama_token_to_piece.restype = c_int
 #                                 char * buf,
 #                                 int    length);
 def llama_token_to_piece_with_model(
-    model: llama_model_p, token: llama_token, buf: bytes, length: c_int
+    model: llama_model_p, token: llama_token, buf: bytes, length: Union[c_int, int]
 ) -> int:
     return _lib.llama_token_to_piece_with_model(model, token, buf, length)
 
@@ -1453,10 +1453,10 @@ def llama_beam_search(
     ctx: llama_context_p,
     callback: "ctypes._CFuncPtr[None, c_void_p, llama_beams_state]",  # type: ignore
     callback_data: c_void_p,
-    n_beams: c_size_t,
-    n_past: c_int,
-    n_predict: c_int,
-    n_threads: c_int,
+    n_beams: Union[c_size_t, int],
+    n_past: Union[c_int, int],
+    n_predict: Union[c_int, int],
+    n_threads: Union[c_int, int],
 ):
     return _lib.llama_beam_search(
         ctx, callback, callback_data, n_beams, n_past, n_predict, n_threads
