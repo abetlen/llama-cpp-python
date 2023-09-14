@@ -236,6 +236,7 @@ class Llama:
         rms_norm_eps: Optional[float] = None,  # (TEMPORARY)
         mul_mat_q: Optional[bool] = None,
         verbose: bool = True,
+        **kwargs # type: ignore
     ):
         """Load a llama.cpp model from `model_path`.
 
