@@ -72,3 +72,5 @@ Changelog = "https://llama-cpp-python.readthedocs.io/en/latest/changelog/"
 [tool.pytest.ini_options]
 addopts = "--ignore=vendor"
 
+[tool.setuptools.dynamic]
+version = {attr = "llama_cpp.__version__"}
