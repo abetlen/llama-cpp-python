@@ -333,7 +333,6 @@ class Llama:
             self.ctx = llama_cpp.llama_new_context_with_model(self.model, self.params)
         else:
             with suppress_stdout_stderr():
-                print("here")
                 self.ctx = llama_cpp.llama_new_context_with_model(
                     self.model, self.params
                 )
