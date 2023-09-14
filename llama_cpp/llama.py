@@ -214,10 +214,16 @@ class Llama:
         model_path: str,
         *,
         # NOTE: These parameters are likely to change in the future.
+        seed: int = llama_cpp.LLAMA_DEFAULT_SEED,
         n_ctx: int = 512,
-        n_parts: int = -1,
+        n_batch: int = 512,
         n_gpu_layers: int = 0,
-        seed: int = 1337,
+        main_gpu: int = 0,
+        tensor_split: Optional[List[float]] = None,
+        rope_freq_base: float = 10000.0,
+        rope_freq_scale: float = 1.0,
+        low_vram: bool = False,
+        mul_mat_q: bool = True,
         f16_kv: bool = True,
         logits_all: bool = False,
         vocab_only: bool = False,
@@ -225,17 +231,9 @@ class Llama:
         use_mlock: bool = False,
         embedding: bool = False,
         n_threads: Optional[int] = None,
-        n_batch: int = 512,
         last_n_tokens_size: int = 64,
         lora_base: Optional[str] = None,
         lora_path: Optional[str] = None,
-        low_vram: bool = False,
-        tensor_split: Optional[List[float]] = None,
-        rope_freq_base: float = 10000.0,
-        rope_freq_scale: float = 1.0,
-        n_gqa: Optional[int] = None,  # (TEMPORARY) must be 8 for llama2 70b
-        rms_norm_eps: Optional[float] = None,  # (TEMPORARY)
-        mul_mat_q: Optional[bool] = None,
         verbose: bool = True,
         **kwargs # type: ignore
     ):
@@ -243,10 +241,16 @@ class Llama:
 
         Args:
             model_path: Path to the model.
-            n_ctx: Maximum context size.
-            n_parts: Number of parts to split the model into. If -1, the number of parts is automatically determined.
             seed: Random seed. -1 for random.
+            n_ctx: Maximum context size.
+            n_batch: Maximum number of prompt tokens to batch together when calling llama_eval.
             n_gpu_layers: Number of layers to offload to GPU (-ngl). If -1, all layers are offloaded.
+            main_gpu: Main GPU to use.
+            tensor_split: Optional list of floats to split the model across multiple GPUs. If None, the model is not split.
+            rope_freq_base: Base frequency for rope sampling.
+            rope_freq_scale: Scale factor for rope sampling.
+            low_vram: Use low VRAM mode.
+            mul_mat_q: if true, use experimental mul_mat_q kernels
             f16_kv: Use half-precision for key/value cache.
             logits_all: Return logits for all tokens, not just the last token.
             vocab_only: Only load the vocabulary no weights.
@@ -254,14 +258,11 @@ class Llama:
             use_mlock: Force the system to keep the model in RAM.
             embedding: Embedding mode only.
             n_threads: Number of threads to use. If None, the number of threads is automatically determined.
-            n_batch: Maximum number of prompt tokens to batch together when calling llama_eval.
             last_n_tokens_size: Maximum number of tokens to keep in the last_n_tokens deque.
             lora_base: Optional path to base model, useful if using a quantized base model and you want to apply LoRA to an f16 model.
             lora_path: Path to a LoRA file to apply to the model.
-            tensor_split: List of floats to split the model across multiple GPUs. If None, the model is not split.
-            rope_freq_base: Base frequency for rope sampling.
-            rope_freq_scale: Scale factor for rope sampling.
             verbose: Print verbose output to stderr.
+            kwargs: Unused keyword arguments (for additional backwards compatibility).
 
         Raises:
             ValueError: If the model path does not exist.
@@ -274,16 +275,20 @@ class Llama:
         self.model_path = model_path
 
         self.params = llama_cpp.llama_context_default_params()
+        self.params.seed = seed
         self.params.n_ctx = n_ctx
         self.params.n_gpu_layers = 0x7FFFFFFF if n_gpu_layers == -1 else n_gpu_layers  # 0x7FFFFFFF is INT32 max, will be auto set to all layers
-        self.params.seed = seed
+        self.params.main_gpu = main_gpu
+        self.params.rope_freq_base = rope_freq_base
+        self.params.rope_freq_scale = rope_freq_scale
+        self.params.low_vram = low_vram
+        self.params.mul_mat_q = mul_mat_q
         self.params.f16_kv = f16_kv
         self.params.logits_all = logits_all
         self.params.vocab_only = vocab_only
         self.params.use_mmap = use_mmap if lora_path is None else False
         self.params.use_mlock = use_mlock
         self.params.embedding = embedding
-        self.params.low_vram = low_vram
 
         self.tensor_split = tensor_split
         self._p_tensor_split = None
@@ -296,12 +301,6 @@ class Llama:
             )  # keep a reference to the array so it is not gc'd
             self.params.tensor_split = self._c_tensor_split
 
-        self.params.rope_freq_base = rope_freq_base
-        self.params.rope_freq_scale = rope_freq_scale
-
-
-        if mul_mat_q is not None:
-            self.params.mul_mat_q = mul_mat_q
 
         self.last_n_tokens_size = last_n_tokens_size
         self.n_batch = min(n_ctx, n_batch)
@@ -312,10 +311,6 @@ class Llama:
 
         self.lora_base = lora_base
         self.lora_path = lora_path
-
-        ### DEPRECATED ###
-        self.n_parts = n_parts
-        ### DEPRECATED ###
 
         if not os.path.exists(model_path):
             raise ValueError(f"Model path does not exist: {model_path}")
