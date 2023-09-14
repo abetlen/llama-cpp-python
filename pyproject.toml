@@ -66,6 +66,8 @@ input = "llama_cpp/__init__.py"
 [project.urls]
 Homepage = "https://github.com/abetlen/llama-cpp-python"
 Issues = "https://github.com/abetlen/llama-cpp-python/issues"
+Documentation = "https://llama-cpp-python.readthedocs.io/en/latest/"
+Changelog = "https://llama-cpp-python.readthedocs.io/en/latest/changelog/"
 
 [tool.pytest.ini_options]
 addopts = "--ignore=vendor"
