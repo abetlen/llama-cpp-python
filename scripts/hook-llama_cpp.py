@@ -23,5 +23,5 @@ elif sys.platform == 'darwin':  # Mac
     so_path = os.path.join(package_path, 'llama_cpp', 'llama.dylib')
     datas.append((so_path, 'llama_cpp'))
 elif os.name == 'posix':  # Linux
-    so_path = os.path.join(package_path, 'llama_cpp', 'llama.so')
+    so_path = os.path.join(package_path, 'llama_cpp', 'libllama.so')
     datas.append((so_path, 'llama_cpp'))
