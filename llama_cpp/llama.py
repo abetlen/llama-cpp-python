@@ -288,7 +288,7 @@ class Llama:
 
         if self.tensor_split is not None:
             # Type conversion and expand the list to the length of LLAMA_MAX_DEVICES
-            FloatArray = ctypes.c_float * llama_cpp.LLAMA_MAX_DEVICES.value
+            FloatArray = ctypes.c_float * llama_cpp.LLAMA_MAX_DEVICES
             self._c_tensor_split = FloatArray(
                 *tensor_split
             )  # keep a reference to the array so it is not gc'd

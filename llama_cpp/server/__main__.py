@@ -23,16 +23,11 @@ Then visit http://localhost:8000/docs to see the interactive API docs.
 """
 import os
 import argparse
-from typing import Literal, Union
+from typing import List, Literal, Union
 
 import uvicorn
 
 from llama_cpp.server.app import create_app, Settings
-
-def get_non_none_base_types(annotation):
-    if not hasattr(annotation, "__args__"):
-        return annotation
-    return [arg for arg in annotation.__args__ if arg is not type(None)][0]
 
 def get_base_type(annotation):
     if getattr(annotation, '__origin__', None) is Literal:
@@ -41,8 +36,21 @@ def get_base_type(annotation):
         non_optional_args = [arg for arg in annotation.__args__ if arg is not type(None)]
         if non_optional_args:
             return get_base_type(non_optional_args[0])
+    elif getattr(annotation, '__origin__', None) is list or getattr(annotation, '__origin__', None) is List:
+        return get_base_type(annotation.__args__[0])
     else:
         return annotation
+
+def contains_list_type(annotation) -> bool:
+    origin = getattr(annotation, '__origin__', None)
+    
+    if origin is list or origin is List:
+        return True
+    elif origin in (Literal, Union):
+        return any(contains_list_type(arg) for arg in annotation.__args__)
+    else:
+        return False
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -53,6 +61,7 @@ if __name__ == "__main__":
         parser.add_argument(
             f"--{name}",
             dest=name,
+            nargs="*" if contains_list_type(field.annotation) else None,
             type=get_base_type(field.annotation) if field.annotation is not None else str,
             help=description,
         )
