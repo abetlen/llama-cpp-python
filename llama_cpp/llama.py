@@ -212,6 +212,7 @@ class Llama:
     def __init__(
         self,
         model_path: str,
+        *,
         # NOTE: These parameters are likely to change in the future.
         n_ctx: int = 512,
         n_parts: int = -1,
