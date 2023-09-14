@@ -24,7 +24,7 @@ from typing import List, Union
 # Load the library
 def _load_shared_library(lib_base_name: str):
     # Construct the paths to the possible shared library names
-    _base_path = pathlib.Path(__file__).parent.resolve()
+    _base_path = pathlib.Path(os.path.abspath(os.path.dirname(__file__)))
     # Searching for the library in the current directory under the name "libllama" (default name
     # for llamacpp) and "llama" (default name for this repo)
     _lib_paths: List[pathlib.Path] = []
