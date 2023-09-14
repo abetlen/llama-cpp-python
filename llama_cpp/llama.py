@@ -21,6 +21,8 @@ from collections import deque, OrderedDict
 import diskcache
 import ctypes
 
+from llama_cpp.llama_chat_templates import ChatCompletionFormat, DefaultChatCompletionFormat
+
 from . import llama_cpp
 from .llama_types import *
 from .llama_grammar import LlamaGrammar
@@ -29,6 +31,7 @@ import numpy as np
 import numpy.typing as npt
 
 from .utils import suppress_stdout_stderr
+
 
 class BaseLlamaCache(ABC):
     """Base cache class for a llama.cpp model."""
@@ -237,8 +240,9 @@ class Llama:
         lora_base: Optional[str] = None,
         lora_path: Optional[str] = None,
         numa: bool = False,
+        chat_completion_template: Optional[ChatCompletionFormat] = None,
         verbose: bool = True,
-        **kwargs # type: ignore
+        **kwargs,  # type: ignore
     ):
         """Load a llama.cpp model from `model_path`.
 
@@ -290,7 +294,9 @@ class Llama:
         self.params = llama_cpp.llama_context_default_params()
         self.params.seed = seed
         self.params.n_ctx = n_ctx
-        self.params.n_gpu_layers = 0x7FFFFFFF if n_gpu_layers == -1 else n_gpu_layers  # 0x7FFFFFFF is INT32 max, will be auto set to all layers
+        self.params.n_gpu_layers = (
+            0x7FFFFFFF if n_gpu_layers == -1 else n_gpu_layers
+        )  # 0x7FFFFFFF is INT32 max, will be auto set to all layers
         self.params.main_gpu = main_gpu
         self.params.rope_freq_base = rope_freq_base
         self.params.rope_freq_scale = rope_freq_scale
@@ -314,9 +320,10 @@ class Llama:
             )  # keep a reference to the array so it is not gc'd
             self.params.tensor_split = self._c_tensor_split
 
-
         self.last_n_tokens_size = last_n_tokens_size
         self.n_batch = min(n_ctx, n_batch)
+
+        self.chat_completion_template = chat_completion_template or DefaultChatCompletionFormat()
 
         self.cache: Optional[BaseLlamaCache] = None
 
@@ -471,7 +478,9 @@ class Llama:
             output += bytes(buffer[:n])
         # NOTE: Llama1 models automatically added a space at the start of the prompt
         # this line removes a leading space if the first token is a beginning of sentence token
-        return output[1:] if len(tokens) > 0 and tokens[0] == self.token_bos() else output
+        return (
+            output[1:] if len(tokens) > 0 and tokens[0] == self.token_bos() else output
+        )
 
     def set_cache(self, cache: Optional[BaseLlamaCache]):
         """Set the cache.
@@ -543,11 +552,7 @@ class Llama:
         n_vocab = self._n_vocab
         n_ctx = self._n_ctx
         top_k = n_vocab if top_k <= 0 else top_k
-        last_n_tokens_size = (
-            n_ctx
-            if last_n_tokens_size < 0
-            else last_n_tokens_size
-        )
+        last_n_tokens_size = n_ctx if last_n_tokens_size < 0 else last_n_tokens_size
         logits: npt.NDArray[np.single] = self._scores[-1, :]
 
         if logits_processor is not None:
@@ -608,7 +613,7 @@ class Llama:
                 mu=llama_cpp.ctypes.byref(mirostat_mu),  # type: ignore
                 m=mirostat_m,
             )
-        elif mirostat_mode== 2:
+        elif mirostat_mode == 2:
             mirostat_mu = llama_cpp.c_float(2.0 * mirostat_tau)
             llama_cpp.llama_sample_temperature(
                 ctx=self.ctx,
@@ -898,7 +903,11 @@ class Llama:
         created: int = int(time.time())
         completion_tokens: List[int] = []
         # Add blank space to start of prompt to match OG llama tokenizer
-        prompt_tokens: List[int] = self.tokenize(prompt.encode("utf-8")) if prompt != "" else [self.token_bos()]
+        prompt_tokens: List[int] = (
+            self.tokenize(prompt.encode("utf-8"))
+            if prompt != ""
+            else [self.token_bos()]
+        )
         text: bytes = b""
         returned_tokens: int = 0
         stop = (
@@ -1023,7 +1032,9 @@ class Llama:
                     for token in remaining_tokens:
                         token_end_position += len(self.detokenize([token]))
                         # Check if stop sequence is in the token
-                        if token_end_position > (remaining_length - first_stop_position):
+                        if token_end_position > (
+                            remaining_length - first_stop_position
+                        ):
                             break
                         token_str = self.detokenize([token]).decode(
                             "utf-8", errors="ignore"
@@ -1080,7 +1091,7 @@ class Llama:
                         for i in range(1, len(remaining_tokens) + 1):
                             try:
                                 bs = self.detokenize(remaining_tokens[:i])
-                                ts = bs.decode('utf-8')
+                                ts = bs.decode("utf-8")
                                 decode_success = True
                                 break
                             except UnicodeError:
@@ -1091,7 +1102,9 @@ class Llama:
                             # all remaining tokens cannot be decoded to a UTF-8 character
                             break
                         token_end_position += len(bs)
-                        if token_end_position > (remaining_length - first_stop_position):
+                        if token_end_position > (
+                            remaining_length - first_stop_position
+                        ):
                             break
                         remaining_tokens = remaining_tokens[i:]
                         returned_tokens += i
@@ -1396,7 +1409,7 @@ class Llama:
             model=model,
             stopping_criteria=stopping_criteria,
             logits_processor=logits_processor,
-            grammar=grammar
+            grammar=grammar,
         )
         if stream:
             chunks: Iterator[CompletionChunk] = completion_or_chunks
@@ -1534,6 +1547,18 @@ class Llama:
                 ],
             }
 
+    def _convert_completion_to_chat(
+        self,
+        completion_or_chunks: Union[Completion, Iterator[CompletionChunk]],
+        stream: bool = False,
+    ) -> Union[ChatCompletion, Iterator[ChatCompletionChunk]]:
+        if stream:
+            chunks: Iterator[CompletionChunk] = completion_or_chunks  # type: ignore
+            return self._convert_text_completion_chunks_to_chat(chunks)
+        else:
+            completion: Completion = completion_or_chunks  # type: ignore
+            return self._convert_text_completion_to_chat(completion)
+
     def create_chat_completion(
         self,
         messages: List[ChatCompletionMessage],
@@ -1571,26 +1596,20 @@ class Llama:
         Returns:
             Generated chat completion or a stream of chat completion chunks.
         """
-        stop = (
-            stop if isinstance(stop, list) else [stop] if isinstance(stop, str) else []
-        )
-        chat_history = "".join(
-            f'### {"Human" if message["role"] == "user" else "Assistant"}:{message["content"]}'
-            for message in messages
-        )
-        PROMPT = chat_history + "### Assistant:"
-        PROMPT_STOP = ["### Assistant:", "### Human:"]
-        completion_or_chunks = self(
-            prompt=PROMPT,
-            stop=PROMPT_STOP + stop,
+        completion_or_chunks = self.chat_completion_template.create_chat_completion(
+            self,
+            messages=messages,
+            functions=functions,
+            function_call=function_call,
             temperature=temperature,
             top_p=top_p,
             top_k=top_k,
             stream=stream,
+            stop=stop,
             max_tokens=max_tokens,
-            repeat_penalty=repeat_penalty,
             presence_penalty=presence_penalty,
             frequency_penalty=frequency_penalty,
+            repeat_penalty=repeat_penalty,
             tfs_z=tfs_z,
             mirostat_mode=mirostat_mode,
             mirostat_tau=mirostat_tau,
@@ -1599,12 +1618,7 @@ class Llama:
             logits_processor=logits_processor,
             grammar=grammar,
         )
-        if stream:
-            chunks: Iterator[CompletionChunk] = completion_or_chunks  # type: ignore
-            return self._convert_text_completion_chunks_to_chat(chunks)
-        else:
-            completion: Completion = completion_or_chunks  # type: ignore
-            return self._convert_text_completion_to_chat(completion)
+        return self._convert_completion_to_chat(completion_or_chunks, stream=stream)  # type: ignore
 
     def __del__(self):
         if hasattr(self, "model") and self.model is not None:
