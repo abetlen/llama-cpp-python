@@ -229,7 +229,6 @@ class GGUFReader:
         return int(tot_size * num_size / 8)
 
     def layers(self):
-        # todo: no idea if this is right
         if blks := self.kv_data.get("llama.block_count"):
             return blks + 3
         return None
