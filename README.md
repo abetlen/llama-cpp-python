@@ -180,6 +180,7 @@ Below is a short example demonstrating how to use the low-level API to tokenize 
 ```python
 >>> import llama_cpp
 >>> import ctypes
+>>> llama_cpp.llama_backend_init(numa=False) # Must be called once at the start of each program
 >>> params = llama_cpp.llama_context_default_params()
 # use bytes for char * params
 >>> model = llama_cpp.llama_load_model_from_file(b"./models/7b/ggml-model.bin", params)

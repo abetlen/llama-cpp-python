@@ -4,6 +4,8 @@ import multiprocessing
 
 import llama_cpp
 
+llama_cpp.llama_backend_init(numa=False)
+
 N_THREADS = multiprocessing.cpu_count()
 MODEL_PATH = os.environ.get('MODEL', "../models/7B/ggml-model.bin")
 

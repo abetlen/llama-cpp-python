@@ -1524,12 +1524,3 @@ def llama_dump_timing_info_yaml(stream: ctypes.c_void_p, ctx: llama_context_p):
 _lib.llama_dump_timing_info_yaml.argtypes = [ctypes.c_void_p, llama_context_p]
 _lib.llama_dump_timing_info_yaml.restype = None
 
-
-###################################################################################################
-
-
-_llama_initialized = False
-
-if not _llama_initialized:
-    llama_backend_init(False)
-    _llama_initialized = True

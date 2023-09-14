@@ -98,6 +98,10 @@ class Settings(BaseSettings):
         default=None,
         description="Path to a LoRA file to apply to the model.",
     )
+    numa: bool = Field(
+        default=False,
+        description="Enable NUMA support.",
+    )
     cache: bool = Field(
         default=False,
         description="Use a cache to reduce processing times for evaluated prompts.",

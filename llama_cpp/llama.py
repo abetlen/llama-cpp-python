@@ -209,6 +209,8 @@ class StoppingCriteriaList(List[StoppingCriteria]):
 class Llama:
     """High-level Python wrapper for a llama.cpp model."""
 
+    __backend_initialized = False
+
     def __init__(
         self,
         model_path: str,
@@ -234,6 +236,7 @@ class Llama:
         last_n_tokens_size: int = 64,
         lora_base: Optional[str] = None,
         lora_path: Optional[str] = None,
+        numa: bool = False,
         verbose: bool = True,
         **kwargs # type: ignore
     ):
@@ -261,6 +264,7 @@ class Llama:
             last_n_tokens_size: Maximum number of tokens to keep in the last_n_tokens deque.
             lora_base: Optional path to base model, useful if using a quantized base model and you want to apply LoRA to an f16 model.
             lora_path: Path to a LoRA file to apply to the model.
+            numa: Enable NUMA support. (NOTE: The initial value of this parameter is used for the remainder of the program as this value is set in llama_backend_init)
             verbose: Print verbose output to stderr.
             kwargs: Unused keyword arguments (for additional backwards compatibility).
 
@@ -272,6 +276,15 @@ class Llama:
         """
 
         self.verbose = verbose
+
+        if not Llama.__backend_initialized:
+            if self.verbose:
+                llama_cpp.llama_backend_init(numa)
+            else:
+                with suppress_stdout_stderr():
+                    llama_cpp.llama_backend_init(numa)
+            Llama.__backend_initialized = True
+
         self.model_path = model_path
 
         self.params = llama_cpp.llama_context_default_params()
