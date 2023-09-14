@@ -256,7 +256,7 @@ class GGUFReader:
 
 # Make sure to define GGUF_MAGIC and GGUFValueType somewhere above this code or import it from where it is defined.
 
-__all__ = GGUFReader
+__all__ = ["GGUFReader"]
 
 # Example usage
 if __name__ == "__main__":
