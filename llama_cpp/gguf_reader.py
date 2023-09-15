@@ -106,7 +106,7 @@ class GGUFReader:
     kv_data: Dict[str, Union[int, float, str, bool, List[Any]]]
     data_alignment = GGUF_DEFAULT_ALIGNMENT
 
-    def __init__(self, path: Union[os.PathLike[str], str]):
+    def __init__(self, path: Union[os.PathLike, str]):
         self.ti_info = []
         self.fin = open(path, "rb")
         self.read_header()

@@ -14,6 +14,7 @@ def test_llama_cpp_gguf_reader():
     assert sum.get("kv.data")
     assert sum.get("kv.data").get("general.architecture") == "llama"
 
+
 def test_llama_cpp_tokenization():
     llama = llama_cpp.Llama(model_path=MODEL, vocab_only=True, verbose=False)
 
