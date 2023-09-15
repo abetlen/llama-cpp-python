@@ -2,7 +2,7 @@ import operator
 import sys
 from functools import reduce
 from io import SEEK_CUR
-from typing import Dict, Any, Tuple, Union, BinaryIO, List
+from typing import Dict, Any, Tuple, Union, BinaryIO, List, Optional
 import os
 import struct
 from enum import IntEnum
