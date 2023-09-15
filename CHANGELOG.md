@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.5]
+
+- Fix docker images missing starlette-context dependency by @abetlen in 22917989003c5e67623d54ab45affa1e0e475410
+- Fix loading dll in Windows Isolation Containers by @abetlen in 847466562573191efa655753d9252f308c4fbdb0
+- Fix build issue on m1 macs by @abetlen in dbd3a6d1ed8416a8fd800127251e730153afa305
+- Update docs to gguf and add hw acceleration docs for server by @jasonacox in #688
+
 ## [0.2.4]
 
 - Add NUMA support. **NOTE** low level api users must call llama_backend_init at the start of their programs by abetlen in f4090a0bb2a2a25acfe28d31c82cc1aa273bedee

@@ -7,15 +7,13 @@ option(LLAMA_BUILD "Build llama.cpp shared library and install alongside python 
 
 if (LLAMA_BUILD)
     set(BUILD_SHARED_LIBS "On")
-    if (APPLE)
-        # Need to disable these llama.cpp flags on Apple
+    if (APPLE AND NOT CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
+        # Need to disable these llama.cpp flags on Apple x86_64,
         # otherwise users may encounter invalid instruction errors
         set(LLAMA_AVX "Off" CACHE BOOL "llama: enable AVX" FORCE)
         set(LLAMA_AVX2 "Off" CACHE BOOL "llama: enable AVX2" FORCE)
         set(LLAMA_FMA "Off" CACHE BOOL "llama: enable FMA" FORCE)
         set(LLAMA_F16C "Off" CACHE BOOL "llama: enable F16C" FORCE)
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native -mtune=native")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -mtune=native")
     endif()
     add_subdirectory(vendor/llama.cpp)
     install(
