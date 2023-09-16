@@ -58,7 +58,7 @@ def _load_shared_library(lib_base_name: str):
         if "CUDA_PATH" in os.environ:
             os.add_dll_directory(os.path.join(os.environ["CUDA_PATH"], "bin"))
             os.add_dll_directory(os.path.join(os.environ["CUDA_PATH"], "lib"))
-        cdll_args["winmode"] = 0
+        cdll_args["winmode"] = ctypes.RTLD_GLOBAL
 
     # Try to load the shared library, handling potential errors
     for _lib_path in _lib_paths:

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.4...3.22)
+cmake_minimum_required(VERSION 3.21)
 
 project(llama_cpp)
 
@@ -32,5 +32,14 @@ if (LLAMA_BUILD)
         ARCHIVE DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
         FRAMEWORK DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
         RESOURCE DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
+    )
+    # Workaround for Windows + CUDA https://github.com/abetlen/llama-cpp-python/issues/563
+    install(
+        FILES $<TARGET_RUNTIME_DLLS:llama>
+        DESTINATION ${SKBUILD_PLATLIB_DIR}/llama_cpp
+    )
+    install(
+        FILES $<TARGET_RUNTIME_DLLS:llama>
+        DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
     )
 endif()
