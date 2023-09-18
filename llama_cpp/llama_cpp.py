@@ -950,42 +950,47 @@ _lib.llama_token_nl.restype = llama_token
 # LLAMA_API int llama_tokenize(
 #         struct llama_context * ctx,
 #                   const char * text,
+#                          int   text_len,
 #                  llama_token * tokens,
 #                          int   n_max_tokens,
 #                         bool   add_bos);
 def llama_tokenize(
     ctx: llama_context_p,
     text: bytes,
+    text_len: Union[c_int, int],
     tokens,  # type: Array[llama_token]
     n_max_tokens: Union[c_int, int],
     add_bos: Union[c_bool, int],
 ) -> int:
-    return _lib.llama_tokenize(ctx, text, tokens, n_max_tokens, add_bos)
+    return _lib.llama_tokenize(ctx, text, text_len, tokens, n_max_tokens, add_bos)
 
 
-_lib.llama_tokenize.argtypes = [llama_context_p, c_char_p, llama_token_p, c_int, c_bool]
+_lib.llama_tokenize.argtypes = [llama_context_p, c_char_p, c_int, llama_token_p, c_int, c_bool]
 _lib.llama_tokenize.restype = c_int
 
 
 # LLAMA_API int llama_tokenize_with_model(
 #     const struct llama_model * model,
 #                   const char * text,
+#                          int   text_len,
 #                  llama_token * tokens,
 #                          int   n_max_tokens,
 #                         bool   add_bos);
 def llama_tokenize_with_model(
     model: llama_model_p,
     text: bytes,
+    text_len: Union[c_int, int],
     tokens,  # type: Array[llama_token]
     n_max_tokens: Union[c_int, int],
     add_bos: Union[c_bool, bool],
 ) -> int:
-    return _lib.llama_tokenize_with_model(model, text, tokens, n_max_tokens, add_bos)
+    return _lib.llama_tokenize_with_model(model, text, text_len, tokens, n_max_tokens, add_bos)
 
 
 _lib.llama_tokenize_with_model.argtypes = [
     llama_model_p,
     c_char_p,
+    c_int,
     llama_token_p,
     c_int,
     c_bool,
