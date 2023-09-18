@@ -392,6 +392,7 @@ class Llama:
         self.scores: npt.NDArray[np.single] = np.ndarray(
             (n_ctx, self._n_vocab), dtype=np.single
         )
+        self.cancel_stream = False
 
     @property
     def _input_ids(self) -> npt.NDArray[np.intc]:
@@ -973,6 +974,11 @@ class Llama:
             if token == self._token_eos:
                 text = self.detokenize(completion_tokens)
                 finish_reason = "stop"
+                break
+
+            if self.cancel_stream:
+                finish_reason = "cancel"
+                self.cancel_stream = False
                 break
 
             completion_tokens.append(token)
@@ -1701,6 +1707,11 @@ class Llama:
 
         if llama_cpp.llama_set_state_data(self.ctx, llama_state) != state_size:
             raise RuntimeError("Failed to set llama state data")
+
+    def cancel(self) -> None:
+        """Cancel a streaming completion."""
+        if self.n_tokens > 0:
+            self.cancel_stream = True
 
     def n_ctx(self) -> int:
         """Return the context window size."""
