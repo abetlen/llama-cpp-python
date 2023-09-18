@@ -430,7 +430,7 @@ class Llama:
         n_tokens = llama_cpp.llama_tokenize_with_model(
             self.model,
             text,
-            len(text)
+            len(text),
             tokens,
             n_ctx,
             add_bos,
