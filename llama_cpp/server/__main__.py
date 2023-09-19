@@ -88,7 +88,7 @@ if __name__ == "__main__":
                 f"--{name}",
                 dest=name,
                 type=parse_bool_arg,
-                help=f"Disable {description}",
+                help=f"{description}",
             )
 
     args = parser.parse_args()
