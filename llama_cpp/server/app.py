@@ -70,7 +70,7 @@ class Settings(BaseSettings):
         default=True, description="if true, use experimental mul_mat_q kernels"
     )
     f16_kv: bool = Field(default=True, description="Whether to use f16 key/value.")
-    logits_all: bool = Field(default=True, description="Whether to return logits.")
+    logits_all: bool = Field(default=False, description="Whether to return logits.")
     vocab_only: bool = Field(
         default=False, description="Whether to only return the vocabulary."
     )
