@@ -54,9 +54,8 @@ all = [
 [tool.scikit-build]
 wheel.packages = ["llama_cpp"]
 cmake.verbose = true
-cmake.minimum-version = "3.12"
+cmake.minimum-version = "3.21"
 minimum-version = "0.5"
-ninja.make-fallback = false
 sdist.exclude = [".git", "vendor/llama.cpp/.git"]
 
 [tool.scikit-build.metadata.version]

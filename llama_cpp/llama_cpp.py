@@ -24,7 +24,7 @@ from typing import List, Union
 # Load the library
 def _load_shared_library(lib_base_name: str):
     # Construct the paths to the possible shared library names
-    _base_path = pathlib.Path(__file__).parent.resolve()
+    _base_path = pathlib.Path(os.path.abspath(os.path.dirname(__file__)))
     # Searching for the library in the current directory under the name "libllama" (default name
     # for llamacpp) and "llama" (default name for this repo)
     _lib_paths: List[pathlib.Path] = []
@@ -58,7 +58,7 @@ def _load_shared_library(lib_base_name: str):
         if "CUDA_PATH" in os.environ:
             os.add_dll_directory(os.path.join(os.environ["CUDA_PATH"], "bin"))
             os.add_dll_directory(os.path.join(os.environ["CUDA_PATH"], "lib"))
-        cdll_args["winmode"] = 0
+        cdll_args["winmode"] = ctypes.RTLD_GLOBAL
 
     # Try to load the shared library, handling potential errors
     for _lib_path in _lib_paths:
@@ -950,42 +950,47 @@ _lib.llama_token_nl.restype = llama_token
 # LLAMA_API int llama_tokenize(
 #         struct llama_context * ctx,
 #                   const char * text,
+#                          int   text_len,
 #                  llama_token * tokens,
 #                          int   n_max_tokens,
 #                         bool   add_bos);
 def llama_tokenize(
     ctx: llama_context_p,
     text: bytes,
+    text_len: Union[c_int, int],
     tokens,  # type: Array[llama_token]
     n_max_tokens: Union[c_int, int],
     add_bos: Union[c_bool, int],
 ) -> int:
-    return _lib.llama_tokenize(ctx, text, tokens, n_max_tokens, add_bos)
+    return _lib.llama_tokenize(ctx, text, text_len, tokens, n_max_tokens, add_bos)
 
 
-_lib.llama_tokenize.argtypes = [llama_context_p, c_char_p, llama_token_p, c_int, c_bool]
+_lib.llama_tokenize.argtypes = [llama_context_p, c_char_p, c_int, llama_token_p, c_int, c_bool]
 _lib.llama_tokenize.restype = c_int
 
 
 # LLAMA_API int llama_tokenize_with_model(
 #     const struct llama_model * model,
 #                   const char * text,
+#                          int   text_len,
 #                  llama_token * tokens,
 #                          int   n_max_tokens,
 #                         bool   add_bos);
 def llama_tokenize_with_model(
     model: llama_model_p,
     text: bytes,
+    text_len: Union[c_int, int],
     tokens,  # type: Array[llama_token]
     n_max_tokens: Union[c_int, int],
     add_bos: Union[c_bool, bool],
 ) -> int:
-    return _lib.llama_tokenize_with_model(model, text, tokens, n_max_tokens, add_bos)
+    return _lib.llama_tokenize_with_model(model, text, text_len, tokens, n_max_tokens, add_bos)
 
 
 _lib.llama_tokenize_with_model.argtypes = [
     llama_model_p,
     c_char_p,
+    c_int,
     llama_token_p,
     c_int,
     c_bool,

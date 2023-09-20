@@ -14,7 +14,7 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
     ninja-build \
     build-essential
 
-RUN python3 -m pip install --upgrade pip pytest cmake scikit-build setuptools fastapi uvicorn sse-starlette pydantic-settings
+RUN python3 -m pip install --upgrade pip pytest cmake scikit-build setuptools fastapi uvicorn sse-starlette pydantic-settings starlette-context
 
 # Perform the conditional installations based on the image
 RUN echo "Image: ${IMAGE}" && \

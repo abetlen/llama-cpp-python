@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.4...3.22)
+cmake_minimum_required(VERSION 3.21)
 
 project(llama_cpp)
 
@@ -7,15 +7,13 @@ option(LLAMA_BUILD "Build llama.cpp shared library and install alongside python 
 
 if (LLAMA_BUILD)
     set(BUILD_SHARED_LIBS "On")
-    if (APPLE)
-        # Need to disable these llama.cpp flags on Apple
+    if (APPLE AND NOT CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
+        # Need to disable these llama.cpp flags on Apple x86_64,
         # otherwise users may encounter invalid instruction errors
         set(LLAMA_AVX "Off" CACHE BOOL "llama: enable AVX" FORCE)
         set(LLAMA_AVX2 "Off" CACHE BOOL "llama: enable AVX2" FORCE)
         set(LLAMA_FMA "Off" CACHE BOOL "llama: enable FMA" FORCE)
         set(LLAMA_F16C "Off" CACHE BOOL "llama: enable F16C" FORCE)
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native -mtune=native")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -mtune=native")
     endif()
     add_subdirectory(vendor/llama.cpp)
     install(
@@ -34,5 +32,14 @@ if (LLAMA_BUILD)
         ARCHIVE DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
         FRAMEWORK DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
         RESOURCE DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
+    )
+    # Workaround for Windows + CUDA https://github.com/abetlen/llama-cpp-python/issues/563
+    install(
+        FILES $<TARGET_RUNTIME_DLLS:llama>
+        DESTINATION ${SKBUILD_PLATLIB_DIR}/llama_cpp
+    )
+    install(
+        FILES $<TARGET_RUNTIME_DLLS:llama>
+        DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
     )
 endif()
