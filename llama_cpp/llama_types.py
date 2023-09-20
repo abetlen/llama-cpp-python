@@ -58,9 +58,11 @@ class Completion(TypedDict):
 
 
 class ChatCompletionMessage(TypedDict):
-    role: Literal["assistant", "user", "system"]
-    content: str
+    role: Literal["assistant", "user", "system", "function"]
+    content: Optional[str]
     user: NotRequired[str]
+    name: NotRequired[str]
+    function_call: NotRequired[str]
 
 
 class ChatCompletionFunction(TypedDict):
@@ -71,6 +73,7 @@ class ChatCompletionFunction(TypedDict):
 
 class ChatCompletionFunctionCall(TypedDict):
     name: str
+    arguments: str
 
 
 class ChatCompletionChoice(TypedDict):
