@@ -2,6 +2,17 @@ import pytest
 import llama_cpp
 
 MODEL = "./vendor/llama.cpp/models/ggml-vocab-llama.gguf"
+FULL = "./tests/tiny.gguf"
+# this is https://huggingface.co/Green-Sky/TinyLlama-1.1B-step-50K-105b-GGUF/blob/main/ggml-model-Q2_K.gguf
+
+@pytest.mark.skip(reason="if you want to test this, you have load tiny.gguf")
+def test_llama_cpp_gguf_reader():
+    reader = llama_cpp.GGUFReader(FULL)
+    sum = reader.summary()
+    assert sum.get("gguf.version") == 2
+    assert sum.get("tensor.layers") == 25
+    assert sum.get("kv.data")
+    assert sum.get("kv.data").get("general.architecture") == "llama"
 
 
 def test_llama_cpp_tokenization():
