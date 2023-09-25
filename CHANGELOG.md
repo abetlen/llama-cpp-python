@@ -7,8 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- Update llama.cpp to 7eb41179edc56083ef4eb2df7967ac9ff38b34fb
+- Update llama.cpp to a98b1633d5a94d0aa84c7c16e1f8df5ac21fc850
 - Install required runtime dlls to package directory on windows by @abetlen in 8d75016549e2ff62a511b1119d966ffc0df5c77b
+- Add openai-processing-ms to server response header by @Tradunsky in #748
 
 ## [0.2.6]
 
