@@ -1,5 +1,6 @@
 import json
 import multiprocessing
+import time
 from re import compile, Match, Pattern
 from threading import Lock
 from functools import partial
@@ -271,7 +272,11 @@ class RouteErrorHandler(APIRoute):
 
         async def custom_route_handler(request: Request) -> Response:
             try:
-                return await original_route_handler(request)
+                start_sec = time.perf_counter()
+                response = await original_route_handler(request)
+                elapsed_time_ms = int((time.perf_counter() - start_sec) * 1000)
+                response.headers["openai-processing-ms"] = f"{elapsed_time_ms}"
+                return response
             except Exception as exc:
                 json_body = await request.json()
                 try:
