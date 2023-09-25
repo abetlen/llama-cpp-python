@@ -1,5 +1,5 @@
 [build-system]
-requires = ["scikit-build-core[pyproject]>=0.5.0"]
+requires = ["scikit-build-core[pyproject]>=0.5.1"]
 build-backend = "scikit_build_core.build"
 
 [project]
@@ -55,7 +55,7 @@ all = [
 wheel.packages = ["llama_cpp"]
 cmake.verbose = true
 cmake.minimum-version = "3.21"
-minimum-version = "0.5"
+minimum-version = "0.5.1"
 sdist.exclude = [".git", "vendor/llama.cpp/.git"]
 
 [tool.scikit-build.metadata.version]
