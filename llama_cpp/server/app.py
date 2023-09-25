@@ -513,6 +513,10 @@ mirostat_eta_field = Field(
     default=0.1, ge=0.001, le=1.0, description="Mirostat learning rate"
 )
 
+save_cache_field = Field(
+    default=True, description="Save the result of this completion to cache, if enabled. Defaults to true."
+)
+
 
 class CreateCompletionRequest(BaseModel):
     prompt: Union[str, List[str]] = Field(
@@ -554,6 +558,7 @@ class CreateCompletionRequest(BaseModel):
     top_k: int = top_k_field
     repeat_penalty: float = repeat_penalty_field
     logit_bias_type: Optional[Literal["input_ids", "tokens"]] = Field(None)
+    save_cache: bool = save_cache_field
 
     model_config = {
         "json_schema_extra": {
