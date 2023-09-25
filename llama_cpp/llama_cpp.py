@@ -1456,7 +1456,7 @@ llama_beam_search_callback_fn_t = ctypes.CFUNCTYPE(None, c_void_p, llama_beams_s
 # LLAMA_API void llama_beam_search(struct llama_context * ctx, llama_beam_search_callback_fn_t callback, void * callback_data, size_t n_beams, int n_past, int n_predict, int n_threads);
 def llama_beam_search(
     ctx: llama_context_p,
-    callback: "ctypes._CFuncPtr[None, c_void_p, llama_beams_state]",  # type: ignore
+    callback: llama_beam_search_callback_fn_t,
     callback_data: c_void_p,
     n_beams: Union[c_size_t, int],
     n_past: Union[c_int, int],
@@ -1467,6 +1467,8 @@ def llama_beam_search(
         ctx, callback, callback_data, n_beams, n_past, n_predict, n_threads
     )
 
+_lib.llama_beam_search.argtypes = [llama_context_p, llama_beam_search_callback_fn_t, c_void_p, c_size_t, c_int, c_int, c_int]
+_lib.llama_beam_search.restype = None
 
 # Performance information
 
