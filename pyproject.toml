@@ -1,9 +1,81 @@
+# -------------------------------------------------------
+# pyproject.toml
+# -------------------------------------------------------
+# This file contains configuration for both the scikit-build system and Poetry.
+# They are kept separate due to incompatibilities between the two.
+# Please refer to the README for more details on how to build and manage dependencies.
+# -------------------------------------------------------
+# Configuration for scikit-build
+# -------------------------------------------------------
 [build-system]
 requires = ["scikit-build-core[pyproject]>=0.5.1"]
 build-backend = "scikit_build_core.build"
 
-[tool.poetry]
+[project]
 name = "llama_cpp_python"
+dynamic = ["version"]
+description = "Python bindings for the llama.cpp library"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "Andrei Betlen", email = "abetlen@gmail.com" },
+]
+dependencies = [
+    "typing-extensions>=4.5.0",
+    "numpy>=1.20.0",
+    "diskcache>=5.6.1",
+]
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+
+
+[project.optional-dependencies]
+server = [
+    "uvicorn>=0.22.0",
+    "fastapi>=0.100.0",
+    "pydantic-settings>=2.0.1",
+    "sse-starlette>=1.6.1",
+    "starlette-context>=0.3.6,<0.4"
+]
+test = [
+    "pytest>=7.4.0",
+    "httpx>=0.24.1",
+]
+dev = [
+    "black>=23.3.0",
+    "twine>=4.0.2",
+    "mkdocs>=1.4.3",
+    "mkdocstrings[python]>=0.22.0",
+    "mkdocs-material>=9.1.18",
+    "pytest>=7.4.0",
+    "httpx>=0.24.1",
+]
+all = [
+    "llama_cpp_python[server,test,dev]",
+]
+
+# -------------------------------------------------------
+# Configuration for Poetry starts here
+# -------------------------------------------------------
+[tool.scikit-build]
+wheel.packages = ["llama_cpp"]
+cmake.verbose = true
+cmake.minimum-version = "3.21"
+minimum-version = "0.5.1"
+sdist.exclude = [".git", "vendor/llama.cpp/.git"]
+
+[tool.scikit-build.metadata.version]
+provider = "scikit_build_core.metadata.regex"
+input = "llama_cpp/__init__.py"
+
+[tool.poetry]
+name = "llama_cpp"
 version = "v0.2.7"
 description = "Python bindings for the llama.cpp library"
 readme = "README.md"
@@ -45,23 +117,3 @@ httpx = ">=0.24.1"
 
 [tool.build]
 packages = { include = "llama-cpp-python", extras = ["server", "test", "dev"] }
-
-[tool.scikit-build]
-wheel.packages = ["llama_cpp"]
-cmake.verbose = true
-cmake.minimum-version = "3.21"
-minimum-version = "0.5.1"
-sdist.exclude = [".git", "vendor/llama.cpp/.git"]
-
-[tool.scikit-build.metadata.version]
-provider = "scikit_build_core.metadata.regex"
-input = "llama_cpp/__init__.py"
-
-[tool.project.urls]
-Homepage = "https://github.com/abetlen/llama-cpp-python"
-Issues = "https://github.com/abetlen/llama-cpp-python/issues"
-Documentation = "https://llama-cpp-python.readthedocs.io/en/latest/"
-Changelog = "https://llama-cpp-python.readthedocs.io/en/latest/changelog/"
-
-[tool.pytest.ini_options]
-addopts = "--ignore=vendor"
