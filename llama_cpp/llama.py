@@ -24,6 +24,7 @@ import ctypes
 from . import llama_cpp
 from .llama_types import *
 from .llama_grammar import LlamaGrammar
+from . import llama_chat_format
 
 import numpy as np
 import numpy.typing as npt
@@ -243,6 +244,8 @@ class Llama:
         lora_path: Optional[str] = None,
         # Backend Params
         numa: bool = False,
+        # Chat Format Params
+        chat_format: str = "llama-2",
         # Misc
         verbose: bool = True,
         # Extra Params
@@ -273,6 +276,7 @@ class Llama:
             lora_base: Optional path to base model, useful if using a quantized base model and you want to apply LoRA to an f16 model.
             lora_path: Path to a LoRA file to apply to the model.
             numa: Enable NUMA support. (NOTE: The initial value of this parameter is used for the remainder of the program as this value is set in llama_backend_init)
+            chat_format: String specifying the chat format to use when calling create_chat_completion.
             verbose: Print verbose output to stderr.
             kwargs: Unused keyword arguments (for additional backwards compatibility).
 
@@ -387,6 +391,8 @@ class Llama:
 
         if self.verbose:
             print(llama_cpp.llama_print_system_info().decode("utf-8"), file=sys.stderr)
+        
+        self.chat_format = chat_format
 
         self._n_vocab = self.n_vocab()
         self._n_ctx = self.n_ctx()
@@ -1578,7 +1584,7 @@ class Llama:
 
     def create_chat_completion(
         self,
-        messages: List[ChatCompletionMessage],
+        messages: List[ChatCompletionRequestMessage],
         functions: Optional[List[ChatCompletionFunction]] = None,
         function_call: Optional[Union[str, ChatCompletionFunctionCall]] = None,
         temperature: float = 0.2,
@@ -1613,11 +1619,19 @@ class Llama:
         Returns:
             Generated chat completion or a stream of chat completion chunks.
         """
-        completion_or_chunks = self.chat_completion_template.create_chat_completion(
-            self,
+
+        format = llama_chat_format.get_chat_format(self.chat_format)
+        result = format(
             messages=messages,
-            functions=functions,
-            function_call=function_call,
+        )
+        prompt = result.prompt
+        if result.stop is not None:
+            stop = [] if stop is None else [stop] if isinstance(stop, str) else stop
+            rstop = result.stop if isinstance(result.stop, list) else [result.stop]
+            stop = stop + rstop
+
+        completion_or_chunks = self.create_completion(
+            prompt=prompt,
             temperature=temperature,
             top_p=top_p,
             top_k=top_k,
@@ -1675,6 +1689,8 @@ class Llama:
             lora_path=self.lora_path,
             # Backend Params
             numa=self.numa,
+            # Chat Format Params
+            chat_format=self.chat_format,
             # Misc
             verbose=self.verbose,
         )
@@ -1708,6 +1724,8 @@ class Llama:
             lora_path=state["lora_path"],
             # Backend Params
             numa=state["numa"],
+            # Chat Format Params
+            chat_format=state["chat_format"],
             # Misc
             verbose=state["verbose"],
         )
@@ -1821,89 +1839,3 @@ class LlamaTokenizer:
     @classmethod
     def from_ggml_file(cls, path: str) -> "LlamaTokenizer":
         return cls(Llama(model_path=path, vocab_only=True))
-
-
-class ChatCompletionFormat(ABC):
-    """Base class for chat completion templates."""
-
-    @abstractmethod
-    def create_chat_completion(
-        self,
-        llama: Llama,
-        messages: List[ChatCompletionMessage],
-        functions: Optional[List[ChatCompletionFunction]] = None,
-        function_call: Optional[Union[str, ChatCompletionFunctionCall]] = None,
-        temperature: float = 0.2,
-        top_p: float = 0.95,
-        top_k: int = 40,
-        stream: bool = False,
-        stop: Optional[Union[str, List[str]]] = [],
-        max_tokens: int = 256,
-        presence_penalty: float = 0.0,
-        frequency_penalty: float = 0.0,
-        repeat_penalty: float = 1.1,
-        tfs_z: float = 1.0,
-        mirostat_mode: int = 0,
-        mirostat_tau: float = 5.0,
-        mirostat_eta: float = 0.1,
-        model: Optional[str] = None,
-        logits_processor: Optional[LogitsProcessorList] = None,
-        grammar: Optional[LlamaGrammar] = None,
-    ) -> Union[Completion, Iterator[CompletionChunk]]:
-        raise NotImplementedError
-
-
-class DefaultChatCompletionFormat(ABC):
-    """Base class for chat completion templates."""
-
-    def create_chat_completion(
-        self,
-        llama: Llama,
-        messages: List[ChatCompletionMessage],
-        functions: Optional[List[ChatCompletionFunction]] = None,
-        function_call: Optional[Union[str, ChatCompletionFunctionCall]] = None,
-        temperature: float = 0.2,
-        top_p: float = 0.95,
-        top_k: int = 40,
-        stream: bool = False,
-        stop: Optional[Union[str, List[str]]] = [],
-        max_tokens: int = 256,
-        presence_penalty: float = 0.0,
-        frequency_penalty: float = 0.0,
-        repeat_penalty: float = 1.1,
-        tfs_z: float = 1.0,
-        mirostat_mode: int = 0,
-        mirostat_tau: float = 5.0,
-        mirostat_eta: float = 0.1,
-        model: Optional[str] = None,
-        logits_processor: Optional[LogitsProcessorList] = None,
-        grammar: Optional[LlamaGrammar] = None,
-    ) -> Union[Completion, Iterator[CompletionChunk]]:
-        stop = (
-            stop if isinstance(stop, list) else [stop] if isinstance(stop, str) else []
-        )
-        chat_history = "".join(
-            f'### {"Human" if message["role"] == "user" else "Assistant"}:{message["content"]}'
-            for message in messages
-        )
-        PROMPT = chat_history + "### Assistant:"
-        PROMPT_STOP = ["### Assistant:", "### Human:"]
-        return llama.create_completion(
-            prompt=PROMPT,
-            stop=PROMPT_STOP + stop,
-            temperature=temperature,
-            top_p=top_p,
-            top_k=top_k,
-            stream=stream,
-            max_tokens=max_tokens,
-            repeat_penalty=repeat_penalty,
-            presence_penalty=presence_penalty,
-            frequency_penalty=frequency_penalty,
-            tfs_z=tfs_z,
-            mirostat_mode=mirostat_mode,
-            mirostat_tau=mirostat_tau,
-            mirostat_eta=mirostat_eta,
-            model=model,
-            logits_processor=logits_processor,
-            grammar=grammar,
-        )
