@@ -119,7 +119,7 @@ def test_llama_pickle():
 
 def test_utf8(monkeypatch):
     llama = llama_cpp.Llama(model_path=MODEL, vocab_only=True)
-    n_vocab = llama_cpp.llama_n_vocab(llama.ctx)
+    n_vocab = llama.n_vocab()
 
     ## Set up mock function
     def mock_eval(*args, **kwargs):
