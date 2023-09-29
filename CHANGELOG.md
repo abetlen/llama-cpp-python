@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- Update llama.cpp to 8781013ef654270cbead3e0011e33a6d690fb168
+## [0.2.7]
+
+- Update llama.cpp to a98b1633d5a94d0aa84c7c16e1f8df5ac21fc850
+- Install required runtime dlls to package directory on windows by @abetlen in 8d75016549e2ff62a511b1119d966ffc0df5c77b
+- Add openai-processing-ms to server response header by @Tradunsky in #748
+- Bump minimum version of scikit-build-core to 0.5.1 to fix msvc cmake issue by @abetlen in 1ed0f3ebe16993a0f961155aa4b2c85f1c68f668
+- Update `llama_types.py` to better match the openai api, old names are aliased to new ones by @abetlen in dbca136feaaf7f8b1182c4c3c90c32918b1d0bb3
 
 ## [0.2.6]
 
