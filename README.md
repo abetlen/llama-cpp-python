@@ -158,6 +158,7 @@ To install the server package and get started:
 pip install llama-cpp-python[server]
 python3 -m llama_cpp.server --model models/7B/llama-model.gguf
 ```
+
 Similar to Hardware Acceleration section above, you can also install with GPU (cuBLAS) support like this:
 
 ```bash
@@ -167,6 +168,8 @@ python3 -m llama_cpp.server --model models/7B/llama-model.gguf --n_gpu_layers 35
 
 Navigate to [http://localhost:8000/docs](http://localhost:8000/docs) to see the OpenAPI documentation.
 
+To bind to `0.0.0.0` to enable remote connections, use `python3 -m llama_cpp.server --host 0.0.0.0`.
+Similarly, to change the port (default is 8000), use `--port`.
 
 ## Docker image
 
