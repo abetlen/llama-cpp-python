@@ -7,9 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.8]
+
+- Update llama.cpp to ggerganov/llama.cpp@40e07a60f9ce06e79f3ccd4c903eba300fb31b5e
+- Add configurable chat formats by @abetlen in #711
+- Fix rope scaling bug by @Josh-XT in #767
+- Fix missing numa parameter in server by @abetlen in d9bce17794d0dd6f7962d10aad768fedecf3ab89
+
 ## [0.2.7]
 
-- Update llama.cpp to a98b1633d5a94d0aa84c7c16e1f8df5ac21fc850
+- Update llama.cpp to ggerganov/llama.cpp@a98b1633d5a94d0aa84c7c16e1f8df5ac21fc850
 - Install required runtime dlls to package directory on windows by @abetlen in 8d75016549e2ff62a511b1119d966ffc0df5c77b
 - Add openai-processing-ms to server response header by @Tradunsky in #748
 - Bump minimum version of scikit-build-core to 0.5.1 to fix msvc cmake issue by @abetlen in 1ed0f3ebe16993a0f961155aa4b2c85f1c68f668
