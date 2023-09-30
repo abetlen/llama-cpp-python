@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.11]
+
+- Fix bug in `llama_model_params` object has no attribute `logits_all` by @abetlen in d696251fbe40015e8616ea7a7d7ad5257fd1b896 
+
 ## [0.2.10]
 
 - Fix bug 'llama_model_params' object has no attribute 'embedding' by @abetlen in 42bb721d64d744242f9f980f2b89d5a6e335b5e4
