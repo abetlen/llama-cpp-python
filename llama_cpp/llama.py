@@ -841,7 +841,7 @@ class Llama:
         assert self.ctx is not None
         model_name: str = model if model is not None else self.model_path
 
-        if self.model_params.embedding == False:
+        if self.context_params.embedding == False:
             raise RuntimeError(
                 "Llama model must be created with embedding=True to call this method"
             )
