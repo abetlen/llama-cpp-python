@@ -4,8 +4,6 @@ project(llama_cpp)
 
 option(LLAMA_BUILD "Build llama.cpp shared library and install alongside python package" ON)
 
-set(BUILD_NUMBER 0) # TEMPORARY Fix
-
 if (LLAMA_BUILD)
     set(BUILD_SHARED_LIBS "On")
     if (APPLE AND NOT CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
