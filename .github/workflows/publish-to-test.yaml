@@ -26,7 +26,9 @@ jobs:
     - name: Append Dev Version to __version__
       run: |
         DEV_VERSION=${{ github.event.inputs.dev_version }}
-        sed -i "s/__version__ = \\".*\\"/__version__ = \\"$(sed -n 's/__version__ = \\"\(.*\)\\"/\1/p' llama_cpp/__init__.py).dev${DEV_VERSION}\\"/" llama_cpp/__init__.py
+        CURRENT_VERSION=$(awk -F= '/__version__ =/ {print $2}' llama_cpp/__init__.py | tr -d ' "')
+        NEW_VERSION="${CURRENT_VERSION}.dev${DEV_VERSION}"
+        sed -i "s/__version__ = \\".*\\"/__version__ = \\"${NEW_VERSION}\\"/" llama_cpp/__init__.py
     - name: Install dependencies
       run: |
         python3 -m pip install --upgrade pip build
