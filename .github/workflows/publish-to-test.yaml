@@ -17,8 +17,6 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: "3.8"
-    - name: Update __version__ with Git Short Hash
-      run: sed -i "s/__version__ = .*/__version__ = '$(git rev-parse --short HEAD)'/" llama_cpp/__init__.py
     - name: Install dependencies
       run: |
         python3 -m pip install --upgrade pip build
