@@ -1,3 +1,4 @@
+import sys
 import json
 import multiprocessing
 import time
@@ -241,7 +242,7 @@ class RouteErrorHandler(APIRoute):
         ] = None,
     ) -> Tuple[int, ErrorResponse]:
         """Wraps error message in OpenAI style error response"""
-
+        print(f"Exception: {str(error)}", file=sys.stderr)
         if body is not None and isinstance(
             body,
             (
