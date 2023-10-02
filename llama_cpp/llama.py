@@ -1625,6 +1625,8 @@ class Llama:
         format = llama_chat_format.get_chat_format(self.chat_format)
         result = format(
             messages=messages,
+            functions=functions,
+            function_call=function_call,
         )
         prompt = result.prompt
         if result.stop is not None:
