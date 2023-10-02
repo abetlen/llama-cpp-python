@@ -1,5 +1,6 @@
 import dataclasses
-from typing import Any, Dict, List, Optional, Tuple, Union, Protocol
+from typing import Any, Dict, List, Optional, Protocol, Tuple, Union
+
 from . import llama_types
 
 
@@ -321,6 +322,7 @@ def format_chatml(
     _prompt = _format_chatml(system_message, _messages, _sep)
     return ChatFormatterResponse(prompt=_prompt)
 
+
 # eg, export HF_MODEL=mistralai/Mistral-7B-Instruct-v0.1
 @register_chat_format("autotokenizer")
 def format_autotokenizer(
@@ -331,13 +333,138 @@ def format_autotokenizer(
     # https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.1#instruction-format
     # https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.1/blob/main/tokenizer_config.json
     import os
+
     from transformers import AutoTokenizer
-    huggingFaceModel = os.getenv("HF_MODEL") # eg, mistralai/Mistral-7B-Instruct-v0.1
+
+    huggingFaceModel = os.getenv("HF_MODEL")  # eg, mistralai/Mistral-7B-Instruct-v0.1
     print(huggingFaceModel)
     if not huggingFaceModel:
-        raise Exception("HF_MODEL needs to be set in env to use chat format 'autotokenizer'")
+        raise Exception(
+            "HF_MODEL needs to be set in env to use chat format 'autotokenizer'"
+        )
     tokenizer = AutoTokenizer.from_pretrained(huggingFaceModel)
     tokenizer.use_default_system_prompt = False
     _prompt = tokenizer.apply_chat_template(messages, tokenize=False)
     # Return formatted prompt and eos token by default
     return ChatFormatterResponse(prompt=_prompt, stop=tokenizer.eos_token)
+
+
+@register_chat_format("functionary")
+def format_functionary(
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    functions: Optional[List[llama_types.ChatCompletionFunctions]] = None,
+    **kwargs: Any,
+) -> ChatFormatterResponse:
+    SYSTEM_MESSAGE = """A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. The assistant calls functions with appropriate input when necessary"""
+
+    def generate_schema_from_functions(
+        functions: List[llama_types.ChatCompletionFunctions],
+        namespace: str = "functions",
+    ):
+        """
+        Convert functions schema to a schema that language models can understand.
+        """
+
+        schema = (
+            "// Supported function definitions that should be called when necessary.\n"
+        )
+        schema += f"namespace {namespace} {{\n\n"
+
+        for function in functions:
+            # Convert a Function object to dict, if necessary
+            function_name = function["name"]
+            description = function.get("description", "")
+            schema += f"// {description}\n"
+            schema += f"type {function_name}"
+
+            parameters = function.get("parameters", None)
+            schema += " = (_: {\n"
+            required_params = parameters.get("required", [])
+            for param_name, param in parameters.get("properties", {}).items():
+                # Param Description
+                description = param.get("description")
+                if description is not None:
+                    schema += f"// {description}\n"
+
+                # Param Name
+                schema += f"{param_name}"
+                if param_name not in required_params:
+                    schema += "?"
+
+                # Param Type
+                param_type = param.get("type", "any")
+                if param_type == "integer":
+                    param_type = "number"
+                if "enum" in param:
+                    param_type = " | ".join([f'"{v}"' for v in param["enum"]])
+                schema += f": {param_type},\n"
+
+            schema += "}) => any;\n\n"
+
+        schema += f"}} // namespace {namespace}"
+
+        return schema
+
+    def prepare_messages_for_inference(
+        messages: List[llama_types.ChatCompletionRequestMessage],
+        functions: Optional[List[llama_types.ChatCompletionFunctions]] = None,
+    ):
+        all_messages: List[llama_types.ChatCompletionRequestMessage] = []
+        if functions is not None:
+            all_messages.append(
+                llama_types.ChatCompletionRequestMessage(
+                    role="system", content=generate_schema_from_functions(functions)
+                )
+            )
+
+        all_messages.append(
+            llama_types.ChatCompletionRequestMessage(
+                role="system", content=SYSTEM_MESSAGE
+            )
+        )
+
+        for message in messages:
+            # Function call responses
+            if message["role"] == "function" and "name" in message:
+                message["name"] = f"functions.{message['name']}"
+            # Function call requests by assistant
+            if "function_call" in message:
+                message["function_call"][
+                    "name"
+                ] = f"functions.{message['function_call']['name']}"
+            all_messages.append(message)
+
+        all_messages.append(
+            llama_types.ChatCompletionRequestMessage(role="assistant", content=None)
+        )
+
+        def message_to_str(msg: llama_types.ChatCompletionRequestMessage):
+            if msg["role"] == "system":
+                return f"system:\n{msg['content']}\n"
+
+            elif msg["role"] == "function" and "name" in msg:
+                return f"function name={msg['name']}:\n{msg['content']}\n"
+            elif msg["role"] == "user":
+                if msg["content"] is None:
+                    return "user:\n</s>"
+                else:
+                    return f"user:\n</s>{msg['content']}\n"
+            elif msg["role"] == "assistant":
+                if msg["content"] is not None and "function_call" in msg:
+                    return f"assistant:\n{msg['content']}\nassistant to={msg['function_call']['name']}:\n{msg['function_call']['arguments']}</s>"
+                elif "function_call" in msg:
+                    return f"assistant to={msg['function_call']['name']}:\n{msg['function_call']['arguments']}</s>"
+                elif msg["content"] is None:
+                    return "assistant"
+                else:
+                    return f"assistant:\n{msg['content']}\n"
+            else:
+                raise ValueError(f"Unsupported role: {msg['role']}")
+
+        return "".join([message_to_str(msg) for msg in all_messages])
+
+    prompt = prepare_messages_for_inference(messages, functions)
+    return ChatFormatterResponse(
+        prompt=prompt,
+        stop=["user:", "</s>"],
+    )
