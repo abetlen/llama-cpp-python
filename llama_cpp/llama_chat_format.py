@@ -1,5 +1,6 @@
 import dataclasses
-from typing import Any, Dict, List, Optional, Tuple, Union, Protocol
+from typing import Any, Dict, List, Optional, Protocol, Tuple, Union
+
 from . import llama_types
 
 
@@ -144,7 +145,7 @@ def format_llama2(
     messages: List[llama_types.ChatCompletionRequestMessage],
     **kwargs: Any,
 ) -> ChatFormatterResponse:
-    _system_template = "[INST] <<SYS>>\n{system_message}\n<</SYS>>\n\n"
+    _system_template = "<<SYS>>\n{system_message}\n<</SYS>>\n\n"
     _roles = dict(user="[INST]", assistant="[/INST]")
     _sep = "\n\n"
     system_message = _get_system_message(messages)
