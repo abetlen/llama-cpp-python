@@ -320,3 +320,24 @@ def format_chatml(
     _messages.append((_roles["assistant"], None))
     _prompt = _format_chatml(system_message, _messages, _sep)
     return ChatFormatterResponse(prompt=_prompt)
+
+# eg, export HF_MODEL=mistralai/Mistral-7B-Instruct-v0.1
+@register_chat_format("autotokenizer")
+def format_autotokenizer(
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    **kwargs: Any,
+) -> ChatFormatterResponse:
+    # https://huggingface.co/docs/transformers/main/chat_templating
+    # https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.1#instruction-format
+    # https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.1/blob/main/tokenizer_config.json
+    import os
+    from transformers import AutoTokenizer
+    huggingFaceModel = os.getenv("HF_MODEL") # eg, mistralai/Mistral-7B-Instruct-v0.1
+    print(huggingFaceModel)
+    if not huggingFaceModel:
+        raise Exception("HF_MODEL needs to be set in env to use chat format 'autotokenizer'")
+    tokenizer = AutoTokenizer.from_pretrained(huggingFaceModel)
+    tokenizer.use_default_system_prompt = False
+    _prompt = tokenizer.apply_chat_template(messages, tokenize=False)
+    # Return formatted prompt and eos token by default
+    return ChatFormatterResponse(prompt=_prompt, stop=tokenizer.eos_token)
