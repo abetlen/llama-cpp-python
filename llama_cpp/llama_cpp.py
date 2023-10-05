@@ -102,8 +102,8 @@ LLAMA_FILE_MAGIC_GGSN = 0x6767736E
 
 # define LLAMA_SESSION_MAGIC   LLAMA_FILE_MAGIC_GGSN
 LLAMA_SESSION_MAGIC = LLAMA_FILE_MAGIC_GGSN
-# define LLAMA_SESSION_VERSION 1
-LLAMA_SESSION_VERSION = 1
+# define LLAMA_SESSION_VERSION 2
+LLAMA_SESSION_VERSION = 2
 
 
 # struct llama_model;
@@ -491,7 +491,7 @@ _lib.llama_backend_free.restype = None
 
 # LLAMA_API struct llama_model * llama_load_model_from_file(
 #                          const char * path_model,
-#         struct llama_context_params   params);
+#         struct llama_model_params     params);
 def llama_load_model_from_file(
     path_model: bytes, params: llama_model_params
 ) -> llama_model_p:
@@ -622,6 +622,16 @@ def llama_n_embd(model: llama_model_p) -> int:
 
 _lib.llama_n_embd.argtypes = [llama_model_p]
 _lib.llama_n_embd.restype = c_int
+
+
+# // Get the model's RoPE frequency scaling factor
+# LLAMA_API float llama_rope_freq_scale_train(const struct llama_model * model);
+def llama_rope_freq_scale_train(model: llama_model_p) -> float:
+    return _lib.llama_rope_freq_scale_train(model)
+
+
+_lib.llama_rope_freq_scale_train.argtypes = [llama_model_p]
+_lib.llama_rope_freq_scale_train.restype = c_float
 
 
 # // Get a string describing the model type
@@ -768,6 +778,8 @@ _lib.llama_get_kv_cache_token_count.restype = c_int
 
 
 # // Remove all tokens data of cells in [c0, c1)
+# // c0 < 0 : [0,  c1]
+# // c1 < 0 : [c0, inf)
 # LLAMA_API void llama_kv_cache_tokens_rm(
 #         struct llama_context * ctx,
 #                      int32_t   c0,
@@ -783,6 +795,8 @@ _lib.llama_kv_cache_tokens_rm.restype = None
 
 
 # // Removes all tokens that belong to the specified sequence and have positions in [p0, p1)
+# // p0 < 0 : [0,  p1]
+# // p1 < 0 : [p0, inf)
 # LLAMA_API void llama_kv_cache_seq_rm(
 #         struct llama_context * ctx,
 #                 llama_seq_id   seq_id,
@@ -808,6 +822,8 @@ _lib.llama_kv_cache_seq_rm.restype = None
 
 # // Copy all tokens that belong to the specified sequence to another sequence
 # // Note that this does not allocate extra KV cache memory - it simply assigns the tokens to the new sequence
+# // p0 < 0 : [0,  p1]
+# // p1 < 0 : [p0, inf)
 # LLAMA_API void llama_kv_cache_seq_cp(
 #         struct llama_context * ctx,
 #                 llama_seq_id   seq_id_src,
@@ -851,6 +867,8 @@ _lib.llama_kv_cache_seq_keep.restype = None
 
 # // Adds relative position "delta" to all tokens that belong to the specified sequence and have positions in [p0, p1)
 # // If the KV cache is RoPEd, the KV data is updated accordingly
+# // p0 < 0 : [0,  p1]
+# // p1 < 0 : [p0, inf)
 # LLAMA_API void llama_kv_cache_seq_shift(
 #         struct llama_context * ctx,
 #                 llama_seq_id   seq_id,
@@ -1213,6 +1231,43 @@ def llama_token_nl(ctx: llama_context_p) -> int:
 
 _lib.llama_token_nl.argtypes = [llama_context_p]
 _lib.llama_token_nl.restype = llama_token
+
+
+# // codellama infill tokens
+# LLAMA_API llama_token llama_token_prefix(const struct llama_context * ctx); // Beginning of infill prefix
+def llama_token_prefix(ctx: llama_context_p) -> int:
+    return _lib.llama_token_prefix(ctx)
+
+
+_lib.llama_token_prefix.argtypes = [llama_context_p]
+_lib.llama_token_prefix.restype = llama_token
+
+
+# LLAMA_API llama_token llama_token_middle(const struct llama_context * ctx); // Beginning of infill middle
+def llama_token_middle(ctx: llama_context_p) -> int:
+    return _lib.llama_token_middle(ctx)
+
+
+_lib.llama_token_middle.argtypes = [llama_context_p]
+_lib.llama_token_middle.restype = llama_token
+
+
+# LLAMA_API llama_token llama_token_suffix(const struct llama_context * ctx); // Beginning of infill suffix
+def llama_token_suffix(ctx: llama_context_p) -> int:
+    return _lib.llama_token_suffix(ctx)
+
+
+_lib.llama_token_suffix.argtypes = [llama_context_p]
+_lib.llama_token_suffix.restype = llama_token
+
+
+# LLAMA_API llama_token llama_token_eot   (const struct llama_context * ctx); // End of infill middle
+def llama_token_eot(ctx: llama_context_p) -> int:
+    return _lib.llama_token_eot(ctx)
+
+
+_lib.llama_token_eot.argtypes = [llama_context_p]
+_lib.llama_token_eot.restype = llama_token
 
 
 # //
@@ -1728,6 +1783,7 @@ _lib.llama_grammar_accept_token.restype = None
 # struct llama_beam_view {
 #     const llama_token * tokens;
 
+
 #     size_t n_tokens;
 #     float  p;        // Cumulative beam probability (renormalized relative to all beams)
 #     bool   eob;      // Callback should set this to true when a beam is at end-of-beam.
@@ -1793,6 +1849,7 @@ def llama_beam_search(
     return _lib.llama_beam_search(
         ctx, callback, callback_data, n_beams, n_past, n_predict
     )
+
 
 _lib.llama_beam_search.argtypes = [
     llama_context_p,
