@@ -491,7 +491,7 @@ _lib.llama_backend_free.restype = None
 
 # LLAMA_API struct llama_model * llama_load_model_from_file(
 #                          const char * path_model,
-#         struct llama_context_params   params);
+#         struct llama_model_params     params);
 def llama_load_model_from_file(
     path_model: bytes, params: llama_model_params
 ) -> llama_model_p:
