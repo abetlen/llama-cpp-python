@@ -24,7 +24,7 @@ import ctypes
 from . import llama_cpp
 from .llama_types import *
 from .llama_grammar import LlamaGrammar
-from . import llama_chat_format
+import llama_cpp.llama_chat_format as llama_chat_format
 
 import numpy as np
 import numpy.typing as npt
@@ -392,7 +392,7 @@ class Llama:
 
         if self.verbose:
             print(llama_cpp.llama_print_system_info().decode("utf-8"), file=sys.stderr)
-        
+
         self.chat_format = chat_format
 
         self._n_vocab = self.n_vocab()
@@ -1512,78 +1512,6 @@ class Llama:
             grammar=grammar,
         )
 
-    def _convert_text_completion_to_chat(
-        self, completion: Completion
-    ) -> ChatCompletion:
-        return {
-            "id": "chat" + completion["id"],
-            "object": "chat.completion",
-            "created": completion["created"],
-            "model": completion["model"],
-            "choices": [
-                {
-                    "index": 0,
-                    "message": {
-                        "role": "assistant",
-                        "content": completion["choices"][0]["text"],
-                    },
-                    "finish_reason": completion["choices"][0]["finish_reason"],
-                }
-            ],
-            "usage": completion["usage"],
-        }
-
-    def _convert_text_completion_chunks_to_chat(
-        self,
-        chunks: Iterator[CompletionChunk],
-    ) -> Iterator[ChatCompletionChunk]:
-        for i, chunk in enumerate(chunks):
-            if i == 0:
-                yield {
-                    "id": "chat" + chunk["id"],
-                    "model": chunk["model"],
-                    "created": chunk["created"],
-                    "object": "chat.completion.chunk",
-                    "choices": [
-                        {
-                            "index": 0,
-                            "delta": {
-                                "role": "assistant",
-                            },
-                            "finish_reason": None,
-                        }
-                    ],
-                }
-            yield {
-                "id": "chat" + chunk["id"],
-                "model": chunk["model"],
-                "created": chunk["created"],
-                "object": "chat.completion.chunk",
-                "choices": [
-                    {
-                        "index": 0,
-                        "delta": {
-                            "content": chunk["choices"][0]["text"],
-                        }
-                        if chunk["choices"][0]["finish_reason"] is None
-                        else {},
-                        "finish_reason": chunk["choices"][0]["finish_reason"],
-                    }
-                ],
-            }
-
-    def _convert_completion_to_chat(
-        self,
-        completion_or_chunks: Union[Completion, Iterator[CompletionChunk]],
-        stream: bool = False,
-    ) -> Union[ChatCompletion, Iterator[ChatCompletionChunk]]:
-        if stream:
-            chunks: Iterator[CompletionChunk] = completion_or_chunks  # type: ignore
-            return self._convert_text_completion_chunks_to_chat(chunks)
-        else:
-            completion: Completion = completion_or_chunks  # type: ignore
-            return self._convert_text_completion_to_chat(completion)
-
     def create_chat_completion(
         self,
         messages: List[ChatCompletionRequestMessage],
@@ -1621,21 +1549,12 @@ class Llama:
         Returns:
             Generated chat completion or a stream of chat completion chunks.
         """
-
-        format = llama_chat_format.get_chat_format(self.chat_format)
-        result = format(
+        handler = llama_chat_format.get_chat_completion_handler(self.chat_format)
+        return handler(
+            self,
             messages=messages,
             functions=functions,
             function_call=function_call,
-        )
-        prompt = result.prompt
-        if result.stop is not None:
-            stop = [] if stop is None else [stop] if isinstance(stop, str) else stop
-            rstop = result.stop if isinstance(result.stop, list) else [result.stop]
-            stop = stop + rstop
-
-        completion_or_chunks = self.create_completion(
-            prompt=prompt,
             temperature=temperature,
             top_p=top_p,
             top_k=top_k,
@@ -1653,7 +1572,6 @@ class Llama:
             logits_processor=logits_processor,
             grammar=grammar,
         )
-        return self._convert_completion_to_chat(completion_or_chunks, stream=stream)  # type: ignore
 
     def __del__(self):
         if hasattr(self, "model") and self.model is not None:
