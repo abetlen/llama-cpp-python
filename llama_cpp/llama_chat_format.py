@@ -3,6 +3,152 @@ from typing import Any, Dict, List, Optional, Protocol, Tuple, Union
 
 from . import llama_types
 
+BASE_TEMPLATE = {
+    "roles": {
+        "system": {
+            "prefix": "<<SYS>>",
+            "postfix": "<</SYS>>",
+            "format": None,
+        },
+        "user": {
+            "prefix": "[INST] ",
+            "postfix": " [/INST]",
+            "format": None,
+        },
+        "assistant": {
+            "prefix": "",
+            "postfix": "",
+            "format": None,
+        },
+    },
+    "separators": {
+        "after_system": "\n",
+        "between_messages": "\n",
+        "end_of_response": "",
+    },
+    "special_tokens": {
+        "bos_token": "<s>",
+        "eos_token": "</s>",
+        "unk_token": "<unk>",
+    },
+    "default_termination": {
+        "role": "assistant",
+        "message": None,
+    },
+}
+
+
+@dataclasses.dataclass
+class ChatFormatterResponse:
+    prompt: str
+    stop: Optional[Union[str, List[str]]] = None
+
+
+class ChatFormatterTemplate(Protocol):
+    def __init__(self, template: Dict[str, Any] = BASE_TEMPLATE):
+        self.template = template
+
+    # NOTE: Override private methods in inheriting classes as needed.
+    def _get_system_message(
+        self, messages: List[Dict[str, llama_types.ChatCompletionRequestMessage]]
+    ) -> str:
+        """Get the first system message."""
+        # NOTE: The system message is always the first element in a sequence,
+        # any other order should be considered undefined.
+        # If we always set the first element in the sequence to a system role,
+        # it makes sense to simply check the first element and test to see if it is a system role.
+        # This allows us to extract and return the system message from the list of messages
+        # with a constant time complexity.
+        try:
+            if messages[0]["role"] == "system":
+                # Retrieve role-specific formatting
+                role_prefix = self.template["roles"]["system"]["prefix"]
+                role_postfix = self.template["roles"]["system"]["postfix"]
+                # Extract the role-based message content
+                content = messages[0]["content"]
+                # Format the message content with the role's prefix and postfix
+                return role_prefix + content + role_postfix
+            return ""
+        except (IndexError, KeyError):
+            return ""
+
+    def _map_roles(
+        self, messages: List[Dict[str, llama_types.ChatCompletionRequestMessage]]
+    ) -> List[Tuple[str, Optional[str]]]:
+        """Map the message roles."""
+        # Convert the messages into a list of (role, message) tuples
+        mapped_sequence = []
+        for message in messages:
+            if message["role"] in ["user", "assistant"]:
+                # Retrieve role-specific formatting
+                role_prefix = self.template["roles"][message["role"]]["prefix"]
+                role_postfix = self.template["roles"][message["role"]]["postfix"]
+                # Format the message content with the role's prefix and postfix
+                formatted_message = role_prefix + message["content"] + role_postfix
+                # Map the formatted message to the sequence as a tuple
+                mapped_sequence.append((message["role"], formatted_message))
+        return mapped_sequence
+
+    def _format_messages(
+        self, messages: List[Dict[str, llama_types.ChatCompletionRequestMessage]]
+    ) -> str:
+        """Transforms a list of messages into the appropriate format for the model."""
+        ...
+
+    def parse_response(
+        self,
+        messages: List[Dict[str, llama_types.ChatCompletionRequestMessage]],
+        **kwargs,
+    ) -> ChatFormatterResponse:
+        ...
+
+
+class Llama2Formatter(ChatFormatterTemplate):
+    def _format_messages(
+        self, messages: List[Dict[str, llama_types.ChatCompletionRequestMessage]]
+    ) -> str:
+        """Private method to format messages based on Llama2 template."""
+        system_message = self._get_system_message(messages)
+        mapped_messages = self._map_roles(messages)
+        separator = self.template["separators"]["between_messages"]
+        end_of_response = self.template["separators"]["end_of_response"]
+
+        formatted_msg = separator.join([msg for role, msg in mapped_messages if msg])
+        return system_message + separator + formatted_msg + end_of_response
+
+    def parse_messages(
+        self,
+        messages: List[Dict[str, llama_types.ChatCompletionRequestMessage]],
+        **kwargs,
+    ) -> ChatFormatterResponse:
+        """Parse messages and wrap in ChatFormatterResponse."""
+        formatted_content = self._format_messages(messages)
+        return ChatFormatterResponse(prompt=formatted_content)
+
+
+class ChatFormatter:
+    _chat_formatters: Dict[str, ChatFormatterTemplate] = {"llama-2": Llama2Formatter}
+
+    def register_chat_format(self, cls, name: str):
+        self._chat_formatters[name] = cls
+
+    def get_chat_format(self, name: str):
+        try:
+            return self._chat_formatters[name]()
+        except KeyError:
+            valid_formats = list(self._chat_formatters.keys())
+            raise ValueError(
+                f"Invalid chat format: {name}. Valid formats: {valid_formats}"
+            )
+
+    def format(self, name: str, messages: List[dict]) -> str:
+        formatter = self.get_chat_format(name)
+        return formatter.format_messages(messages)
+
+    def parse(self, name: str, raw_response: str) -> Tuple[str, List[dict]]:
+        formatter = self.get_chat_format(name)
+        return formatter.parse_response(raw_response)
+
 
 def _get_system_message(
     messages: List[llama_types.ChatCompletionRequestMessage],
@@ -24,19 +170,6 @@ def _map_roles(
         if role in role_map:
             output.append((role_map[role], message["content"]))
     return output
-
-
-def _format_llama2(
-    system_message: str, messages: List[Tuple[str, Optional[str]]], sep: str
-) -> str:
-    """Format the prompt with the llama2 style."""
-    ret = system_message + sep
-    for role, message in messages:
-        if message:
-            ret += message + " "
-        else:
-            ret += role + " "
-    return ret
 
 
 def _format_add_colon_single(
@@ -111,15 +244,6 @@ class ChatFormatterResponse:
     stop: Optional[Union[str, List[str]]] = None
 
 
-class ChatFormatter(Protocol):
-    def __call__(
-        self,
-        messages: List[llama_types.ChatCompletionRequestMessage],
-        **kwargs: Any,
-    ) -> ChatFormatterResponse:
-        ...
-
-
 _CHAT_FORMATS: Dict[str, ChatFormatter] = {}
 
 
@@ -138,22 +262,6 @@ def get_chat_format(name: str):
         raise ValueError(
             f"Invalid chat format: {name} (valid formats: {list(_CHAT_FORMATS.keys())})"
         )
-
-
-@register_chat_format("llama-2")
-def format_llama2(
-    messages: List[llama_types.ChatCompletionRequestMessage],
-    **kwargs: Any,
-) -> ChatFormatterResponse:
-    _system_template = "[INST] <<SYS>>\n{system_message}\n<</SYS>>\n\n"
-    _roles = dict(user="[INST]", assistant="[/INST]")
-    _sep = "\n\n"
-    system_message = _get_system_message(messages)
-    system_message = _system_template.format(system_message=system_message)
-    _messages = _map_roles(messages, _roles)
-    _messages.append((_roles["assistant"], None))
-    _prompt = _format_llama2(system_message, _messages, _sep)
-    return ChatFormatterResponse(prompt=_prompt)
 
 
 @register_chat_format("alpaca")
