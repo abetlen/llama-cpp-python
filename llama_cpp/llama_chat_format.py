@@ -16,7 +16,7 @@ class Llama2Formatter(ChatFormatter):
 
 # Obtaining a registered formatter
 chat_formatter_factory = ChatFormatterFactory()
-llama2_formatter = chat_formatter_factory.get_formatter_by_name("alpaca")
+llama2_formatter = chat_formatter_factory.get_formatter_by_name("llama-2")
 
 # Formatting messages
 messages = [{"role": "user", "content": "Hello, World!"}]
@@ -27,7 +27,7 @@ import dataclasses
 import os
 from typing import Any, Dict, List, Optional, Protocol, Type, Union
 
-from huggingface_hub import login
+import huggingface_hub
 from transformers import AutoTokenizer
 
 from . import llama_types
@@ -192,13 +192,7 @@ class TokenizerCache:
 class AutoTokenizerFormatter(ChatFormatterInterface):
     def __init__(self, template: Optional[Dict[str, str]] = None):
         self.template = template or huggingface_template
-        self.token = os.getenv("HF_TOKEN")
-        if self.token is None:
-            raise AttributeError(
-                "Failed to login to huggingface. "
-                "Did you forget to set the `HF_TOKEN` environment variable with your huggingface token?"
-            )
-        login(self.token)
+        self.huggingface_login()
         self.tokenizer = TokenizerCache.get_tokenizer(self.template["model"])
 
     def __call__(
@@ -211,6 +205,15 @@ class AutoTokenizerFormatter(ChatFormatterInterface):
             prompt=formatted_content, stop=[self.tokenizer.eos_token]
         )
 
+    def huggingface_login(self) -> None:
+        token = os.getenv("HF_TOKEN")
+        if token is None:
+            raise AttributeError(
+                "Failed to login to huggingface. "
+                "Did you forget to set the `HF_TOKEN` environment variable with your huggingface token?"
+            )
+        huggingface_hub.login(token)
+
     def format_messages(
         self, messages: List[llama_types.ChatCompletionRequestMessage]
     ) -> str:
@@ -219,7 +222,7 @@ class AutoTokenizerFormatter(ChatFormatterInterface):
             self.tokenizer.chat_template = self.template["jinja"]
 
         return self.tokenizer.apply_chat_template(
-            messages, tokenize=self.template["tokenize"]
+            messages, tokenize=self.template.get("tokenize", False)
         )
 
 
