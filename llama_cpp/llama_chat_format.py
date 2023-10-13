@@ -1,41 +1,182 @@
-import dataclasses
-from typing import Dict, List, Optional
+"""
+llama_cpp/llama_chat_format.py
 
+This module provides a chat formatting system that allows for custom templates and HuggingFace's jinja2-based chat templating.
+
+To extend or customize, simply inherit from the ChatFormatter class and override the necessary methods. Registered formatters can be accessed using the ChatFormatterFactory.
+
+NOTE: The system message is always assumed to be the first element in a sequence.
+
+# Usage example:
+# Registering a custom formatter
+@ChatFormatterFactory.register_predefined_model("llama-2")
+class Llama2Formatter(ChatFormatter):
+    def __init__(self):
+        super().__init__(llama2_template)
+
+# Obtaining a registered formatter
+chat_formatter_factory = ChatFormatterFactory()
+llama2_formatter = chat_formatter_factory.get_formatter_by_name("alpaca")
+
+# Formatting messages
+messages = [{"role": "user", "content": "Hello, World!"}]
+response = llama2_formatter(messages)
+print(response)
+"""
+import dataclasses
+import os
+from typing import Any, Dict, List, Optional, Protocol, Type, Union
+
+from huggingface_hub import login
 from transformers import AutoTokenizer
 
 from . import llama_types
 
-# NOTE: Custom Templates use Jinja2.
-# If no template is given, then should default to hf's tokenizer template.
-# We can define the model and template on a model-to-model basis,
-# however, this should be allowed to be overridden for flexibility and extensibility.
-# We only need 2 keys, the model name and the jinja2 template.
-#
-#   template = {"model": "meta-llama/Llama-2-7b-chat-hf", "template": None}
-#
-#   or
-#
-# chat_template = {
-#     "model": "meta-llama/Llama-2-7b-chat-hf",
-#     "jinja": "{% for message in messages %}{% if message['role'] == 'user' %}{{ bos_token + '[INST] ' + message['content'].strip() + ' [/INST]' }}{% elif message['role'] == 'system' %}{{ '<<SYS>>\\n' + message['content'].strip() + '\\n<</SYS>>\\n\\n' }}{% elif message['role'] == 'assistant' %}{{ '[ASST] '  + message ['content'] + ' [/ASST]' + eos_token }}{% endif %}{% endfor %}",
-# }
-#
-# We can probably employ some kind of method for reading a template it in from a file in necessary.
-#
-# We leave template empty here because HuggingFace defined it already.
-#
-# Source: https://huggingface.co/docs/transformers/main/chat_templating
-#
-# Special Thanks and Credit goes to bioshazard for the idea and preliminary implementation.
-# Source: https://github.com/abetlen/llama-cpp-python/pull/790
+# NOTE: The default templates are defined here for reusability.
+huggingface_template = {
+    "model": "meta-llama/Llama-2-7b-chat-hf",
+    "jinja": None,
+    "tokenize": False,
+}
+
+common_template = {
+    "separators": {
+        "after_system": "\n",
+        "between_messages": "\n",
+        "end_of_response": "",
+    },
+    "special_tokens": {
+        "bos_token": "<s>",
+        "eos_token": "</s>",
+        "unk_token": "<unk>",
+    },
+    "default_termination": {
+        "role": "assistant",
+        "message": None,
+    },
+    "include_prompt": False,
+}
+
+# Templates can be reused, modified, or overriden as needed on a model-by-model basis.
+# This reduces noise in the code and ideally keeps the code base DRY.
+llama2_template = {
+    "roles": {
+        "system": {
+            "prefix": "<<SYS>>",
+            "postfix": "<</SYS>>",
+            "format": None,  # Optionally specify an custom format
+        },
+        "assistant": {
+            "prefix": "",  # No prefix for assistant role by default
+            "postfix": "",  # No postfix for assistant role by default
+            "format": None,
+        },
+        "user": {
+            "prefix": "[INST] ",
+            "postfix": " [/INST]",  # Model starts generating from here
+            "format": None,
+        },
+    }
+}
+# NOTE: The merge operator requires Python 3.9+
+# Other options are to use `dict.update()` or to create a custom function that merges them.
+# Source: https://docs.python.org/3/library/stdtypes.html?highlight=dict#dict
+llama2_template |= common_template
+
+# NOTE: If `include_prompt` is set to `True`, it will append the user prefix/postfix to the prompts output.
+alpaca_template = {
+    "roles": {
+        "system": {
+            "prefix": "",
+            "postfix": "\n",
+            "format": None,
+        },
+        "user": {
+            "prefix": "### Instruction:\n",
+            "postfix": "\n",
+            "format": None,
+        },
+        "input": {
+            "prefix": "### Input:\n",
+            "postfix": "\n",
+            "format": None,
+        },
+        "assistant": {
+            "prefix": "### Response:\n",
+            "postfix": "",  # Model starts generating from here
+            "format": None,
+        },
+    }
+}
+alpaca_template |= common_template
 
 
-# NOTE: We can still use this for reverse compatibility with the currently employed API.
-# This can be modified, if needed, in the future.
 @dataclasses.dataclass
 class ChatFormatterResponse:
     prompt: str
-    stop: Optional[List[str]] = None
+    stop: Optional[Union[str, List[str]]] = None
+
+
+# Base Chat Formatter Protocol
+class ChatFormatterInterface(Protocol):
+    def __init__(self, template: Optional[Dict[str, Any]] = None):
+        raise NotImplementedError
+
+    def __call__(
+        self,
+        messages: List[Dict[str, str]],
+        **kwargs,
+    ) -> ChatFormatterResponse:
+        raise NotImplementedError
+
+
+# Core Chat Formatter class
+# NOTE: Methods can be overridden as needed on a model-by-model basis.
+class ChatFormatter(ChatFormatterInterface):
+    def __init__(self, template: Optional[Dict[str, Any]] = None):
+        self.template = template or llama2_template
+
+    def __call__(
+        self,
+        messages: List[Dict[str, str]],
+        **kwargs: Any,
+    ) -> ChatFormatterResponse:
+        formatted_messages = [
+            self.format_message(msg["content"], msg["role"]) for msg in messages
+        ]
+        separator = self.format_separator("between_messages")
+        formatted_sequence = separator.join(formatted_messages)
+        # NOTE: Optionally include a prompt at the end
+        if self.template["include_prompt"]:
+            formatted_sequence += self.get_prompt()
+        # NOTE: `stop` is handled within completion methods
+        return ChatFormatterResponse(prompt=formatted_sequence)
+
+    def format_message(self, message, role) -> str:
+        """Format a message based on the specified role."""
+        try:
+            role_info = self.template["roles"][role]
+        except KeyError:
+            raise KeyError(
+                f"The role '{role}' is not defined in the template. Please check your template configuration."
+            )
+
+        prefix = role_info.get("prefix", "")
+        postfix = role_info.get("postfix", "")
+        formatted_message = f"{prefix}{message}{postfix}"
+        return formatted_message
+
+    def format_separator(self, separator_type) -> str:
+        """Format separators based on the specified type."""
+        return self.template["separators"].get(separator_type, "")
+
+    def format_special_token(self, token_type) -> str:
+        """Format special tokens based on the specified type."""
+        return self.template["special_tokens"].get(token_type, "")
+
+    def get_prompt(self) -> str:
+        # Implement logic to generate a prompt, if needed
+        return self.template["roles"]["user"]["prefix"]
 
 
 class TokenizerCache:
@@ -48,19 +189,31 @@ class TokenizerCache:
         return cls._cache[model_name]
 
 
-class ChatFormatterTemplate:
+class AutoTokenizerFormatter(ChatFormatterInterface):
     def __init__(self, template: Optional[Dict[str, str]] = None):
-        if template:
-            self.template = template
-        else:
-            self.template = {
-                "model": "meta-llama/Llama-2-7b-chat-hf",
-                "jinja": None,
-                "tokenize": False,
-            }
+        self.template = template or huggingface_template
+        self.token = os.getenv("HF_TOKEN")
+        if self.token is None:
+            raise AttributeError(
+                "Failed to login to huggingface. "
+                "Did you forget to set the `HF_TOKEN` environment variable with your huggingface token?"
+            )
+        login(self.token)
         self.tokenizer = TokenizerCache.get_tokenizer(self.template["model"])
 
-    def _format_messages(self, messages: List[Dict[str, str]]) -> str:
+    def __call__(
+        self,
+        messages: List[llama_types.ChatCompletionRequestMessage],
+        **kwargs,
+    ) -> ChatFormatterResponse:
+        formatted_content = self.format_messages(messages)
+        return ChatFormatterResponse(
+            prompt=formatted_content, stop=[self.tokenizer.eos_token]
+        )
+
+    def format_messages(
+        self, messages: List[llama_types.ChatCompletionRequestMessage]
+    ) -> str:
         # If a custom template is provided, override the tokenizer's default template
         if self.template.get("jinja"):
             self.tokenizer.chat_template = self.template["jinja"]
@@ -69,51 +222,50 @@ class ChatFormatterTemplate:
             messages, tokenize=self.template["tokenize"]
         )
 
-    def parse_response(self, messages: List[Dict[str, str]]) -> ChatFormatterResponse:
-        formatted_content = self._format_messages(messages)
-        return ChatFormatterResponse(
-            prompt=formatted_content, stop=[self.tokenizer.eos_token]
-        )
+
+# NOTE: Template registration is currently a WIP (work in progress).
+class FormatterNotFoundException(Exception):
+    pass
 
 
-class ChatFormatter:
-    _chat_formatters: Dict[str, ChatFormatterTemplate] = {}
+# External developers can now use the `@ChatFormatter.register_predefined_model`
+# method to register their own custom formatters.
+class ChatFormatterFactory:
+    _chat_formatters: Dict[str, ChatFormatterInterface] = {}
 
-    def register_chat_format(
-        self, model_name: str, template: Optional[Dict[str, str]] = None
-    ):
-        self._chat_formatters[model_name] = ChatFormatterTemplate(template)
+    @staticmethod
+    def register_predefined_model(name: str):
+        def decorator(cls: Type[ChatFormatterInterface]):
+            ChatFormatterFactory._chat_formatters[name] = cls()
+            return cls
 
-    def get_chat_format(self, model_name: str) -> ChatFormatterTemplate:
-        if model_name not in self._chat_formatters:
-            raise ValueError(f"Model {model_name} is not registered.")
+        return decorator
 
-        return self._chat_formatters[model_name]
+    def register_custom_model(self, name: str, formatter: ChatFormatterInterface):
+        self._chat_formatters[name] = formatter
 
-    def format(self, model_name: str, messages: List[Dict[str, str]]) -> str:
-        formatter = self.get_chat_format(model_name)
-        return formatter._format_messages(messages)
-
-    def parse(
-        self, model_name: str, messages: List[Dict[str, str]]
-    ) -> ChatFormatterResponse:
-        formatter = self.get_chat_format(model_name)
-        return formatter.parse_response(messages)
+    def get_formatter_by_name(self, name: str) -> ChatFormatterInterface:
+        try:
+            return self._chat_formatters[name]
+        except KeyError:
+            raise FormatterNotFoundException(
+                f"Invalid chat format: {name} (valid formats: {list(self._chat_formatters.keys())})"
+            )
 
 
-# NOTE: Template registration is currently a WIP (work in progress)
-@register_chat_format("alpaca")
-def format_alpaca(
-    messages: List[llama_types.ChatCompletionRequestMessage],
-    **kwargs: Any,
-) -> ChatFormatterResponse:
-    _roles = dict(user="### Instruction", assistant="### Response")
-    _sep = "\n\n"
-    _sep2 = "</s>"
-    system_message = _get_system_message(messages)
-    _messages = _map_roles(messages, _roles)
-    _prompt = _format_add_colon_two(system_message, _messages, _sep, _sep2)
-    return ChatFormatterResponse(prompt=_prompt)
+# Define a chat format class and register it
+@ChatFormatterFactory.register_predefined_model("llama-2")
+class Llama2Formatter(ChatFormatter):
+    def __init__(self):
+        super().__init__(llama2_template)
+
+
+# Define a chat format class and register it
+@ChatFormatterFactory.register_predefined_model("alpaca")
+class AlpacaFormatter(ChatFormatter):
+    def __init__(self):
+        # Define the Alpaca template
+        super().__init__(alpaca_template)
 
 
 @register_chat_format("vicuna")
@@ -267,32 +419,6 @@ def format_chatml(
     _messages.append((_roles["assistant"], None))
     _prompt = _format_chatml(system_message, _messages, _sep)
     return ChatFormatterResponse(prompt=_prompt)
-
-
-# eg, export HF_MODEL=mistralai/Mistral-7B-Instruct-v0.1
-@register_chat_format("autotokenizer")
-def format_autotokenizer(
-    messages: List[llama_types.ChatCompletionRequestMessage],
-    **kwargs: Any,
-) -> ChatFormatterResponse:
-    # https://huggingface.co/docs/transformers/main/chat_templating
-    # https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.1#instruction-format
-    # https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.1/blob/main/tokenizer_config.json
-    import os
-
-    from transformers import AutoTokenizer
-
-    huggingFaceModel = os.getenv("HF_MODEL")  # eg, mistralai/Mistral-7B-Instruct-v0.1
-    print(huggingFaceModel)
-    if not huggingFaceModel:
-        raise Exception(
-            "HF_MODEL needs to be set in env to use chat format 'autotokenizer'"
-        )
-    tokenizer = AutoTokenizer.from_pretrained(huggingFaceModel)
-    tokenizer.use_default_system_prompt = False
-    _prompt = tokenizer.apply_chat_template(messages, tokenize=False)
-    # Return formatted prompt and eos token by default
-    return ChatFormatterResponse(prompt=_prompt, stop=tokenizer.eos_token)
 
 
 @register_chat_format("functionary")
