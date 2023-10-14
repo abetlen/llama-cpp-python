@@ -7,6 +7,54 @@ To extend or customize, simply inherit from the ChatFormatter class and override
 
 NOTE: The system message is always assumed to be the first element in a sequence.
 
+NOTE: Users should avoid tampering with special tokens to prevent model issues.
+
+---
+
+# IMPORTANT NOTES:
+
+- The use of the merge operator (|) for dictionaries requires Python 3.9 or higher. Keep in mind that llama-cpp-python supports Python 3.8 and later versions. If you are working with an earlier Python version, consider alternatives such as `dict.update()` or creating a custom function to merge dictionaries. For Python 3.9 or higher, the merge operator simplifies dictionary merging.
+Source: https://docs.python.org/3/library/stdtypes.html?highlight=dict#dict
+
+- Special tokens are crucial for the model's underlying operations, impacting pre-training, fine-tuning, and low-level inference processes. Users should avoid modifying special tokens to prevent issues in the model's output during inference. These issues may manifest as token fixation, repetitive language patterns, contextual derailment, and hallucinations. Improper use of separators and templates can exacerbate these problems.
+
+Example using the llama-2 model and its templating schema:
+
+#  1  <<SYS>>My name is Llama and I am a helpful assistant.<</SYS>>$
+#  2  [INST] Hello Llama, my name is User. What's your name? [/INST]$
+#  3  Hello User, my name is Llama. Nice to meet you!$
+#  4  [INST] What can you do? [/INST]$
+#  5  I can assist you with various tasks, including providing structured output for certain queries.$
+#  6  [INST] How can you assist me in my programming projects? [/INST]$
+#  7  $
+
+This initial example is a proper template format that the model understands. It results in proper output and does not confuse the model.
+
+#  1  <<SYS>>My name is Llama and I am a helpful assistant.<</SYS>>$
+#  2  <s>[INST] Hello Llama, my name is User. What's your name? [/INST]$
+#  3  Hello User, my name is Llama. Nice to meet you!</s>$
+#  4  <s>[INST] What can you do? [/INST]$
+#  5  I can assist you with various tasks, including providing structured output for certain queries.</s>$
+#  6  <s>[INST] How can you assist me in my programming projects? [/INST]$
+#  7  $
+
+This example includes the use of special tokens, and the model may or may not use these tokens as a result. The model is not expecting them during inference, which causes unexpected behavior.
+
+#  1  <<SYS>>My name is Llama and I am a helpful assistant.<</SYS>>$
+#  2  $
+#  3  <s>[INST] Hello Llama, my name is User. What's your name? [/INST]$
+#  4  Hello User, my name is Llama. Nice to meet you!</s>$
+#  5  $
+#  6  <s>[INST] What can you do? [/INST]$
+#  7  I can assist you with various tasks, including providing structured output for certain queries.</s>$
+#  8  $
+#  9  <s>[INST] How can you assist me in my programming projects? [/INST]$
+# 10  $
+
+This example is improperly formatted and causes the model to become confused. The model begins to fixate on tokens, uses language repetition, and eventually derails.
+
+---
+
 # Usage example:
 # Registering a custom formatter
 @ChatFormatterFactory.register_predefined_model("llama-2")
@@ -32,58 +80,54 @@ from transformers import AutoTokenizer
 
 from . import llama_types
 
-# NOTE: The default templates are defined here for reusability.
+# Default chat formatting templates for reusability.
+# These templates can be reused or modified on a model-by-model basis.
+
+# Template for HuggingFace-based models.
 huggingface_template = {
     "model": "meta-llama/Llama-2-7b-chat-hf",
     "jinja": None,
     "tokenize": False,
 }
 
+# Common formatting settings applicable to all roles in chat models.
 common_template = {
     "separators": {
         "after_system": "\n",
         "between_messages": "\n",
         "end_of_response": "",
     },
-    "special_tokens": {
-        "bos_token": "<s>",
-        "eos_token": "</s>",
-        "unk_token": "<unk>",
-    },
     "default_termination": {
-        "role": "assistant",
-        "message": None,
+        "role": "assistant",  # Default role for termination
+        "message": None,  # Default termination message (None for assistant)
     },
-    "include_prompt": False,
+    "include_prompt": False,  # Whether to include user prefix/postfix in prompts
 }
 
-# Templates can be reused, modified, or overriden as needed on a model-by-model basis.
-# This reduces noise in the code and ideally keeps the code base DRY.
+# Template for Llama-2 model.
 llama2_template = {
     "roles": {
         "system": {
-            "prefix": "<<SYS>>",
-            "postfix": "<</SYS>>",
-            "format": None,  # Optionally specify an custom format
+            "prefix": "<<SYS>>",  # System message prefix
+            "postfix": "<</SYS>>",  # System message postfix
+            "format": None,  # Optionally specify a custom format
+        },
+        "user": {
+            "prefix": "[INST] ",
+            "postfix": " [/INST]",  # Model generates from here
+            "format": None,
         },
         "assistant": {
             "prefix": "",  # No prefix for assistant role by default
             "postfix": "",  # No postfix for assistant role by default
-            "format": None,
-        },
-        "user": {
-            "prefix": "[INST] ",
-            "postfix": " [/INST]",  # Model starts generating from here
-            "format": None,
+            "format": None,  # Custom format for assistant (if needed)
         },
     }
 }
-# NOTE: The merge operator requires Python 3.9+
-# Other options are to use `dict.update()` or to create a custom function that merges them.
-# Source: https://docs.python.org/3/library/stdtypes.html?highlight=dict#dict
+# Merge common settings into the llama2_template to reduce code duplication.
 llama2_template |= common_template
 
-# NOTE: If `include_prompt` is set to `True`, it will append the user prefix/postfix to the prompts output.
+# Template for Alpaca model.
 alpaca_template = {
     "roles": {
         "system": {
@@ -103,12 +147,36 @@ alpaca_template = {
         },
         "assistant": {
             "prefix": "### Response:\n",
-            "postfix": "",  # Model starts generating from here
+            "postfix": "",  # Model generates from here
             "format": None,
         },
     }
 }
+# Merge common settings into the alpaca_template to reduce code duplication.
 alpaca_template |= common_template
+
+# Template for Vicuna model.
+vicuna_template = {
+    "roles": {
+        "system": {
+            "prefix": "",
+            "postfix": "\n",
+            "format": None,
+        },
+        "user": {
+            "prefix": "USER: ",
+            "postfix": "",
+            "format": None,
+        },
+        "assistant": {
+            "prefix": "ASSISTANT: ",  # Model generates from here
+            "postfix": "",
+            "format": None,
+        },
+    }
+}
+# Merge common settings into the alpaca_template to reduce code duplication.
+vicuna_template |= common_template
 
 
 @dataclasses.dataclass
@@ -169,10 +237,6 @@ class ChatFormatter(ChatFormatterInterface):
     def format_separator(self, separator_type) -> str:
         """Format separators based on the specified type."""
         return self.template["separators"].get(separator_type, "")
-
-    def format_special_token(self, token_type) -> str:
-        """Format special tokens based on the specified type."""
-        return self.template["special_tokens"].get(token_type, "")
 
     def get_prompt(self) -> str:
         # Implement logic to generate a prompt, if needed
