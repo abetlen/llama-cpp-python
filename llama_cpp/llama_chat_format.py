@@ -91,7 +91,7 @@ huggingface_template = {
 }
 
 # Common formatting settings applicable to all roles in chat models.
-common_template = {
+common_template: llama_types.CommonTemplate = {
     "separators": {
         "after_system": "\n",
         "between_messages": "\n",
@@ -105,7 +105,7 @@ common_template = {
 }
 
 # Template for Llama-2 model.
-llama2_template = {
+llama2_template: llama_types.ChatMLTemplate = {
     "roles": {
         "system": {
             "prefix": "<<SYS>>",  # System message prefix
@@ -128,7 +128,7 @@ llama2_template = {
 llama2_template |= common_template
 
 # Template for Alpaca model.
-alpaca_template = {
+alpaca_template: llama_types.ChatMLTemplate = {
     "roles": {
         "system": {
             "prefix": "",
@@ -152,11 +152,12 @@ alpaca_template = {
         },
     }
 }
-# Merge common settings into the alpaca_template to reduce code duplication.
 alpaca_template |= common_template
 
 # Template for Vicuna model.
-vicuna_template = {
+# NOTE: The v0 template differs from the v1.1, v1.3, and v1.5.
+# This is the v1.5 Vicuna Template.
+vicuna_template: llama_types.ChatMLTemplate = {
     "roles": {
         "system": {
             "prefix": "",
@@ -175,7 +176,6 @@ vicuna_template = {
         },
     }
 }
-# Merge common settings into the alpaca_template to reduce code duplication.
 vicuna_template |= common_template
 
 
@@ -335,20 +335,11 @@ class AlpacaFormatter(ChatFormatter):
         super().__init__(alpaca_template)
 
 
-@register_chat_format("vicuna")
-def format(
-    messages: List[llama_types.ChatCompletionRequestMessage],
-    **kwargs: Any,
-) -> ChatFormatterResponse:
-    _system_message = "A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions."
-    _roles = dict(user="USER", assistant="ASSISTANT")
-    _sep = " "
-    _sep2 = "</s>"
-    system_message = _system_message
-    _messages = _map_roles(messages, _roles)
-    _messages.append((_roles["assistant"], None))
-    _prompt = _format_add_colon_two(system_message, _messages, _sep, _sep2)
-    return ChatFormatterResponse(prompt=_prompt)
+@ChatFormatterFactory.register_predefined_model("vicuna")
+class VicunaFormatter(ChatFormatter):
+    def __init__(self):
+        # Define the Vicuna template
+        super().__init__(vicuna_template)
 
 
 @register_chat_format("oasst_llama")

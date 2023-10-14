@@ -4,8 +4,9 @@ Based on the OpenAI OpenAPI specification:
 https://github.com/openai/openai-openapi/blob/master/openapi.yaml
 
 """
-from typing import Any, List, Optional, Dict, Union
-from typing_extensions import TypedDict, NotRequired, Literal
+from typing import Any, Dict, List, Optional, Union
+
+from typing_extensions import Literal, NotRequired, TypedDict
 
 
 class EmbeddingUsage(TypedDict):
@@ -170,3 +171,19 @@ class ChatCompletionRequestMessage(TypedDict):
     content: Optional[str]
     name: NotRequired[str]
     funcion_call: NotRequired[ChatCompletionFunctionCall]
+
+
+class RoleTemplate(TypedDict, total=False):
+    prefix: str
+    postfix: str
+    format: Optional[str]
+
+
+class CommonTemplate(TypedDict):
+    separators: Dict[str, str]
+    default_termination: Dict[str, Optional[str]]
+    include_prompt: bool
+
+
+class ChatMLTemplate(TypedDict):
+    roles: Dict[str, RoleTemplate]
