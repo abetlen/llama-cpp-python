@@ -178,6 +178,30 @@ vicuna_template: llama_types.ChatMLTemplate = {
 }
 vicuna_template |= common_template
 
+# NOTE: Open Assistant uses multiple custom prompts.
+# The oasst-llama hybrids utilize ChatML templates.
+# The base template is defined here for convenience.
+oasst_template: llama_types.ChatMLTemplate = {
+    "roles": {
+        "system": {
+            "prefix": "<|system|>",
+            "postfix": "<|endoftext|>",
+            "format": None,
+        },
+        "user": {
+            "prefix": "<|prompter|>",
+            "postfix": "<|endoftext|>",
+            "format": None,
+        },
+        "assistant": {
+            "prefix": "<|assistant|>",  # Model generates from here
+            "postfix": "<|endoftext|>",
+            "format": None,
+        },
+    }
+}
+oasst_template |= common_template
+
 
 @dataclasses.dataclass
 class ChatFormatterResponse:
@@ -342,20 +366,12 @@ class VicunaFormatter(ChatFormatter):
         super().__init__(vicuna_template)
 
 
-@register_chat_format("oasst_llama")
-def format_oasst_llama(
-    messages: List[llama_types.ChatCompletionRequestMessage],
-    **kwargs: Any,
-) -> ChatFormatterResponse:
-    _system_template = "[INST] <<SYS>>\n{system_message}\n<</SYS>>\n\n"
-    _roles = dict(user="<|prompter|>", assistant="<|assistant|>")
-    _sep = "</s>"
-    system_message = _get_system_message(messages)
-    system_message = _system_template.format(system_message=system_message)
-    _messages = _map_roles(messages, _roles)
-    _messages.append((_roles["assistant"], None))
-    _prompt = _format_no_colon_single(system_message, _messages, _sep)
-    return ChatFormatterResponse(prompt=_prompt)
+# NOTE: Refer to `oasst_template` note for more information.
+@ChatFormatterFactory.register_predefined_model("oasst")
+class OpenAssistantFormatter(ChatFormatter):
+    def __init__(self):
+        # Define the Open Assistant template
+        super().__init__(oasst_template)
 
 
 @register_chat_format("openbuddy")
