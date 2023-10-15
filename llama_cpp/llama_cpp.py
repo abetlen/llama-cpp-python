@@ -82,6 +82,8 @@ _lib = _load_shared_library(_lib_base_name)
 
 # Misc
 c_float_p = POINTER(c_float)
+c_float_p_p = POINTER(POINTER(c_float))
+c_int_p = POINTER(c_int)
 c_uint8_p = POINTER(c_uint8)
 c_size_t_p = POINTER(c_size_t)
 
@@ -112,6 +114,11 @@ llama_model_p = c_void_p
 # struct llama_context;
 llama_context_p = c_void_p
 
+# struct clip_ctx;
+clip_ctx_p = c_void_p
+
+# struct llava_image_embed;
+llava_image_embed_p = c_void_p;
 
 # typedef int32_t llama_pos;
 llama_pos = c_int32
@@ -1923,3 +1930,63 @@ def llama_dump_timing_info_yaml(stream: ctypes.c_void_p, ctx: llama_context_p):
 
 _lib.llama_dump_timing_info_yaml.argtypes = [ctypes.c_void_p, llama_context_p]
 _lib.llama_dump_timing_info_yaml.restype = None
+
+
+# LLAVA
+
+
+# LLAMA_API struct clip_ctx * clip_model_load(const char * fname, const int verbosity);
+def clip_model_load(fname: Union[c_char_p, bytes], verbosity: c_int = 0) -> clip_ctx_p:
+    """ load mmproj model """
+    return _lib.clip_model_load(fname, verbosity)
+_lib.clip_model_load.argtypes = [c_char_p, c_int]
+_lib.clip_model_load.restype = clip_ctx_p
+
+
+# LLAMA_API void clip_free(struct clip_ctx * ctx);
+def clip_free(ctx: clip_ctx_p):
+    """ free mmproj model """
+    _lib.clip_free(ctx)
+_lib.clip_free.argtypes = [clip_ctx_p]
+_lib.clip_free.restype = None
+
+
+#LLAMA_API bool llava_validate_embed_size(const llama_context * ctx_llama, const clip_ctx * ctx_clip);
+def llava_validate_embed_size(ctx_llama: llama_context_p, ctx_clip: clip_ctx_p) -> c_bool:
+    """ sanity check for clip <-> llava embed size match """
+    return _lib.llava_validate_embed_size(ctx_llama, ctx_clip)
+_lib.llava_validate_embed_size.argtypes = [llama_context_p, clip_ctx_p]
+_lib.llava_validate_embed_size.restype = c_bool
+
+
+#LLAMA_API struct llava_image_embed * llava_image_embed_make_with_bytes(struct clip_ctx * ctx_clip, int n_threads, const unsigned char * image_bytes, int image_bytes_length);
+def llava_image_embed_make_with_bytes(ctx_clip: clip_ctx_p, n_threads: Union[int,c_int], image_bytes: c_uint8_p, image_bytes_length: c_size_t) -> llava_image_embed_p:
+    """ build an image embed by interpreting image_bytes as the contents of an image file with byte size image_bytes_length.
+     supported formats (autodetected): JPG, PNG, TGA, BMP, PSD, GIF, HDR, PIC (ref https://github.com/nothings/stb) """
+    return _lib.llava_image_embed_make_with_bytes(ctx_clip, n_threads, image_bytes, image_bytes_length)
+_lib.llava_image_embed_make_with_bytes.argtypes = [clip_ctx_p, c_int, c_uint8_p, c_size_t]
+_lib.llava_image_embed_make_with_bytes.restype = llava_image_embed_p
+
+
+#LLAMA_API struct llava_image_embed * llava_image_embed_make_with_filename(struct clip_ctx * ctx_clip, int n_threads, const char * image_path);
+def llava_image_embed_make_with_filename(ctx_clip: clip_ctx_p, n_threads: Union[c_int, int], filename: Union[c_char_p, bytes]) -> llava_image_embed_p:
+    """ build an image embed from a path to an image filename """
+    return _lib.llava_image_embed_make_with_filename(ctx_clip, n_threads, filename)
+_lib.llava_image_embed_make_with_filename.argtypes = [clip_ctx_p, c_int, c_char_p]
+_lib.llava_image_embed_make_with_filename.restype = llava_image_embed_p
+
+#LLAMA_API void llava_image_embed_free(struct llava_image_embed * embed);
+def llava_image_embed_free(embed: llava_image_embed_p):
+    """ free an embedding made with one of the llava_image_embed_make_ methods """
+    _lib.llava_image_embed_free(embed)
+_lib.llava_image_embed_free.argtypes = [llava_image_embed_p]
+_lib.llava_image_embed_free.restype = None
+
+#LLAMA_API bool llava_eval_image_embed(struct llama_context * ctx_llama, const struct llava_image_embed * embed, int n_batch, int * n_past);
+def llava_eval_image_embed(ctx: llama_context_p, image_embed: llava_image_embed_p, n_batch: c_int, n_past: c_int_p) -> c_bool:
+    """ write the image represented by embed into the llama context with batch size n_batch,
+    starting at context pos n_past. on completion, n_past points to the next position in the context after the image embed."""
+    return _lib.llava_eval_image_embed(ctx, image_embed, n_batch, n_past)
+_lib.llava_eval_image_embed.argtypes = [llama_context_p, llava_image_embed_p, c_int, c_int_p]
+_lib.llava_eval_image_embed.restyle = c_bool
+

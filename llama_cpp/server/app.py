@@ -41,6 +41,9 @@ class Settings(BaseSettings):
         default=None,
         description="The alias of the model to use for generating completions.",
     )
+    model_mproj: str = Field(
+        description="For multimodal models (eg Llava), the path to the multimodal projector model."
+    )
     seed: int = Field(default=llama_cpp.LLAMA_DEFAULT_SEED, description="Random seed. -1 for random.")
     n_ctx: int = Field(default=2048, ge=1, description="The context size.")
     n_batch: int = Field(
@@ -345,6 +348,7 @@ def create_app(settings: Optional[Settings] = None):
     global llama
     llama = llama_cpp.Llama(
         model_path=settings.model,
+        model_mproj_path=settings.model_mproj,
         seed=settings.seed,
         n_ctx=settings.n_ctx,
         n_batch=settings.n_batch,

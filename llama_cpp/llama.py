@@ -242,6 +242,8 @@ class Llama:
         lora_base: Optional[str] = None,
         lora_scale: float = 1.0,
         lora_path: Optional[str] = None,
+        # Multimodal Params
+        model_mproj_path: str = None,
         # Backend Params
         numa: bool = False,
         # Chat Format Params
