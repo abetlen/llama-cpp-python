@@ -48,8 +48,8 @@ class Settings(BaseSettings):
     )
     n_gpu_layers: int = Field(
         default=0,
-        ge=0,
-        description="The number of layers to put on the GPU. The rest will be on the CPU.",
+        ge=-1,
+        description="The number of layers to put on the GPU. The rest will be on the CPU. Set -1 to move all to GPU.",
     )
     main_gpu: int = Field(
         default=0,
