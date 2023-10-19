@@ -69,7 +69,7 @@ def test_llama_patch(monkeypatch):
     n = 0  # reset
     chunks = list(llama.create_completion(text, max_tokens=20, stream=True))
     assert "".join(chunk["choices"][0]["text"] for chunk in chunks) == output_text
-    # assert chunks[-1]["choices"][0]["finish_reason"] == "stop"
+    assert chunks[-1]["choices"][0]["finish_reason"] == "stop"
 
     ## Test basic completion until stop sequence
     n = 0  # reset
@@ -83,19 +83,19 @@ def test_llama_patch(monkeypatch):
     assert (
         "".join(chunk["choices"][0]["text"] for chunk in chunks) == " jumps over the "
     )
-    # assert chunks[-1]["choices"][0]["finish_reason"] == "stop"
+    assert chunks[-1]["choices"][0]["finish_reason"] == "stop"
 
     ## Test basic completion until length
     n = 0  # reset
     completion = llama.create_completion(text, max_tokens=2)
     assert completion["choices"][0]["text"] == " jumps"
-    # assert completion["choices"][0]["finish_reason"] == "length"
+    assert completion["choices"][0]["finish_reason"] == "length"
 
     ## Test streaming completion until length
     n = 0  # reset
     chunks = list(llama.create_completion(text, max_tokens=2, stream=True))
     assert "".join(chunk["choices"][0]["text"] for chunk in chunks) == " jumps"
-    # assert chunks[-1]["choices"][0]["finish_reason"] == "length"
+    assert chunks[-1]["choices"][0]["finish_reason"] == "length"
 
 
 def test_llama_pickle():
