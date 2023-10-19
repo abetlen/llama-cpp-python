@@ -444,7 +444,7 @@ class Llama:
             maxlen=self._n_ctx if self.context_params.logits_all else 1,
         )
 
-    def tokenize(self, text: bytes, add_bos: bool = True) -> List[int]:
+    def tokenize(self, text: bytes, add_bos: bool = True, special: bool = False) -> List[int]:
         """Tokenize a string.
 
         Args:
@@ -466,6 +466,7 @@ class Llama:
             tokens,
             n_ctx,
             add_bos,
+            special
         )
         if n_tokens < 0:
             n_tokens = abs(n_tokens)
@@ -477,6 +478,7 @@ class Llama:
                 tokens,
                 n_tokens,
                 add_bos,
+                special
             )
             if n_tokens < 0:
                 raise RuntimeError(

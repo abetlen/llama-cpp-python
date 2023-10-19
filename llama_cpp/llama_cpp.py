@@ -240,11 +240,11 @@ llama_progress_callback = ctypes.CFUNCTYPE(None, c_float, c_void_p)
 # typedef struct llama_batch {
 #     int32_t n_tokens;
 
-#     llama_token  * token;
-#     float        * embd;
-#     llama_pos    * pos;
-#     llama_seq_id * seq_id;
-#     int8_t       * logits;
+#     llama_token  *  token;
+#     float        *  embd;
+#     llama_pos    *  pos;
+#     llama_seq_id ** seq_id;
+#     int8_t       *  logits;
 
 
 #     // NOTE: helpers for smooth API transition - can be deprecated in the future
@@ -262,7 +262,7 @@ class llama_batch(Structure):
         ("token", POINTER(llama_token)),
         ("embd", c_float_p),
         ("pos", POINTER(llama_pos)),
-        ("seq_id", POINTER(llama_seq_id)),
+        ("seq_id", POINTER(POINTER(llama_seq_id))),
         ("logits", POINTER(c_int8)),
         ("all_pos_0", llama_pos),
         ("all_pos_1", llama_pos),
@@ -1069,7 +1069,8 @@ _lib.llama_batch_get_one.argtypes = [
 _lib.llama_batch_get_one.restype = llama_batch
 
 
-# // Allocates a batch of tokens on the heap
+# // Allocates a batch of tokens on the heap that can hold a maximum of n_tokens
+# // Each token can be assigned up to n_seq_max sequence ids
 # // The batch has to be freed with llama_batch_free()
 # // If embd != 0, llama_batch.embd will be allocated with size of n_tokens * embd * sizeof(float)
 # // Otherwise, llama_batch.token will be allocated to store n_tokens llama_token
@@ -1077,14 +1078,17 @@ _lib.llama_batch_get_one.restype = llama_batch
 # // All members are left uninitialized
 # LLAMA_API struct llama_batch llama_batch_init(
 #         int32_t n_tokens,
-#         int32_t embd);
+#         int32_t embd,
+#         int32_t n_seq_max);
 def llama_batch_init(
-    n_tokens: Union[c_int, int], embd: Union[c_int, int]
+    n_tokens: Union[c_int32, int],
+    embd: Union[c_int32, int],
+    n_seq_max: Union[c_int32, int],
 ) -> llama_batch:
-    return _lib.llama_batch_init(n_tokens, embd)
+    return _lib.llama_batch_init(n_tokens, embd, n_seq_max)
 
 
-_lib.llama_batch_init.argtypes = [c_int, c_int]
+_lib.llama_batch_init.argtypes = [c_int32, c_int32, c_int32]
 _lib.llama_batch_init.restype = llama_batch
 
 
@@ -1303,6 +1307,46 @@ _lib.llama_tokenize.argtypes = [
     c_int,
     llama_token_p,
     c_int,
+    c_bool,
+]
+_lib.llama_tokenize.restype = c_int
+
+
+# /// @details Convert the provided text into tokens.
+# /// @param tokens The tokens pointer must be large enough to hold the resulting tokens.
+# /// @return Returns the number of tokens on success, no more than n_max_tokens
+# /// @return Returns a negative number on failure - the number of tokens that would have been returned
+# /// @param special Allow tokenizing special and/or control tokens which otherwise are not exposed and treated as plaintext.
+# ///                Does not insert a leading space.
+# LLAMA_API int llama_tokenize(
+#     const struct llama_model * model,
+#                   const char * text,
+#                          int   text_len,
+#                  llama_token * tokens,
+#                          int   n_max_tokens,
+#                         bool   add_bos,
+#                         bool   special);
+def llama_tokenize(
+    model: llama_model_p,
+    text: bytes,
+    text_len: Union[c_int, int],
+    tokens,  # type: Array[llama_token]
+    n_max_tokens: Union[c_int, int],
+    add_bos: Union[c_bool, bool],
+    special: Union[c_bool, bool],
+) -> int:
+    return _lib.llama_tokenize(
+        model, text, text_len, tokens, n_max_tokens, add_bos, special
+    )
+
+
+_lib.llama_tokenize.argtypes = [
+    llama_model_p,
+    c_char_p,
+    c_int,
+    llama_token_p,
+    c_int,
+    c_bool,
     c_bool,
 ]
 _lib.llama_tokenize.restype = c_int
