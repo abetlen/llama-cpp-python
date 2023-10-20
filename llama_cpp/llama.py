@@ -308,6 +308,8 @@ class Llama:
         self.tensor_split = tensor_split
         self._p_tensor_split = None
         if self.tensor_split is not None:
+            if len(self.tensor_split) > llama_cpp.LLAMA_MAX_DEVICES:
+                raise ValueError(f"Attempt to split tensors that exceed maximum supported devices. Current LLAMA_MAX_DEVICES={llama_cpp.LLAMA_MAX_DEVICES}")
             # Type conversion and expand the list to the length of LLAMA_MAX_DEVICES
             FloatArray = ctypes.c_float * llama_cpp.LLAMA_MAX_DEVICES
             self._c_tensor_split = FloatArray(
@@ -442,7 +444,7 @@ class Llama:
             maxlen=self._n_ctx if self.context_params.logits_all else 1,
         )
 
-    def tokenize(self, text: bytes, add_bos: bool = True) -> List[int]:
+    def tokenize(self, text: bytes, add_bos: bool = True, special: bool = False) -> List[int]:
         """Tokenize a string.
 
         Args:
@@ -464,6 +466,7 @@ class Llama:
             tokens,
             n_ctx,
             add_bos,
+            special
         )
         if n_tokens < 0:
             n_tokens = abs(n_tokens)
@@ -475,6 +478,7 @@ class Llama:
                 tokens,
                 n_tokens,
                 add_bos,
+                special
             )
             if n_tokens < 0:
                 raise RuntimeError(
@@ -1228,20 +1232,6 @@ class Llama:
                             }
                         ],
                     }
-                    yield {
-                        "id": completion_id,
-                        "object": "text_completion",
-                        "created": created,
-                        "model": model_name,
-                        "choices": [
-                            {
-                                "text": "",
-                                "index": 0,
-                                "logprobs": None,
-                                "finish_reason": finish_reason,
-                            }
-                        ],
-                    }
                     break
                 returned_tokens += 1
                 yield {
@@ -1260,20 +1250,20 @@ class Llama:
                         }
                     ],
                 }
-                yield {
-                    "id": completion_id,
-                    "object": "text_completion",
-                    "created": created,
-                    "model": model_name,
-                    "choices": [
-                        {
-                            "text": "",
-                            "index": 0,
-                            "logprobs": None,
-                            "finish_reason": finish_reason,
-                        }
-                    ],
-                }
+            yield {
+                "id": completion_id,
+                "object": "text_completion",
+                "created": created,
+                "model": model_name,
+                "choices": [
+                    {
+                        "text": "",
+                        "index": 0,
+                        "logprobs": None,
+                        "finish_reason": finish_reason,
+                    }
+                ],
+            }
             if self.cache:
                 if self.verbose:
                     print("Llama._create_completion: cache save", file=sys.stderr)
@@ -1573,13 +1563,20 @@ class Llama:
             grammar=grammar,
         )
 
-    def __del__(self):
+    def _free_model(self):
         if hasattr(self, "model") and self.model is not None:
             llama_cpp.llama_free_model(self.model)
             self.model = None
         if hasattr(self, "ctx") and self.ctx is not None:
             llama_cpp.llama_free(self.ctx)
             self.ctx = None
+
+    def __del__(self):
+        if self.verbose:
+            self._free_model()
+        else:
+            with suppress_stdout_stderr():
+                self._free_model()
 
     def __getstate__(self):
         return dict(

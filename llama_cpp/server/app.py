@@ -1,5 +1,6 @@
 import sys
 import json
+import traceback
 import multiprocessing
 import time
 from re import compile, Match, Pattern
@@ -47,8 +48,8 @@ class Settings(BaseSettings):
     )
     n_gpu_layers: int = Field(
         default=0,
-        ge=0,
-        description="The number of layers to put on the GPU. The rest will be on the CPU.",
+        ge=-1,
+        description="The number of layers to put on the GPU. The rest will be on the CPU. Set -1 to move all to GPU.",
     )
     main_gpu: int = Field(
         default=0,
@@ -243,6 +244,7 @@ class RouteErrorHandler(APIRoute):
     ) -> Tuple[int, ErrorResponse]:
         """Wraps error message in OpenAI style error response"""
         print(f"Exception: {str(error)}", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
         if body is not None and isinstance(
             body,
             (

@@ -26,10 +26,9 @@ def test_llama_cpp_tokenization():
     assert detokenized != text
 
 
-@pytest.mark.skip(reason="bug in tokenization where leading space is always inserted even if not after eos")
 def test_llama_patch(monkeypatch):
     llama = llama_cpp.Llama(model_path=MODEL, vocab_only=True)
-    n_vocab = llama_cpp.llama_n_vocab(llama.ctx)
+    n_vocab = llama_cpp.llama_n_vocab(llama.model)
 
     ## Set up mock function
     def mock_eval(*args, **kwargs):
@@ -44,7 +43,7 @@ def test_llama_patch(monkeypatch):
     monkeypatch.setattr("llama_cpp.llama_cpp.llama_get_logits", mock_get_logits)
 
     output_text = " jumps over the lazy dog."
-    output_tokens = llama.tokenize(output_text.encode("utf-8"))
+    output_tokens = llama.tokenize(output_text.encode("utf-8"), add_bos=False, special=True)
     token_eos = llama.token_eos()
     n = 0
 
@@ -68,9 +67,9 @@ def test_llama_patch(monkeypatch):
 
     ## Test streaming completion until eos
     n = 0  # reset
-    chunks = llama.create_completion(text, max_tokens=20, stream=True)
+    chunks = list(llama.create_completion(text, max_tokens=20, stream=True))
     assert "".join(chunk["choices"][0]["text"] for chunk in chunks) == output_text
-    assert completion["choices"][0]["finish_reason"] == "stop"
+    assert chunks[-1]["choices"][0]["finish_reason"] == "stop"
 
     ## Test basic completion until stop sequence
     n = 0  # reset
@@ -80,23 +79,23 @@ def test_llama_patch(monkeypatch):
 
     ## Test streaming completion until stop sequence
     n = 0  # reset
-    chunks = llama.create_completion(text, max_tokens=20, stream=True, stop=["lazy"])
+    chunks = list(llama.create_completion(text, max_tokens=20, stream=True, stop=["lazy"]))
     assert (
         "".join(chunk["choices"][0]["text"] for chunk in chunks) == " jumps over the "
     )
-    assert completion["choices"][0]["finish_reason"] == "stop"
+    assert chunks[-1]["choices"][0]["finish_reason"] == "stop"
 
     ## Test basic completion until length
     n = 0  # reset
     completion = llama.create_completion(text, max_tokens=2)
-    assert completion["choices"][0]["text"] == " j"
+    assert completion["choices"][0]["text"] == " jumps"
     assert completion["choices"][0]["finish_reason"] == "length"
 
     ## Test streaming completion until length
     n = 0  # reset
-    chunks = llama.create_completion(text, max_tokens=2, stream=True)
-    assert "".join(chunk["choices"][0]["text"] for chunk in chunks) == " j"
-    assert completion["choices"][0]["finish_reason"] == "length"
+    chunks = list(llama.create_completion(text, max_tokens=2, stream=True))
+    assert "".join(chunk["choices"][0]["text"] for chunk in chunks) == " jumps"
+    assert chunks[-1]["choices"][0]["finish_reason"] == "length"
 
 
 def test_llama_pickle():
