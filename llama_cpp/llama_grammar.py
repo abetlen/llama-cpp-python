@@ -2,7 +2,7 @@
 # flake8: noqa
 from pathlib import Path
 import sys
-from ctypes import *  # type: ignore
+from ctypes import c_int, c_size_t, c_uint32, cast  # type: ignore
 from enum import Enum
 from itertools import islice
 from typing import (
