@@ -2,7 +2,13 @@
 
 name: Publish to TestPyPI
 
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+    inputs:
+      dev_version:
+        description: 'Dev version N'
+        required: true
+
 
 jobs:
   build-n-publish:
@@ -17,6 +23,12 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: "3.8"
+    - name: Append Dev Version to __version__
+      run: |
+        DEV_VERSION=${{ github.event.inputs.dev_version }}
+        CURRENT_VERSION=$(awk -F= '/__version__ =/ {print $2}' llama_cpp/__init__.py | tr -d ' "')
+        NEW_VERSION="${CURRENT_VERSION}.dev${DEV_VERSION}"
+        sed -i 's/__version__ = \".*\"/__version__ = \"'"${NEW_VERSION}"'\"/' llama_cpp/__init__.py
     - name: Install dependencies
       run: |
         python3 -m pip install --upgrade pip build
