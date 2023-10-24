@@ -243,6 +243,7 @@ llama_progress_callback = ctypes.CFUNCTYPE(None, c_float, c_void_p)
 #     llama_token  *  token;
 #     float        *  embd;
 #     llama_pos    *  pos;
+#     int32_t      *  n_seq_id;
 #     llama_seq_id ** seq_id;
 #     int8_t       *  logits;
 
@@ -262,6 +263,7 @@ class llama_batch(Structure):
         ("token", POINTER(llama_token)),
         ("embd", c_float_p),
         ("pos", POINTER(llama_pos)),
+        ("n_seq_id", POINTER(c_int32)),
         ("seq_id", POINTER(POINTER(llama_seq_id))),
         ("logits", POINTER(c_int8)),
         ("all_pos_0", llama_pos),
