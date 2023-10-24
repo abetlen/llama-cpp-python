@@ -1180,97 +1180,97 @@ _lib.llama_get_embeddings.restype = c_float_p
 # //
 
 
-# LLAMA_API const char * llama_token_get_text(const struct llama_context * ctx, llama_token token);
-def llama_token_get_text(ctx: llama_context_p, token: llama_token) -> bytes:
-    return _lib.llama_token_get_text(ctx, token)
+# LLAMA_API const char * llama_token_get_text(const struct llama_model * model, llama_token token);
+def llama_token_get_text(model: llama_model_p, token: llama_token) -> bytes:
+    return _lib.llama_token_get_text(model, token)
 
 
-_lib.llama_token_get_text.argtypes = [llama_context_p, llama_token]
+_lib.llama_token_get_text.argtypes = [llama_model_p, llama_token]
 _lib.llama_token_get_text.restype = c_char_p
 
 
-# LLAMA_API float llama_token_get_score(const struct llama_context * ctx, llama_token token);
-def llama_token_get_score(ctx: llama_context_p, token: llama_token) -> float:
-    return _lib.llama_token_get_score(ctx, token)
+# LLAMA_API float llama_token_get_score(const struct llama_model * model, llama_token token);
+def llama_token_get_score(model: llama_model_p, token: llama_token) -> float:
+    return _lib.llama_token_get_score(model, token)
 
 
-_lib.llama_token_get_score.argtypes = [llama_context_p, llama_token]
+_lib.llama_token_get_score.argtypes = [llama_model_p, llama_token]
 _lib.llama_token_get_score.restype = c_float
 
 
-# LLAMA_API enum llama_token_type llama_token_get_type(const struct llama_context * ctx, llama_token token);
-def llama_token_get_type(ctx: llama_context_p, token: llama_token) -> int:
-    return _lib.llama_token_get_type(ctx, token)
+# LLAMA_API enum llama_token_type llama_token_get_type(const struct llama_model * model, llama_token token);
+def llama_token_get_type(model: llama_model_p, token: llama_token) -> int:
+    return _lib.llama_token_get_type(model, token)
 
 
-_lib.llama_token_get_type.argtypes = [llama_context_p, llama_token]
+_lib.llama_token_get_type.argtypes = [llama_model_p, llama_token]
 _lib.llama_token_get_type.restype = ctypes.c_int
 
 
 # // Special tokens
 
 
-# LLAMA_API llama_token llama_token_bos(const struct llama_context * ctx);  // beginning-of-sentence
-def llama_token_bos(ctx: llama_context_p) -> int:
-    return _lib.llama_token_bos(ctx)
+# LLAMA_API llama_token llama_token_bos(const struct llama_model * model); // beginning-of-sentence
+def llama_token_bos(model: llama_model_p) -> int:
+    return _lib.llama_token_bos(model)
 
 
-_lib.llama_token_bos.argtypes = [llama_context_p]
+_lib.llama_token_bos.argtypes = [llama_model_p]
 _lib.llama_token_bos.restype = llama_token
 
 
-# LLAMA_API llama_token llama_token_eos(const struct llama_context * ctx);  // end-of-sentence
-def llama_token_eos(ctx: llama_context_p) -> int:
-    return _lib.llama_token_eos(ctx)
+# LLAMA_API llama_token llama_token_eos(const struct llama_model * model); // end-of-sentence
+def llama_token_eos(model: llama_model_p) -> int:
+    return _lib.llama_token_eos(model)
 
 
-_lib.llama_token_eos.argtypes = [llama_context_p]
+_lib.llama_token_eos.argtypes = [llama_model_p]
 _lib.llama_token_eos.restype = llama_token
 
 
-# LLAMA_API llama_token llama_token_nl (const struct llama_context * ctx);  // next-line
-def llama_token_nl(ctx: llama_context_p) -> int:
-    return _lib.llama_token_nl(ctx)
+# LLAMA_API llama_token llama_token_nl (const struct llama_model * model); // next-line
+def llama_token_nl(model: llama_model_p) -> int:
+    return _lib.llama_token_nl(model)
 
 
-_lib.llama_token_nl.argtypes = [llama_context_p]
+_lib.llama_token_nl.argtypes = [llama_model_p]
 _lib.llama_token_nl.restype = llama_token
 
 
 # // codellama infill tokens
-# LLAMA_API llama_token llama_token_prefix(const struct llama_context * ctx); // Beginning of infill prefix
-def llama_token_prefix(ctx: llama_context_p) -> int:
-    return _lib.llama_token_prefix(ctx)
+# LLAMA_API llama_token llama_token_prefix(const struct llama_model * model); // Beginning of infill prefix
+def llama_token_prefix(model: llama_model_p) -> int:
+    return _lib.llama_token_prefix(model)
 
 
-_lib.llama_token_prefix.argtypes = [llama_context_p]
+_lib.llama_token_prefix.argtypes = [llama_model_p]
 _lib.llama_token_prefix.restype = llama_token
 
 
-# LLAMA_API llama_token llama_token_middle(const struct llama_context * ctx); // Beginning of infill middle
-def llama_token_middle(ctx: llama_context_p) -> int:
-    return _lib.llama_token_middle(ctx)
+# LLAMA_API llama_token llama_token_middle(const struct llama_model * model); // Beginning of infill middle
+def llama_token_middle(model: llama_model_p) -> int:
+    return _lib.llama_token_middle(model)
 
 
-_lib.llama_token_middle.argtypes = [llama_context_p]
+_lib.llama_token_middle.argtypes = [llama_model_p]
 _lib.llama_token_middle.restype = llama_token
 
 
-# LLAMA_API llama_token llama_token_suffix(const struct llama_context * ctx); // Beginning of infill suffix
-def llama_token_suffix(ctx: llama_context_p) -> int:
-    return _lib.llama_token_suffix(ctx)
+# LLAMA_API llama_token llama_token_suffix(const struct llama_model * model); // Beginning of infill suffix
+def llama_token_suffix(model: llama_model_p) -> int:
+    return _lib.llama_token_suffix(model)
 
 
-_lib.llama_token_suffix.argtypes = [llama_context_p]
+_lib.llama_token_suffix.argtypes = [llama_model_p]
 _lib.llama_token_suffix.restype = llama_token
 
 
-# LLAMA_API llama_token llama_token_eot   (const struct llama_context * ctx); // End of infill middle
-def llama_token_eot(ctx: llama_context_p) -> int:
-    return _lib.llama_token_eot(ctx)
+# LLAMA_API llama_token llama_token_eot   (const struct llama_model * model); // End of infill middle
+def llama_token_eot(model: llama_model_p) -> int:
+    return _lib.llama_token_eot(model)
 
 
-_lib.llama_token_eot.argtypes = [llama_context_p]
+_lib.llama_token_eot.argtypes = [llama_model_p]
 _lib.llama_token_eot.restype = llama_token
 
 
@@ -1431,70 +1431,46 @@ _lib.llama_set_rng_seed.argtypes = [llama_context_p, c_uint32]
 _lib.llama_set_rng_seed.restype = None
 
 
-# @details Repetition penalty described in CTRL academic paper https://arxiv.org/abs/1909.05858, with negative logit fix.
-# LLAMA_API void llama_sample_repetition_penalty(
+# /// @details Repetition penalty described in CTRL academic paper https://arxiv.org/abs/1909.05858, with negative logit fix.
+# /// @details Frequency and presence penalties described in OpenAI API https://platform.openai.com/docs/api-reference/parameter-details.
+# LLAMA_API void llama_sample_repetition_penalties(
 #         struct llama_context * ctx,
 #       llama_token_data_array * candidates,
 #            const llama_token * last_tokens,
-#                       size_t   last_tokens_size,
-#                       float    penalty);
-def llama_sample_repetition_penalty(
+#                       size_t   penalty_last_n,
+#                        float   penalty_repeat,
+#                        float   penalty_freq,
+#                        float   penalty_present);
+def llama_sample_repetition_penalties(
     ctx: llama_context_p,
     candidates,  # type: _Pointer[llama_token_data_array]
     last_tokens_data,  # type: Array[llama_token]
-    last_tokens_size: Union[c_int, int],
-    penalty: Union[c_float, float],
+    penalty_last_n: Union[c_size_t, int],
+    penalty_repeat: Union[c_float, float],
+    penalty_freq: Union[c_float, float],
+    penalty_present: Union[c_float, float],
 ):
-    return _lib.llama_sample_repetition_penalty(
-        ctx, candidates, last_tokens_data, last_tokens_size, penalty
-    )
-
-
-_lib.llama_sample_repetition_penalty.argtypes = [
-    llama_context_p,
-    llama_token_data_array_p,
-    llama_token_p,
-    c_int,
-    c_float,
-]
-_lib.llama_sample_repetition_penalty.restype = None
-
-
-# @details Frequency and presence penalties described in OpenAI API https://platform.openai.com/docs/api-reference/parameter-details.
-# LLAMA_API void llama_sample_frequency_and_presence_penalties(
-#         struct llama_context * ctx,
-#       llama_token_data_array * candidates,
-#            const llama_token * last_tokens,
-#                       size_t   last_tokens_size,
-#                        float   alpha_frequency,
-#                        float   alpha_presence);
-def llama_sample_frequency_and_presence_penalties(
-    ctx: llama_context_p,
-    candidates,  # type: _Pointer[llama_token_data_array]
-    last_tokens_data,  # type: Array[llama_token]
-    last_tokens_size: Union[c_int, int],
-    alpha_frequency: Union[c_float, float],
-    alpha_presence: Union[c_float, float],
-):
-    return _lib.llama_sample_frequency_and_presence_penalties(
+    return _lib.llama_sample_repetition_penalties(
         ctx,
         candidates,
         last_tokens_data,
-        last_tokens_size,
-        alpha_frequency,
-        alpha_presence,
+        penalty_last_n,
+        penalty_repeat,
+        penalty_freq,
+        penalty_present,
     )
 
 
-_lib.llama_sample_frequency_and_presence_penalties.argtypes = [
+_lib.llama_sample_repetition_penalties.argtypes = [
     llama_context_p,
     llama_token_data_array_p,
     llama_token_p,
-    c_int,
+    c_size_t,
+    c_float,
     c_float,
     c_float,
 ]
-_lib.llama_sample_frequency_and_presence_penalties.restype = None
+_lib.llama_sample_repetition_penalties.restype = None
 
 
 # /// @details Apply classifier-free guidance to the logits as described in academic paper "Stay on topic with Classifier-Free Guidance" https://arxiv.org/abs/2306.17806
