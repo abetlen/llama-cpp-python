@@ -6,6 +6,7 @@ import math
 import multiprocessing
 from abc import ABC, abstractmethod
 from typing import (
+    Dict,
     List,
     Optional,
     Union,
@@ -22,7 +23,18 @@ import diskcache
 import ctypes
 
 from . import llama_cpp
-from .llama_types import *
+from .llama_types import (
+    ChatCompletion,
+    ChatCompletionChunk,
+    ChatCompletionFunction,
+    ChatCompletionFunctionCall,
+    ChatCompletionRequestMessage,
+    Completion,
+    CompletionChunk,
+    CompletionLogprobs,
+    CreateEmbeddingResponse,
+    EmbeddingData,
+)
 from .llama_grammar import LlamaGrammar
 from . import llama_chat_format
 
