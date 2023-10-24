@@ -1496,6 +1496,18 @@ class Llama:
             grammar=grammar,
         )
 
+    def create_generate(
+        self,
+        prompt: str,
+        max_tokens: int = 256
+    ) -> GenerateResponse:
+        response = self.create_completion(prompt=prompt, max_tokens=max_tokens)
+        
+        return {
+            "generated_text": response["choices"][0]["text"],
+            "status": 200
+        }
+
     def _convert_text_completion_to_chat(
         self, completion: Completion
     ) -> ChatCompletion:

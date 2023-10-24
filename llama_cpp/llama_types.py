@@ -170,3 +170,9 @@ class ChatCompletionRequestMessage(TypedDict):
     content: Optional[str]
     name: NotRequired[str]
     funcion_call: NotRequired[ChatCompletionFunctionCall]
+
+class CreateGenerateResponse(TypedDict):
+    generated_text: str
+    status: int
+
+GenerateResponse = CreateGenerateResponse
