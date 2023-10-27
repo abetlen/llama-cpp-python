@@ -92,6 +92,12 @@ Then, call `pip` after setting the variables:
 pip install llama-cpp-python
 ```
 
+If you run into issues where it complains it can't find `'nmake'` `'?'` or CMAKE_C_COMPILER, you can extract w64devkit as [mentioned in llama.cpp repo](https://github.com/ggerganov/llama.cpp#openblas) and add those manually to CMAKE_ARGS before running `pip` install:
+```ps
+$env:CMAKE_GENERATOR = "MinGW Makefiles"
+$env:CMAKE_ARGS = "-DLLAMA_OPENBLAS=on -DCMAKE_C_COMPILER=C:/w64devkit/bin/gcc.exe -DCMAKE_CXX_COMPILER=C:/w64devkit/bin/g++.exe" 
+```
+
 See the above instructions and set `CMAKE_ARGS` to the BLAS backend you want to use.
 
 #### MacOS remarks
