@@ -41,7 +41,7 @@ def _load_shared_library(lib_base_name: str):
         ]
     elif sys.platform == "win32":
         _lib_paths += [
-            _base_path / f"{lib_base_name}.dll",
+            _base_path / f"lib{lib_base_name}.dll",
         ]
     else:
         raise RuntimeError("Unsupported platform")
