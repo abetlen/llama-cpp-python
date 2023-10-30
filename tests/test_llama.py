@@ -25,6 +25,15 @@ def test_llama_cpp_tokenization():
     detokenized = llama.detokenize(tokens)
     assert detokenized != text
 
+    text = b"Hello World</s>"
+    tokens = llama.tokenize(text)
+    assert tokens[-1] != llama.token_eos()
+    assert tokens == [1, 15043, 2787, 829, 29879, 29958]
+
+    tokens = llama.tokenize(text, special=True)
+    assert tokens[-1] == llama.token_eos()
+    assert tokens == [1, 10994, 2787, 2]
+
 
 def test_llama_patch(monkeypatch):
     llama = llama_cpp.Llama(model_path=MODEL, vocab_only=True)
