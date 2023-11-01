@@ -601,10 +601,9 @@ def make_logit_bias_processor(
         input_ids: npt.NDArray[np.intc],
         scores: npt.NDArray[np.single],
     ) -> npt.NDArray[np.single]:
-        new_scores = [None] * len(scores)
-        for input_id, score in enumerate(scores):
-            new_scores[input_id] = score + to_bias.get(input_id, 0.0)
-
+        new_scores = np.copy(scores)         # Does it make sense to copy the whole array or can we just overwrite the original one?
+        for input_id, score in to_bias.items():
+            new_scores[input_id] = score + scores[input_id]
         return new_scores
 
     return logit_bias_processor
