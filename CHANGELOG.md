@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Update llama.cpp to ggerganov/llama.cpp@50337961a678fce4081554b24e56e86b67660163
 - Fix missing `n_seq_id` in `llama_batch` by @NickAlgra in #842
-- Fix exception raised in `__del__` when freeing models by @cebtenzzre in #848
+- Fix for shared libraries on Windows that start with `lib` prefix by @sujeendran in #848
+- Fix exception raised in `__del__` when freeing models by @cebtenzzre in #846
 - Performance improvement for logit bias by @zolastro in #851
 - Fix suffix check arbitrary code execution bug by @mtasic85 in #854
 - Fix typo in `function_call` parameter in `llama_types.py` by @akatora28 in #849
