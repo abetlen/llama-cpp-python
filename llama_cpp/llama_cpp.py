@@ -243,6 +243,7 @@ llama_progress_callback = ctypes.CFUNCTYPE(None, c_float, c_void_p)
 #     llama_token  *  token;
 #     float        *  embd;
 #     llama_pos    *  pos;
+#     int32_t      *  n_seq_id;
 #     llama_seq_id ** seq_id;
 #     int8_t       *  logits;
 
@@ -262,6 +263,7 @@ class llama_batch(Structure):
         ("token", POINTER(llama_token)),
         ("embd", c_float_p),
         ("pos", POINTER(llama_pos)),
+        ("n_seq_id", POINTER(c_int32)),
         ("seq_id", POINTER(POINTER(llama_seq_id))),
         ("logits", POINTER(c_int8)),
         ("all_pos_0", llama_pos),
@@ -312,7 +314,7 @@ class llama_model_params(Structure):
 
 
 #     // Keep the booleans together to avoid misalignment during copy-by-value.
-#     bool mul_mat_q;  // if true, use experimental mul_mat_q kernels
+#     bool mul_mat_q;  // if true, use experimental mul_mat_q kernels (DEPRECATED - always true)
 #     bool f16_kv;     // use fp16 for KV cache, fp32 otherwise
 #     bool logits_all; // the llama_eval() call computes all logits, not just the last one
 #     bool embedding;  // embedding mode only
@@ -349,6 +351,7 @@ llama_log_callback = ctypes.CFUNCTYPE(None, c_int, c_char_p, c_void_p)
 #     bool allow_requantize;       // allow quantizing non-f32/f16 tensors
 #     bool quantize_output_tensor; // quantize output.weight
 #     bool only_copy;              // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
+#     bool pure;                   // disable k-quant mixtures and quantize all tensors to the same type
 # } llama_model_quantize_params;
 class llama_model_quantize_params(Structure):
     _fields_ = [
@@ -777,26 +780,21 @@ _lib.llama_get_kv_cache_token_count.argtypes = [llama_context_p]
 _lib.llama_get_kv_cache_token_count.restype = c_int
 
 
-# // Remove all tokens data of cells in [c0, c1)
-# // c0 < 0 : [0,  c1]
-# // c1 < 0 : [c0, inf)
-# LLAMA_API void llama_kv_cache_tokens_rm(
-#         struct llama_context * ctx,
-#                      int32_t   c0,
-#                      int32_t   c1);
-def llama_kv_cache_tokens_rm(
-    ctx: llama_context_p, c0: Union[c_int32, int], c1: Union[c_int32, int]
-):
-    return _lib.llama_kv_cache_tokens_rm(ctx, c0, c1)
+# // Clear the KV cache
+# LLAMA_API void llama_kv_cache_clear(
+#         struct llama_context * ctx);
+def llama_kv_cache_clear(ctx: llama_context_p):
+    return _lib.llama_kv_cache_clear(ctx)
 
 
-_lib.llama_kv_cache_tokens_rm.argtypes = [llama_context_p, c_int32, c_int32]
-_lib.llama_kv_cache_tokens_rm.restype = None
+_lib.llama_kv_cache_clear.argtypes = [llama_context_p]
+_lib.llama_kv_cache_clear.restype = None
 
 
 # // Removes all tokens that belong to the specified sequence and have positions in [p0, p1)
-# // p0 < 0 : [0,  p1]
-# // p1 < 0 : [p0, inf)
+# // seq_id < 0 : match any sequence
+# // p0 < 0     : [0,  p1]
+# // p1 < 0     : [p0, inf)
 # LLAMA_API void llama_kv_cache_seq_rm(
 #         struct llama_context * ctx,
 #                 llama_seq_id   seq_id,
@@ -1502,7 +1500,7 @@ _lib.llama_sample_classifier_free_guidance.argtypes = [
 _lib.llama_sample_classifier_free_guidance.restype = None
 
 
-# @details Sorts candidate tokens by their logits in descending order and calculate probabilities based on logits.
+# /// @details Sorts candidate tokens by their logits in descending order and calculate probabilities based on logits.
 # LLAMA_API void llama_sample_softmax(
 #         struct llama_context * ctx,
 #       llama_token_data_array * candidates);
@@ -1519,7 +1517,7 @@ _lib.llama_sample_softmax.argtypes = [
 _lib.llama_sample_softmax.restype = None
 
 
-# @details Top-K sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
+# /// @details Top-K sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
 # LLAMA_API void llama_sample_top_k(
 #         struct llama_context * ctx,
 #       llama_token_data_array * candidates,
@@ -1543,7 +1541,7 @@ _lib.llama_sample_top_k.argtypes = [
 _lib.llama_sample_top_k.restype = None
 
 
-# @details Nucleus sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
+# /// @details Nucleus sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
 # LLAMA_API void llama_sample_top_p(
 #         struct llama_context * ctx,
 #       llama_token_data_array * candidates,
@@ -1567,7 +1565,31 @@ _lib.llama_sample_top_p.argtypes = [
 _lib.llama_sample_top_p.restype = None
 
 
-# @details Tail Free Sampling described in https://www.trentonbricken.com/Tail-Free-Sampling/.
+# /// @details Minimum P sampling as described in https://github.com/ggerganov/llama.cpp/pull/3841
+# LLAMA_API void llama_sample_min_p(
+#         struct llama_context * ctx,
+#       llama_token_data_array * candidates,
+#                        float   p,
+#                       size_t   min_keep);
+def llama_sample_min_p(
+    ctx: llama_context_p,
+    candidates,  # type: _Pointer[llama_token_data_array]
+    p: Union[c_float, float],
+    min_keep: Union[c_size_t, int],
+):
+    return _lib.llama_sample_min_p(ctx, candidates, p, min_keep)
+
+
+_lib.llama_sample_min_p.argtypes = [
+    llama_context_p,
+    llama_token_data_array_p,
+    c_float,
+    c_size_t,
+]
+_lib.llama_sample_min_p.restype = None
+
+
+# /// @details Tail Free Sampling described in https://www.trentonbricken.com/Tail-Free-Sampling/.
 # LLAMA_API void llama_sample_tail_free(
 #         struct llama_context * ctx,
 #       llama_token_data_array * candidates,
@@ -1591,7 +1613,7 @@ _lib.llama_sample_tail_free.argtypes = [
 _lib.llama_sample_tail_free.restype = None
 
 
-# @details Locally Typical Sampling implementation described in the paper https://arxiv.org/abs/2202.00666.
+# /// @details Locally Typical Sampling implementation described in the paper https://arxiv.org/abs/2202.00666.
 # LLAMA_API void llama_sample_typical(
 #         struct llama_context * ctx,
 #       llama_token_data_array * candidates,
@@ -1656,7 +1678,11 @@ _lib.llama_sample_temperature.argtypes = [
 _lib.llama_sample_temperature.restype = None
 
 
-# LLAMA_API void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * candidates, const struct llama_grammar * grammar);
+# /// @details Apply constraints from grammar
+# LLAMA_API void llama_sample_grammar(
+#         struct llama_context * ctx,
+#       llama_token_data_array * candidates,
+#   const struct llama_grammar * grammar);
 def llama_sample_grammar(
     ctx: llama_context_p,
     candidates,  # type: _Pointer[llama_token_data_array]
@@ -1673,12 +1699,12 @@ _lib.llama_sample_grammar.argtypes = [
 _lib.llama_sample_grammar.restype = None
 
 
-# @details Mirostat 1.0 algorithm described in the paper https://arxiv.org/abs/2007.14966. Uses tokens instead of words.
-# @param candidates A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
-# @param tau  The target cross-entropy (or surprise) value you want to achieve for the generated text. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text.
-# @param eta The learning rate used to update `mu` based on the error between the target and observed surprisal of the sampled word. A larger learning rate will cause `mu` to be updated more quickly, while a smaller learning rate will result in slower updates.
-# @param m The number of tokens considered in the estimation of `s_hat`. This is an arbitrary value that is used to calculate `s_hat`, which in turn helps to calculate the value of `k`. In the paper, they use `m = 100`, but you can experiment with different values to see how it affects the performance of the algorithm.
-# @param mu Maximum cross-entropy. This value is initialized to be twice the target cross-entropy (`2 * tau`) and is updated in the algorithm based on the error between the target and observed surprisal.
+# /// @details Mirostat 1.0 algorithm described in the paper https://arxiv.org/abs/2007.14966. Uses tokens instead of words.
+# /// @param candidates A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
+# /// @param tau  The target cross-entropy (or surprise) value you want to achieve for the generated text. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text.
+# /// @param eta The learning rate used to update `mu` based on the error between the target and observed surprisal of the sampled word. A larger learning rate will cause `mu` to be updated more quickly, while a smaller learning rate will result in slower updates.
+# /// @param m The number of tokens considered in the estimation of `s_hat`. This is an arbitrary value that is used to calculate `s_hat`, which in turn helps to calculate the value of `k`. In the paper, they use `m = 100`, but you can experiment with different values to see how it affects the performance of the algorithm.
+# /// @param mu Maximum cross-entropy. This value is initialized to be twice the target cross-entropy (`2 * tau`) and is updated in the algorithm based on the error between the target and observed surprisal.
 # LLAMA_API llama_token llama_sample_token_mirostat(
 #         struct llama_context * ctx,
 #       llama_token_data_array * candidates,
@@ -1708,11 +1734,11 @@ _lib.llama_sample_token_mirostat.argtypes = [
 _lib.llama_sample_token_mirostat.restype = llama_token
 
 
-# @details Mirostat 2.0 algorithm described in the paper https://arxiv.org/abs/2007.14966. Uses tokens instead of words.
-# @param candidates A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
-# @param tau  The target cross-entropy (or surprise) value you want to achieve for the generated text. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text.
-# @param eta The learning rate used to update `mu` based on the error between the target and observed surprisal of the sampled word. A larger learning rate will cause `mu` to be updated more quickly, while a smaller learning rate will result in slower updates.
-# @param mu Maximum cross-entropy. This value is initialized to be twice the target cross-entropy (`2 * tau`) and is updated in the algorithm based on the error between the target and observed surprisal.
+# /// @details Mirostat 2.0 algorithm described in the paper https://arxiv.org/abs/2007.14966. Uses tokens instead of words.
+# /// @param candidates A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
+# /// @param tau  The target cross-entropy (or surprise) value you want to achieve for the generated text. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text.
+# /// @param eta The learning rate used to update `mu` based on the error between the target and observed surprisal of the sampled word. A larger learning rate will cause `mu` to be updated more quickly, while a smaller learning rate will result in slower updates.
+# /// @param mu Maximum cross-entropy. This value is initialized to be twice the target cross-entropy (`2 * tau`) and is updated in the algorithm based on the error between the target and observed surprisal.
 # LLAMA_API llama_token llama_sample_token_mirostat_v2(
 #         struct llama_context * ctx,
 #       llama_token_data_array * candidates,
@@ -1739,7 +1765,8 @@ _lib.llama_sample_token_mirostat_v2.argtypes = [
 _lib.llama_sample_token_mirostat_v2.restype = llama_token
 
 
-# @details Selects the token with the highest probability.
+# /// @details Selects the token with the highest probability.
+# ///          Does not compute the token probabilities. Use llama_sample_softmax() instead.
 # LLAMA_API llama_token llama_sample_token_greedy(
 #         struct llama_context * ctx,
 #       llama_token_data_array * candidates);
@@ -1757,7 +1784,7 @@ _lib.llama_sample_token_greedy.argtypes = [
 _lib.llama_sample_token_greedy.restype = llama_token
 
 
-# @details Randomly selects a token from the candidates based on their probabilities.
+# /// @details Randomly selects a token from the candidates based on their probabilities.
 # LLAMA_API llama_token llama_sample_token(
 #         struct llama_context * ctx,
 #       llama_token_data_array * candidates);
