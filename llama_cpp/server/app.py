@@ -594,7 +594,7 @@ def make_logit_bias_processor(
     elif logit_bias_type == "tokens":
         for token, score in logit_bias.items():
             token = token.encode("utf-8")
-            for input_id in llama.tokenize(token, add_bos=False):
+            for input_id in llama.tokenize(token, add_bos=False, special=True):
                 to_bias[input_id] = score
 
     def logit_bias_processor(
