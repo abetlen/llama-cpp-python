@@ -48,7 +48,7 @@ def test_llama_patch(monkeypatch):
             *[llama_cpp.c_float(0) for _ in range(n_vocab)]
         )
 
-    monkeypatch.setattr("llama_cpp.llama_cpp.llama_eval", mock_eval)
+    monkeypatch.setattr("llama_cpp.llama_cpp.llama_decode", mock_eval)
     monkeypatch.setattr("llama_cpp.llama_cpp.llama_get_logits", mock_get_logits)
 
     output_text = " jumps over the lazy dog."
@@ -138,7 +138,7 @@ def test_utf8(monkeypatch):
             *[llama_cpp.c_float(0) for _ in range(n_vocab)]
         )
 
-    monkeypatch.setattr("llama_cpp.llama_cpp.llama_eval", mock_eval)
+    monkeypatch.setattr("llama_cpp.llama_cpp.llama_decode", mock_eval)
     monkeypatch.setattr("llama_cpp.llama_cpp.llama_get_logits", mock_get_logits)
 
     output_text = "😀"
