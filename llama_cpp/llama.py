@@ -856,7 +856,7 @@ class Llama:
         data: List[EmbeddingData] = []
         total_tokens = 0
         for index, input in enumerate(inputs):
-            tokens = self.tokenize(input.encode("utf-8"))
+            tokens = self.tokenize(input.encode("utf-8"), special=True)
             self.reset()
             self.eval(tokens)
             n_tokens = len(tokens)
@@ -928,7 +928,7 @@ class Llama:
         completion_tokens: List[int] = []
         # Add blank space to start of prompt to match OG llama tokenizer
         prompt_tokens: List[int] = (
-            self.tokenize(prompt.encode("utf-8"))
+            self.tokenize(prompt.encode("utf-8"), special=True)
             if prompt != ""
             else [self.token_bos()]
         )
@@ -1826,7 +1826,7 @@ class LlamaTokenizer:
 
     def encode(self, text: str, add_bos: bool = True) -> List[int]:
         return self.llama.tokenize(
-            text.encode("utf-8", errors="ignore"), add_bos=add_bos
+            text.encode("utf-8", errors="ignore"), add_bos=add_bos, special=True
         )
 
     def decode(self, tokens: List[int]) -> str:
