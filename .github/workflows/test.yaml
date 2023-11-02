@@ -77,3 +77,23 @@ jobs:
       - name: Test with pytest
         run: |
           python3 -m pytest
+
+  build-macos-metal:
+
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: "true"
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.8"
+      - name: Install dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          CMAKE_ARGS="-DLLAMA_METAL=on" python3 -m pip install .[all] --verbose
+      - name: Test with pytest
+        run: |
+          python3 -m pytest
