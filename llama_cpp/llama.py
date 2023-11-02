@@ -553,7 +553,8 @@ class Llama:
                 self.batch.pos[i] = n_past + i
                 self.batch.seq_id[i][0] = 0
                 self.batch.n_seq_id[i] = 1
-                self.batch.logits[i] = True
+                self.batch.logits[i] = True if self.context_params.logits_all else False
+            self.batch.logits[n_tokens - 1] = True
             return_code = llama_cpp.llama_decode(
                 ctx=self.ctx,
                 batch=self.batch,
