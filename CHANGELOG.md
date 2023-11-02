@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Fix tokenization of special characters by @antoine-lizee in #850
+
 ## [0.2.12]
 
 - Update llama.cpp to ggerganov/llama.cpp@50337961a678fce4081554b24e56e86b67660163
