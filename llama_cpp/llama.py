@@ -230,8 +230,14 @@ class Llama:
         n_batch: int = 512,
         n_threads: Optional[int] = None,
         n_threads_batch: Optional[int] = None,
+        rope_scaling_type: Optional[int] = llama_cpp.LLAMA_ROPE_SCALING_UNSPECIFIED,
         rope_freq_base: float = 0.0,
         rope_freq_scale: float = 0.0,
+        yarn_ext_factor: float = float("nan"),
+        yarn_attn_factor: float = 1.0,
+        yarn_beta_fast: float = 32.0,
+        yarn_beta_slow: float = 1.0,
+        yarn_orig_ctx: int = 0,
         mul_mat_q: bool = True,
         f16_kv: bool = True,
         logits_all: bool = False,
@@ -255,30 +261,30 @@ class Llama:
 
         Args:
             model_path: Path to the model.
-            seed: Random seed. -1 for random.
-            n_ctx: Maximum context size.
-            n_batch: Maximum number of prompt tokens to batch together when calling llama_eval.
             n_gpu_layers: Number of layers to offload to GPU (-ngl). If -1, all layers are offloaded.
-            main_gpu: Main GPU to use.
-            tensor_split: Optional list of floats to split the model across multiple GPUs. If None, the model is not split.
-            rope_freq_base: Base frequency for rope sampling.
-            rope_freq_scale: Scale factor for rope sampling.
-            low_vram: Use low VRAM mode.
-            mul_mat_q: if true, use experimental mul_mat_q kernels
-            f16_kv: Use half-precision for key/value cache.
-            logits_all: Return logits for all tokens, not just the last token.
+            main_gpu: The GPU that is used for scratch and small tensors.
+            tensor_split: How split tensors should be distributed across GPUs. If None, the model is not split.
             vocab_only: Only load the vocabulary no weights.
             use_mmap: Use mmap if possible.
             use_mlock: Force the system to keep the model in RAM.
-            embedding: Embedding mode only.
+            seed: Random seed. -1 for random.
+            n_ctx: Context size.
+            n_batch: Batch size for prompt processing (must be >= 32 to use BLAS)
             n_threads: Number of threads to use. If None, the number of threads is automatically determined.
+            n_threads_batch: Number of threads to use for batch processing. If None, use n_threads.
+            rope_scaling_type: Type of rope scaling to use.
+            rope_freq_base: Base frequency for rope sampling.
+            rope_freq_scale: Scale factor for rope sampling.
+            mul_mat_q: if true, use experimental mul_mat_q kernels
+            f16_kv: Use half-precision for key/value cache.
+            logits_all: Return logits for all tokens, not just the last token.
+            embedding: Embedding mode only.
             last_n_tokens_size: Maximum number of tokens to keep in the last_n_tokens deque.
             lora_base: Optional path to base model, useful if using a quantized base model and you want to apply LoRA to an f16 model.
             lora_path: Path to a LoRA file to apply to the model.
             numa: Enable NUMA support. (NOTE: The initial value of this parameter is used for the remainder of the program as this value is set in llama_backend_init)
             chat_format: String specifying the chat format to use when calling create_chat_completion.
             verbose: Print verbose output to stderr.
-            kwargs: Unused keyword arguments (for additional backwards compatibility).
 
         Raises:
             ValueError: If the model path does not exist.
@@ -332,11 +338,29 @@ class Llama:
         self.context_params.n_batch = self.n_batch
         self.context_params.n_threads = self.n_threads
         self.context_params.n_threads_batch = self.n_threads_batch
+        self.context_params.rope_scaling_type = (
+            rope_scaling_type if rope_scaling_type is not None else llama_cpp.LLAMA_ROPE_SCALING_UNSPECIFIED
+        )
         self.context_params.rope_freq_base = (
             rope_freq_base if rope_freq_base != 0.0 else 0
         )
         self.context_params.rope_freq_scale = (
             rope_freq_scale if rope_freq_scale != 0.0 else 0
+        )
+        self.context_params.yarn_ext_factor = (
+            yarn_ext_factor if yarn_ext_factor != 0.0 else 0
+        )
+        self.context_params.yarn_attn_factor = (
+            yarn_attn_factor if yarn_attn_factor != 0.0 else 0
+        )
+        self.context_params.yarn_beta_fast = (
+            yarn_beta_fast if yarn_beta_fast != 0.0 else 0
+        )
+        self.context_params.yarn_beta_slow = (
+            yarn_beta_slow if yarn_beta_slow != 0.0 else 0
+        )
+        self.context_params.yarn_orig_ctx = (
+            yarn_orig_ctx if yarn_orig_ctx != 0 else 0
         )
         self.context_params.mul_mat_q = mul_mat_q
         self.context_params.f16_kv = f16_kv
@@ -1671,8 +1695,14 @@ class Llama:
             n_batch=self.n_batch,
             n_threads=self.context_params.n_threads,
             n_threads_batch=self.context_params.n_threads_batch,
+            rope_scaling_type=self.context_params.rope_scaling_type,
             rope_freq_base=self.context_params.rope_freq_base,
             rope_freq_scale=self.context_params.rope_freq_scale,
+            yarn_ext_factor=self.context_params.yarn_ext_factor,
+            yarn_attn_factor=self.context_params.yarn_attn_factor,
+            yarn_beta_fast=self.context_params.yarn_beta_fast,
+            yarn_beta_slow=self.context_params.yarn_beta_slow,
+            yarn_orig_ctx=self.context_params.yarn_orig_ctx,
             mul_mat_q=self.context_params.mul_mat_q,
             f16_kv=self.context_params.f16_kv,
             logits_all=self.context_params.logits_all,
@@ -1709,6 +1739,12 @@ class Llama:
             n_threads_batch=state["n_threads_batch"],
             rope_freq_base=state["rope_freq_base"],
             rope_freq_scale=state["rope_freq_scale"],
+            rope_scaling_type=state["rope_scaling_type"],
+            yarn_ext_factor=state["yarn_ext_factor"],
+            yarn_attn_factor=state["yarn_attn_factor"],
+            yarn_beta_fast=state["yarn_beta_fast"],
+            yarn_beta_slow=state["yarn_beta_slow"],
+            yarn_orig_ctx=state["yarn_orig_ctx"],
             mul_mat_q=state["mul_mat_q"],
             f16_kv=state["f16_kv"],
             logits_all=state["logits_all"],
