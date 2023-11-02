@@ -169,4 +169,4 @@ class ChatCompletionRequestMessage(TypedDict):
     role: Literal["assistant", "user", "system", "function"]
     content: Optional[str]
     name: NotRequired[str]
-    funcion_call: NotRequired[ChatCompletionFunctionCall]
+    function_call: NotRequired[ChatCompletionFunctionCall]

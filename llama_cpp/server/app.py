@@ -1,5 +1,6 @@
 import sys
 import json
+import traceback
 import multiprocessing
 import time
 from re import compile, Match, Pattern
@@ -47,8 +48,8 @@ class Settings(BaseSettings):
     )
     n_gpu_layers: int = Field(
         default=0,
-        ge=0,
-        description="The number of layers to put on the GPU. The rest will be on the CPU.",
+        ge=-1,
+        description="The number of layers to put on the GPU. The rest will be on the CPU. Set -1 to move all to GPU.",
     )
     main_gpu: int = Field(
         default=0,
@@ -243,6 +244,7 @@ class RouteErrorHandler(APIRoute):
     ) -> Tuple[int, ErrorResponse]:
         """Wraps error message in OpenAI style error response"""
         print(f"Exception: {str(error)}", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
         if body is not None and isinstance(
             body,
             (
@@ -516,6 +518,10 @@ mirostat_eta_field = Field(
     default=0.1, ge=0.001, le=1.0, description="Mirostat learning rate"
 )
 
+grammar = Field(
+    default=None,
+    description="A CBNF grammar (as string) to be used for formatting the model's output."
+)
 
 class CreateCompletionRequest(BaseModel):
     prompt: Union[str, List[str]] = Field(
@@ -531,6 +537,7 @@ class CreateCompletionRequest(BaseModel):
     mirostat_mode: int = mirostat_mode_field
     mirostat_tau: float = mirostat_tau_field
     mirostat_eta: float = mirostat_eta_field
+    grammar: Optional[str] = None
     echo: bool = Field(
         default=False,
         description="Whether to echo the prompt in the generated text. Useful for chatbots.",
@@ -587,17 +594,16 @@ def make_logit_bias_processor(
     elif logit_bias_type == "tokens":
         for token, score in logit_bias.items():
             token = token.encode("utf-8")
-            for input_id in llama.tokenize(token, add_bos=False):
+            for input_id in llama.tokenize(token, add_bos=False, special=True):
                 to_bias[input_id] = score
 
     def logit_bias_processor(
         input_ids: npt.NDArray[np.intc],
         scores: npt.NDArray[np.single],
     ) -> npt.NDArray[np.single]:
-        new_scores = [None] * len(scores)
-        for input_id, score in enumerate(scores):
-            new_scores[input_id] = score + to_bias.get(input_id, 0.0)
-
+        new_scores = np.copy(scores)         # Does it make sense to copy the whole array or can we just overwrite the original one?
+        for input_id, score in to_bias.items():
+            new_scores[input_id] = score + scores[input_id]
         return new_scores
 
     return logit_bias_processor
@@ -631,6 +637,9 @@ async def create_completion(
                 make_logit_bias_processor(llama, body.logit_bias, body.logit_bias_type),
             ]
         )
+
+    if body.grammar is not None:
+        kwargs["grammar"] = llama_cpp.LlamaGrammar.from_string(body.grammar)
 
     iterator_or_completion: Union[
         llama_cpp.Completion, Iterator[llama_cpp.CompletionChunk]
@@ -712,6 +721,7 @@ class CreateChatCompletionRequest(BaseModel):
     mirostat_mode: int = mirostat_mode_field
     mirostat_tau: float = mirostat_tau_field
     mirostat_eta: float = mirostat_eta_field
+    grammar: Optional[str] = None
     stop: Optional[List[str]] = stop_field
     stream: bool = stream_field
     presence_penalty: Optional[float] = presence_penalty_field
@@ -769,6 +779,9 @@ async def create_chat_completion(
                 make_logit_bias_processor(llama, body.logit_bias, body.logit_bias_type),
             ]
         )
+
+    if body.grammar is not None:
+        kwargs["grammar"] = llama_cpp.LlamaGrammar.from_string(body.grammar)
 
     iterator_or_completion: Union[
         llama_cpp.ChatCompletion, Iterator[llama_cpp.ChatCompletionChunk]

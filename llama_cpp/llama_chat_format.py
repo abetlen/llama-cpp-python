@@ -32,7 +32,7 @@ def _format_llama2(
     ret = system_message + sep
     for role, message in messages:
         if message:
-            ret += message + " "
+            ret += role + message + " "
         else:
             ret += role + " "
     return ret

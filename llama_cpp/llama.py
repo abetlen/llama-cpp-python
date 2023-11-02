@@ -308,6 +308,8 @@ class Llama:
         self.tensor_split = tensor_split
         self._p_tensor_split = None
         if self.tensor_split is not None:
+            if len(self.tensor_split) > llama_cpp.LLAMA_MAX_DEVICES:
+                raise ValueError(f"Attempt to split tensors that exceed maximum supported devices. Current LLAMA_MAX_DEVICES={llama_cpp.LLAMA_MAX_DEVICES}")
             # Type conversion and expand the list to the length of LLAMA_MAX_DEVICES
             FloatArray = ctypes.c_float * llama_cpp.LLAMA_MAX_DEVICES
             self._c_tensor_split = FloatArray(
@@ -442,7 +444,7 @@ class Llama:
             maxlen=self._n_ctx if self.context_params.logits_all else 1,
         )
 
-    def tokenize(self, text: bytes, add_bos: bool = True) -> List[int]:
+    def tokenize(self, text: bytes, add_bos: bool = True, special: bool = False) -> List[int]:
         """Tokenize a string.
 
         Args:
@@ -464,6 +466,7 @@ class Llama:
             tokens,
             n_ctx,
             add_bos,
+            special
         )
         if n_tokens < 0:
             n_tokens = abs(n_tokens)
@@ -475,6 +478,7 @@ class Llama:
                 tokens,
                 n_tokens,
                 add_bos,
+                special
             )
             if n_tokens < 0:
                 raise RuntimeError(
@@ -591,20 +595,14 @@ class Llama:
         candidates.data = candidates_data.ctypes.data_as(llama_cpp.llama_token_data_p)
         candidates.sorted = llama_cpp.c_bool(False)
         candidates.size = llama_cpp.c_size_t(n_vocab)
-        llama_cpp.llama_sample_repetition_penalty(
-            ctx=self.ctx,
-            last_tokens_data=last_n_tokens_data,
-            last_tokens_size=last_n_tokens_size,
-            candidates=llama_cpp.ctypes.byref(candidates),  # type: ignore
-            penalty=repeat_penalty,
-        )
-        llama_cpp.llama_sample_frequency_and_presence_penalties(
+        llama_cpp.llama_sample_repetition_penalties(
             ctx=self.ctx,
             candidates=llama_cpp.ctypes.byref(candidates),  # type: ignore
             last_tokens_data=last_n_tokens_data,
-            last_tokens_size=last_n_tokens_size,
-            alpha_frequency=frequency_penalty,
-            alpha_presence=presence_penalty,
+            penalty_last_n=last_n_tokens_size,
+            penalty_repeat=repeat_penalty,
+            penalty_freq=frequency_penalty,
+            penalty_present=presence_penalty,
         )
         if not penalize_nl:
             candidates.data[self._token_nl].logit = llama_cpp.c_float(nl_logit)
@@ -858,7 +856,7 @@ class Llama:
         data: List[EmbeddingData] = []
         total_tokens = 0
         for index, input in enumerate(inputs):
-            tokens = self.tokenize(input.encode("utf-8"))
+            tokens = self.tokenize(input.encode("utf-8"), special=True)
             self.reset()
             self.eval(tokens)
             n_tokens = len(tokens)
@@ -923,13 +921,14 @@ class Llama:
         grammar: Optional[LlamaGrammar] = None,
     ) -> Union[Iterator[Completion], Iterator[CompletionChunk]]:
         assert self.ctx is not None
+        assert suffix is None or suffix.__class__ is str
 
         completion_id: str = f"cmpl-{str(uuid.uuid4())}"
         created: int = int(time.time())
         completion_tokens: List[int] = []
         # Add blank space to start of prompt to match OG llama tokenizer
         prompt_tokens: List[int] = (
-            self.tokenize(prompt.encode("utf-8"))
+            self.tokenize(prompt.encode("utf-8"), special=True)
             if prompt != ""
             else [self.token_bos()]
         )
@@ -1228,20 +1227,6 @@ class Llama:
                             }
                         ],
                     }
-                    yield {
-                        "id": completion_id,
-                        "object": "text_completion",
-                        "created": created,
-                        "model": model_name,
-                        "choices": [
-                            {
-                                "text": "",
-                                "index": 0,
-                                "logprobs": None,
-                                "finish_reason": finish_reason,
-                            }
-                        ],
-                    }
                     break
                 returned_tokens += 1
                 yield {
@@ -1260,20 +1245,20 @@ class Llama:
                         }
                     ],
                 }
-                yield {
-                    "id": completion_id,
-                    "object": "text_completion",
-                    "created": created,
-                    "model": model_name,
-                    "choices": [
-                        {
-                            "text": "",
-                            "index": 0,
-                            "logprobs": None,
-                            "finish_reason": finish_reason,
-                        }
-                    ],
-                }
+            yield {
+                "id": completion_id,
+                "object": "text_completion",
+                "created": created,
+                "model": model_name,
+                "choices": [
+                    {
+                        "text": "",
+                        "index": 0,
+                        "logprobs": None,
+                        "finish_reason": finish_reason,
+                    }
+                ],
+            }
             if self.cache:
                 if self.verbose:
                     print("Llama._create_completion: cache save", file=sys.stderr)
@@ -1653,13 +1638,22 @@ class Llama:
         )
         return self._convert_completion_to_chat(completion_or_chunks, stream=stream)  # type: ignore
 
-    def __del__(self):
-        if hasattr(self, "model") and self.model is not None:
-            llama_cpp.llama_free_model(self.model)
+    def _free_model(self, *, _lfree_model=llama_cpp._lib.llama_free_model, _free=llama_cpp._lib.llama_free):
+        model = getattr(self, 'model', None)
+        if model is not None:
+            _lfree_model(model)
             self.model = None
-        if hasattr(self, "ctx") and self.ctx is not None:
-            llama_cpp.llama_free(self.ctx)
+        ctx = getattr(self, 'ctx', None)
+        if ctx is not None:
+            _free(ctx)
             self.ctx = None
+
+    def __del__(self):
+        if self.verbose:
+            self._free_model()
+        else:
+            with suppress_stdout_stderr():
+                self._free_model()
 
     def __getstate__(self):
         return dict(
@@ -1796,18 +1790,18 @@ class Llama:
 
     def token_eos(self) -> int:
         """Return the end-of-sequence token."""
-        assert self.ctx is not None
-        return llama_cpp.llama_token_eos(self.ctx)
+        assert self.model is not None
+        return llama_cpp.llama_token_eos(self.model)
 
     def token_bos(self) -> int:
         """Return the beginning-of-sequence token."""
-        assert self.ctx is not None
-        return llama_cpp.llama_token_bos(self.ctx)
+        assert self.model is not None
+        return llama_cpp.llama_token_bos(self.model)
 
     def token_nl(self) -> int:
         """Return the newline token."""
-        assert self.ctx is not None
-        return llama_cpp.llama_token_nl(self.ctx)
+        assert self.model is not None
+        return llama_cpp.llama_token_nl(self.model)
 
     @staticmethod
     def logits_to_logprobs(logits: List[float]) -> List[float]:
@@ -1832,7 +1826,7 @@ class LlamaTokenizer:
 
     def encode(self, text: str, add_bos: bool = True) -> List[int]:
         return self.llama.tokenize(
-            text.encode("utf-8", errors="ignore"), add_bos=add_bos
+            text.encode("utf-8", errors="ignore"), add_bos=add_bos, special=True
         )
 
     def decode(self, tokens: List[int]) -> str:
