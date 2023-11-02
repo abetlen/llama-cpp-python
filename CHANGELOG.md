@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.13]
+
+- Update llama.cpp to 51b2fc11f7f605fff49725a4540e9a6ef7b51b70
+- Fix name 'open' is not defined exception when deleting model by @abetlen in 011b95d7f34cbfc528af75a892757bd9a20838ab
 - Fix tokenization of special characters by @antoine-lizee in #850
 
 ## [0.2.12]

@@ -192,6 +192,18 @@ LLAMA_FTYPE_MOSTLY_Q5_K_M = 17
 LLAMA_FTYPE_MOSTLY_Q6_K = 18
 LLAMA_FTYPE_GUESSED = 1024
 
+# enum llama_rope_scaling_type {
+#     LLAMA_ROPE_SCALING_UNSPECIFIED = -1,
+#     LLAMA_ROPE_SCALING_NONE        = 0,
+#     LLAMA_ROPE_SCALING_LINEAR      = 1,
+#     LLAMA_ROPE_SCALING_YARN        = 2,
+#     LLAMA_ROPE_SCALING_MAX_VALUE   = LLAMA_ROPE_SCALING_YARN,
+# };
+LLAMA_ROPE_SCALING_UNSPECIFIED = -1
+LLAMA_ROPE_SCALING_NONE = 0
+LLAMA_ROPE_SCALING_LINEAR = 1
+LLAMA_ROPE_SCALING_YARN = 2
+LLAMA_ROPE_SCALING_MAX_VALUE = LLAMA_ROPE_SCALING_YARN
 
 # typedef struct llama_token_data {
 #     llama_token id; // token id
@@ -308,10 +320,16 @@ class llama_model_params(Structure):
 #     uint32_t n_batch;         // prompt processing maximum batch size
 #     uint32_t n_threads;       // number of threads to use for generation
 #     uint32_t n_threads_batch; // number of threads to use for batch processing
+#     int8_t   rope_scaling_type; // RoPE scaling type, from `enum llama_rope_scaling_type`
 
 #     // ref: https://github.com/ggerganov/llama.cpp/pull/2054
-#     float rope_freq_base;  // RoPE base frequency, 0 = from model
-#     float rope_freq_scale; // RoPE frequency scaling factor, 0 = from model
+#     float    rope_freq_base;   // RoPE base frequency, 0 = from model
+#     float    rope_freq_scale;  // RoPE frequency scaling factor, 0 = from model
+#     float    yarn_ext_factor;  // YaRN extrapolation mix factor, NaN = from model
+#     float    yarn_attn_factor; // YaRN magnitude scaling factor
+#     float    yarn_beta_fast;   // YaRN low correction dim
+#     float    yarn_beta_slow;   // YaRN high correction dim
+#     uint32_t yarn_orig_ctx;    // YaRN original context size
 
 
 #     // Keep the booleans together to avoid misalignment during copy-by-value.
@@ -327,8 +345,14 @@ class llama_context_params(Structure):
         ("n_batch", c_uint32),
         ("n_threads", c_uint32),
         ("n_threads_batch", c_uint32),
+        ("rope_scaling_type", c_int8),
         ("rope_freq_base", c_float),
         ("rope_freq_scale", c_float),
+        ("yarn_ext_factor", c_float),
+        ("yarn_attn_factor", c_float),
+        ("yarn_beta_fast", c_float),
+        ("yarn_beta_slow", c_float),
+        ("yarn_orig_ctx", c_uint32),
         ("mul_mat_q", c_bool),
         ("f16_kv", c_bool),
         ("logits_all", c_bool),
