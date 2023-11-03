@@ -157,6 +157,10 @@ class Settings(BaseSettings):
     )
     # Server Params
     host: str = Field(default="localhost", description="Listen address")
+    limit_concurrency: int = Field(
+        default=2,
+        description="Number of concurrent processes + 1"
+    )
     port: int = Field(default=8000, description="Listen port")
     interrupt_requests: bool = Field(
         default=True,
