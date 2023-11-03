@@ -402,6 +402,16 @@ class Llama:
 
         assert self.ctx is not None
 
+        if verbose:
+            self.batch = llama_cpp.llama_batch_init(
+                self.n_batch, 0, 1
+            )
+        else:
+            with suppress_stdout_stderr():
+                self.batch = llama_cpp.llama_batch_init(
+                    self.n_batch, 0, 1
+                )
+
         if self.lora_path:
             if llama_cpp.llama_model_apply_lora_from_file(
                 self.model,
@@ -554,19 +564,27 @@ class Llama:
             tokens: The list of tokens to evaluate.
         """
         assert self.ctx is not None
+        assert self.batch is not None
         n_ctx = self._n_ctx
         for i in range(0, len(tokens), self.n_batch):
             batch = tokens[i : min(len(tokens), i + self.n_batch)]
             n_past = min(n_ctx - len(batch), len(self._input_ids))
             n_tokens = len(batch)
-            return_code = llama_cpp.llama_eval(
+            llama_cpp.llama_kv_cache_seq_rm(self.ctx, -1, n_past, -1)
+            self.batch.n_tokens = n_tokens
+            for i in range(n_tokens):
+                self.batch.token[i] = batch[i]
+                self.batch.pos[i] = n_past + i
+                self.batch.seq_id[i][0] = 0
+                self.batch.n_seq_id[i] = 1
+                self.batch.logits[i] = True if self.context_params.logits_all else False
+            self.batch.logits[n_tokens - 1] = True
+            return_code = llama_cpp.llama_decode(
                 ctx=self.ctx,
-                tokens=(llama_cpp.llama_token * len(batch))(*batch),
-                n_tokens=n_tokens,
-                n_past=n_past,
+                batch=self.batch,
             )
             if return_code != 0:
-                raise RuntimeError(f"llama_eval returned {return_code}")
+                raise RuntimeError(f"llama_decode returned {return_code}")
             # Save tokens
             self.input_ids[self.n_tokens : self.n_tokens + n_tokens] = batch
             # Save logits
@@ -1662,7 +1680,11 @@ class Llama:
         )
         return self._convert_completion_to_chat(completion_or_chunks, stream=stream)  # type: ignore
 
-    def _free_model(self, *, _lfree_model=llama_cpp._lib.llama_free_model, _free=llama_cpp._lib.llama_free):
+    def _free_model(self, *, _lbatch_free=llama_cpp._lib.llama_batch_free, _lfree_model=llama_cpp._lib.llama_free_model, _free=llama_cpp._lib.llama_free):
+        batch = getattr(self, 'batch', None)
+        if batch is not None:
+            _lbatch_free(batch)
+            self.batch = None
         model = getattr(self, 'model', None)
         if model is not None:
             _lfree_model(model)
