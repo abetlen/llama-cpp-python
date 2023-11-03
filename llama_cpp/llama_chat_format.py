@@ -507,134 +507,12 @@ def format_chatml(
     return ChatFormatterResponse(prompt=_prompt)
 
 
-@register_chat_format("functionary")
-def format_functionary(
-    messages: List[llama_types.ChatCompletionRequestMessage],
-    functions: Optional[List[llama_types.ChatCompletionFunctions]] = None,
-    **kwargs: Any,
-) -> ChatFormatterResponse:
-    SYSTEM_MESSAGE = """A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. The assistant calls functions with appropriate input when necessary"""
-
-    def generate_schema_from_functions(
-        functions: List[llama_types.ChatCompletionFunctions],
-        namespace: str = "functions",
-    ):
-        """
-        Convert functions schema to a schema that language models can understand.
-        """
-
-        schema = (
-            "// Supported function definitions that should be called when necessary.\n"
-        )
-        schema += f"namespace {namespace} {{\n\n"
-
-        for function in functions:
-            # Convert a Function object to dict, if necessary
-            function_name = function["name"]
-            description = function.get("description", "")
-            schema += f"// {description}\n"
-            schema += f"type {function_name}"
-
-            parameters = function.get("parameters", None)
-            schema += " = (_: {\n"
-            required_params = parameters.get("required", [])
-            for param_name, param in parameters.get("properties", {}).items():
-                # Param Description
-                description = param.get("description")
-                if description is not None:
-                    schema += f"// {description}\n"
-
-                # Param Name
-                schema += f"{param_name}"
-                if param_name not in required_params:
-                    schema += "?"
-
-                # Param Type
-                param_type = param.get("type", "any")
-                if param_type == "integer":
-                    param_type = "number"
-                if "enum" in param:
-                    param_type = " | ".join([f'"{v}"' for v in param["enum"]])
-                schema += f": {param_type},\n"
-
-            schema += "}) => any;\n\n"
-
-        schema += f"}} // namespace {namespace}"
-
-        return schema
-
-    def prepare_messages_for_inference(
-        messages: List[llama_types.ChatCompletionRequestMessage],
-        functions: Optional[List[llama_types.ChatCompletionFunctions]] = None,
-    ):
-        all_messages: List[llama_types.ChatCompletionRequestMessage] = []
-        if functions is not None:
-            all_messages.append(
-                llama_types.ChatCompletionRequestMessage(
-                    role="system", content=generate_schema_from_functions(functions)
-                )
-            )
-
-        all_messages.append(
-            llama_types.ChatCompletionRequestMessage(
-                role="system", content=SYSTEM_MESSAGE
-            )
-        )
-
-        for message in messages:
-            # Function call responses
-            if message["role"] == "function" and "name" in message:
-                message["name"] = f"functions.{message['name']}"
-            # Function call requests by assistant
-            if "function_call" in message:
-                message["function_call"][
-                    "name"
-                ] = f"functions.{message['function_call']['name']}"
-            all_messages.append(message)
-
-        all_messages.append(
-            llama_types.ChatCompletionRequestMessage(role="assistant", content=None)
-        )
-
-        def message_to_str(msg: llama_types.ChatCompletionRequestMessage):
-            if msg["role"] == "system":
-                return f"system:\n{msg['content']}\n"
-
-            elif msg["role"] == "function" and "name" in msg:
-                return f"function name={msg['name']}:\n{msg['content']}\n"
-            elif msg["role"] == "user":
-                if msg["content"] is None:
-                    return "user:\n</s>"
-                else:
-                    return f"user:\n</s>{msg['content']}\n"
-            elif msg["role"] == "assistant":
-                if msg["content"] is not None and "function_call" in msg:
-                    return f"assistant:\n{msg['content']}\nassistant to={msg['function_call']['name']}:\n{msg['function_call']['arguments']}</s>"
-                elif "function_call" in msg:
-                    return f"assistant to={msg['function_call']['name']}:\n{msg['function_call']['arguments']}</s>"
-                elif msg["content"] is None:
-                    return "assistant"
-                else:
-                    return f"assistant:\n{msg['content']}\n"
-            else:
-                raise ValueError(f"Unsupported role: {msg['role']}")
-
-        return "".join([message_to_str(msg) for msg in all_messages])
-
-    prompt = prepare_messages_for_inference(messages, functions)
-    return ChatFormatterResponse(
-        prompt=prompt,
-        stop=["user:", "</s>"],
-    )
-
-@register_chat_completion_handler("functionary-full")
+@register_chat_completion_handler("functionary")
 def functionary_chat_handler(
     llama: llama.Llama,
     messages: List[llama_types.ChatCompletionRequestMessage],
     functions: Optional[List[llama_types.ChatCompletionFunction]] = None,
-    function_call: Optional[
-        Union[str, llama_types.ChatCompletionFunctionCall]
-    ] = None,
+    function_call: Optional[Union[str, llama_types.ChatCompletionFunctionCall]] = None,
     temperature: float = 0.2,
     top_p: float = 0.95,
     top_k: int = 40,
@@ -651,10 +529,7 @@ def functionary_chat_handler(
     model: Optional[str] = None,
     logits_processor: Optional[llama.LogitsProcessorList] = None,
     grammar: Optional[llama.LlamaGrammar] = None,
-) -> Union[
-    llama_types.ChatCompletion, Iterator[llama_types.ChatCompletionChunk]
-]:
-
+) -> Union[llama_types.ChatCompletion, Iterator[llama_types.ChatCompletionChunk]]:
     SYSTEM_MESSAGE = """A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. The assistant calls functions with appropriate input when necessary"""
 
     def generate_schema_from_functions(
@@ -766,13 +641,36 @@ def functionary_chat_handler(
         return "".join([message_to_str(msg) for msg in all_messages])
 
     prompt = prepare_messages_for_inference(messages, functions)
-    if function_call is None or isinstance(function_call, str) and function_call == "auto":
+
+    if function_call is None and (functions is None or len(functions) == 0):
+        completion_or_completion_chunks = llama.create_completion(
+            prompt=prompt + ":\n",
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            stream=stream,
+            stop=["user:", "</s>"],
+            max_tokens=max_tokens,
+            presence_penalty=presence_penalty,
+            frequency_penalty=frequency_penalty,
+            repeat_penalty=repeat_penalty,
+            tfs_z=tfs_z,
+            mirostat_mode=mirostat_mode,
+            mirostat_tau=mirostat_tau,
+            mirostat_eta=mirostat_eta,
+            model=model,
+            logits_processor=logits_processor,
+            grammar=grammar,
+        )
+        return _convert_completion_to_chat(completion_or_completion_chunks, stream=stream)  # type: ignore
+
+    if function_call is None or (
+        isinstance(function_call, str) and function_call == "auto"
+    ):
         stop = "\n"
         completion: llama_types.Completion = llama.create_completion(
-            prompt=prompt,
-            stop=stop,
-            stream=False
-        ) # type: ignore
+            prompt=prompt, stop=stop, stream=False
+        )  # type: ignore
         completion_text = completion["choices"][0]["text"]
         # strip " to=functions." and ending ":"
         function_call = completion_text[14:-1]
@@ -786,10 +684,8 @@ def functionary_chat_handler(
         new_prompt = prompt + f"assistant:\n"
 
     completion: llama_types.Completion = llama.create_completion(
-        prompt=new_prompt,
-        stop=["user:", "</s>"],
-        stream=False
-    ) # type: ignore
+        prompt=new_prompt, stop=["user:", "</s>"], stream=False
+    )  # type: ignore
 
     return llama_types.CreateChatCompletionResponse(
         id="chat" + completion["id"],
@@ -805,32 +701,10 @@ def functionary_chat_handler(
                     "function_call": {
                         "name": function_call,
                         "arguments": completion["choices"][0]["text"],
-                    }
+                    },
                 },
                 "finish_reason": "function_call",
             }
         ],
         usage=completion["usage"],
     )
-
-    # stop = ["user:", "</s>"]
-    # completion_or_chunks = llama.create_completion(
-    #     prompt=prompt,
-    #     temperature=temperature,
-    #     top_p=top_p,
-    #     top_k=top_k,
-    #     stream=stream,
-    #     stop=stop,
-    #     max_tokens=max_tokens,
-    #     presence_penalty=presence_penalty,
-    #     frequency_penalty=frequency_penalty,
-    #     repeat_penalty=repeat_penalty,
-    #     tfs_z=tfs_z,
-    #     mirostat_mode=mirostat_mode,
-    #     mirostat_tau=mirostat_tau,
-    #     mirostat_eta=mirostat_eta,
-    #     model=model,
-    #     logits_processor=logits_processor,
-    #     grammar=grammar,
-    # )
-    # return _convert_completion_to_chat(completion_or_chunks, stream=stream)  # type: ignore
