@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Migrate inference from deprecated `llama_eval`API to `llama_batch` and `llama_decode` by @abetlen in #795
+
 ## [0.2.13]
 
 - Update llama.cpp to 51b2fc11f7f605fff49725a4540e9a6ef7b51b70
