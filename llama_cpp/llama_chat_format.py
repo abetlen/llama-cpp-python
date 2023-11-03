@@ -324,19 +324,20 @@ def get_chat_format(name: str):
         )
 
 
+# see https://github.com/huggingface/transformers/blob/main/src/transformers/models/llama/tokenization_llama.py
+# system prompt is "embedded" in the first message
 @register_chat_format("llama-2")
 def format_llama2(
     messages: List[llama_types.ChatCompletionRequestMessage],
     **kwargs: Any,
 ) -> ChatFormatterResponse:
     _system_template = "[INST] <<SYS>>\n{system_message}\n<</SYS>>\n\n"
-    _roles = dict(user="[INST]", assistant="[/INST]")
+    _roles = dict(user="", assistant="[/INST] [INST]")
     _sep = "\n\n"
     system_message = _get_system_message(messages)
     system_message = _system_template.format(system_message=system_message)
     _messages = _map_roles(messages, _roles)
-    _messages.append((_roles["assistant"], None))
-    _prompt = _format_llama2(system_message, _messages, _sep)
+    _prompt = _format_llama2(system_message, _messages, _sep) + "[/INST]"
     return ChatFormatterResponse(prompt=_prompt)
 
 
