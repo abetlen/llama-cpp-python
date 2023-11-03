@@ -9,8 +9,14 @@ class suppress_stdout_stderr(object):
     sys = sys
     os = os
 
+    def __init__(self, disable: bool = True):
+        self.disable = disable
+
     # Oddly enough this works better than the contextlib version
     def __enter__(self):
+        if self.disable:
+            return self
+
         self.outnull_file = self.open(self.os.devnull, "w")
         self.errnull_file = self.open(self.os.devnull, "w")
 
@@ -31,6 +37,9 @@ class suppress_stdout_stderr(object):
         return self
 
     def __exit__(self, *_):
+        if self.disable:
+            return
+
         self.sys.stdout = self.old_stdout
         self.sys.stderr = self.old_stderr
 
