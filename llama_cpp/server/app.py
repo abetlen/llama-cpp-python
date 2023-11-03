@@ -743,21 +743,22 @@ async def create_embedding(
 
 
 class ChatCompletionRequestMessage(BaseModel):
-    role: Literal["system", "user", "assistant"] = Field(
+    role: Literal["system", "user", "assistant", "function"] = Field(
         default="user", description="The role of the message."
     )
-    content: str = Field(default="", description="The content of the message.")
+    content: Optional[str] = Field(default="", description="The content of the message.")
 
+from typing import Any
 
 class CreateChatCompletionRequest(BaseModel):
-    messages: List[ChatCompletionRequestMessage] = Field(
+    messages: List[Any] = Field(
         default=[], description="A list of messages to generate completions for."
     )
     functions: Optional[List[llama_cpp.ChatCompletionFunction]] = Field(
         default=None,
         description="A list of functions to apply to the generated completions.",
     )
-    function_call: Optional[Union[str, llama_cpp.ChatCompletionFunctionCall]] = Field(
+    function_call: Optional[Union[Literal["auto", "none"], llama_cpp.ChatCompletionFunctionCallOption]] = Field(
         default=None,
         description="A function to apply to the generated completions.",
     )
