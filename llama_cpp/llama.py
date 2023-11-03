@@ -29,7 +29,7 @@ import llama_cpp.llama_chat_format as llama_chat_format
 import numpy as np
 import numpy.typing as npt
 
-from .utils import suppress_stdout_stderr
+from ._utils import suppress_stdout_stderr
 
 
 class BaseLlamaCache(ABC):
