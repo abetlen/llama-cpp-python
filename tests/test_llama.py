@@ -25,6 +25,15 @@ def test_llama_cpp_tokenization():
     detokenized = llama.detokenize(tokens)
     assert detokenized != text
 
+    text = b"Hello World</s>"
+    tokens = llama.tokenize(text)
+    assert tokens[-1] != llama.token_eos()
+    assert tokens == [1, 15043, 2787, 829, 29879, 29958]
+
+    tokens = llama.tokenize(text, special=True)
+    assert tokens[-1] == llama.token_eos()
+    assert tokens == [1, 10994, 2787, 2]
+
 
 def test_llama_patch(monkeypatch):
     llama = llama_cpp.Llama(model_path=MODEL, vocab_only=True)
@@ -39,7 +48,7 @@ def test_llama_patch(monkeypatch):
             *[llama_cpp.c_float(0) for _ in range(n_vocab)]
         )
 
-    monkeypatch.setattr("llama_cpp.llama_cpp.llama_eval", mock_eval)
+    monkeypatch.setattr("llama_cpp.llama_cpp.llama_decode", mock_eval)
     monkeypatch.setattr("llama_cpp.llama_cpp.llama_get_logits", mock_get_logits)
 
     output_text = " jumps over the lazy dog."
@@ -129,7 +138,7 @@ def test_utf8(monkeypatch):
             *[llama_cpp.c_float(0) for _ in range(n_vocab)]
         )
 
-    monkeypatch.setattr("llama_cpp.llama_cpp.llama_eval", mock_eval)
+    monkeypatch.setattr("llama_cpp.llama_cpp.llama_decode", mock_eval)
     monkeypatch.setattr("llama_cpp.llama_cpp.llama_get_logits", mock_get_logits)
 
     output_text = "😀"
