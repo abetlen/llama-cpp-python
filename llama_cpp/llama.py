@@ -233,7 +233,7 @@ class Llama:
         rope_scaling_type: Optional[int] = llama_cpp.LLAMA_ROPE_SCALING_UNSPECIFIED,
         rope_freq_base: float = 0.0,
         rope_freq_scale: float = 0.0,
-        yarn_ext_factor: float = float("nan"),
+        yarn_ext_factor: float = -1.0,
         yarn_attn_factor: float = 1.0,
         yarn_beta_fast: float = 32.0,
         yarn_beta_slow: float = 1.0,

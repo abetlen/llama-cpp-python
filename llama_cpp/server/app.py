@@ -93,7 +93,7 @@ class Settings(BaseSettings):
         default=0.0, description="RoPE frequency scaling factor"
     )
     yarn_ext_factor: float = Field(
-        default=float("nan")
+        default=-1.0
     )
     yarn_attn_factor: float = Field(
         default=1.0
