@@ -827,7 +827,7 @@ _lib.llama_kv_cache_clear.restype = None
 #                    llama_pos   p1);
 def llama_kv_cache_seq_rm(
     ctx: llama_context_p,
-    seq_id: llama_seq_id,
+    seq_id: Union[llama_seq_id, int],
     p0: Union[llama_pos, int],
     p1: Union[llama_pos, int],
 ):
@@ -855,8 +855,8 @@ _lib.llama_kv_cache_seq_rm.restype = None
 #                    llama_pos   p1);
 def llama_kv_cache_seq_cp(
     ctx: llama_context_p,
-    seq_id_src: llama_seq_id,
-    seq_id_dst: llama_seq_id,
+    seq_id_src: Union[llama_seq_id, int],
+    seq_id_dst: Union[llama_seq_id, int],
     p0: Union[llama_pos, int],
     p1: Union[llama_pos, int],
 ):
@@ -879,7 +879,7 @@ _lib.llama_kv_cache_seq_cp.restype = None
 #                 llama_seq_id   seq_id);
 def llama_kv_cache_seq_keep(
     ctx: llama_context_p,
-    seq_id: llama_seq_id,
+    seq_id: Union[llama_seq_id, int],
 ):
     return _lib.llama_kv_cache_seq_keep(ctx, seq_id)
 
@@ -900,7 +900,7 @@ _lib.llama_kv_cache_seq_keep.restype = None
 #                    llama_pos   delta);
 def llama_kv_cache_seq_shift(
     ctx: llama_context_p,
-    seq_id: llama_seq_id,
+    seq_id: Union[llama_seq_id, int],
     p0: Union[llama_pos, int],
     p1: Union[llama_pos, int],
     delta: Union[llama_pos, int],
@@ -1204,7 +1204,7 @@ _lib.llama_get_embeddings.restype = c_float_p
 
 
 # LLAMA_API const char * llama_token_get_text(const struct llama_model * model, llama_token token);
-def llama_token_get_text(model: llama_model_p, token: llama_token) -> bytes:
+def llama_token_get_text(model: llama_model_p, token: Union[llama_token, int]) -> bytes:
     return _lib.llama_token_get_text(model, token)
 
 
@@ -1213,7 +1213,7 @@ _lib.llama_token_get_text.restype = c_char_p
 
 
 # LLAMA_API float llama_token_get_score(const struct llama_model * model, llama_token token);
-def llama_token_get_score(model: llama_model_p, token: llama_token) -> float:
+def llama_token_get_score(model: llama_model_p, token: Union[llama_token, int]) -> float:
     return _lib.llama_token_get_score(model, token)
 
 
@@ -1222,7 +1222,7 @@ _lib.llama_token_get_score.restype = c_float
 
 
 # LLAMA_API enum llama_token_type llama_token_get_type(const struct llama_model * model, llama_token token);
-def llama_token_get_type(model: llama_model_p, token: llama_token) -> int:
+def llama_token_get_type(model: llama_model_p, token: Union[llama_token, int]) -> int:
     return _lib.llama_token_get_type(model, token)
 
 
@@ -1302,39 +1302,6 @@ _lib.llama_token_eot.restype = llama_token
 # //
 
 
-# // Convert the provided text into tokens.
-# // The tokens pointer must be large enough to hold the resulting tokens.
-# // Returns the number of tokens on success, no more than n_max_tokens
-# // Returns a negative number on failure - the number of tokens that would have been returned
-# LLAMA_API int llama_tokenize(
-#     const struct llama_model * model,
-#                   const char * text,
-#                          int   text_len,
-#                  llama_token * tokens,
-#                          int   n_max_tokens,
-#                         bool   add_bos);
-def llama_tokenize(
-    model: llama_model_p,
-    text: bytes,
-    text_len: Union[c_int, int],
-    tokens,  # type: Array[llama_token]
-    n_max_tokens: Union[c_int, int],
-    add_bos: Union[c_bool, bool],
-) -> int:
-    return _lib.llama_tokenize(model, text, text_len, tokens, n_max_tokens, add_bos)
-
-
-_lib.llama_tokenize.argtypes = [
-    llama_model_p,
-    c_char_p,
-    c_int,
-    llama_token_p,
-    c_int,
-    c_bool,
-]
-_lib.llama_tokenize.restype = c_int
-
-
 # /// @details Convert the provided text into tokens.
 # /// @param tokens The tokens pointer must be large enough to hold the resulting tokens.
 # /// @return Returns the number of tokens on success, no more than n_max_tokens
@@ -1386,7 +1353,7 @@ _lib.llama_tokenize.restype = c_int
 #                               int    length);
 def llama_token_to_piece(
     model: llama_model_p,
-    token: llama_token,
+    token: Union[llama_token, int],
     buf: Union[c_char_p, bytes],
     length: Union[c_int, int],
 ) -> int:
@@ -1835,7 +1802,7 @@ _lib.llama_sample_token.restype = llama_token
 def llama_grammar_accept_token(
     ctx: llama_context_p,
     grammar: llama_grammar_p,
-    token: llama_token,
+    token: Union[llama_token, int],
 ) -> None:
     _lib.llama_grammar_accept_token(ctx, grammar, token)
 
