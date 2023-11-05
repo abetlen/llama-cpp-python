@@ -9,8 +9,7 @@ from jinja2 import Template
 
 # NOTE: We sacrifice readability for usability.
 # It will fail to work as expected if we attempt to format it in a readable way.
-llama2_template = """{% for message in messages %}{% if message['role'] == 'user' %}
-[INST] {{ message['content'] }} [/INST]\n{% elif message['role'] == 'assistant' %}{{ message['content'] }}\n{% elif message['role'] == 'system' %}<<SYS>> {{ message['content'] }} <</SYS>>\n{% endif %}{% endfor %}"""
+llama2_template = """{% for message in messages %}{% if message['role'] == 'user' %}[INST] {{ message['content'] }} [/INST]\n{% elif message['role'] == 'assistant' %}{{ message['content'] }}\n{% elif message['role'] == 'system' %}<<SYS>> {{ message['content'] }} <</SYS>>\n{% endif %}{% endfor %}"""
 
 
 class MetaSingleton(type):
@@ -43,7 +42,7 @@ class ChatFormatterResponse:
 
 # Base Chat Formatter Protocol
 class ChatFormatterInterface(Protocol):
-    def __init__(self, template: Optional[Dict[str, Any]] = None):
+    def __init__(self, template: Optional[object] = None):
         ...
 
     def __call__(
@@ -51,6 +50,10 @@ class ChatFormatterInterface(Protocol):
         messages: List[Dict[str, str]],
         **kwargs,
     ) -> ChatFormatterResponse:
+        ...
+
+    @property
+    def template(self) -> str:
         ...
 
 
@@ -91,7 +94,7 @@ class FormatterNotFoundException(Exception):
     pass
 
 
-class ChatFormatterFactory(metaclass=MetaSingleton):
+class ChatFormatterFactory(Singleton):
     _chat_formatters: Dict[str, Callable[[], ChatFormatterInterface]] = {}
 
     def register_formatter(
