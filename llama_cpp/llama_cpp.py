@@ -42,6 +42,7 @@ def _load_shared_library(lib_base_name: str):
     elif sys.platform == "win32":
         _lib_paths += [
             _base_path / f"{lib_base_name}.dll",
+            _base_path / f"lib{lib_base_name}.dll",
         ]
     else:
         raise RuntimeError("Unsupported platform")
@@ -198,6 +199,18 @@ LLAMA_FTYPE_MOSTLY_Q5_K_M = 17
 LLAMA_FTYPE_MOSTLY_Q6_K = 18
 LLAMA_FTYPE_GUESSED = 1024
 
+# enum llama_rope_scaling_type {
+#     LLAMA_ROPE_SCALING_UNSPECIFIED = -1,
+#     LLAMA_ROPE_SCALING_NONE        = 0,
+#     LLAMA_ROPE_SCALING_LINEAR      = 1,
+#     LLAMA_ROPE_SCALING_YARN        = 2,
+#     LLAMA_ROPE_SCALING_MAX_VALUE   = LLAMA_ROPE_SCALING_YARN,
+# };
+LLAMA_ROPE_SCALING_UNSPECIFIED = -1
+LLAMA_ROPE_SCALING_NONE = 0
+LLAMA_ROPE_SCALING_LINEAR = 1
+LLAMA_ROPE_SCALING_YARN = 2
+LLAMA_ROPE_SCALING_MAX_VALUE = LLAMA_ROPE_SCALING_YARN
 
 # typedef struct llama_token_data {
 #     llama_token id; // token id
@@ -247,11 +260,12 @@ llama_progress_callback = ctypes.CFUNCTYPE(None, c_float, c_void_p)
 # typedef struct llama_batch {
 #     int32_t n_tokens;
 
-#     llama_token  * token;
-#     float        * embd;
-#     llama_pos    * pos;
-#     llama_seq_id * seq_id;
-#     int8_t       * logits;
+#     llama_token  *  token;
+#     float        *  embd;
+#     llama_pos    *  pos;
+#     int32_t      *  n_seq_id;
+#     llama_seq_id ** seq_id;
+#     int8_t       *  logits;
 
 
 #     // NOTE: helpers for smooth API transition - can be deprecated in the future
@@ -269,7 +283,8 @@ class llama_batch(Structure):
         ("token", POINTER(llama_token)),
         ("embd", c_float_p),
         ("pos", POINTER(llama_pos)),
-        ("seq_id", POINTER(llama_seq_id)),
+        ("n_seq_id", POINTER(c_int32)),
+        ("seq_id", POINTER(POINTER(llama_seq_id))),
         ("logits", POINTER(c_int8)),
         ("all_pos_0", llama_pos),
         ("all_pos_1", llama_pos),
@@ -307,19 +322,25 @@ class llama_model_params(Structure):
 
 
 # struct llama_context_params {
-#     uint32_t seed;            // RNG seed, -1 for random
-#     uint32_t n_ctx;           // text context, 0 = from model
-#     uint32_t n_batch;         // prompt processing maximum batch size
-#     uint32_t n_threads;       // number of threads to use for generation
-#     uint32_t n_threads_batch; // number of threads to use for batch processing
+#     uint32_t seed;              // RNG seed, -1 for random
+#     uint32_t n_ctx;             // text context, 0 = from model
+#     uint32_t n_batch;           // prompt processing maximum batch size
+#     uint32_t n_threads;         // number of threads to use for generation
+#     uint32_t n_threads_batch;   // number of threads to use for batch processing
+#     int8_t   rope_scaling_type; // RoPE scaling type, from `enum llama_rope_scaling_type`
 
 #     // ref: https://github.com/ggerganov/llama.cpp/pull/2054
-#     float rope_freq_base;  // RoPE base frequency, 0 = from model
-#     float rope_freq_scale; // RoPE frequency scaling factor, 0 = from model
+#     float    rope_freq_base;   // RoPE base frequency, 0 = from model
+#     float    rope_freq_scale;  // RoPE frequency scaling factor, 0 = from model
+#     float    yarn_ext_factor;  // YaRN extrapolation mix factor, NaN = from model
+#     float    yarn_attn_factor; // YaRN magnitude scaling factor
+#     float    yarn_beta_fast;   // YaRN low correction dim
+#     float    yarn_beta_slow;   // YaRN high correction dim
+#     uint32_t yarn_orig_ctx;    // YaRN original context size
 
 
 #     // Keep the booleans together to avoid misalignment during copy-by-value.
-#     bool mul_mat_q;  // if true, use experimental mul_mat_q kernels
+#     bool mul_mat_q;  // if true, use experimental mul_mat_q kernels (DEPRECATED - always true)
 #     bool f16_kv;     // use fp16 for KV cache, fp32 otherwise
 #     bool logits_all; // the llama_eval() call computes all logits, not just the last one
 #     bool embedding;  // embedding mode only
@@ -331,8 +352,14 @@ class llama_context_params(Structure):
         ("n_batch", c_uint32),
         ("n_threads", c_uint32),
         ("n_threads_batch", c_uint32),
+        ("rope_scaling_type", c_int8),
         ("rope_freq_base", c_float),
         ("rope_freq_scale", c_float),
+        ("yarn_ext_factor", c_float),
+        ("yarn_attn_factor", c_float),
+        ("yarn_beta_fast", c_float),
+        ("yarn_beta_slow", c_float),
+        ("yarn_orig_ctx", c_uint32),
         ("mul_mat_q", c_bool),
         ("f16_kv", c_bool),
         ("logits_all", c_bool),
@@ -356,6 +383,7 @@ llama_log_callback = ctypes.CFUNCTYPE(None, c_int, c_char_p, c_void_p)
 #     bool allow_requantize;       // allow quantizing non-f32/f16 tensors
 #     bool quantize_output_tensor; // quantize output.weight
 #     bool only_copy;              // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
+#     bool pure;                   // disable k-quant mixtures and quantize all tensors to the same type
 # } llama_model_quantize_params;
 class llama_model_quantize_params(Structure):
     _fields_ = [
@@ -784,26 +812,21 @@ _lib.llama_get_kv_cache_token_count.argtypes = [llama_context_p]
 _lib.llama_get_kv_cache_token_count.restype = c_int
 
 
-# // Remove all tokens data of cells in [c0, c1)
-# // c0 < 0 : [0,  c1]
-# // c1 < 0 : [c0, inf)
-# LLAMA_API void llama_kv_cache_tokens_rm(
-#         struct llama_context * ctx,
-#                      int32_t   c0,
-#                      int32_t   c1);
-def llama_kv_cache_tokens_rm(
-    ctx: llama_context_p, c0: Union[c_int32, int], c1: Union[c_int32, int]
-):
-    return _lib.llama_kv_cache_tokens_rm(ctx, c0, c1)
+# // Clear the KV cache
+# LLAMA_API void llama_kv_cache_clear(
+#         struct llama_context * ctx);
+def llama_kv_cache_clear(ctx: llama_context_p):
+    return _lib.llama_kv_cache_clear(ctx)
 
 
-_lib.llama_kv_cache_tokens_rm.argtypes = [llama_context_p, c_int32, c_int32]
-_lib.llama_kv_cache_tokens_rm.restype = None
+_lib.llama_kv_cache_clear.argtypes = [llama_context_p]
+_lib.llama_kv_cache_clear.restype = None
 
 
 # // Removes all tokens that belong to the specified sequence and have positions in [p0, p1)
-# // p0 < 0 : [0,  p1]
-# // p1 < 0 : [p0, inf)
+# // seq_id < 0 : match any sequence
+# // p0 < 0     : [0,  p1]
+# // p1 < 0     : [p0, inf)
 # LLAMA_API void llama_kv_cache_seq_rm(
 #         struct llama_context * ctx,
 #                 llama_seq_id   seq_id,
@@ -811,7 +834,7 @@ _lib.llama_kv_cache_tokens_rm.restype = None
 #                    llama_pos   p1);
 def llama_kv_cache_seq_rm(
     ctx: llama_context_p,
-    seq_id: llama_seq_id,
+    seq_id: Union[llama_seq_id, int],
     p0: Union[llama_pos, int],
     p1: Union[llama_pos, int],
 ):
@@ -839,8 +862,8 @@ _lib.llama_kv_cache_seq_rm.restype = None
 #                    llama_pos   p1);
 def llama_kv_cache_seq_cp(
     ctx: llama_context_p,
-    seq_id_src: llama_seq_id,
-    seq_id_dst: llama_seq_id,
+    seq_id_src: Union[llama_seq_id, int],
+    seq_id_dst: Union[llama_seq_id, int],
     p0: Union[llama_pos, int],
     p1: Union[llama_pos, int],
 ):
@@ -863,7 +886,7 @@ _lib.llama_kv_cache_seq_cp.restype = None
 #                 llama_seq_id   seq_id);
 def llama_kv_cache_seq_keep(
     ctx: llama_context_p,
-    seq_id: llama_seq_id,
+    seq_id: Union[llama_seq_id, int],
 ):
     return _lib.llama_kv_cache_seq_keep(ctx, seq_id)
 
@@ -884,7 +907,7 @@ _lib.llama_kv_cache_seq_keep.restype = None
 #                    llama_pos   delta);
 def llama_kv_cache_seq_shift(
     ctx: llama_context_p,
-    seq_id: llama_seq_id,
+    seq_id: Union[llama_seq_id, int],
     p0: Union[llama_pos, int],
     p1: Union[llama_pos, int],
     delta: Union[llama_pos, int],
@@ -1062,7 +1085,7 @@ def llama_batch_get_one(
     tokens,  # type: Array[llama_token]
     n_tokens: Union[c_int, int],
     pos_0: Union[llama_pos, int],
-    seq_id: llama_seq_id,
+    seq_id: Union[llama_seq_id, int],
 ) -> llama_batch:
     return _lib.llama_batch_get_one(tokens, n_tokens, pos_0, seq_id)
 
@@ -1076,7 +1099,8 @@ _lib.llama_batch_get_one.argtypes = [
 _lib.llama_batch_get_one.restype = llama_batch
 
 
-# // Allocates a batch of tokens on the heap
+# // Allocates a batch of tokens on the heap that can hold a maximum of n_tokens
+# // Each token can be assigned up to n_seq_max sequence ids
 # // The batch has to be freed with llama_batch_free()
 # // If embd != 0, llama_batch.embd will be allocated with size of n_tokens * embd * sizeof(float)
 # // Otherwise, llama_batch.token will be allocated to store n_tokens llama_token
@@ -1084,14 +1108,17 @@ _lib.llama_batch_get_one.restype = llama_batch
 # // All members are left uninitialized
 # LLAMA_API struct llama_batch llama_batch_init(
 #         int32_t n_tokens,
-#         int32_t embd);
+#         int32_t embd,
+#         int32_t n_seq_max);
 def llama_batch_init(
-    n_tokens: Union[c_int, int], embd: Union[c_int, int]
+    n_tokens: Union[c_int32, int],
+    embd: Union[c_int32, int],
+    n_seq_max: Union[c_int32, int],
 ) -> llama_batch:
-    return _lib.llama_batch_init(n_tokens, embd)
+    return _lib.llama_batch_init(n_tokens, embd, n_seq_max)
 
 
-_lib.llama_batch_init.argtypes = [c_int, c_int]
+_lib.llama_batch_init.argtypes = [c_int32, c_int32, c_int32]
 _lib.llama_batch_init.restype = llama_batch
 
 
@@ -1183,97 +1210,97 @@ _lib.llama_get_embeddings.restype = c_float_p
 # //
 
 
-# LLAMA_API const char * llama_token_get_text(const struct llama_context * ctx, llama_token token);
-def llama_token_get_text(ctx: llama_context_p, token: llama_token) -> bytes:
-    return _lib.llama_token_get_text(ctx, token)
+# LLAMA_API const char * llama_token_get_text(const struct llama_model * model, llama_token token);
+def llama_token_get_text(model: llama_model_p, token: Union[llama_token, int]) -> bytes:
+    return _lib.llama_token_get_text(model, token)
 
 
-_lib.llama_token_get_text.argtypes = [llama_context_p, llama_token]
+_lib.llama_token_get_text.argtypes = [llama_model_p, llama_token]
 _lib.llama_token_get_text.restype = c_char_p
 
 
-# LLAMA_API float llama_token_get_score(const struct llama_context * ctx, llama_token token);
-def llama_token_get_score(ctx: llama_context_p, token: llama_token) -> float:
-    return _lib.llama_token_get_score(ctx, token)
+# LLAMA_API float llama_token_get_score(const struct llama_model * model, llama_token token);
+def llama_token_get_score(model: llama_model_p, token: Union[llama_token, int]) -> float:
+    return _lib.llama_token_get_score(model, token)
 
 
-_lib.llama_token_get_score.argtypes = [llama_context_p, llama_token]
+_lib.llama_token_get_score.argtypes = [llama_model_p, llama_token]
 _lib.llama_token_get_score.restype = c_float
 
 
-# LLAMA_API enum llama_token_type llama_token_get_type(const struct llama_context * ctx, llama_token token);
-def llama_token_get_type(ctx: llama_context_p, token: llama_token) -> int:
-    return _lib.llama_token_get_type(ctx, token)
+# LLAMA_API enum llama_token_type llama_token_get_type(const struct llama_model * model, llama_token token);
+def llama_token_get_type(model: llama_model_p, token: Union[llama_token, int]) -> int:
+    return _lib.llama_token_get_type(model, token)
 
 
-_lib.llama_token_get_type.argtypes = [llama_context_p, llama_token]
+_lib.llama_token_get_type.argtypes = [llama_model_p, llama_token]
 _lib.llama_token_get_type.restype = ctypes.c_int
 
 
 # // Special tokens
 
 
-# LLAMA_API llama_token llama_token_bos(const struct llama_context * ctx);  // beginning-of-sentence
-def llama_token_bos(ctx: llama_context_p) -> int:
-    return _lib.llama_token_bos(ctx)
+# LLAMA_API llama_token llama_token_bos(const struct llama_model * model); // beginning-of-sentence
+def llama_token_bos(model: llama_model_p) -> int:
+    return _lib.llama_token_bos(model)
 
 
-_lib.llama_token_bos.argtypes = [llama_context_p]
+_lib.llama_token_bos.argtypes = [llama_model_p]
 _lib.llama_token_bos.restype = llama_token
 
 
-# LLAMA_API llama_token llama_token_eos(const struct llama_context * ctx);  // end-of-sentence
-def llama_token_eos(ctx: llama_context_p) -> int:
-    return _lib.llama_token_eos(ctx)
+# LLAMA_API llama_token llama_token_eos(const struct llama_model * model); // end-of-sentence
+def llama_token_eos(model: llama_model_p) -> int:
+    return _lib.llama_token_eos(model)
 
 
-_lib.llama_token_eos.argtypes = [llama_context_p]
+_lib.llama_token_eos.argtypes = [llama_model_p]
 _lib.llama_token_eos.restype = llama_token
 
 
-# LLAMA_API llama_token llama_token_nl (const struct llama_context * ctx);  // next-line
-def llama_token_nl(ctx: llama_context_p) -> int:
-    return _lib.llama_token_nl(ctx)
+# LLAMA_API llama_token llama_token_nl (const struct llama_model * model); // next-line
+def llama_token_nl(model: llama_model_p) -> int:
+    return _lib.llama_token_nl(model)
 
 
-_lib.llama_token_nl.argtypes = [llama_context_p]
+_lib.llama_token_nl.argtypes = [llama_model_p]
 _lib.llama_token_nl.restype = llama_token
 
 
 # // codellama infill tokens
-# LLAMA_API llama_token llama_token_prefix(const struct llama_context * ctx); // Beginning of infill prefix
-def llama_token_prefix(ctx: llama_context_p) -> int:
-    return _lib.llama_token_prefix(ctx)
+# LLAMA_API llama_token llama_token_prefix(const struct llama_model * model); // Beginning of infill prefix
+def llama_token_prefix(model: llama_model_p) -> int:
+    return _lib.llama_token_prefix(model)
 
 
-_lib.llama_token_prefix.argtypes = [llama_context_p]
+_lib.llama_token_prefix.argtypes = [llama_model_p]
 _lib.llama_token_prefix.restype = llama_token
 
 
-# LLAMA_API llama_token llama_token_middle(const struct llama_context * ctx); // Beginning of infill middle
-def llama_token_middle(ctx: llama_context_p) -> int:
-    return _lib.llama_token_middle(ctx)
+# LLAMA_API llama_token llama_token_middle(const struct llama_model * model); // Beginning of infill middle
+def llama_token_middle(model: llama_model_p) -> int:
+    return _lib.llama_token_middle(model)
 
 
-_lib.llama_token_middle.argtypes = [llama_context_p]
+_lib.llama_token_middle.argtypes = [llama_model_p]
 _lib.llama_token_middle.restype = llama_token
 
 
-# LLAMA_API llama_token llama_token_suffix(const struct llama_context * ctx); // Beginning of infill suffix
-def llama_token_suffix(ctx: llama_context_p) -> int:
-    return _lib.llama_token_suffix(ctx)
+# LLAMA_API llama_token llama_token_suffix(const struct llama_model * model); // Beginning of infill suffix
+def llama_token_suffix(model: llama_model_p) -> int:
+    return _lib.llama_token_suffix(model)
 
 
-_lib.llama_token_suffix.argtypes = [llama_context_p]
+_lib.llama_token_suffix.argtypes = [llama_model_p]
 _lib.llama_token_suffix.restype = llama_token
 
 
-# LLAMA_API llama_token llama_token_eot   (const struct llama_context * ctx); // End of infill middle
-def llama_token_eot(ctx: llama_context_p) -> int:
-    return _lib.llama_token_eot(ctx)
+# LLAMA_API llama_token llama_token_eot   (const struct llama_model * model); // End of infill middle
+def llama_token_eot(model: llama_model_p) -> int:
+    return _lib.llama_token_eot(model)
 
 
-_lib.llama_token_eot.argtypes = [llama_context_p]
+_lib.llama_token_eot.argtypes = [llama_model_p]
 _lib.llama_token_eot.restype = llama_token
 
 
@@ -1282,17 +1309,20 @@ _lib.llama_token_eot.restype = llama_token
 # //
 
 
-# // Convert the provided text into tokens.
-# // The tokens pointer must be large enough to hold the resulting tokens.
-# // Returns the number of tokens on success, no more than n_max_tokens
-# // Returns a negative number on failure - the number of tokens that would have been returned
+# /// @details Convert the provided text into tokens.
+# /// @param tokens The tokens pointer must be large enough to hold the resulting tokens.
+# /// @return Returns the number of tokens on success, no more than n_max_tokens
+# /// @return Returns a negative number on failure - the number of tokens that would have been returned
+# /// @param special Allow tokenizing special and/or control tokens which otherwise are not exposed and treated as plaintext.
+# ///                Does not insert a leading space.
 # LLAMA_API int llama_tokenize(
 #     const struct llama_model * model,
 #                   const char * text,
 #                          int   text_len,
 #                  llama_token * tokens,
 #                          int   n_max_tokens,
-#                         bool   add_bos);
+#                         bool   add_bos,
+#                         bool   special);
 def llama_tokenize(
     model: llama_model_p,
     text: bytes,
@@ -1300,8 +1330,11 @@ def llama_tokenize(
     tokens,  # type: Array[llama_token]
     n_max_tokens: Union[c_int, int],
     add_bos: Union[c_bool, bool],
+    special: Union[c_bool, bool],
 ) -> int:
-    return _lib.llama_tokenize(model, text, text_len, tokens, n_max_tokens, add_bos)
+    return _lib.llama_tokenize(
+        model, text, text_len, tokens, n_max_tokens, add_bos, special
+    )
 
 
 _lib.llama_tokenize.argtypes = [
@@ -1310,6 +1343,7 @@ _lib.llama_tokenize.argtypes = [
     c_int,
     llama_token_p,
     c_int,
+    c_bool,
     c_bool,
 ]
 _lib.llama_tokenize.restype = c_int
@@ -1326,7 +1360,7 @@ _lib.llama_tokenize.restype = c_int
 #                               int    length);
 def llama_token_to_piece(
     model: llama_model_p,
-    token: llama_token,
+    token: Union[llama_token, int],
     buf: Union[c_char_p, bytes],
     length: Union[c_int, int],
 ) -> int:
@@ -1394,70 +1428,46 @@ _lib.llama_set_rng_seed.argtypes = [llama_context_p, c_uint32]
 _lib.llama_set_rng_seed.restype = None
 
 
-# @details Repetition penalty described in CTRL academic paper https://arxiv.org/abs/1909.05858, with negative logit fix.
-# LLAMA_API void llama_sample_repetition_penalty(
+# /// @details Repetition penalty described in CTRL academic paper https://arxiv.org/abs/1909.05858, with negative logit fix.
+# /// @details Frequency and presence penalties described in OpenAI API https://platform.openai.com/docs/api-reference/parameter-details.
+# LLAMA_API void llama_sample_repetition_penalties(
 #         struct llama_context * ctx,
 #       llama_token_data_array * candidates,
 #            const llama_token * last_tokens,
-#                       size_t   last_tokens_size,
-#                       float    penalty);
-def llama_sample_repetition_penalty(
+#                       size_t   penalty_last_n,
+#                        float   penalty_repeat,
+#                        float   penalty_freq,
+#                        float   penalty_present);
+def llama_sample_repetition_penalties(
     ctx: llama_context_p,
     candidates,  # type: _Pointer[llama_token_data_array]
     last_tokens_data,  # type: Array[llama_token]
-    last_tokens_size: Union[c_int, int],
-    penalty: Union[c_float, float],
+    penalty_last_n: Union[c_size_t, int],
+    penalty_repeat: Union[c_float, float],
+    penalty_freq: Union[c_float, float],
+    penalty_present: Union[c_float, float],
 ):
-    return _lib.llama_sample_repetition_penalty(
-        ctx, candidates, last_tokens_data, last_tokens_size, penalty
-    )
-
-
-_lib.llama_sample_repetition_penalty.argtypes = [
-    llama_context_p,
-    llama_token_data_array_p,
-    llama_token_p,
-    c_int,
-    c_float,
-]
-_lib.llama_sample_repetition_penalty.restype = None
-
-
-# @details Frequency and presence penalties described in OpenAI API https://platform.openai.com/docs/api-reference/parameter-details.
-# LLAMA_API void llama_sample_frequency_and_presence_penalties(
-#         struct llama_context * ctx,
-#       llama_token_data_array * candidates,
-#            const llama_token * last_tokens,
-#                       size_t   last_tokens_size,
-#                        float   alpha_frequency,
-#                        float   alpha_presence);
-def llama_sample_frequency_and_presence_penalties(
-    ctx: llama_context_p,
-    candidates,  # type: _Pointer[llama_token_data_array]
-    last_tokens_data,  # type: Array[llama_token]
-    last_tokens_size: Union[c_int, int],
-    alpha_frequency: Union[c_float, float],
-    alpha_presence: Union[c_float, float],
-):
-    return _lib.llama_sample_frequency_and_presence_penalties(
+    return _lib.llama_sample_repetition_penalties(
         ctx,
         candidates,
         last_tokens_data,
-        last_tokens_size,
-        alpha_frequency,
-        alpha_presence,
+        penalty_last_n,
+        penalty_repeat,
+        penalty_freq,
+        penalty_present,
     )
 
 
-_lib.llama_sample_frequency_and_presence_penalties.argtypes = [
+_lib.llama_sample_repetition_penalties.argtypes = [
     llama_context_p,
     llama_token_data_array_p,
     llama_token_p,
-    c_int,
+    c_size_t,
+    c_float,
     c_float,
     c_float,
 ]
-_lib.llama_sample_frequency_and_presence_penalties.restype = None
+_lib.llama_sample_repetition_penalties.restype = None
 
 
 # /// @details Apply classifier-free guidance to the logits as described in academic paper "Stay on topic with Classifier-Free Guidance" https://arxiv.org/abs/2306.17806
@@ -1489,7 +1499,7 @@ _lib.llama_sample_classifier_free_guidance.argtypes = [
 _lib.llama_sample_classifier_free_guidance.restype = None
 
 
-# @details Sorts candidate tokens by their logits in descending order and calculate probabilities based on logits.
+# /// @details Sorts candidate tokens by their logits in descending order and calculate probabilities based on logits.
 # LLAMA_API void llama_sample_softmax(
 #         struct llama_context * ctx,
 #       llama_token_data_array * candidates);
@@ -1506,7 +1516,7 @@ _lib.llama_sample_softmax.argtypes = [
 _lib.llama_sample_softmax.restype = None
 
 
-# @details Top-K sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
+# /// @details Top-K sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
 # LLAMA_API void llama_sample_top_k(
 #         struct llama_context * ctx,
 #       llama_token_data_array * candidates,
@@ -1530,7 +1540,7 @@ _lib.llama_sample_top_k.argtypes = [
 _lib.llama_sample_top_k.restype = None
 
 
-# @details Nucleus sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
+# /// @details Nucleus sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
 # LLAMA_API void llama_sample_top_p(
 #         struct llama_context * ctx,
 #       llama_token_data_array * candidates,
@@ -1554,7 +1564,31 @@ _lib.llama_sample_top_p.argtypes = [
 _lib.llama_sample_top_p.restype = None
 
 
-# @details Tail Free Sampling described in https://www.trentonbricken.com/Tail-Free-Sampling/.
+# /// @details Minimum P sampling as described in https://github.com/ggerganov/llama.cpp/pull/3841
+# LLAMA_API void llama_sample_min_p(
+#         struct llama_context * ctx,
+#       llama_token_data_array * candidates,
+#                        float   p,
+#                       size_t   min_keep);
+def llama_sample_min_p(
+    ctx: llama_context_p,
+    candidates,  # type: _Pointer[llama_token_data_array]
+    p: Union[c_float, float],
+    min_keep: Union[c_size_t, int],
+):
+    return _lib.llama_sample_min_p(ctx, candidates, p, min_keep)
+
+
+_lib.llama_sample_min_p.argtypes = [
+    llama_context_p,
+    llama_token_data_array_p,
+    c_float,
+    c_size_t,
+]
+_lib.llama_sample_min_p.restype = None
+
+
+# /// @details Tail Free Sampling described in https://www.trentonbricken.com/Tail-Free-Sampling/.
 # LLAMA_API void llama_sample_tail_free(
 #         struct llama_context * ctx,
 #       llama_token_data_array * candidates,
@@ -1578,7 +1612,7 @@ _lib.llama_sample_tail_free.argtypes = [
 _lib.llama_sample_tail_free.restype = None
 
 
-# @details Locally Typical Sampling implementation described in the paper https://arxiv.org/abs/2202.00666.
+# /// @details Locally Typical Sampling implementation described in the paper https://arxiv.org/abs/2202.00666.
 # LLAMA_API void llama_sample_typical(
 #         struct llama_context * ctx,
 #       llama_token_data_array * candidates,
@@ -1643,7 +1677,11 @@ _lib.llama_sample_temperature.argtypes = [
 _lib.llama_sample_temperature.restype = None
 
 
-# LLAMA_API void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * candidates, const struct llama_grammar * grammar);
+# /// @details Apply constraints from grammar
+# LLAMA_API void llama_sample_grammar(
+#         struct llama_context * ctx,
+#       llama_token_data_array * candidates,
+#   const struct llama_grammar * grammar);
 def llama_sample_grammar(
     ctx: llama_context_p,
     candidates,  # type: _Pointer[llama_token_data_array]
@@ -1660,12 +1698,12 @@ _lib.llama_sample_grammar.argtypes = [
 _lib.llama_sample_grammar.restype = None
 
 
-# @details Mirostat 1.0 algorithm described in the paper https://arxiv.org/abs/2007.14966. Uses tokens instead of words.
-# @param candidates A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
-# @param tau  The target cross-entropy (or surprise) value you want to achieve for the generated text. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text.
-# @param eta The learning rate used to update `mu` based on the error between the target and observed surprisal of the sampled word. A larger learning rate will cause `mu` to be updated more quickly, while a smaller learning rate will result in slower updates.
-# @param m The number of tokens considered in the estimation of `s_hat`. This is an arbitrary value that is used to calculate `s_hat`, which in turn helps to calculate the value of `k`. In the paper, they use `m = 100`, but you can experiment with different values to see how it affects the performance of the algorithm.
-# @param mu Maximum cross-entropy. This value is initialized to be twice the target cross-entropy (`2 * tau`) and is updated in the algorithm based on the error between the target and observed surprisal.
+# /// @details Mirostat 1.0 algorithm described in the paper https://arxiv.org/abs/2007.14966. Uses tokens instead of words.
+# /// @param candidates A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
+# /// @param tau  The target cross-entropy (or surprise) value you want to achieve for the generated text. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text.
+# /// @param eta The learning rate used to update `mu` based on the error between the target and observed surprisal of the sampled word. A larger learning rate will cause `mu` to be updated more quickly, while a smaller learning rate will result in slower updates.
+# /// @param m The number of tokens considered in the estimation of `s_hat`. This is an arbitrary value that is used to calculate `s_hat`, which in turn helps to calculate the value of `k`. In the paper, they use `m = 100`, but you can experiment with different values to see how it affects the performance of the algorithm.
+# /// @param mu Maximum cross-entropy. This value is initialized to be twice the target cross-entropy (`2 * tau`) and is updated in the algorithm based on the error between the target and observed surprisal.
 # LLAMA_API llama_token llama_sample_token_mirostat(
 #         struct llama_context * ctx,
 #       llama_token_data_array * candidates,
@@ -1695,11 +1733,11 @@ _lib.llama_sample_token_mirostat.argtypes = [
 _lib.llama_sample_token_mirostat.restype = llama_token
 
 
-# @details Mirostat 2.0 algorithm described in the paper https://arxiv.org/abs/2007.14966. Uses tokens instead of words.
-# @param candidates A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
-# @param tau  The target cross-entropy (or surprise) value you want to achieve for the generated text. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text.
-# @param eta The learning rate used to update `mu` based on the error between the target and observed surprisal of the sampled word. A larger learning rate will cause `mu` to be updated more quickly, while a smaller learning rate will result in slower updates.
-# @param mu Maximum cross-entropy. This value is initialized to be twice the target cross-entropy (`2 * tau`) and is updated in the algorithm based on the error between the target and observed surprisal.
+# /// @details Mirostat 2.0 algorithm described in the paper https://arxiv.org/abs/2007.14966. Uses tokens instead of words.
+# /// @param candidates A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
+# /// @param tau  The target cross-entropy (or surprise) value you want to achieve for the generated text. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text.
+# /// @param eta The learning rate used to update `mu` based on the error between the target and observed surprisal of the sampled word. A larger learning rate will cause `mu` to be updated more quickly, while a smaller learning rate will result in slower updates.
+# /// @param mu Maximum cross-entropy. This value is initialized to be twice the target cross-entropy (`2 * tau`) and is updated in the algorithm based on the error between the target and observed surprisal.
 # LLAMA_API llama_token llama_sample_token_mirostat_v2(
 #         struct llama_context * ctx,
 #       llama_token_data_array * candidates,
@@ -1726,7 +1764,8 @@ _lib.llama_sample_token_mirostat_v2.argtypes = [
 _lib.llama_sample_token_mirostat_v2.restype = llama_token
 
 
-# @details Selects the token with the highest probability.
+# /// @details Selects the token with the highest probability.
+# ///          Does not compute the token probabilities. Use llama_sample_softmax() instead.
 # LLAMA_API llama_token llama_sample_token_greedy(
 #         struct llama_context * ctx,
 #       llama_token_data_array * candidates);
@@ -1744,7 +1783,7 @@ _lib.llama_sample_token_greedy.argtypes = [
 _lib.llama_sample_token_greedy.restype = llama_token
 
 
-# @details Randomly selects a token from the candidates based on their probabilities.
+# /// @details Randomly selects a token from the candidates based on their probabilities.
 # LLAMA_API llama_token llama_sample_token(
 #         struct llama_context * ctx,
 #       llama_token_data_array * candidates);
@@ -1770,7 +1809,7 @@ _lib.llama_sample_token.restype = llama_token
 def llama_grammar_accept_token(
     ctx: llama_context_p,
     grammar: llama_grammar_p,
-    token: llama_token,
+    token: Union[llama_token, int],
 ) -> None:
     _lib.llama_grammar_accept_token(ctx, grammar, token)
 

@@ -41,4 +41,23 @@ if (LLAMA_BUILD)
         FILES $<TARGET_RUNTIME_DLLS:llama>
         DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
     )
+    add_subdirectory(vendor/llama.cpp/examples/llava)
+    set_target_properties(llava_shared PROPERTIES OUTPUT_NAME "llava")
+    install(
+        TARGETS llava_shared
+        LIBRARY DESTINATION ${SKBUILD_PLATLIB_DIR}/llama_cpp
+        RUNTIME DESTINATION ${SKBUILD_PLATLIB_DIR}/llama_cpp
+        ARCHIVE DESTINATION ${SKBUILD_PLATLIB_DIR}/llama_cpp
+        FRAMEWORK DESTINATION ${SKBUILD_PLATLIB_DIR}/llama_cpp
+        RESOURCE DESTINATION ${SKBUILD_PLATLIB_DIR}/llama_cpp
+    )
+    # Temporary fix for https://github.com/scikit-build/scikit-build-core/issues/374
+    install(
+        TARGETS llava_shared
+        LIBRARY DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
+        RUNTIME DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
+        ARCHIVE DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
+        FRAMEWORK DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
+        RESOURCE DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
+    )
 endif()

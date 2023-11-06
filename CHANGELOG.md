@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Migrate inference from deprecated `llama_eval`API to `llama_batch` and `llama_decode` by @abetlen in #795
+
+## [0.2.13]
+
+- Update llama.cpp to 51b2fc11f7f605fff49725a4540e9a6ef7b51b70
+- Fix name 'open' is not defined exception when deleting model by @abetlen in 011b95d7f34cbfc528af75a892757bd9a20838ab
+- Fix tokenization of special characters by @antoine-lizee in #850
+
+## [0.2.12]
+
+- Update llama.cpp to ggerganov/llama.cpp@50337961a678fce4081554b24e56e86b67660163
+- Fix missing `n_seq_id` in `llama_batch` by @NickAlgra in #842
+- Fix for shared libraries on Windows that start with `lib` prefix by @sujeendran in #848
+- Fix exception raised in `__del__` when freeing models by @cebtenzzre in #846
+- Performance improvement for logit bias by @zolastro in #851
+- Fix suffix check arbitrary code execution bug by @mtasic85 in #854
+- Fix typo in `function_call` parameter in `llama_types.py` by @akatora28 in #849
+- Fix streaming not returning `finish_reason` by @gmcgoldr in #798
+- Fix `n_gpu_layers` check to allow values less than 1 for server by @hxy9243 in #826
+- Supppress stdout and stderr when freeing model by @paschembri in #803
+- Fix `llama2` chat format by @delock in #808
+- Add validation for tensor_split size by @eric1932 #820
+- Print stack trace on server error by @abetlen in d6a130a052db3a50975a719088a9226abfebb266
+- Update docs for gguf by @johnccshen in #783
+- Add `chatml` chat format by @abetlen in 305482bd4156c70802fc054044119054806f4126
+
 ## [0.2.11]
 
 - Fix bug in `llama_model_params` object has no attribute `logits_all` by @abetlen in d696251fbe40015e8616ea7a7d7ad5257fd1b896 

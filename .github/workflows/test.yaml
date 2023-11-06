@@ -17,7 +17,7 @@ jobs:
         python-version: ["3.8", "3.9", "3.10", "3.11"]
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: "true"
       - name: Set up Python ${{ matrix.python-version }}
@@ -74,6 +74,53 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install .[all] --verbose
+      - name: Test with pytest
+        run: |
+          python3 -m pytest
+
+  build-linux-opencl:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: "true"
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.8"
+      - name: Set up OpenCL & CLBlast
+        run: |
+          wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB | gpg --dearmor | sudo tee /usr/share/keyrings/oneapi-archive-keyring.gpg > /dev/null
+          echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" | sudo tee /etc/apt/sources.list.d/oneAPI.list  
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends llvm intel-oneapi-runtime-opencl intel-oneapi-runtime-compilers libclblast-dev
+      - name: Install dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          CMAKE_ARGS="-DLLAMA_CLBLAST=on" python3 -m pip install .[all] --verbose
+      - name: Test with pytest
+        run: |
+          python3 -m pytest
+
+
+  build-macos-metal:
+
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: "true"
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.8"
+      - name: Install dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          CMAKE_ARGS="-DLLAMA_METAL=on" python3 -m pip install .[all] --verbose
       - name: Test with pytest
         run: |
           python3 -m pytest
