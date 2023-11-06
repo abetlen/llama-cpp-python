@@ -77,9 +77,25 @@ class ChatCompletionFunctionCall(TypedDict):
     arguments: str
 
 
+class _ChatCompletionTextContent(TypedDict):
+    type: Literal["text"]
+    text: str
+
+
+class _ChatCompletionImageUrlContentUrl(TypedDict):
+    url: str
+
+
+class _ChatCompletionImageUrlContent(TypedDict):
+    type: Literal["image_url"]
+    image_url: _ChatCompletionImageUrlContentUrl
+
+
 class ChatCompletionResponseMessage(TypedDict):
     role: Literal["assistant", "user", "system", "function"]
-    content: Optional[str]
+    content: Optional[
+        Union[str, _ChatCompletionTextContent, _ChatCompletionImageUrlContent]
+    ]
     user: NotRequired[str]
     function_call: NotRequired[ChatCompletionFunctionCall]
 
