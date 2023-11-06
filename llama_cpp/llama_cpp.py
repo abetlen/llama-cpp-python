@@ -1078,7 +1078,7 @@ def llama_batch_get_one(
     tokens,  # type: Array[llama_token]
     n_tokens: Union[c_int, int],
     pos_0: Union[llama_pos, int],
-    seq_id: llama_seq_id,
+    seq_id: Union[llama_seq_id, int],
 ) -> llama_batch:
     return _lib.llama_batch_get_one(tokens, n_tokens, pos_0, seq_id)
 
