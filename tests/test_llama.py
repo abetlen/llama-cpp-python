@@ -8,7 +8,7 @@ def test_llama_cpp_tokenization():
     llama = llama_cpp.Llama(model_path=MODEL, vocab_only=True, verbose=False)
 
     assert llama
-    assert llama.ctx is not None
+    assert llama._ctx.ctx is not None
 
     text = b"Hello World"
 
@@ -37,7 +37,7 @@ def test_llama_cpp_tokenization():
 
 def test_llama_patch(monkeypatch):
     llama = llama_cpp.Llama(model_path=MODEL, vocab_only=True)
-    n_vocab = llama_cpp.llama_n_vocab(llama.model)
+    n_vocab = llama_cpp.llama_n_vocab(llama._model.model)
 
     ## Set up mock function
     def mock_eval(*args, **kwargs):
