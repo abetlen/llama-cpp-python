@@ -1,4 +1,4 @@
-"""Types and request signatrues for OpenAI compatibility
+"""Types and request signatures for OpenAI compatibility
 
 Based on the OpenAI OpenAPI specification:
 https://github.com/openai/openai-openapi/blob/master/openapi.yaml
