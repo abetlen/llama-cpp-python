@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.14]
+
+- Update llama.cpp to f0b30ef7dc1360922ccbea0a8cd3918ecf15eaa7
+- Add support for Huggingface Autotokenizer Chat Formats by @bioshazard and @abetlen in #790 and bbffdaebaa7bb04b543dbf683a07276087251f86
+- Fix llama-2 chat format by @earonesty in #869
+- Add support for functionary chat format by @abetlen in #784
 - Migrate inference from deprecated `llama_eval`API to `llama_batch` and `llama_decode` by @abetlen in #795
 
 ## [0.2.13]
