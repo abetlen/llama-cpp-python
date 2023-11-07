@@ -11,12 +11,13 @@ from . import llama
 class LlamaChatCompletionHandler(Protocol):
     def __call__(
         self,
+        *,
         llama: llama.Llama,
         messages: List[llama_types.ChatCompletionRequestMessage],
         functions: Optional[List[llama_types.ChatCompletionFunction]] = None,
-        function_call: Optional[
-            Union[str, llama_types.ChatCompletionFunctionCall]
-        ] = None,
+        function_call: Optional[llama_types.ChatCompletionRequestFunctionCall] = None,
+        tools: Optional[List[llama_types.ChatCompletionTool]] = None,
+        tool_choice: Optional[llama_types.ChatCompletionToolChoiceOption] = None,
         temperature: float = 0.2,
         top_p: float = 0.95,
         top_k: int = 40,
@@ -33,6 +34,7 @@ class LlamaChatCompletionHandler(Protocol):
         model: Optional[str] = None,
         logits_processor: Optional[llama.LogitsProcessorList] = None,
         grammar: Optional[llama.LlamaGrammar] = None,
+        **kwargs,  # type: ignore
     ) -> Union[llama_types.ChatCompletion, Iterator[llama_types.ChatCompletionChunk]]:
         ...
 
@@ -239,10 +241,13 @@ def _convert_text_completion_chunks_to_chat(
 
 def _convert_completion_to_chat(
     completion_or_chunks: Union[
-        llama_types.CreateCompletionResponse, Iterator[llama_types.CreateCompletionStreamResponse]
+        llama_types.CreateCompletionResponse,
+        Iterator[llama_types.CreateCompletionStreamResponse],
     ],
     stream: bool = False,
-) -> Union[llama_types.CreateChatCompletionResponse, Iterator[llama_types.ChatCompletionChunk]]:
+) -> Union[
+    llama_types.CreateChatCompletionResponse, Iterator[llama_types.ChatCompletionChunk]
+]:
     if stream:
         chunks: Iterator[llama_types.CreateCompletionStreamResponse] = completion_or_chunks  # type: ignore
         return _convert_text_completion_chunks_to_chat(chunks)
@@ -329,7 +334,9 @@ def get_chat_format(name: str):
         )
 
 
-def hf_autotokenizer_to_chat_formatter(pretrained_model_name_or_path: Union[str, os.PathLike[str]]) -> ChatFormatter:
+def hf_autotokenizer_to_chat_formatter(
+    pretrained_model_name_or_path: Union[str, os.PathLike[str]]
+) -> ChatFormatter:
     # https://huggingface.co/docs/transformers/main/chat_templating
     # https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.1#instruction-format
     # https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.1/blob/main/tokenizer_config.json
@@ -538,7 +545,7 @@ def functionary_chat_handler(
     llama: llama.Llama,
     messages: List[llama_types.ChatCompletionRequestMessage],
     functions: Optional[List[llama_types.ChatCompletionFunction]] = None,
-    function_call: Optional[Union[str, llama_types.ChatCompletionFunctionCall]] = None,
+    function_call: Optional[llama_types.ChatCompletionRequestFunctionCall] = None,
     temperature: float = 0.2,
     top_p: float = 0.95,
     top_k: int = 40,
@@ -555,6 +562,7 @@ def functionary_chat_handler(
     model: Optional[str] = None,
     logits_processor: Optional[llama.LogitsProcessorList] = None,
     grammar: Optional[llama.LlamaGrammar] = None,
+    **kwargs,  # type: ignore
 ) -> Union[llama_types.ChatCompletion, Iterator[llama_types.ChatCompletionChunk]]:
     SYSTEM_MESSAGE = """A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. The assistant calls functions with appropriate input when necessary"""
 
@@ -636,7 +644,9 @@ def functionary_chat_handler(
             all_messages.append(message)
 
         all_messages.append(
-            llama_types.ChatCompletionRequestAssistantMessage(role="assistant", content=None)
+            llama_types.ChatCompletionRequestAssistantMessage(
+                role="assistant", content=None
+            )
         )
 
         def message_to_str(msg: llama_types.ChatCompletionRequestMessage):
@@ -713,6 +723,9 @@ def functionary_chat_handler(
         prompt=new_prompt, stop=["user:", "</s>"], stream=False
     )  # type: ignore
 
+    assert "usage" in completion
+    assert isinstance(function_call, str)
+
     return llama_types.CreateChatCompletionResponse(
         id="chat" + completion["id"],
         object="chat.completion",
@@ -741,7 +754,7 @@ def lava_1_5_chat_handler(
     llama: llama.Llama,
     messages: List[llama_types.ChatCompletionRequestMessage],
     functions: Optional[List[llama_types.ChatCompletionFunction]] = None,
-    function_call: Optional[Union[str, llama_types.ChatCompletionFunctionCall]] = None,
+    function_call: Optional[llama_types.ChatCompletionRequestFunctionCall] = None,
     temperature: float = 0.2,
     top_p: float = 0.95,
     top_k: int = 40,
@@ -758,6 +771,7 @@ def lava_1_5_chat_handler(
     model: Optional[str] = None,
     logits_processor: Optional[llama.LogitsProcessorList] = None,
     grammar: Optional[llama.LlamaGrammar] = None,
+    **kwargs,  # type: ignore
 ) -> Union[llama_types.ChatCompletion, Iterator[llama_types.ChatCompletionChunk]]:
     # convert messages into a list of strings and images objects
     # for each item in list

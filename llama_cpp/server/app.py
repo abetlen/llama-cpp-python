@@ -748,20 +748,27 @@ class ChatCompletionRequestMessage(BaseModel):
     )
     content: Optional[str] = Field(default="", description="The content of the message.")
 
-from typing import Any
 
 class CreateChatCompletionRequest(BaseModel):
-    messages: List[Any] = Field(
+    messages: List[llama_cpp.ChatCompletionRequestMessage] = Field(
         default=[], description="A list of messages to generate completions for."
     )
     functions: Optional[List[llama_cpp.ChatCompletionFunction]] = Field(
         default=None,
         description="A list of functions to apply to the generated completions.",
     )
-    function_call: Optional[Union[Literal["auto", "none"], llama_cpp.ChatCompletionFunctionCallOption]] = Field(
+    function_call: Optional[llama_cpp.ChatCompletionRequestFunctionCall] = Field(
         default=None,
         description="A function to apply to the generated completions.",
     )
+    tools: Optional[List[llama_cpp.ChatCompletionTool]] = Field(
+        default=None,
+        description="A list of tools to apply to the generated completions.",
+    )
+    tool_choice: Optional[llama_cpp.ChatCompletionToolChoiceOption] = Field(
+        default=None,
+        description="A tool to apply to the generated completions.",
+    ) # TODO: verify
     max_tokens: int = max_tokens_field
     temperature: float = temperature_field
     top_p: float = top_p_field
