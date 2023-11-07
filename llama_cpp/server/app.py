@@ -580,10 +580,6 @@ class CreateCompletionRequest(BaseModel):
     max_tokens: int = max_tokens_field
     temperature: float = temperature_field
     top_p: float = top_p_field
-    mirostat_mode: int = mirostat_mode_field
-    mirostat_tau: float = mirostat_tau_field
-    mirostat_eta: float = mirostat_eta_field
-    grammar: Optional[str] = None
     echo: bool = Field(
         default=False,
         description="Whether to echo the prompt in the generated text. Useful for chatbots.",
@@ -610,6 +606,10 @@ class CreateCompletionRequest(BaseModel):
     top_k: int = top_k_field
     repeat_penalty: float = repeat_penalty_field
     logit_bias_type: Optional[Literal["input_ids", "tokens"]] = Field(None)
+    mirostat_mode: int = mirostat_mode_field
+    mirostat_tau: float = mirostat_tau_field
+    mirostat_eta: float = mirostat_eta_field
+    grammar: Optional[str] = None
 
     model_config = {
         "json_schema_extra": {
@@ -765,10 +765,6 @@ class CreateChatCompletionRequest(BaseModel):
     max_tokens: int = max_tokens_field
     temperature: float = temperature_field
     top_p: float = top_p_field
-    mirostat_mode: int = mirostat_mode_field
-    mirostat_tau: float = mirostat_tau_field
-    mirostat_eta: float = mirostat_eta_field
-    grammar: Optional[str] = None
     stop: Optional[List[str]] = stop_field
     stream: bool = stream_field
     presence_penalty: Optional[float] = presence_penalty_field
@@ -784,6 +780,10 @@ class CreateChatCompletionRequest(BaseModel):
     top_k: int = top_k_field
     repeat_penalty: float = repeat_penalty_field
     logit_bias_type: Optional[Literal["input_ids", "tokens"]] = Field(None)
+    mirostat_mode: int = mirostat_mode_field
+    mirostat_tau: float = mirostat_tau_field
+    mirostat_eta: float = mirostat_eta_field
+    grammar: Optional[str] = None
 
     model_config = {
         "json_schema_extra": {
