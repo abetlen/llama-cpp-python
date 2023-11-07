@@ -1297,7 +1297,9 @@ class Llama:
         stopping_criteria: Optional[StoppingCriteriaList] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
-    ) -> Union[Iterator[CreateCompletionResponse], Iterator[CreateCompletionStreamResponse]]:
+    ) -> Union[
+        Iterator[CreateCompletionResponse], Iterator[CreateCompletionStreamResponse]
+    ]:
         assert self._ctx is not None
         assert suffix is None or suffix.__class__ is str
 
@@ -1880,7 +1882,7 @@ class Llama:
         messages: List[ChatCompletionRequestMessage],
         functions: Optional[List[ChatCompletionFunction]] = None,
         function_call: Optional[ChatCompletionRequestFunctionCall] = None,
-        tools: List[ChatCompletionTool] = [],
+        tools: Optional[List[ChatCompletionTool]] = None,
         tool_choice: Optional[ChatCompletionToolChoiceOption] = None,
         temperature: float = 0.2,
         top_p: float = 0.95,
@@ -1898,7 +1900,9 @@ class Llama:
         model: Optional[str] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
-    ) -> Union[ChatCompletion, Iterator[ChatCompletionChunk]]:
+    ) -> Union[
+        CreateChatCompletionResponse, Iterator[CreateChatCompletionStreamResponse]
+    ]:
         """Generate a chat completion from a list of messages.
 
         Args:
@@ -1916,7 +1920,7 @@ class Llama:
         """
         handler = llama_chat_format.get_chat_completion_handler(self.chat_format)
         return handler(
-            self,
+            llama=self,
             messages=messages,
             functions=functions,
             function_call=function_call,

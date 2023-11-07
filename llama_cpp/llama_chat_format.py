@@ -35,7 +35,7 @@ class LlamaChatCompletionHandler(Protocol):
         logits_processor: Optional[llama.LogitsProcessorList] = None,
         grammar: Optional[llama.LlamaGrammar] = None,
         **kwargs,  # type: ignore
-    ) -> Union[llama_types.ChatCompletion, Iterator[llama_types.ChatCompletionChunk]]:
+    ) -> Union[llama_types.CreateChatCompletionResponse, Iterator[llama_types.CreateChatCompletionStreamResponse]]:
         ...
 
 
@@ -749,34 +749,45 @@ def functionary_chat_handler(
     )
 
 
-@register_chat_completion_handler("llava-1.5")
-def lava_1_5_chat_handler(
-    llama: llama.Llama,
-    messages: List[llama_types.ChatCompletionRequestMessage],
-    functions: Optional[List[llama_types.ChatCompletionFunction]] = None,
-    function_call: Optional[llama_types.ChatCompletionRequestFunctionCall] = None,
-    temperature: float = 0.2,
-    top_p: float = 0.95,
-    top_k: int = 40,
-    stream: bool = False,
-    stop: Optional[Union[str, List[str]]] = [],
-    max_tokens: int = 256,
-    presence_penalty: float = 0.0,
-    frequency_penalty: float = 0.0,
-    repeat_penalty: float = 1.1,
-    tfs_z: float = 1.0,
-    mirostat_mode: int = 0,
-    mirostat_tau: float = 5.0,
-    mirostat_eta: float = 0.1,
-    model: Optional[str] = None,
-    logits_processor: Optional[llama.LogitsProcessorList] = None,
-    grammar: Optional[llama.LlamaGrammar] = None,
-    **kwargs,  # type: ignore
-) -> Union[llama_types.ChatCompletion, Iterator[llama_types.ChatCompletionChunk]]:
-    # convert messages into a list of strings and images objects
-    # for each item in list
-    #  if string, process it and append to prompt
-    #  if image, evaluate it and add empty string to prompt (for now)
-    # generate completion
-    items = []
-    current_prompt = ""
+class Llava15ChatHandler:
+    def __init__(self, clip_model_path: str):
+        self.clip_model_path = clip_model_path
+
+    def chat_handler(
+        self,
+        llama: llama.Llama,
+        messages: List[llama_types.ChatCompletionRequestMessage],
+        functions: Optional[List[llama_types.ChatCompletionFunction]] = None,
+        function_call: Optional[llama_types.ChatCompletionRequestFunctionCall] = None,
+        temperature: float = 0.2,
+        top_p: float = 0.95,
+        top_k: int = 40,
+        stream: bool = False,
+        stop: Optional[Union[str, List[str]]] = [],
+        max_tokens: int = 256,
+        presence_penalty: float = 0.0,
+        frequency_penalty: float = 0.0,
+        repeat_penalty: float = 1.1,
+        tfs_z: float = 1.0,
+        mirostat_mode: int = 0,
+        mirostat_tau: float = 5.0,
+        mirostat_eta: float = 0.1,
+        model: Optional[str] = None,
+        logits_processor: Optional[llama.LogitsProcessorList] = None,
+        grammar: Optional[llama.LlamaGrammar] = None,
+        **kwargs,  # type: ignore
+    ) -> Union[llama_types.ChatCompletion, Iterator[llama_types.ChatCompletionChunk]]:
+        # convert messages into a list of strings and images objects
+        # for each item in list
+        #  if string, process it and append to prompt
+        #  if image, evaluate it and add empty string to prompt (for now)
+        # generate completion
+        items = []
+        current_prompt = ""
+        system_prompt = ""
+        for message in messages:
+            if message["role"] == "system" and message["content"] is not None:
+                system_prompt = message["content"]
+            if message["role"] == "user":
+                items.append(message["content"])
+                current_prompt += message["content"]

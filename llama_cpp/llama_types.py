@@ -65,7 +65,7 @@ class ChatCompletionResponseFunctionCall(TypedDict):
 class ChatCompletionResponseMessage(TypedDict):
     content: Optional[str]
     tool_calls: NotRequired["ChatCompletionMessageToolCalls"]
-    role: Literal["assistant", "function"] # NOTE: "function" may be incorrect here
+    role: Literal["assistant", "function"]  # NOTE: "function" may be incorrect here
     function_call: NotRequired[ChatCompletionResponseFunctionCall]  # DEPRECATED
 
 
@@ -122,16 +122,18 @@ class ChatCompletionStreamResponseDelta(TypedDict):
 
 class ChatCompletionStreamResponseChoice(TypedDict):
     index: int
-    delta: Union["ChatCompletionChunkDelta", "ChatCompletionChunkDeltaEmpty"]
+    delta: Union[
+        ChatCompletionStreamResponseDelta, ChatCompletionStreamResponseDeltaEmpty
+    ]
     finish_reason: Optional[Literal["stop", "length", "function_call"]]
 
 
-class ChatCompletionStreamResponse(TypedDict):
+class CreateChatCompletionStreamResponse(TypedDict):
     id: str
     model: str
     object: Literal["chat.completion.chunk"]
     created: int
-    choices: List["ChatCompletionChunkChoice"]
+    choices: List[ChatCompletionStreamResponseChoice]
 
 
 JsonType = Union[None, int, str, bool, List["JsonType"], Dict[str, "JsonType"]]
@@ -277,6 +279,7 @@ ChatCompletion = CreateChatCompletionResponse
 ChatCompletionChunkDeltaEmpty = ChatCompletionStreamResponseDeltaEmpty
 ChatCompletionChunkChoice = ChatCompletionStreamResponseChoice
 ChatCompletionChunkDelta = ChatCompletionStreamResponseDelta
-ChatCompletionChunk = ChatCompletionStreamResponse
+ChatCompletionChunk = CreateChatCompletionStreamResponse
+ChatCompletionStreamResponse = CreateChatCompletionStreamResponse
 ChatCompletionResponseFunction = ChatCompletionFunction
 ChatCompletionFunctionCall = ChatCompletionResponseFunctionCall
