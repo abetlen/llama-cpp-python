@@ -230,7 +230,7 @@ ChatCompletionRequestMessage = Union[
 ]
 
 
-class ChatCompletionRequestFunctionCallOption:
+class ChatCompletionRequestFunctionCallOption(TypedDict):
     name: str
 
 
