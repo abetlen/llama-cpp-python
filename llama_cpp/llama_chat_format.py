@@ -4,8 +4,8 @@ import os
 import dataclasses
 from typing import Any, Dict, Iterator, List, Optional, Tuple, Union, Protocol
 
-from . import llama_types
-from . import llama
+import llama_cpp.llama_types as llama_types
+import llama_cpp.llama as llama
 
 
 class LlamaChatCompletionHandler(Protocol):
