@@ -21,9 +21,9 @@ from collections import deque, OrderedDict
 import diskcache
 import ctypes
 
-from . import llama_cpp
 from .llama_types import *
 from .llama_grammar import LlamaGrammar
+import llama_cpp.llama_cpp as llama_cpp
 import llama_cpp.llama_chat_format as llama_chat_format
 
 import numpy as np
