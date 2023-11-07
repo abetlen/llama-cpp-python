@@ -1,5 +1,7 @@
 """Types and request signatures for OpenAI compatibility
 
+NOTE: These types may change to match the OpenAI OpenAPI specification.
+
 Based on the OpenAI OpenAPI specification:
 https://github.com/openai/openai-openapi/blob/master/openapi.yaml
 
@@ -17,9 +19,6 @@ class Embedding(TypedDict):
     index: int
     object: str
     embedding: List[float]
-
-
-EmbeddingData = Embedding
 
 
 class CreateEmbeddingResponse(TypedDict):
@@ -57,9 +56,6 @@ class CreateCompletionStreamResponse(TypedDict):
     choices: List[CompletionChoice]
 
 
-CompletionChunk = CreateCompletionStreamResponse
-
-
 class CreateCompletionResponse(TypedDict):
     id: str
     object: Literal["text_completion"]
@@ -67,9 +63,6 @@ class CreateCompletionResponse(TypedDict):
     model: str
     choices: List[CompletionChoice]
     usage: CompletionUsage
-
-
-Completion = CreateCompletionResponse
 
 
 class ChatCompletionFunctionCall(TypedDict):
@@ -100,25 +93,16 @@ class ChatCompletionResponseMessage(TypedDict):
     function_call: NotRequired[ChatCompletionFunctionCall]
 
 
-ChatCompletionMessage = ChatCompletionResponseMessage
-
-
 class ChatCompletionResponseFunction(TypedDict):
     name: str
     description: NotRequired[str]
     parameters: Dict[str, Any]  # TODO: make this more specific
 
 
-ChatCompletionFunction = ChatCompletionResponseFunction
-
-
 class ChatCompletionResponseChoice(TypedDict):
     index: int
-    message: ChatCompletionMessage
+    message: "ChatCompletionMessage"
     finish_reason: Optional[str]
-
-
-ChatCompletionChoice = ChatCompletionResponseChoice
 
 
 class CreateChatCompletionResponse(TypedDict):
@@ -126,36 +110,32 @@ class CreateChatCompletionResponse(TypedDict):
     object: Literal["chat.completion"]
     created: int
     model: str
-    choices: List[ChatCompletionChoice]
+    choices: List["ChatCompletionChoice"]
     usage: CompletionUsage
 
 
-ChatCompletion = CreateChatCompletionResponse
+class ChatCompletionMessageToolCallChunk(TypedDict):
+    index: int
+    id: NotRequired[str]
+    type: Literal["function"]
+    function: ChatCompletionFunctionCall
 
 
 class ChatCompletionStreamResponseDeltaEmpty(TypedDict):
     pass
 
 
-ChatCompletionChunkDeltaEmpty = ChatCompletionStreamResponseDeltaEmpty
-
-
 class ChatCompletionStreamResponseDelta(TypedDict):
-    role: NotRequired[Literal["assistant"]]
     content: NotRequired[str]
     function_call: NotRequired[ChatCompletionFunctionCall]
-
-
-ChatCompletionChunkDelta = ChatCompletionStreamResponseDelta
+    tool_calls: NotRequired[List[ChatCompletionMessageToolCallChunk]]
+    role: NotRequired[Literal["system", "user", "assistant", "tool"]]
 
 
 class ChatCompletionStreamResponseChoice(TypedDict):
     index: int
-    delta: Union[ChatCompletionChunkDelta, ChatCompletionChunkDeltaEmpty]
+    delta: Union["ChatCompletionChunkDelta", "ChatCompletionChunkDeltaEmpty"]
     finish_reason: Optional[Literal["stop", "length", "function_call"]]
-
-
-ChatCompletionChunkChoice = ChatCompletionStreamResponseChoice
 
 
 class ChatCompletionStreamResponse(TypedDict):
@@ -163,10 +143,8 @@ class ChatCompletionStreamResponse(TypedDict):
     model: str
     object: Literal["chat.completion.chunk"]
     created: int
-    choices: List[ChatCompletionChunkChoice]
+    choices: List["ChatCompletionChunkChoice"]
 
-
-ChatCompletionChunk = ChatCompletionStreamResponse
 
 JsonType = Union[None, int, str, bool, List["JsonType"], Dict[str, "JsonType"]]
 
@@ -181,8 +159,90 @@ class ChatCompletionFunctionCallOption(TypedDict):
     name: str
 
 
-class ChatCompletionRequestMessage(TypedDict):
-    role: Literal["assistant", "user", "system", "function"]
+class ChatCompletionRequestMessageContentPartText(TypedDict):
+    type: Literal["text"]
+    text: str
+
+
+class ChatCompletionRequestMessageContentPartImageImageUrl(TypedDict):
+    url: str
+    detail: NotRequired[Literal["auto", "low", "high"]]
+
+
+class ChatCompletionRequestMessageContentPartImage(TypedDict):
+    type: Literal["image_url"]
+    image_url: ChatCompletionRequestMessageContentPartImageImageUrl
+
+
+ChatCompletionRequestMessageContentPart = Union[
+    ChatCompletionRequestMessageContentPartText,
+    ChatCompletionRequestMessageContentPartImage,
+]
+
+
+class ChatCompletionRequestSystemMessage(TypedDict):
+    role: Literal["system"]
     content: Optional[str]
-    name: NotRequired[str]
-    function_call: NotRequired[ChatCompletionFunctionCall]
+
+
+class ChatCompletionRequestUserMessage(TypedDict):
+    role: Literal["user"]
+    content: Optional[Union[str, List[ChatCompletionRequestMessageContentPart]]]
+
+
+class ChatCompletionMessageToolCallFunction(TypedDict):
+    name: str
+    arguments: str
+
+
+class ChatCompletionMessageToolCall(TypedDict):
+    id: str
+    type: Literal["function"]
+    function: ChatCompletionMessageToolCallFunction
+
+
+ChatCompletionMessageToolCalls = List[ChatCompletionMessageToolCall]
+
+
+class ChatCompletionRequestAssistantMessage(TypedDict):
+    role: Literal["assistant"]
+    content: Optional[str]
+    tool_calls: NotRequired[ChatCompletionMessageToolCalls]
+    function_call: NotRequired[ChatCompletionFunctionCall]  # DEPRECATED
+
+
+class ChatCompletionRequestToolMessage(TypedDict):
+    role: Literal["tool"]
+    content: Optional[str]
+    tool_call_id: str
+
+
+class ChatCompletionRequestFunctionMessage(TypedDict):
+    role: Literal["function"]
+    content: Optional[str]
+    name: str
+
+
+ChatCompletionRequestMessage = Union[
+    ChatCompletionRequestSystemMessage,
+    ChatCompletionRequestUserMessage,
+    ChatCompletionRequestAssistantMessage,
+    ChatCompletionRequestUserMessage,
+    ChatCompletionRequestToolMessage,
+    ChatCompletionRequestFunctionMessage,
+]
+
+# NOTE: The following type names are not part of the OpenAI OpenAPI specification
+# and will be removed in a future major release.
+
+EmbeddingData = Embedding
+CompletionChunk = CreateCompletionStreamResponse
+Completion = CreateCompletionResponse
+ChatCompletionMessage = ChatCompletionResponseMessage
+ChatCompletionChoice = ChatCompletionResponseChoice
+ChatCompletion = CreateChatCompletionResponse
+ChatCompletionChunkDeltaEmpty = ChatCompletionStreamResponseDeltaEmpty
+ChatCompletionChunkChoice = ChatCompletionStreamResponseChoice
+ChatCompletionChunkDelta = ChatCompletionStreamResponseDelta
+ChatCompletionChunk = ChatCompletionStreamResponse
+ChatCompletionFunction = ChatCompletionResponseFunction

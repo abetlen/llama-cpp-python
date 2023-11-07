@@ -199,7 +199,7 @@ def _convert_text_completion_to_chat(
 
 
 def _convert_text_completion_chunks_to_chat(
-    chunks: Iterator[llama_types.CompletionChunk],
+    chunks: Iterator[llama_types.CreateCompletionStreamResponse],
 ) -> Iterator[llama_types.ChatCompletionChunk]:
     for i, chunk in enumerate(chunks):
         if i == 0:
@@ -239,12 +239,12 @@ def _convert_text_completion_chunks_to_chat(
 
 def _convert_completion_to_chat(
     completion_or_chunks: Union[
-        llama_types.Completion, Iterator[llama_types.CompletionChunk]
+        llama_types.CreateCompletionResponse, Iterator[llama_types.CreateCompletionStreamResponse]
     ],
     stream: bool = False,
-) -> Union[llama_types.ChatCompletion, Iterator[llama_types.ChatCompletionChunk]]:
+) -> Union[llama_types.CreateChatCompletionResponse, Iterator[llama_types.ChatCompletionChunk]]:
     if stream:
-        chunks: Iterator[llama_types.CompletionChunk] = completion_or_chunks  # type: ignore
+        chunks: Iterator[llama_types.CreateCompletionStreamResponse] = completion_or_chunks  # type: ignore
         return _convert_text_completion_chunks_to_chat(chunks)
     else:
         completion: llama_types.Completion = completion_or_chunks  # type: ignore
@@ -613,13 +613,13 @@ def functionary_chat_handler(
         all_messages: List[llama_types.ChatCompletionRequestMessage] = []
         if functions is not None:
             all_messages.append(
-                llama_types.ChatCompletionRequestMessage(
+                llama_types.ChatCompletionRequestSystemMessage(
                     role="system", content=generate_schema_from_functions(functions)
                 )
             )
 
         all_messages.append(
-            llama_types.ChatCompletionRequestMessage(
+            llama_types.ChatCompletionRequestSystemMessage(
                 role="system", content=SYSTEM_MESSAGE
             )
         )
@@ -636,7 +636,7 @@ def functionary_chat_handler(
             all_messages.append(message)
 
         all_messages.append(
-            llama_types.ChatCompletionRequestMessage(role="assistant", content=None)
+            llama_types.ChatCompletionRequestAssistantMessage(role="assistant", content=None)
         )
 
         def message_to_str(msg: llama_types.ChatCompletionRequestMessage):
@@ -734,3 +734,35 @@ def functionary_chat_handler(
         ],
         usage=completion["usage"],
     )
+
+
+@register_chat_completion_handler("llava-1.5")
+def lava_1_5_chat_handler(
+    llama: llama.Llama,
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    functions: Optional[List[llama_types.ChatCompletionFunction]] = None,
+    function_call: Optional[Union[str, llama_types.ChatCompletionFunctionCall]] = None,
+    temperature: float = 0.2,
+    top_p: float = 0.95,
+    top_k: int = 40,
+    stream: bool = False,
+    stop: Optional[Union[str, List[str]]] = [],
+    max_tokens: int = 256,
+    presence_penalty: float = 0.0,
+    frequency_penalty: float = 0.0,
+    repeat_penalty: float = 1.1,
+    tfs_z: float = 1.0,
+    mirostat_mode: int = 0,
+    mirostat_tau: float = 5.0,
+    mirostat_eta: float = 0.1,
+    model: Optional[str] = None,
+    logits_processor: Optional[llama.LogitsProcessorList] = None,
+    grammar: Optional[llama.LlamaGrammar] = None,
+) -> Union[llama_types.ChatCompletion, Iterator[llama_types.ChatCompletionChunk]]:
+    # convert messages into a list of strings and images objects
+    # for each item in list
+    #  if string, process it and append to prompt
+    #  if image, evaluate it and add empty string to prompt (for now)
+    # generate completion
+    items = []
+    current_prompt = ""

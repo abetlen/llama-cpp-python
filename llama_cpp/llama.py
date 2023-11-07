@@ -1231,7 +1231,7 @@ class Llama:
         else:
             inputs = input
 
-        data: List[EmbeddingData] = []
+        data: List[Embedding] = []
         total_tokens = 0
         for index, input in enumerate(inputs):
             tokens = self.tokenize(input.encode("utf-8"), special=True)
@@ -1297,7 +1297,7 @@ class Llama:
         stopping_criteria: Optional[StoppingCriteriaList] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
-    ) -> Union[Iterator[Completion], Iterator[CompletionChunk]]:
+    ) -> Union[Iterator[CreateCompletionResponse], Iterator[CreateCompletionStreamResponse]]:
         assert self._ctx is not None
         assert suffix is None or suffix.__class__ is str
 
@@ -1753,7 +1753,7 @@ class Llama:
         stopping_criteria: Optional[StoppingCriteriaList] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
-    ) -> Union[Completion, Iterator[CompletionChunk]]:
+    ) -> Union[CreateCompletionResponse, Iterator[CreateCompletionStreamResponse]]:
         """Generate text from a prompt.
 
         Args:
@@ -1800,7 +1800,7 @@ class Llama:
             grammar=grammar,
         )
         if stream:
-            chunks: Iterator[CompletionChunk] = completion_or_chunks
+            chunks: Iterator[CreateCompletionStreamResponse] = completion_or_chunks
             return chunks
         completion: Completion = next(completion_or_chunks)  # type: ignore
         return completion
@@ -1828,7 +1828,7 @@ class Llama:
         stopping_criteria: Optional[StoppingCriteriaList] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
-    ) -> Union[Completion, Iterator[CompletionChunk]]:
+    ) -> Union[CreateCompletionResponse, Iterator[CreateCompletionStreamResponse]]:
         """Generate text from a prompt.
 
         Args:

@@ -688,7 +688,7 @@ async def create_completion(
         kwargs["grammar"] = llama_cpp.LlamaGrammar.from_string(body.grammar)
 
     iterator_or_completion: Union[
-        llama_cpp.Completion, Iterator[llama_cpp.CompletionChunk]
+        llama_cpp.CreateCompletionResponse, Iterator[llama_cpp.CreateCompletionStreamResponse]
     ] = await run_in_threadpool(llama, **kwargs)
 
     if isinstance(iterator_or_completion, Iterator):
@@ -697,7 +697,7 @@ async def create_completion(
 
         # If no exception was raised from first_response, we can assume that
         # the iterator is valid and we can use it to stream the response.
-        def iterator() -> Iterator[llama_cpp.CompletionChunk]:
+        def iterator() -> Iterator[llama_cpp.CreateCompletionStreamResponse]:
             yield first_response
             yield from iterator_or_completion
 
