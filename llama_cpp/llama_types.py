@@ -93,7 +93,7 @@ class ChatCompletionResponseMessage(TypedDict):
     function_call: NotRequired[ChatCompletionFunctionCall]
 
 
-class ChatCompletionResponseFunction(TypedDict):
+class ChatCompletionFunction(TypedDict):
     name: str
     description: NotRequired[str]
     parameters: Dict[str, Any]  # TODO: make this more specific
@@ -245,4 +245,4 @@ ChatCompletionChunkDeltaEmpty = ChatCompletionStreamResponseDeltaEmpty
 ChatCompletionChunkChoice = ChatCompletionStreamResponseChoice
 ChatCompletionChunkDelta = ChatCompletionStreamResponseDelta
 ChatCompletionChunk = ChatCompletionStreamResponse
-ChatCompletionFunction = ChatCompletionResponseFunction
+ChatCompletionResponseFunction = ChatCompletionFunction
