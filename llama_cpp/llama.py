@@ -752,6 +752,7 @@ class Llama:
         numa: bool = False,
         # Chat Format Params
         chat_format: str = "llama-2",
+        chat_handler: Optional[llama_chat_format.LlamaChatCompletionHandler] = None,
         # Misc
         verbose: bool = True,
         # Extra Params
@@ -784,6 +785,7 @@ class Llama:
             lora_path: Path to a LoRA file to apply to the model.
             numa: Enable NUMA support. (NOTE: The initial value of this parameter is used for the remainder of the program as this value is set in llama_backend_init)
             chat_format: String specifying the chat format to use when calling create_chat_completion.
+            chat_handler: Optional chat handler to use when calling create_chat_completion.
             verbose: Print verbose output to stderr.
 
         Raises:
@@ -910,6 +912,7 @@ class Llama:
             print(llama_cpp.llama_print_system_info().decode("utf-8"), file=sys.stderr)
 
         self.chat_format = chat_format
+        self.chat_handler = chat_handler
 
         self._n_vocab = self.n_vocab()
         self._n_ctx = self.n_ctx()
@@ -1918,7 +1921,9 @@ class Llama:
         Returns:
             Generated chat completion or a stream of chat completion chunks.
         """
-        handler = llama_chat_format.get_chat_completion_handler(self.chat_format)
+        handler = self.chat_handler or llama_chat_format.get_chat_completion_handler(
+            self.chat_format
+        )
         return handler(
             llama=self,
             messages=messages,
@@ -1982,6 +1987,7 @@ class Llama:
             numa=self.numa,
             # Chat Format Params
             chat_format=self.chat_format,
+            chat_handler=self.chat_handler,
             # Misc
             verbose=self.verbose,
         )
@@ -2023,6 +2029,7 @@ class Llama:
             numa=state["numa"],
             # Chat Format Params
             chat_format=state["chat_format"],
+            chat_handler=state["chat_handler"],
             # Misc
             verbose=state["verbose"],
         )
