@@ -1279,7 +1279,7 @@ class Llama:
 
     def _create_completion(
         self,
-        prompt: str,
+        prompt: Union[str, List[int]],
         suffix: Optional[str] = None,
         max_tokens: int = 16,
         temperature: float = 0.8,
@@ -1314,7 +1314,7 @@ class Llama:
             self.tokenize(prompt.encode("utf-8"), special=True)
             if prompt != ""
             else [self.token_bos()]
-        )
+        ) if isinstance(prompt, str) else prompt
         text: bytes = b""
         returned_tokens: int = 0
         stop = (
@@ -1327,7 +1327,7 @@ class Llama:
 
         if len(prompt_tokens) >= self._n_ctx:
             raise ValueError(
-                f"Requested tokens ({len(prompt_tokens)}) exceed context window of {llama_cpp.llama_n_ctx(self._ctx)}"
+                f"Requested tokens ({len(prompt_tokens)}) exceed context window of {llama_cpp.llama_n_ctx(self.ctx)}"
             )
 
         if max_tokens <= 0:
@@ -1737,7 +1737,7 @@ class Llama:
 
     def create_completion(
         self,
-        prompt: str,
+        prompt: Union[str, List[int]],
         suffix: Optional[str] = None,
         max_tokens: int = 128,
         temperature: float = 0.8,
