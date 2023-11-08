@@ -138,6 +138,10 @@ class Settings(BaseSettings):
         default="llama-2",
         description="Chat format to use.",
     )
+    clip_model_path: Optional[str] = Field(
+        default=None,
+        description="Path to a CLIP model to use for multi-modal chat completion.",
+    )
     # Cache Params
     cache: bool = Field(
         default=False,
@@ -375,6 +379,14 @@ def create_app(settings: Optional[Settings] = None):
     )
     app.include_router(router)
     global llama
+
+    ##
+    chat_handler = None
+    if settings.chat_format == "llava-1-5":
+        assert settings.clip_model_path is not None
+        chat_handler = llama_cpp.llama_chat_format.Llava15ChatHandler(clip_model_path=settings.clip_model_path)
+    ##
+
     llama = llama_cpp.Llama(
         model_path=settings.model,
         # Model Params
@@ -411,6 +423,7 @@ def create_app(settings: Optional[Settings] = None):
         numa=settings.numa,
         # Chat Format Params
         chat_format=settings.chat_format,
+        chat_handler=chat_handler,
         # Misc
         verbose=settings.verbose,
     )
