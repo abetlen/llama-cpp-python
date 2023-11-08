@@ -9,6 +9,8 @@ import llama_cpp.llama as llama
 import llama_cpp.llama_types as llama_types
 import llama_cpp.llama_grammar as llama_grammar
 
+from ._utils import suppress_stdout_stderr
+
 
 class LlamaChatCompletionHandler(Protocol):
     def __call__(
@@ -775,20 +777,26 @@ def functionary_chat_handler(
 
 
 class Llava15ChatHandler:
-    def __init__(self, clip_model_path: str):
+    _clip_free = None
+
+    def __init__(self, clip_model_path: str, verbose: bool = False):
         import llama_cpp.llava_cpp as llava_cpp
 
         self._llava_cpp = llava_cpp
         self.clip_model_path = clip_model_path
+        self.verbose = verbose
+        self._clip_free = self._llava_cpp._libllava.clip_free # type: ignore
 
-        self.clip_ctx = self._llava_cpp.clip_model_load(
-            self.clip_model_path.encode(), 0
-        )
+        with suppress_stdout_stderr(disable=self.verbose):
+            self.clip_ctx = self._llava_cpp.clip_model_load(
+                self.clip_model_path.encode(), 0 
+            )
 
     def __del__(self):
-        if self.clip_ctx is not None:
-            self._llava_cpp.clip_free(self.clip_ctx)
-            self.clip_ctx = None
+        with suppress_stdout_stderr(disable=self.verbose):
+            if self.clip_ctx is not None and self._clip_free is not None:
+                self._clip_free(self.clip_ctx)
+                self.clip_ctx = None
 
     def load_image(self, image_url: str) -> bytes:
         if image_url.startswith("data:"):
@@ -881,27 +889,28 @@ class Llava15ChatHandler:
                             c_ubyte_ptr = (
                                 ctypes.c_ubyte * len(data_array)
                             ).from_buffer(data_array)
-                            embed = self._llava_cpp.llava_image_embed_make_with_bytes(
-                                ctx_clip=self.clip_ctx,
-                                n_threads=llama.context_params.n_threads,
-                                image_bytes=c_ubyte_ptr,
-                                image_bytes_length=len(image_bytes),
-                            )
-                            # image_bytes_p = (ctypes.c_uint8 * len(image_bytes)).from_buffer_copy(image_bytes)
-                            # embed = self._llava_cpp.llava_image_embed_make_with_bytes(ctx_clip=self.clip_ctx, n_threads=1, image_bytes=image_bytes_p, image_bytes_length=len(image_bytes))
+                            with suppress_stdout_stderr(disable=self.verbose):
+                                embed = self._llava_cpp.llava_image_embed_make_with_bytes(
+                                    ctx_clip=self.clip_ctx,
+                                    n_threads=llama.context_params.n_threads,
+                                    image_bytes=c_ubyte_ptr,
+                                    image_bytes_length=len(image_bytes),
+                                )
                             try:
                                 n_past = ctypes.c_int(llama.n_tokens)
                                 n_past_p = ctypes.pointer(n_past)
-                                self._llava_cpp.llava_eval_image_embed(
-                                    ctx_llama=llama.ctx,
-                                    embed=embed,
-                                    n_batch=llama.n_batch,
-                                    n_past=n_past_p,
-                                )
+                                with suppress_stdout_stderr(disable=self.verbose):
+                                    self._llava_cpp.llava_eval_image_embed(
+                                        ctx_llama=llama.ctx,
+                                        embed=embed,
+                                        n_batch=llama.n_batch,
+                                        n_past=n_past_p,
+                                    )
                                 assert llama.n_ctx() >= n_past.value
                                 llama.n_tokens = n_past.value
                             finally:
-                                self._llava_cpp.llava_image_embed_free(embed)
+                                with suppress_stdout_stderr(disable=self.verbose):
+                                    self._llava_cpp.llava_image_embed_free(embed)
             if message["role"] == "assistant" and message["content"] is not None:
                 llama.eval(
                     llama.tokenize(
@@ -910,7 +919,7 @@ class Llava15ChatHandler:
                 )
         llama.eval(llama.tokenize(f"{assistant_role}".encode("utf8"), add_bos=False))
 
-        prompt = llama._input_ids.tolist()
+        prompt = llama.input_ids[:llama.n_tokens].tolist()
 
         return _convert_completion_to_chat(
             llama.create_completion(

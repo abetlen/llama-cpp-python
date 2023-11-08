@@ -384,7 +384,7 @@ def create_app(settings: Optional[Settings] = None):
     chat_handler = None
     if settings.chat_format == "llava-1-5":
         assert settings.clip_model_path is not None
-        chat_handler = llama_cpp.llama_chat_format.Llava15ChatHandler(clip_model_path=settings.clip_model_path)
+        chat_handler = llama_cpp.llama_chat_format.Llava15ChatHandler(clip_model_path=settings.clip_model_path, verbose=settings.verbose)
     ##
 
     llama = llama_cpp.Llama(

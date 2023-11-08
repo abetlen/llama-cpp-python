@@ -213,7 +213,7 @@ class _LlamaModel:
 
     NOTE: For stability it's recommended you use the Llama class instead."""
 
-    _llama_free_model = llama_cpp._lib.llama_free_model  # type: ignore
+    _llama_free_model = None
 
     def __init__(
         self,
@@ -226,6 +226,8 @@ class _LlamaModel:
         self.params = params
         self.verbose = verbose
 
+        self._llama_free_model = llama_cpp._lib.llama_free_model  # type: ignore
+
         if not os.path.exists(path_model):
             raise ValueError(f"Model path does not exist: {path_model}")
 
@@ -236,7 +238,7 @@ class _LlamaModel:
 
     def __del__(self):
         with suppress_stdout_stderr(disable=self.verbose):
-            if self.model is not None:
+            if self.model is not None and self._llama_free_model is not None:
                 self._llama_free_model(self.model)
                 self.model = None
 
@@ -396,7 +398,7 @@ class _LlamaContext:
 
     NOTE: For stability it's recommended you use the Llama class instead."""
 
-    _llama_free = llama_cpp._lib.llama_free  # type: ignore
+    _llama_free = None
 
     def __init__(
         self,
@@ -409,6 +411,8 @@ class _LlamaContext:
         self.params = params
         self.verbose = verbose
 
+        self._llama_free = llama_cpp._lib.llama_free  # type: ignore
+
         with suppress_stdout_stderr(disable=self.verbose):
             self.ctx = llama_cpp.llama_new_context_with_model(
                 self.model.model, self.params
@@ -416,7 +420,7 @@ class _LlamaContext:
 
     def __del__(self):
         with suppress_stdout_stderr(disable=self.verbose):
-            if self.ctx is not None:
+            if self.ctx is not None and self._llama_free is not None:
                 self._llama_free(self.ctx)
                 self.ctx = None
 
@@ -645,7 +649,7 @@ class _LlamaContext:
 
 
 class _LlamaBatch:
-    _llama_batch_free = llama_cpp._lib.llama_batch_free  # type: ignore
+    _llama_batch_free = None
 
     def __init__(
         self, *, n_tokens: int, embd: int, n_seq_max: int, verbose: bool = True
@@ -655,6 +659,8 @@ class _LlamaBatch:
         self.n_seq_max = n_seq_max
         self.verbose = verbose
 
+        self._llama_batch_free = llama_cpp._lib.llama_batch_free  # type: ignore
+
         with suppress_stdout_stderr(disable=self.verbose):
             self.batch = llama_cpp.llama_batch_init(
                 self.n_tokens, self.embd, self.n_seq_max
@@ -662,7 +668,7 @@ class _LlamaBatch:
 
     def __del__(self):
         with suppress_stdout_stderr(disable=self.verbose):
-            if self.batch is not None:
+            if self.batch is not None and self._llama_batch_free is not None:
                 self._llama_batch_free(self.batch)
                 self.batch = None
 
