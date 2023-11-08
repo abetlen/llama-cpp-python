@@ -10,6 +10,12 @@ from typing import Any, List, Optional, Dict, Union
 from typing_extensions import TypedDict, NotRequired, Literal
 
 
+# NOTE: Defining this correctly using annotations seems to break pydantic validation.
+#       This is a workaround until we can figure out how to do this correctly
+# JsonType = Union[None, int, str, bool, List["JsonType"], Dict[str, "JsonType"]]
+JsonType = Union[None, int, str, bool, List[Any], Dict[str, Any]]
+
+
 class EmbeddingUsage(TypedDict):
     prompt_tokens: int
     total_tokens: int
@@ -72,7 +78,7 @@ class ChatCompletionResponseMessage(TypedDict):
 class ChatCompletionFunction(TypedDict):
     name: str
     description: NotRequired[str]
-    parameters: Dict[str, Any]  # TODO: make this more specific
+    parameters: Dict[str, JsonType]  # TODO: make this more specific
 
 
 class ChatCompletionResponseChoice(TypedDict):
@@ -134,9 +140,6 @@ class CreateChatCompletionStreamResponse(TypedDict):
     object: Literal["chat.completion.chunk"]
     created: int
     choices: List[ChatCompletionStreamResponseChoice]
-
-
-JsonType = Union[None, int, str, bool, List["JsonType"], Dict[str, "JsonType"]]
 
 
 class ChatCompletionFunctions(TypedDict):
@@ -238,7 +241,7 @@ ChatCompletionRequestFunctionCall = Union[
     Literal["none", "auto"], ChatCompletionRequestFunctionCallOption
 ]
 
-ChatCompletionFunctionParameters = Dict[str, JsonType]
+ChatCompletionFunctionParameters = Dict[str, JsonType] # TODO: make this more specific
 
 
 class ChatCompletionToolFunction(TypedDict):
