@@ -44,10 +44,10 @@ You'll first need to download one of the available multi-modal models in GGUF fo
 - [llava1.5 7b](https://huggingface.co/mys/ggml_llava-v1.5-7b)
 - [llava1.5 13b](https://huggingface.co/mys/ggml_llava-v1.5-13b)
 
-Then when you run the server you'll need to also specify the path to the clip model used for image embedding
+Then when you run the server you'll need to also specify the path to the clip model used for image embedding and the `llava-1-5` chat_format
 
 ```bash
-python3 -m llama_cpp.server --model <model_path> --clip-model-path <clip_model_path>
+python3 -m llama_cpp.server --model <model_path> --clip-model-path <clip_model_path> --chat-format llava-1-5
 ```
 
 Then you can just use the OpenAI API as normal
