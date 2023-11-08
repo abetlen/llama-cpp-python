@@ -34,15 +34,29 @@ NOTE: All server options are also available as environment variables. For exampl
 
 ## Guides
 
-### Multi-modal Models
+### Function Calling
+
+`llama-cpp-python` supports structured function calling based on a JSON schema.
+
+You'll first need to download one of the available function calling models in GGUF format:
+
+- [functionary-7b-v1](https://huggingface.co/abetlen/functionary-7b-v1-GGUF)
+
+Then when you run the server you'll need to also specify the `functionary-7b-v1` chat_format
+
+```bash
+python3 -m llama_cpp.server --model <model_path> --chat-format functionary
+```
+
+### Multimodal Models
 
 `llama-cpp-python` supports the llava1.5 family of multi-modal models which allow the language model to
 read information from both text and images.
 
 You'll first need to download one of the available multi-modal models in GGUF format:
 
-- [llava1.5 7b](https://huggingface.co/mys/ggml_llava-v1.5-7b)
-- [llava1.5 13b](https://huggingface.co/mys/ggml_llava-v1.5-13b)
+- [llava-v1.5-7b](https://huggingface.co/mys/ggml_llava-v1.5-7b)
+- [llava-v1.5-13b](https://huggingface.co/mys/ggml_llava-v1.5-13b)
 
 Then when you run the server you'll need to also specify the path to the clip model used for image embedding and the `llava-1-5` chat_format
 
