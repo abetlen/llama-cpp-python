@@ -7,9 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.15]
+
 - Update llama.cpp to ggerganov/llama.cpp@0a7c980b6f94a049cb804573df2d8092a34df8e4
-- Add support for Llava1.5 multi-modal models by @damian0815 and @abetlen in #821
+- Add support for Llava1.5 multimodal models by @damian0815 and @abetlen in #821
 - Update OpenAI API compatibility to match dev day update by @abetlen in #821
+- Add seed parameter to completion and chat_completion functions of Llama class by @abetlen in 86aeb9f3a14808575d2bb0076e6acb4a30907e6a
+- Add JSON mode support to constrain chat completion to JSON objects by @abetlen in b30b9c338bf9af316d497ea501d39f5c246900db
 
 ## [0.2.14]
 
