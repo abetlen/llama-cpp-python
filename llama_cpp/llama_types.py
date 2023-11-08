@@ -152,6 +152,10 @@ class ChatCompletionFunctionCallOption(TypedDict):
     name: str
 
 
+class ChatCompletionRequestResponseFormat(TypedDict):
+    type: Literal["text", "json_object"]
+
+
 class ChatCompletionRequestMessageContentPartText(TypedDict):
     type: Literal["text"]
     text: str
@@ -241,7 +245,7 @@ ChatCompletionRequestFunctionCall = Union[
     Literal["none", "auto"], ChatCompletionRequestFunctionCallOption
 ]
 
-ChatCompletionFunctionParameters = Dict[str, JsonType] # TODO: make this more specific
+ChatCompletionFunctionParameters = Dict[str, JsonType]  # TODO: make this more specific
 
 
 class ChatCompletionToolFunction(TypedDict):
