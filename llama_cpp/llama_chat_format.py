@@ -24,6 +24,7 @@ class LlamaChatCompletionHandler(Protocol):
         top_k: int = 40,
         stream: bool = False,
         stop: Optional[Union[str, List[str]]] = [],
+        seed: Optional[int] = None,
         max_tokens: int = 256,
         presence_penalty: float = 0.0,
         frequency_penalty: float = 0.0,
