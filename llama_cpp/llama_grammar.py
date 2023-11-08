@@ -1188,7 +1188,7 @@ def print_grammar(file: TextIO, state: parse_state) -> None:
 
 """llama.cpp gbnf rules from vendor/llama.cpp/grammars"""
 
-ARITHMETIC_GBNF = """\
+ARITHMETIC_GBNF = r"""
 root  ::= (expr "=" ws term "\n")+
 expr  ::= term ([-+*/] term)*
 term  ::= ident | num | "(" ws expr ")" ws
@@ -1197,7 +1197,7 @@ num   ::= [0-9]+ ws
 ws    ::= [ \t\n]*
 """
 
-C_GBNF = """\
+C_GBNF = r"""
 root ::= (declaration)*
 
 declaration ::= dataType identifier "(" parameter? ")" "{" statement* "}"
@@ -1242,7 +1242,7 @@ multiLineComment ::= "/*" ( [^*] | ("*" [^/]) )* "*/"
 ws ::= ([ \t\n]+)
 """
 
-CHESS_GBNF = """\
+CHESS_GBNF = r"""
 root   ::= object
 value  ::= object | array | string | number | ("true" | "false" | "null") ws
 
@@ -1270,7 +1270,7 @@ number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? ws
 ws ::= ([ \t\n] ws)?
 """
 
-JAPANESE_GBNF = """\
+JAPANESE_GBNF = r"""
 root   ::= object
 value  ::= object | array | string | number | ("true" | "false" | "null") ws
 
@@ -1298,7 +1298,7 @@ number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? ws
 ws ::= ([ \t\n] ws)?
 """
 
-JSON_ARR_GBNF = """\
+JSON_ARR_GBNF = r"""
 # This is the same as json.gbnf but we restrict whitespaces at the end of the root array
 # Useful for generating JSON arrays
 
@@ -1336,7 +1336,7 @@ ws ::= ([ \t\n] ws)?
 """
 
 
-JSON_GBNF = """\
+JSON_GBNF = r"""
 root   ::= object
 value  ::= object | array | string | number | ("true" | "false" | "null") ws
 
@@ -1360,10 +1360,10 @@ string ::=
 
 number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? ws
 
-# Optional space: by convention, applied in this grammar after literal chars when allowed
-ws ::= ([ \t\n] ws)?"""
+ws ::= ([ \t\n] ws)?
+"""
 
-LIST_GBNF = """\
+LIST_GBNF = r"""
 root ::= item+
 
 # Excludes various line break characters
