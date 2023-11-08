@@ -1,22 +1,24 @@
 from __future__ import annotations
 
 import os
+import ctypes
 import dataclasses
 from typing import Any, Dict, Iterator, List, Optional, Tuple, Union, Protocol
 
-from . import llama_types
-from . import llama
+import llama_cpp.llama_types as llama_types
+import llama_cpp.llama as llama
 
 
 class LlamaChatCompletionHandler(Protocol):
     def __call__(
         self,
+        *,
         llama: llama.Llama,
         messages: List[llama_types.ChatCompletionRequestMessage],
         functions: Optional[List[llama_types.ChatCompletionFunction]] = None,
-        function_call: Optional[
-            Union[str, llama_types.ChatCompletionFunctionCall]
-        ] = None,
+        function_call: Optional[llama_types.ChatCompletionRequestFunctionCall] = None,
+        tools: Optional[List[llama_types.ChatCompletionTool]] = None,
+        tool_choice: Optional[llama_types.ChatCompletionToolChoiceOption] = None,
         temperature: float = 0.2,
         top_p: float = 0.95,
         top_k: int = 40,
@@ -33,7 +35,8 @@ class LlamaChatCompletionHandler(Protocol):
         model: Optional[str] = None,
         logits_processor: Optional[llama.LogitsProcessorList] = None,
         grammar: Optional[llama.LlamaGrammar] = None,
-    ) -> Union[llama_types.ChatCompletion, Iterator[llama_types.ChatCompletionChunk]]:
+        **kwargs,  # type: ignore
+    ) -> Union[llama_types.CreateChatCompletionResponse, Iterator[llama_types.CreateChatCompletionStreamResponse]]:
         ...
 
 
@@ -199,7 +202,7 @@ def _convert_text_completion_to_chat(
 
 
 def _convert_text_completion_chunks_to_chat(
-    chunks: Iterator[llama_types.CompletionChunk],
+    chunks: Iterator[llama_types.CreateCompletionStreamResponse],
 ) -> Iterator[llama_types.ChatCompletionChunk]:
     for i, chunk in enumerate(chunks):
         if i == 0:
@@ -239,12 +242,15 @@ def _convert_text_completion_chunks_to_chat(
 
 def _convert_completion_to_chat(
     completion_or_chunks: Union[
-        llama_types.Completion, Iterator[llama_types.CompletionChunk]
+        llama_types.CreateCompletionResponse,
+        Iterator[llama_types.CreateCompletionStreamResponse],
     ],
     stream: bool = False,
-) -> Union[llama_types.ChatCompletion, Iterator[llama_types.ChatCompletionChunk]]:
+) -> Union[
+    llama_types.CreateChatCompletionResponse, Iterator[llama_types.ChatCompletionChunk]
+]:
     if stream:
-        chunks: Iterator[llama_types.CompletionChunk] = completion_or_chunks  # type: ignore
+        chunks: Iterator[llama_types.CreateCompletionStreamResponse] = completion_or_chunks  # type: ignore
         return _convert_text_completion_chunks_to_chat(chunks)
     else:
         completion: llama_types.Completion = completion_or_chunks  # type: ignore
@@ -329,7 +335,9 @@ def get_chat_format(name: str):
         )
 
 
-def hf_autotokenizer_to_chat_formatter(pretrained_model_name_or_path: Union[str, os.PathLike[str]]) -> ChatFormatter:
+def hf_autotokenizer_to_chat_formatter(
+    pretrained_model_name_or_path: Union[str, os.PathLike[str]]
+) -> ChatFormatter:
     # https://huggingface.co/docs/transformers/main/chat_templating
     # https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.1#instruction-format
     # https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.1/blob/main/tokenizer_config.json
@@ -538,7 +546,7 @@ def functionary_chat_handler(
     llama: llama.Llama,
     messages: List[llama_types.ChatCompletionRequestMessage],
     functions: Optional[List[llama_types.ChatCompletionFunction]] = None,
-    function_call: Optional[Union[str, llama_types.ChatCompletionFunctionCall]] = None,
+    function_call: Optional[llama_types.ChatCompletionRequestFunctionCall] = None,
     temperature: float = 0.2,
     top_p: float = 0.95,
     top_k: int = 40,
@@ -555,6 +563,7 @@ def functionary_chat_handler(
     model: Optional[str] = None,
     logits_processor: Optional[llama.LogitsProcessorList] = None,
     grammar: Optional[llama.LlamaGrammar] = None,
+    **kwargs,  # type: ignore
 ) -> Union[llama_types.ChatCompletion, Iterator[llama_types.ChatCompletionChunk]]:
     SYSTEM_MESSAGE = """A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. The assistant calls functions with appropriate input when necessary"""
 
@@ -613,13 +622,13 @@ def functionary_chat_handler(
         all_messages: List[llama_types.ChatCompletionRequestMessage] = []
         if functions is not None:
             all_messages.append(
-                llama_types.ChatCompletionRequestMessage(
+                llama_types.ChatCompletionRequestSystemMessage(
                     role="system", content=generate_schema_from_functions(functions)
                 )
             )
 
         all_messages.append(
-            llama_types.ChatCompletionRequestMessage(
+            llama_types.ChatCompletionRequestSystemMessage(
                 role="system", content=SYSTEM_MESSAGE
             )
         )
@@ -636,7 +645,9 @@ def functionary_chat_handler(
             all_messages.append(message)
 
         all_messages.append(
-            llama_types.ChatCompletionRequestMessage(role="assistant", content=None)
+            llama_types.ChatCompletionRequestAssistantMessage(
+                role="assistant", content=None
+            )
         )
 
         def message_to_str(msg: llama_types.ChatCompletionRequestMessage):
@@ -713,6 +724,10 @@ def functionary_chat_handler(
         prompt=new_prompt, stop=["user:", "</s>"], stream=False
     )  # type: ignore
 
+    assert "usage" in completion
+    assert isinstance(function_call, str)
+    assert stream is False # TODO: support stream mode
+
     return llama_types.CreateChatCompletionResponse(
         id="chat" + completion["id"],
         object="chat.completion",
@@ -734,3 +749,119 @@ def functionary_chat_handler(
         ],
         usage=completion["usage"],
     )
+
+
+class Llava15ChatHandler:
+    def __init__(self, clip_model_path: str):
+        import llama_cpp.llava_cpp as llava_cpp
+
+        self._llava_cpp = llava_cpp
+        self.clip_model_path = clip_model_path
+
+        self.clip_ctx = self._llava_cpp.clip_model_load(self.clip_model_path.encode(), 0)
+
+    def __del__(self):
+        if self.clip_ctx is not None:
+            self._llava_cpp.clip_free(self.clip_ctx)
+            self.clip_ctx = None
+
+    def load_image(self, image_url: str) -> bytes:
+        if image_url.startswith("data:"):
+            import base64
+
+            image_bytes = base64.b64decode(image_url.split(",")[1])
+            return image_bytes
+        else:
+            import urllib.request
+
+            with urllib.request.urlopen(image_url) as f:
+                image_bytes = f.read()
+                return image_bytes
+
+    def __call__(
+        self,
+        *,
+        llama: llama.Llama,
+        messages: List[llama_types.ChatCompletionRequestMessage],
+        functions: Optional[List[llama_types.ChatCompletionFunction]] = None,
+        function_call: Optional[llama_types.ChatCompletionRequestFunctionCall] = None,
+        tools: Optional[List[llama_types.ChatCompletionTool]] = None,
+        tool_choice: Optional[llama_types.ChatCompletionToolChoiceOption] = None,
+        temperature: float = 0.2,
+        top_p: float = 0.95,
+        top_k: int = 40,
+        stream: bool = False,
+        stop: Optional[Union[str, List[str]]] = [],
+        max_tokens: int = 256,
+        presence_penalty: float = 0.0,
+        frequency_penalty: float = 0.0,
+        repeat_penalty: float = 1.1,
+        tfs_z: float = 1.0,
+        mirostat_mode: int = 0,
+        mirostat_tau: float = 5.0,
+        mirostat_eta: float = 0.1,
+        model: Optional[str] = None,
+        logits_processor: Optional[llama.LogitsProcessorList] = None,
+        grammar: Optional[llama.LlamaGrammar] = None,
+        **kwargs,  # type: ignore
+    ) -> Union[llama_types.CreateChatCompletionResponse, Iterator[llama_types.CreateChatCompletionStreamResponse]]:
+        assert llama.context_params.logits_all is True # BUG: logits_all=True is required for llava
+        assert self.clip_ctx is not None
+        system_prompt = _get_system_message(messages)
+        system_prompt = system_prompt if system_prompt != "" else "A chat between a curious human and an artificial intelligence assistant.  The assistant gives helpful, detailed, and polite answers to the human's questions."
+        system_prompt =  "A chat between a curious human and an artificial intelligence assistant.  The assistant gives helpful, detailed, and polite answers to the human's questions."
+        user_role = "\nUSER:"
+        assistant_role = "\nASSISTANT:"
+        llama.reset()
+        llama.eval(llama.tokenize(system_prompt.encode("utf8"), add_bos=True))
+        for message in messages:
+            if message["role"] == "user" and message["content"] is not None:
+                if isinstance(message["content"], str):
+                    llama.eval(llama.tokenize(f"{user_role} {message['content']}".encode("utf8"), add_bos=False))
+                else:
+                    assert isinstance(message["content"], list)
+                    llama.eval(llama.tokenize(f"{user_role} ".encode("utf8"), add_bos=False))
+                    for content in message["content"]:
+                        if content["type"] == "text":
+                            llama.eval(llama.tokenize(f"{content['text']}".encode("utf8"), add_bos=False))
+                        if content["type"] == "image_url":
+                            image_bytes = self.load_image(content["image_url"]["url"]) if isinstance(content["image_url"], dict) else self.load_image(content["image_url"])
+                            import array
+                            data_array =  array.array('B', image_bytes)
+                            c_ubyte_ptr = (ctypes.c_ubyte * len(data_array)).from_buffer(data_array)
+                            embed = self._llava_cpp.llava_image_embed_make_with_bytes(ctx_clip=self.clip_ctx, n_threads=llama.context_params.n_threads, image_bytes=c_ubyte_ptr, image_bytes_length=len(image_bytes))
+                            # image_bytes_p = (ctypes.c_uint8 * len(image_bytes)).from_buffer_copy(image_bytes)
+                            # embed = self._llava_cpp.llava_image_embed_make_with_bytes(ctx_clip=self.clip_ctx, n_threads=1, image_bytes=image_bytes_p, image_bytes_length=len(image_bytes))
+                            try:
+                                n_past = ctypes.c_int(llama.n_tokens)
+                                n_past_p = ctypes.pointer(n_past)
+                                self._llava_cpp.llava_eval_image_embed(ctx_llama=llama.ctx, embed=embed, n_batch=llama.n_batch, n_past=n_past_p)
+                                assert llama.n_ctx() >= n_past.value
+                                llama.n_tokens = n_past.value
+                            finally:
+                                self._llava_cpp.llava_image_embed_free(embed)
+            if message["role"] == "assistant" and message["content"] is not None:
+                llama.eval(llama.tokenize(f"ASSISTANT: {message['content']}".encode("utf8"), add_bos=False))
+        llama.eval(llama.tokenize(f"{assistant_role}".encode("utf8"), add_bos=False))
+
+        prompt = llama._input_ids.tolist()
+
+        return _convert_completion_to_chat(llama.create_completion(
+            prompt=prompt,
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            stream=stream,
+            stop=stop,
+            max_tokens=max_tokens,
+            presence_penalty=presence_penalty,
+            frequency_penalty=frequency_penalty,
+            repeat_penalty=repeat_penalty,
+            tfs_z=tfs_z,
+            mirostat_mode=mirostat_mode,
+            mirostat_tau=mirostat_tau,
+            mirostat_eta=mirostat_eta,
+            model=model,
+            logits_processor=logits_processor,
+            grammar=grammar,
+        ), stream=stream)

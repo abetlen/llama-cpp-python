@@ -21,9 +21,9 @@ from collections import deque, OrderedDict
 import diskcache
 import ctypes
 
-from . import llama_cpp
 from .llama_types import *
 from .llama_grammar import LlamaGrammar
+import llama_cpp.llama_cpp as llama_cpp
 import llama_cpp.llama_chat_format as llama_chat_format
 
 import numpy as np
@@ -752,6 +752,7 @@ class Llama:
         numa: bool = False,
         # Chat Format Params
         chat_format: str = "llama-2",
+        chat_handler: Optional[llama_chat_format.LlamaChatCompletionHandler] = None,
         # Misc
         verbose: bool = True,
         # Extra Params
@@ -784,6 +785,7 @@ class Llama:
             lora_path: Path to a LoRA file to apply to the model.
             numa: Enable NUMA support. (NOTE: The initial value of this parameter is used for the remainder of the program as this value is set in llama_backend_init)
             chat_format: String specifying the chat format to use when calling create_chat_completion.
+            chat_handler: Optional chat handler to use when calling create_chat_completion.
             verbose: Print verbose output to stderr.
 
         Raises:
@@ -910,6 +912,7 @@ class Llama:
             print(llama_cpp.llama_print_system_info().decode("utf-8"), file=sys.stderr)
 
         self.chat_format = chat_format
+        self.chat_handler = chat_handler
 
         self._n_vocab = self.n_vocab()
         self._n_ctx = self.n_ctx()
@@ -1231,7 +1234,7 @@ class Llama:
         else:
             inputs = input
 
-        data: List[EmbeddingData] = []
+        data: List[Embedding] = []
         total_tokens = 0
         for index, input in enumerate(inputs):
             tokens = self.tokenize(input.encode("utf-8"), special=True)
@@ -1276,7 +1279,7 @@ class Llama:
 
     def _create_completion(
         self,
-        prompt: str,
+        prompt: Union[str, List[int]],
         suffix: Optional[str] = None,
         max_tokens: int = 16,
         temperature: float = 0.8,
@@ -1297,7 +1300,9 @@ class Llama:
         stopping_criteria: Optional[StoppingCriteriaList] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
-    ) -> Union[Iterator[Completion], Iterator[CompletionChunk]]:
+    ) -> Union[
+        Iterator[CreateCompletionResponse], Iterator[CreateCompletionStreamResponse]
+    ]:
         assert self._ctx is not None
         assert suffix is None or suffix.__class__ is str
 
@@ -1309,7 +1314,7 @@ class Llama:
             self.tokenize(prompt.encode("utf-8"), special=True)
             if prompt != ""
             else [self.token_bos()]
-        )
+        ) if isinstance(prompt, str) else prompt
         text: bytes = b""
         returned_tokens: int = 0
         stop = (
@@ -1322,7 +1327,7 @@ class Llama:
 
         if len(prompt_tokens) >= self._n_ctx:
             raise ValueError(
-                f"Requested tokens ({len(prompt_tokens)}) exceed context window of {llama_cpp.llama_n_ctx(self._ctx)}"
+                f"Requested tokens ({len(prompt_tokens)}) exceed context window of {llama_cpp.llama_n_ctx(self.ctx)}"
             )
 
         if max_tokens <= 0:
@@ -1732,7 +1737,7 @@ class Llama:
 
     def create_completion(
         self,
-        prompt: str,
+        prompt: Union[str, List[int]],
         suffix: Optional[str] = None,
         max_tokens: int = 128,
         temperature: float = 0.8,
@@ -1753,7 +1758,7 @@ class Llama:
         stopping_criteria: Optional[StoppingCriteriaList] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
-    ) -> Union[Completion, Iterator[CompletionChunk]]:
+    ) -> Union[CreateCompletionResponse, Iterator[CreateCompletionStreamResponse]]:
         """Generate text from a prompt.
 
         Args:
@@ -1800,7 +1805,7 @@ class Llama:
             grammar=grammar,
         )
         if stream:
-            chunks: Iterator[CompletionChunk] = completion_or_chunks
+            chunks: Iterator[CreateCompletionStreamResponse] = completion_or_chunks
             return chunks
         completion: Completion = next(completion_or_chunks)  # type: ignore
         return completion
@@ -1828,7 +1833,7 @@ class Llama:
         stopping_criteria: Optional[StoppingCriteriaList] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
-    ) -> Union[Completion, Iterator[CompletionChunk]]:
+    ) -> Union[CreateCompletionResponse, Iterator[CreateCompletionStreamResponse]]:
         """Generate text from a prompt.
 
         Args:
@@ -1879,7 +1884,9 @@ class Llama:
         self,
         messages: List[ChatCompletionRequestMessage],
         functions: Optional[List[ChatCompletionFunction]] = None,
-        function_call: Optional[Union[str, ChatCompletionFunctionCall]] = None,
+        function_call: Optional[ChatCompletionRequestFunctionCall] = None,
+        tools: Optional[List[ChatCompletionTool]] = None,
+        tool_choice: Optional[ChatCompletionToolChoiceOption] = None,
         temperature: float = 0.2,
         top_p: float = 0.95,
         top_k: int = 40,
@@ -1896,7 +1903,9 @@ class Llama:
         model: Optional[str] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
-    ) -> Union[ChatCompletion, Iterator[ChatCompletionChunk]]:
+    ) -> Union[
+        CreateChatCompletionResponse, Iterator[CreateChatCompletionStreamResponse]
+    ]:
         """Generate a chat completion from a list of messages.
 
         Args:
@@ -1912,12 +1921,16 @@ class Llama:
         Returns:
             Generated chat completion or a stream of chat completion chunks.
         """
-        handler = llama_chat_format.get_chat_completion_handler(self.chat_format)
+        handler = self.chat_handler or llama_chat_format.get_chat_completion_handler(
+            self.chat_format
+        )
         return handler(
-            self,
+            llama=self,
             messages=messages,
             functions=functions,
             function_call=function_call,
+            tools=tools,
+            tool_choice=tool_choice,
             temperature=temperature,
             top_p=top_p,
             top_k=top_k,
@@ -1974,6 +1987,7 @@ class Llama:
             numa=self.numa,
             # Chat Format Params
             chat_format=self.chat_format,
+            chat_handler=self.chat_handler,
             # Misc
             verbose=self.verbose,
         )
@@ -2015,6 +2029,7 @@ class Llama:
             numa=state["numa"],
             # Chat Format Params
             chat_format=state["chat_format"],
+            chat_handler=state["chat_handler"],
             # Misc
             verbose=state["verbose"],
         )

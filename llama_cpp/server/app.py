@@ -138,6 +138,10 @@ class Settings(BaseSettings):
         default="llama-2",
         description="Chat format to use.",
     )
+    clip_model_path: Optional[str] = Field(
+        default=None,
+        description="Path to a CLIP model to use for multi-modal chat completion.",
+    )
     # Cache Params
     cache: bool = Field(
         default=False,
@@ -375,6 +379,14 @@ def create_app(settings: Optional[Settings] = None):
     )
     app.include_router(router)
     global llama
+
+    ##
+    chat_handler = None
+    if settings.chat_format == "llava-1-5":
+        assert settings.clip_model_path is not None
+        chat_handler = llama_cpp.llama_chat_format.Llava15ChatHandler(clip_model_path=settings.clip_model_path)
+    ##
+
     llama = llama_cpp.Llama(
         model_path=settings.model,
         # Model Params
@@ -411,6 +423,7 @@ def create_app(settings: Optional[Settings] = None):
         numa=settings.numa,
         # Chat Format Params
         chat_format=settings.chat_format,
+        chat_handler=chat_handler,
         # Misc
         verbose=settings.verbose,
     )
@@ -580,10 +593,6 @@ class CreateCompletionRequest(BaseModel):
     max_tokens: int = max_tokens_field
     temperature: float = temperature_field
     top_p: float = top_p_field
-    mirostat_mode: int = mirostat_mode_field
-    mirostat_tau: float = mirostat_tau_field
-    mirostat_eta: float = mirostat_eta_field
-    grammar: Optional[str] = None
     echo: bool = Field(
         default=False,
         description="Whether to echo the prompt in the generated text. Useful for chatbots.",
@@ -610,6 +619,10 @@ class CreateCompletionRequest(BaseModel):
     top_k: int = top_k_field
     repeat_penalty: float = repeat_penalty_field
     logit_bias_type: Optional[Literal["input_ids", "tokens"]] = Field(None)
+    mirostat_mode: int = mirostat_mode_field
+    mirostat_tau: float = mirostat_tau_field
+    mirostat_eta: float = mirostat_eta_field
+    grammar: Optional[str] = None
 
     model_config = {
         "json_schema_extra": {
@@ -688,7 +701,7 @@ async def create_completion(
         kwargs["grammar"] = llama_cpp.LlamaGrammar.from_string(body.grammar)
 
     iterator_or_completion: Union[
-        llama_cpp.Completion, Iterator[llama_cpp.CompletionChunk]
+        llama_cpp.CreateCompletionResponse, Iterator[llama_cpp.CreateCompletionStreamResponse]
     ] = await run_in_threadpool(llama, **kwargs)
 
     if isinstance(iterator_or_completion, Iterator):
@@ -697,7 +710,7 @@ async def create_completion(
 
         # If no exception was raised from first_response, we can assume that
         # the iterator is valid and we can use it to stream the response.
-        def iterator() -> Iterator[llama_cpp.CompletionChunk]:
+        def iterator() -> Iterator[llama_cpp.CreateCompletionStreamResponse]:
             yield first_response
             yield from iterator_or_completion
 
@@ -748,27 +761,30 @@ class ChatCompletionRequestMessage(BaseModel):
     )
     content: Optional[str] = Field(default="", description="The content of the message.")
 
-from typing import Any
 
 class CreateChatCompletionRequest(BaseModel):
-    messages: List[Any] = Field(
+    messages: List[llama_cpp.ChatCompletionRequestMessage] = Field(
         default=[], description="A list of messages to generate completions for."
     )
     functions: Optional[List[llama_cpp.ChatCompletionFunction]] = Field(
         default=None,
         description="A list of functions to apply to the generated completions.",
     )
-    function_call: Optional[Union[Literal["auto", "none"], llama_cpp.ChatCompletionFunctionCallOption]] = Field(
+    function_call: Optional[llama_cpp.ChatCompletionRequestFunctionCall] = Field(
         default=None,
         description="A function to apply to the generated completions.",
     )
+    tools: Optional[List[llama_cpp.ChatCompletionTool]] = Field(
+        default=None,
+        description="A list of tools to apply to the generated completions.",
+    )
+    tool_choice: Optional[llama_cpp.ChatCompletionToolChoiceOption] = Field(
+        default=None,
+        description="A tool to apply to the generated completions.",
+    ) # TODO: verify
     max_tokens: int = max_tokens_field
     temperature: float = temperature_field
     top_p: float = top_p_field
-    mirostat_mode: int = mirostat_mode_field
-    mirostat_tau: float = mirostat_tau_field
-    mirostat_eta: float = mirostat_eta_field
-    grammar: Optional[str] = None
     stop: Optional[List[str]] = stop_field
     stream: bool = stream_field
     presence_penalty: Optional[float] = presence_penalty_field
@@ -784,6 +800,10 @@ class CreateChatCompletionRequest(BaseModel):
     top_k: int = top_k_field
     repeat_penalty: float = repeat_penalty_field
     logit_bias_type: Optional[Literal["input_ids", "tokens"]] = Field(None)
+    mirostat_mode: int = mirostat_mode_field
+    mirostat_tau: float = mirostat_tau_field
+    mirostat_eta: float = mirostat_eta_field
+    grammar: Optional[str] = None
 
     model_config = {
         "json_schema_extra": {
