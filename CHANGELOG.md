@@ -7,9 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Update llama.cpp to ggerganov/llama.cpp@0a7c980b6f94a049cb804573df2d8092a34df8e4
+- Add support for Llava1.5 multi-modal models by @damian0815 and @abetlen in #821
+- Update OpenAI API compatibility to match dev day update by @abetlen in #821
+
 ## [0.2.14]
 
-- Update llama.cpp to f0b30ef7dc1360922ccbea0a8cd3918ecf15eaa7
+- Update llama.cpp to ggerganov/llama.cpp@f0b30ef7dc1360922ccbea0a8cd3918ecf15eaa7
 - Add support for Huggingface Autotokenizer Chat Formats by @bioshazard and @abetlen in #790 and bbffdaebaa7bb04b543dbf683a07276087251f86
 - Fix llama-2 chat format by @earonesty in #869
 - Add support for functionary chat format by @abetlen in #784
@@ -17,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.13]
 
-- Update llama.cpp to 51b2fc11f7f605fff49725a4540e9a6ef7b51b70
+- Update llama.cpp to ggerganov/llama.cpp@51b2fc11f7f605fff49725a4540e9a6ef7b51b70
 - Fix name 'open' is not defined exception when deleting model by @abetlen in 011b95d7f34cbfc528af75a892757bd9a20838ab
 - Fix tokenization of special characters by @antoine-lizee in #850
 
