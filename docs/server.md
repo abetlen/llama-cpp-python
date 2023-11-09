@@ -57,6 +57,7 @@ You'll first need to download one of the available multi-modal models in GGUF fo
 
 - [llava-v1.5-7b](https://huggingface.co/mys/ggml_llava-v1.5-7b)
 - [llava-v1.5-13b](https://huggingface.co/mys/ggml_llava-v1.5-13b)
+- [bakllava-1-7b](https://huggingface.co/mys/ggml_bakllava-1)
 
 Then when you run the server you'll need to also specify the path to the clip model used for image embedding and the `llava-1-5` chat_format
 
