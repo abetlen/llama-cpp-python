@@ -45,7 +45,7 @@ You'll first need to download one of the available function calling models in GG
 Then when you run the server you'll need to also specify the `functionary-7b-v1` chat_format
 
 ```bash
-python3 -m llama_cpp.server --model <model_path> --chat-format functionary
+python3 -m llama_cpp.server --model <model_path> --chat_format functionary
 ```
 
 ### Multimodal Models
@@ -61,7 +61,7 @@ You'll first need to download one of the available multi-modal models in GGUF fo
 Then when you run the server you'll need to also specify the path to the clip model used for image embedding and the `llava-1-5` chat_format
 
 ```bash
-python3 -m llama_cpp.server --model <model_path> --clip-model-path <clip_model_path> --chat-format llava-1-5
+python3 -m llama_cpp.server --model <model_path> --clip_model_path <clip_model_path> --chat_format llava-1-5
 ```
 
 Then you can just use the OpenAI API as normal
