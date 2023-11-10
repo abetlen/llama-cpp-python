@@ -565,7 +565,7 @@ def format_chatml(
     _messages = _map_roles(messages, _roles)
     _messages.append((_roles["assistant"], None))
     _prompt = _format_chatml(system_message, _messages, _sep)
-    return ChatFormatterResponse(prompt=_prompt)
+    return ChatFormatterResponse(prompt=_prompt, stop=_sep)
 
 
 @register_chat_completion_handler("functionary")
