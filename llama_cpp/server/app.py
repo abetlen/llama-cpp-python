@@ -783,7 +783,9 @@ class CreateChatCompletionRequest(BaseModel):
         default=None,
         description="A tool to apply to the generated completions.",
     ) # TODO: verify
-    max_tokens: int = max_tokens_field
+    max_tokens: Optional[int] = Field(
+        default=None, description="The maximum number of tokens to generate. Defaults to inf"
+    )
     temperature: float = temperature_field
     top_p: float = top_p_field
     stop: Optional[List[str]] = stop_field
