@@ -1484,7 +1484,7 @@ class SchemaConverter:
 
 def json_schema_to_gbnf(schema: str, prop_order: Optional[List[str]] = None):
     prop_order = prop_order or []
-    schema = json.load(schema)
+    schema = json.loads(schema)
     prop_order = {name: idx for idx, name in enumerate(prop_order)}
     converter = SchemaConverter(prop_order)
     converter.visit(schema, "")
