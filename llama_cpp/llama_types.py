@@ -131,7 +131,7 @@ class ChatCompletionStreamResponseChoice(TypedDict):
     delta: Union[
         ChatCompletionStreamResponseDelta, ChatCompletionStreamResponseDeltaEmpty
     ]
-    finish_reason: Optional[Literal["stop", "length", "function_call"]]
+    finish_reason: Optional[Literal["stop", "length", "tool_calls", "function_call"]]
 
 
 class CreateChatCompletionStreamResponse(TypedDict):
