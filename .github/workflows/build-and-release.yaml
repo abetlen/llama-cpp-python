@@ -30,11 +30,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e .[all]
-      
-      - name: Set LD_LIBRARY_PATH (Hack)
-        run: |
-          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/runner/work/llama-cpp-python/llama-cpp-python/llama_cpp/" >> $GITHUB_ENV
-
+          make clean
 
       - name: Build wheels
         run: python -m cibuildwheel --output-dir wheelhouse
