@@ -6,6 +6,8 @@ option(LLAMA_BUILD "Build llama.cpp shared library and install alongside python 
 
 if (LLAMA_BUILD)
     set(BUILD_SHARED_LIBS "On")
+
+    # Building llama
     if (APPLE AND NOT CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
         # Need to disable these llama.cpp flags on Apple x86_64,
         # otherwise users may encounter invalid instruction errors
@@ -41,8 +43,14 @@ if (LLAMA_BUILD)
         FILES $<TARGET_RUNTIME_DLLS:llama>
         DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
     )
+
+    # Building llava
     add_subdirectory(vendor/llama.cpp/examples/llava)
     set_target_properties(llava_shared PROPERTIES OUTPUT_NAME "llava")
+    # Set CUDA_ARCHITECTURES to OFF on windows
+    if (WIN32)
+        set_target_properties(llava_shared PROPERTIES CUDA_ARCHITECTURES OFF)
+    endif()
     install(
         TARGETS llava_shared
         LIBRARY DESTINATION ${SKBUILD_PLATLIB_DIR}/llama_cpp
