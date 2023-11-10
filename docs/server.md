@@ -34,6 +34,35 @@ NOTE: All server options are also available as environment variables. For exampl
 
 ## Guides
 
+### Code Completion
+
+`llama-cpp-python` supports code completion via GitHub Copilot.
+
+*NOTE*: Without GPU acceleration this is unlikely to be fast enough to be usable.
+
+You'll first need to download one of the available code completion models in GGUF format:
+
+- [replit-code-v1_5-GGUF](https://huggingface.co/abetlen/replit-code-v1_5-3b-GGUF)
+
+Then you'll need to run the OpenAI compatible web server with a increased context size substantially for GitHub Copilot requests:
+
+```bash
+python3 -m llama_cpp.server --model <model_path> --n_ctx 16192
+```
+
+Then just update your settings in `.vscode/settings.json` to point to your code completion server:
+
+```json
+{
+    // ...
+    "github.copilot.advanced": {
+        "debug.testOverrideProxyUrl": "http://<host>:<port>",
+        "debug.overrideProxyUrl": "http://<host>:<port>"
+    }
+    // ...
+}
+```
+
 ### Function Calling
 
 `llama-cpp-python` supports structured function calling based on a JSON schema.
