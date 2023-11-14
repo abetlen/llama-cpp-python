@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.18]
+
+- Update llama.cpp to ggerganov/llama.cpp@6bb4908a17150b49373b5f977685b2e180a04f6f
+
 ## [0.2.17]
 
 - Update llama.cpp to ggerganov/llama.cpp@df9d1293defe783f42bc83af732d3c670552c541
