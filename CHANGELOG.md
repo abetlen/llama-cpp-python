@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.16]
+
+- Update llama.cpp to ggerganov/llama.cp@a75fa576abba9d37f463580c379e4bbf1e1ad03c
+- Add `set_seed` to `Llama` class by @abetlen in fd41ed3a908761d286102a019a34c2938a15118d
+- Fix server doc arguments by @kjunggithub in #892
+- Fix response_format handler in llava chat handler by @abetlen in b62c44983921197ed10a7d29dc4ba920e9979380
+- Fix default max_tokens, chat completion is now unlimited (to context length) and completion is 16 tokens to match OpenAI defaults by @abetlen in e7962d2c733cbbeec5a37392c81f64185a9a39e8
+- Fix json_schema_to_gbnf helper so that it takes a json schema string as input instead by @abetlen in faeae181b1e868643c0dc28fcf039f077baf0829
+- Add support for $ref and $def in json_schema_to_gbnf to handle more complex function schemas by @abetlen in 770df344369c0630df1be14be9f9e301e7c56d24
+- Update functionary chat handler for new OpenAI api by abetlen in 1b376c62b775b401653facf25a519d116aafe99a
+- Fix add default stop sequence to chatml chat format by @abetlen in b84d76a844149216d511cfd8cdb9827148a1853c
+- Fix sampling bug when logits_all=False by @abetlen in 6f0b0b1b840af846938ed74d0e8170a91c40e617
+
 ## [0.2.15]
 
 - Update llama.cpp to ggerganov/llama.cpp@0a7c980b6f94a049cb804573df2d8092a34df8e4
