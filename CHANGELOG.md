@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.17]
+
+- Update llama.cpp to ggerganov/llama.cpp@df9d1293defe783f42bc83af732d3c670552c541
+- Hotfix: Set `CUDA_ARCHITECTURES=OFF` for `llava_shared` target on Windows by @abetlen in 4388f3341413110217b98c4f097ac5c590bdf40b
+
 ## [0.2.16]
 
 - Update llama.cpp to ggerganov/llama.cp@a75fa576abba9d37f463580c379e4bbf1e1ad03c
