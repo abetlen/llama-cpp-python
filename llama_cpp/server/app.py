@@ -521,6 +521,14 @@ top_p_field = Field(
     + "Top-p sampling, also known as nucleus sampling, is another text generation method that selects the next token from a subset of tokens that together have a cumulative probability of at least p. This method provides a balance between diversity and quality by considering both the probabilities of tokens and the number of tokens to sample from. A higher value for top_p (e.g., 0.95) will lead to more diverse text, while a lower value (e.g., 0.5) will generate more focused and conservative text.",
 )
 
+min_p_field = Field(
+    default=0.05,
+    ge=0.0,
+    le=1.0,
+    description="Sets a minimum base probability threshold for token selection.\n\n"
+    + "The Min-P sampling method was designed as an alternative to Top-P, and aims to ensure a balance of quality and variety. The parameter min_p represents the minimum probability for a token to be considered, relative to the probability of the most likely token. For example, with min_p=0.05 and the most likely token having a probability of 0.9, logits with a value less than 0.045 are filtered out.",
+)
+
 stop_field = Field(
     default=None,
     description="A list of tokens at which to stop generation. If None, no stop tokens are used.",
@@ -593,6 +601,7 @@ class CreateCompletionRequest(BaseModel):
     max_tokens: int = max_tokens_field
     temperature: float = temperature_field
     top_p: float = top_p_field
+    min_p: float = min_p_field
     echo: bool = Field(
         default=False,
         description="Whether to echo the prompt in the generated text. Useful for chatbots.",
@@ -788,6 +797,7 @@ class CreateChatCompletionRequest(BaseModel):
     )
     temperature: float = temperature_field
     top_p: float = top_p_field
+    min_p: float = min_p_field
     stop: Optional[List[str]] = stop_field
     stream: bool = stream_field
     presence_penalty: Optional[float] = presence_penalty_field
