@@ -19,7 +19,7 @@ from typing import (
     overload,
 )
 
-from . import llama_cpp
+import llama_cpp.llama_cpp as llama_cpp
 
 # Type aliases
 llama_grammar_element = llama_cpp.llama_grammar_element
@@ -1188,7 +1188,7 @@ def print_grammar(file: TextIO, state: parse_state) -> None:
 
 """llama.cpp gbnf rules from vendor/llama.cpp/grammars"""
 
-ARITHMETIC_GBNF = """\
+ARITHMETIC_GBNF = r"""
 root  ::= (expr "=" ws term "\n")+
 expr  ::= term ([-+*/] term)*
 term  ::= ident | num | "(" ws expr ")" ws
@@ -1197,7 +1197,7 @@ num   ::= [0-9]+ ws
 ws    ::= [ \t\n]*
 """
 
-C_GBNF = """\
+C_GBNF = r"""
 root ::= (declaration)*
 
 declaration ::= dataType identifier "(" parameter? ")" "{" statement* "}"
@@ -1242,7 +1242,7 @@ multiLineComment ::= "/*" ( [^*] | ("*" [^/]) )* "*/"
 ws ::= ([ \t\n]+)
 """
 
-CHESS_GBNF = """\
+CHESS_GBNF = r"""
 root   ::= object
 value  ::= object | array | string | number | ("true" | "false" | "null") ws
 
@@ -1270,7 +1270,7 @@ number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? ws
 ws ::= ([ \t\n] ws)?
 """
 
-JAPANESE_GBNF = """\
+JAPANESE_GBNF = r"""
 root   ::= object
 value  ::= object | array | string | number | ("true" | "false" | "null") ws
 
@@ -1298,7 +1298,7 @@ number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? ws
 ws ::= ([ \t\n] ws)?
 """
 
-JSON_ARR_GBNF = """\
+JSON_ARR_GBNF = r"""
 # This is the same as json.gbnf but we restrict whitespaces at the end of the root array
 # Useful for generating JSON arrays
 
@@ -1336,7 +1336,7 @@ ws ::= ([ \t\n] ws)?
 """
 
 
-JSON_GBNF = """\
+JSON_GBNF = r"""
 root   ::= object
 value  ::= object | array | string | number | ("true" | "false" | "null") ws
 
@@ -1360,10 +1360,10 @@ string ::=
 
 number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? ws
 
-# Optional space: by convention, applied in this grammar after literal chars when allowed
-ws ::= ([ \t\n] ws)?"""
+ws ::= ([ \t\n] ws)?
+"""
 
-LIST_GBNF = """\
+LIST_GBNF = r"""
 root ::= item+
 
 # Excludes various line break characters
@@ -1399,6 +1399,7 @@ class SchemaConverter:
     def __init__(self, prop_order):
         self._prop_order = prop_order
         self._rules = {"space": SPACE_RULE}
+        self._defs = {}
 
     def _format_literal(self, literal):
         escaped = GRAMMAR_LITERAL_ESCAPE_RE.sub(
@@ -1421,6 +1422,11 @@ class SchemaConverter:
     def visit(self, schema, name):
         schema_type = schema.get("type")
         rule_name = name or "root"
+
+        if "$defs" in schema:
+            # add defs to self._defs for later inlining
+            for def_name, def_schema in schema["$defs"].items():
+                self._defs[def_name] = def_schema
 
         if "oneOf" in schema or "anyOf" in schema:
             rule = " | ".join(
@@ -1471,6 +1477,14 @@ class SchemaConverter:
             )
             return self._add_rule(rule_name, rule)
 
+        elif "$ref" in schema:
+            ref = schema["$ref"]
+            assert ref.startswith("#/$defs/"), f"Unrecognized schema: {schema}"
+            # inline $defs
+            def_name = ref[len("#/$defs/") :]
+            def_schema = self._defs[def_name]
+            return self.visit(def_schema, f'{name}{"-" if name else ""}{def_name}')
+
         else:
             assert schema_type in PRIMITIVE_RULES, f"Unrecognized schema: {schema}"
             return self._add_rule(
@@ -1484,7 +1498,7 @@ class SchemaConverter:
 
 def json_schema_to_gbnf(schema: str, prop_order: Optional[List[str]] = None):
     prop_order = prop_order or []
-    schema = json.load(schema)
+    schema = json.loads(schema)
     prop_order = {name: idx for idx, name in enumerate(prop_order)}
     converter = SchemaConverter(prop_order)
     converter.visit(schema, "")
