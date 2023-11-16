@@ -23,8 +23,8 @@ import ctypes
 
 from .llama_types import *
 from .llama_grammar import LlamaGrammar
-import llama_cpp.llama_cpp as llama_cpp
-import llama_cpp.llama_chat_format as llama_chat_format
+from . import llama_cpp
+from . import llama_chat_format
 
 import numpy as np
 import numpy.typing as npt
