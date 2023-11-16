@@ -1111,7 +1111,8 @@ class Llama:
             )
 
         if temp < 0.0:
-            id = self._ctx.sample_softmax(candidates=self._candidates)
+            self._ctx.sample_softmax(candidates=self._candidates)
+            id = self._candidates.candidates.data[0].id
         elif temp == 0.0:
             id = self._ctx.sample_token_greedy(candidates=self._candidates)
         elif mirostat_mode == 1:
