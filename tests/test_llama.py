@@ -35,7 +35,7 @@ def test_llama_cpp_tokenization():
 
     tokens = llama.tokenize(text, special=True)
     assert tokens[-1] == llama.token_eos()
-    assert tokens == [1, 10994, 2787, 2]
+    assert tokens == [1, 15043, 2787, 2]
 
 
 def test_llama_patch(monkeypatch):
@@ -55,8 +55,11 @@ def test_llama_patch(monkeypatch):
     monkeypatch.setattr("llama_cpp.llama_cpp.llama_decode", mock_decode)
     monkeypatch.setattr("llama_cpp.llama_cpp.llama_get_logits", mock_get_logits)
 
+    text = "The quick brown fox"
+    text_tokens = llama.tokenize(text.encode("utf-8"), add_bos=True, special=True)
     output_text = " jumps over the lazy dog."
-    output_tokens = llama.tokenize(output_text.encode("utf-8"), add_bos=False, special=True)
+    all_text_tokens = llama.tokenize((text + output_text).encode("utf-8"), add_bos=True, special=True)
+    output_tokens = all_text_tokens[len(text_tokens):]
     token_eos = llama.token_eos()
     n = 0
 
@@ -70,7 +73,6 @@ def test_llama_patch(monkeypatch):
 
     monkeypatch.setattr("llama_cpp.llama_cpp.llama_sample_token", mock_sample)
 
-    text = "The quick brown fox"
 
     ## Test basic completion until eos
     n = 0  # reset
