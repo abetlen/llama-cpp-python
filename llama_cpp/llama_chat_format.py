@@ -523,6 +523,19 @@ def format_phind(
     _prompt = _format_add_colon_single(_system_message, _messages, _sep)
     return ChatFormatterResponse(prompt=_prompt)
 
+@register_chat_format("intel")
+def format_intel(
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    **kwargs: Any,
+) -> ChatFormatterResponse:
+    _roles = dict(user="### User:", assistant="### Assistant:")
+    _sep = "\n"
+    _system_message = "### System:\n{system_message}"
+    _messages = _map_roles(messages, _roles)
+    _messages.append((_roles["assistant"], None))
+    _prompt = _format_add_colon_single(_system_message, _messages, _sep)
+    return ChatFormatterResponse(prompt=_prompt)
+
 
 @register_chat_format("open-orca")
 def format_open_orca(
