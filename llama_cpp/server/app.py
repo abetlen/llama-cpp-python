@@ -30,7 +30,7 @@ import numpy.typing as npt
 
 
 # Disable warning for model and model_alias settings
-BaseSettings.model_config['protected_namespaces'] = ()
+BaseSettings.model_config["protected_namespaces"] = ()
 
 
 class Settings(BaseSettings):
@@ -68,7 +68,9 @@ class Settings(BaseSettings):
         description="Use mlock.",
     )
     # Context Params
-    seed: int = Field(default=llama_cpp.LLAMA_DEFAULT_SEED, description="Random seed. -1 for random.")
+    seed: int = Field(
+        default=llama_cpp.LLAMA_DEFAULT_SEED, description="Random seed. -1 for random."
+    )
     n_ctx: int = Field(default=2048, ge=1, description="The context size.")
     n_batch: int = Field(
         default=512, ge=1, description="The batch size to use per eval."
@@ -83,30 +85,16 @@ class Settings(BaseSettings):
         ge=0,
         description="The number of threads to use when batch processing.",
     )
-    rope_scaling_type: int = Field(
-        default=llama_cpp.LLAMA_ROPE_SCALING_UNSPECIFIED
-    )
-    rope_freq_base: float = Field(
-        default=0.0, description="RoPE base frequency"
-    )
+    rope_scaling_type: int = Field(default=llama_cpp.LLAMA_ROPE_SCALING_UNSPECIFIED)
+    rope_freq_base: float = Field(default=0.0, description="RoPE base frequency")
     rope_freq_scale: float = Field(
         default=0.0, description="RoPE frequency scaling factor"
     )
-    yarn_ext_factor: float = Field(
-        default=-1.0
-    )
-    yarn_attn_factor: float = Field(
-        default=1.0
-    )
-    yarn_beta_fast: float = Field(
-        default=32.0
-    )
-    yarn_beta_slow: float = Field(
-        default=1.0
-    )
-    yarn_orig_ctx: int = Field(
-        default=0
-    )
+    yarn_ext_factor: float = Field(default=-1.0)
+    yarn_attn_factor: float = Field(default=1.0)
+    yarn_beta_fast: float = Field(default=32.0)
+    yarn_beta_slow: float = Field(default=1.0)
+    yarn_orig_ctx: int = Field(default=0)
     mul_mat_q: bool = Field(
         default=True, description="if true, use experimental mul_mat_q kernels"
     )
@@ -122,7 +110,7 @@ class Settings(BaseSettings):
     # LoRA Params
     lora_base: Optional[str] = Field(
         default=None,
-        description="Optional path to base model, useful if using a quantized base model and you want to apply LoRA to an f16 model."
+        description="Optional path to base model, useful if using a quantized base model and you want to apply LoRA to an f16 model.",
     )
     lora_path: Optional[str] = Field(
         default=None,
@@ -384,7 +372,9 @@ def create_app(settings: Optional[Settings] = None):
     chat_handler = None
     if settings.chat_format == "llava-1-5":
         assert settings.clip_model_path is not None
-        chat_handler = llama_cpp.llama_chat_format.Llava15ChatHandler(clip_model_path=settings.clip_model_path, verbose=settings.verbose)
+        chat_handler = llama_cpp.llama_chat_format.Llava15ChatHandler(
+            clip_model_path=settings.clip_model_path, verbose=settings.verbose
+        )
     ##
 
     llama = llama_cpp.Llama(
@@ -587,8 +577,9 @@ mirostat_eta_field = Field(
 
 grammar = Field(
     default=None,
-    description="A CBNF grammar (as string) to be used for formatting the model's output."
+    description="A CBNF grammar (as string) to be used for formatting the model's output.",
 )
+
 
 class CreateCompletionRequest(BaseModel):
     prompt: Union[str, List[str]] = Field(
@@ -690,7 +681,8 @@ async def create_completion(
         kwargs["grammar"] = llama_cpp.LlamaGrammar.from_string(body.grammar)
 
     iterator_or_completion: Union[
-        llama_cpp.CreateCompletionResponse, Iterator[llama_cpp.CreateCompletionStreamResponse]
+        llama_cpp.CreateCompletionResponse,
+        Iterator[llama_cpp.CreateCompletionStreamResponse],
     ] = await run_in_threadpool(llama, **kwargs)
 
     if isinstance(iterator_or_completion, Iterator):
@@ -748,7 +740,9 @@ class ChatCompletionRequestMessage(BaseModel):
     role: Literal["system", "user", "assistant", "function"] = Field(
         default="user", description="The role of the message."
     )
-    content: Optional[str] = Field(default="", description="The content of the message.")
+    content: Optional[str] = Field(
+        default="", description="The content of the message."
+    )
 
 
 class CreateChatCompletionRequest(BaseModel):
@@ -770,9 +764,10 @@ class CreateChatCompletionRequest(BaseModel):
     tool_choice: Optional[llama_cpp.ChatCompletionToolChoiceOption] = Field(
         default=None,
         description="A tool to apply to the generated completions.",
-    ) # TODO: verify
+    )  # TODO: verify
     max_tokens: Optional[int] = Field(
-        default=None, description="The maximum number of tokens to generate. Defaults to inf"
+        default=None,
+        description="The maximum number of tokens to generate. Defaults to inf",
     )
     temperature: float = temperature_field
     top_p: float = top_p_field

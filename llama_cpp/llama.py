@@ -1036,9 +1036,9 @@ class Llama:
             offset = (
                 0 if self.context_params.logits_all else n_tokens - 1
             )  # NOTE: Only save the last token logits if logits_all is False
-            self.scores[n_past + offset : n_past + n_tokens, :].reshape(
-                -1
-            )[:] = self._ctx.get_logits()[offset * cols: rows * cols]
+            self.scores[n_past + offset : n_past + n_tokens, :].reshape(-1)[
+                :
+            ] = self._ctx.get_logits()[offset * cols : rows * cols]
             # Update n_tokens
             self.n_tokens += n_tokens
 
@@ -1135,7 +1135,9 @@ class Llama:
         else:
             self._ctx.sample_top_k(candidates=self._candidates, k=top_k, min_keep=1)
             self._ctx.sample_tail_free(candidates=self._candidates, z=tfs_z, min_keep=1)
-            self._ctx.sample_typical(candidates=self._candidates, p=typical_p, min_keep=1)
+            self._ctx.sample_typical(
+                candidates=self._candidates, p=typical_p, min_keep=1
+            )
             self._ctx.sample_top_p(candidates=self._candidates, p=top_p, min_keep=1)
             self._ctx.sample_min_p(candidates=self._candidates, p=min_p, min_keep=1)
             self._ctx.sample_temp(candidates=self._candidates, temp=temp)
