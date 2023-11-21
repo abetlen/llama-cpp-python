@@ -130,11 +130,6 @@ def llama_sampling_sample(ctx_sampling: LlamaSamplingContext,
         for key, value in params.logit_bias.items():
             logits[key] += value
 
-    # for token_id, logit in enumerate(logits):
-    #     # baii fix logit_bias is None
-    #     if params.logit_bias:
-    #         logit += params.logit_bias.get(token_id, 0.0)
-
     # 性能优化换用 numpy 数组实现
     cur.clear()
     # cur = None
@@ -145,14 +140,6 @@ def llama_sampling_sample(ctx_sampling: LlamaSamplingContext,
         cur[token_id].id = token_id
         cur[token_id].logit = logits[token_id]
         cur[token_id].p = 0.0
-    #
-    # cur_p = ctypes.byref(llama_cpp.llama_token_data_array(cur, len(cur), False))
-
-    # for token_id in range(n_vocab):
-    #     cur.append(
-    #         llama_cpp.llama_token_data(id=token_id, logit=logits[token_id], p=0.0)
-    #         # {'id': token_id, 'logit': logits[token_id], 'p': 0.0}
-    #     )
 
     cur_p = ctypes.byref(llama_cpp.llama_token_data_array(cur, n_vocab, False))
 
@@ -294,7 +281,7 @@ def _get_batch_view(batch: _LlamaBatch, n_tokens: int, offset: int) -> llama_cpp
 
     def _move_pointer_offset(ptr, c_types, offset: int):
         """
-        移动指针(指针算数)
+        Move the pointer (pointer counts)
         :param ptr: 要移动的指针
         :param c_types: 指针指向内存的类型
         :param offset: 移动的偏移量
@@ -368,7 +355,7 @@ class Client(object):
     input: str = ""
     prompt: str = ""
     response: str = ""
-    decode_err: bytes = b''
+    decode_err_buffer: bytes = b''
 
     def __del__(self):
         if self.ctx_sampling:
@@ -638,10 +625,10 @@ if __name__ == '__main__':
                 token_str = llama.detokenize([token_id])
                 # simple decode support zh-cn
                 try:
-                    client.response += (client.decode_err + token_str).decode('utf8')
-                    client.decode_err = b''
+                    client.response += (client.decode_err_buffer + token_str).decode('utf8')
+                    client.decode_err_buffer = b''
                 except UnicodeDecodeError:
-                    client.decode_err += token_str
+                    client.decode_err_buffer += token_str
                     # print(f'{id=} {token_str} 解码失败')
                 # client.response += token_str.decode('utf8', 'replace')
                 # print(f"\033[31mClient {client.id}, seq {client.seq_id}, response {client.response}, \033[0m")
