@@ -140,3 +140,12 @@ class Settings(BaseSettings):
         default=True,
         description="Whether to interrupt requests when a new request is received.",
     )
+
+SETTINGS: Optional[Settings] = None
+
+def set_settings(settings: Settings):
+    global SETTINGS
+    SETTINGS = settings
+
+def get_settings():
+    yield SETTINGS

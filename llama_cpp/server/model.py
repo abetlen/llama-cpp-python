@@ -9,7 +9,7 @@ from fastapi.background import BackgroundTasks
 import llama_cpp
 
 from llama_cpp.server.util import remove_file, models_root_dir
-from llama_cpp.server.settings import Settings
+from llama_cpp.server.settings import Settings, SETTINGS
 
 class MultiLlama:
     _model: Optional[llama_cpp.Llama] = None
@@ -26,6 +26,7 @@ class MultiLlama:
         try:
             model_path = self._models[model]
         except KeyError:
+            # TODO server raises 500 ?
             raise HTTPException(404, f"Model file for {model} NOT found")
         
         if self._model:
@@ -84,15 +85,10 @@ class MultiLlama:
     def __getitem__(self, model):
         return self._models[model]
     
+    def __setitem__(self, model, path):
+        self._models[model] = path
+    
 LLAMA: Optional[MultiLlama] = None
-SETTINGS: Optional[Settings] = None
-
-def set_settings(settings: Settings):
-    global SETTINGS
-    SETTINGS = settings
-
-def get_settings():
-    yield SETTINGS
 
 def init_llama():
     global LLAMA
