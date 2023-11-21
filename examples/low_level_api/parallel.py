@@ -2,7 +2,7 @@
 parallel.cpp's python version
 https://github.com/ggerganov/llama.cpp/blob/master/examples/parallel/parallel.cpp
 
-e.g:
+notice:
 not support grammar
 not support terminal args
 not support prompt file
