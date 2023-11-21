@@ -772,7 +772,7 @@ class CreateChatCompletionRequest(BaseModel):
     temperature: float = temperature_field
     top_p: float = top_p_field
     min_p: float = min_p_field
-    stop: Optional[List[str]] = stop_field
+    stop: Optional[Union[str, List[str]]] = stop_field
     stream: bool = stream_field
     presence_penalty: Optional[float] = presence_penalty_field
     frequency_penalty: Optional[float] = frequency_penalty_field
