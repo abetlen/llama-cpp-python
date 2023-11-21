@@ -1,12 +1,15 @@
 import os
 from typing import Any, Optional
 from threading import Lock
+import logging
 import llama_cpp
 from llama_cpp.server.settings import Settings, get_settings
 
 FILE_EXT = ".gguf"
 MODEL_ENV_ARG = "MODEL"
 DEFAULT_MODEL_DIR = "/models"
+
+logger = logging.getLogger("uvicorn")
 
 def models_root_dir(path = None):
     path = os.path.abspath(path or os.environ.get(MODEL_ENV_ARG, DEFAULT_MODEL_DIR))
@@ -30,8 +33,11 @@ class MultiLlama:
         try:
             model_path = self._models[model]
         except KeyError:
-            # TODO server raises 500 ?
-            raise Exception(404, f"Model file for {model} NOT found")
+            if self._model:
+                if self._settings.verbose: logger.info(f"Model file for {model} NOT found! Using preloaded")
+                return self._model
+            else: raise Exception(404, f"Model file for {model} NOT found")
+
         
         if self._model:
             if self._model.model_path == model_path:
