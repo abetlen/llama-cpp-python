@@ -1046,6 +1046,8 @@ class Llama:
         self,
         top_k: int = 40,
         top_p: float = 0.95,
+        min_p: float = 0.05,
+        typical_p: float = 1.0,
         temp: float = 0.80,
         repeat_penalty: float = 1.1,
         frequency_penalty: float = 0.0,
@@ -1108,7 +1110,10 @@ class Llama:
                 grammar=grammar,
             )
 
-        if temp == 0.0:
+        if temp < 0.0:
+            self._ctx.sample_softmax(candidates=self._candidates)
+            id = self._candidates.candidates.data[0].id
+        elif temp == 0.0:
             id = self._ctx.sample_token_greedy(candidates=self._candidates)
         elif mirostat_mode == 1:
             self._ctx.sample_temp(candidates=self._candidates, temp=temp)
@@ -1130,8 +1135,9 @@ class Llama:
         else:
             self._ctx.sample_top_k(candidates=self._candidates, k=top_k, min_keep=1)
             self._ctx.sample_tail_free(candidates=self._candidates, z=tfs_z, min_keep=1)
-            self._ctx.sample_typical(candidates=self._candidates, p=1.0, min_keep=1)
+            self._ctx.sample_typical(candidates=self._candidates, p=typical_p, min_keep=1)
             self._ctx.sample_top_p(candidates=self._candidates, p=top_p, min_keep=1)
+            self._ctx.sample_min_p(candidates=self._candidates, p=min_p, min_keep=1)
             self._ctx.sample_temp(candidates=self._candidates, temp=temp)
             id = self._ctx.sample_token(candidates=self._candidates)
         if grammar is not None:
@@ -1143,6 +1149,8 @@ class Llama:
         tokens: Sequence[int],
         top_k: int = 40,
         top_p: float = 0.95,
+        min_p: float = 0.05,
+        typical_p: float = 1.0,
         temp: float = 0.80,
         repeat_penalty: float = 1.1,
         reset: bool = True,
@@ -1200,6 +1208,8 @@ class Llama:
             token = self.sample(
                 top_k=top_k,
                 top_p=top_p,
+                min_p=min_p,
+                typical_p=typical_p,
                 temp=temp,
                 repeat_penalty=repeat_penalty,
                 frequency_penalty=frequency_penalty,
@@ -1298,6 +1308,8 @@ class Llama:
         max_tokens: Optional[int] = 16,
         temperature: float = 0.8,
         top_p: float = 0.95,
+        min_p: float = 0.05,
+        typical_p: float = 1.0,
         logprobs: Optional[int] = None,
         echo: bool = False,
         stop: Optional[Union[str, List[str]]] = [],
@@ -1398,6 +1410,8 @@ class Llama:
             prompt_tokens,
             top_k=top_k,
             top_p=top_p,
+            min_p=min_p,
+            typical_p=typical_p,
             temp=temperature,
             tfs_z=tfs_z,
             mirostat_mode=mirostat_mode,
@@ -1772,6 +1786,8 @@ class Llama:
         max_tokens: Optional[int] = 16,
         temperature: float = 0.8,
         top_p: float = 0.95,
+        min_p: float = 0.05,
+        typical_p: float = 1.0,
         logprobs: Optional[int] = None,
         echo: bool = False,
         stop: Optional[Union[str, List[str]]] = [],
@@ -1818,6 +1834,8 @@ class Llama:
             max_tokens=max_tokens,
             temperature=temperature,
             top_p=top_p,
+            min_p=min_p,
+            typical_p=typical_p,
             logprobs=logprobs,
             echo=echo,
             stop=stop,
@@ -1849,6 +1867,8 @@ class Llama:
         max_tokens: int = 128,
         temperature: float = 0.8,
         top_p: float = 0.95,
+        min_p: float = 0.05,
+        typical_p: float = 1.0,
         logprobs: Optional[int] = None,
         echo: bool = False,
         stop: Optional[Union[str, List[str]]] = [],
@@ -1895,6 +1915,8 @@ class Llama:
             max_tokens=max_tokens,
             temperature=temperature,
             top_p=top_p,
+            min_p=min_p,
+            typical_p=typical_p,
             logprobs=logprobs,
             echo=echo,
             stop=stop,
@@ -1924,6 +1946,8 @@ class Llama:
         temperature: float = 0.2,
         top_p: float = 0.95,
         top_k: int = 40,
+        min_p: float = 0.05,
+        typical_p: float = 1.0,
         stream: bool = False,
         stop: Optional[Union[str, List[str]]] = [],
         seed: Optional[int] = None,
@@ -1970,6 +1994,8 @@ class Llama:
             temperature=temperature,
             top_p=top_p,
             top_k=top_k,
+            min_p=min_p,
+            typical_p=typical_p,
             stream=stream,
             stop=stop,
             seed=seed,
