@@ -529,6 +529,19 @@ def format_phind(
     _prompt = _format_add_colon_single(_system_message, _messages, _sep)
     return ChatFormatterResponse(prompt=_prompt)
 
+@register_chat_format("intel")
+def format_intel(
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    **kwargs: Any,
+) -> ChatFormatterResponse:
+    _roles = dict(user="### User:", assistant="### Assistant:")
+    _sep = "\n"
+    _system_message = "### System:\n{system_message}"
+    _messages = _map_roles(messages, _roles)
+    _messages.append((_roles["assistant"], None))
+    _prompt = _format_add_colon_single(_system_message, _messages, _sep)
+    return ChatFormatterResponse(prompt=_prompt)
+
 
 @register_chat_format("open-orca")
 def format_open_orca(
@@ -557,6 +570,21 @@ def format_open_orca(
     return ChatFormatterResponse(prompt=_prompt, stop=stop_str)
 
 
+@register_chat_format("mistrallite")
+def format_mistrallite(
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    **kwargs: Any,
+) -> ChatFormatterResponse:
+    _roles = dict(user="<|prompter|>", assistant="</s>\n<|assistant|>")
+    _sep = " "
+    system_template = """<|system|>{system_message}</s>"""
+    system_message = _get_system_message(messages)
+    system_message = system_template.format(system_message=system_message)
+    _messages = _map_roles(messages, _roles)
+    _messages.append((_roles["assistant"], None))
+    _prompt = _format_no_colon_single(system_message, _messages, _sep)
+    return ChatFormatterResponse(prompt=_prompt)
+
 @register_chat_format("chatml")
 def format_chatml(
     messages: List[llama_types.ChatCompletionRequestMessage],
@@ -568,6 +596,21 @@ def format_chatml(
     system_message = system_template.format(system_message=system_message)
     _roles = dict(user="<|im_start|>user", assistant="<|im_start|>assistant")
     _sep = "<|im_end|>"
+    _messages = _map_roles(messages, _roles)
+    _messages.append((_roles["assistant"], None))
+    _prompt = _format_chatml(system_message, _messages, _sep)
+    return ChatFormatterResponse(prompt=_prompt, stop=_sep)
+
+@register_chat_format("openchat")
+def format_openchat(
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    **kwargs: Any,
+) -> ChatFormatterResponse:
+    system_template = "{system_message}<|end_of_turn|>"
+    system_message = _get_system_message(messages)
+    system_message = system_template.format(system_message=system_message)
+    _roles = dict(user="GPT4 Correct User: ", assistant="<|end_of_turn|>GPT4 Correct Assistant: ")
+    _sep = "<|end_of_turn|>"
     _messages = _map_roles(messages, _roles)
     _messages.append((_roles["assistant"], None))
     _prompt = _format_chatml(system_message, _messages, _sep)
