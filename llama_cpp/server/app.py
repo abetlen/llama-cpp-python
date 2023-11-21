@@ -1,10 +1,8 @@
 import sys
 import json
 import traceback
-import multiprocessing
 import time
 from re import compile, Match, Pattern
-from threading import Lock
 from functools import partial
 from typing import Callable, Coroutine, Iterator, List, Optional, Tuple, Union, Dict
 from typing_extensions import TypedDict, Literal
@@ -20,7 +18,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 from pydantic import BaseModel, Field
-from pydantic_settings import BaseSettings
 from sse_starlette.sse import EventSourceResponse
 from starlette_context import plugins
 from starlette_context.middleware import RawContextMiddleware
@@ -28,145 +25,10 @@ from starlette_context.middleware import RawContextMiddleware
 import numpy as np
 import numpy.typing as npt
 
-
-# Disable warning for model and model_alias settings
-BaseSettings.model_config['protected_namespaces'] = ()
-
-
-class Settings(BaseSettings):
-    model: str = Field(
-        description="The path to the model to use for generating completions."
-    )
-    model_alias: Optional[str] = Field(
-        default=None,
-        description="The alias of the model to use for generating completions.",
-    )
-    # Model Params
-    n_gpu_layers: int = Field(
-        default=0,
-        ge=-1,
-        description="The number of layers to put on the GPU. The rest will be on the CPU. Set -1 to move all to GPU.",
-    )
-    main_gpu: int = Field(
-        default=0,
-        ge=0,
-        description="Main GPU to use.",
-    )
-    tensor_split: Optional[List[float]] = Field(
-        default=None,
-        description="Split layers across multiple GPUs in proportion.",
-    )
-    vocab_only: bool = Field(
-        default=False, description="Whether to only return the vocabulary."
-    )
-    use_mmap: bool = Field(
-        default=llama_cpp.llama_mmap_supported(),
-        description="Use mmap.",
-    )
-    use_mlock: bool = Field(
-        default=llama_cpp.llama_mlock_supported(),
-        description="Use mlock.",
-    )
-    # Context Params
-    seed: int = Field(default=llama_cpp.LLAMA_DEFAULT_SEED, description="Random seed. -1 for random.")
-    n_ctx: int = Field(default=2048, ge=1, description="The context size.")
-    n_batch: int = Field(
-        default=512, ge=1, description="The batch size to use per eval."
-    )
-    n_threads: int = Field(
-        default=max(multiprocessing.cpu_count() // 2, 1),
-        ge=1,
-        description="The number of threads to use.",
-    )
-    n_threads_batch: int = Field(
-        default=max(multiprocessing.cpu_count() // 2, 1),
-        ge=0,
-        description="The number of threads to use when batch processing.",
-    )
-    rope_scaling_type: int = Field(
-        default=llama_cpp.LLAMA_ROPE_SCALING_UNSPECIFIED
-    )
-    rope_freq_base: float = Field(
-        default=0.0, description="RoPE base frequency"
-    )
-    rope_freq_scale: float = Field(
-        default=0.0, description="RoPE frequency scaling factor"
-    )
-    yarn_ext_factor: float = Field(
-        default=-1.0
-    )
-    yarn_attn_factor: float = Field(
-        default=1.0
-    )
-    yarn_beta_fast: float = Field(
-        default=32.0
-    )
-    yarn_beta_slow: float = Field(
-        default=1.0
-    )
-    yarn_orig_ctx: int = Field(
-        default=0
-    )
-    mul_mat_q: bool = Field(
-        default=True, description="if true, use experimental mul_mat_q kernels"
-    )
-    f16_kv: bool = Field(default=True, description="Whether to use f16 key/value.")
-    logits_all: bool = Field(default=True, description="Whether to return logits.")
-    embedding: bool = Field(default=True, description="Whether to use embeddings.")
-    # Sampling Params
-    last_n_tokens_size: int = Field(
-        default=64,
-        ge=0,
-        description="Last n tokens to keep for repeat penalty calculation.",
-    )
-    # LoRA Params
-    lora_base: Optional[str] = Field(
-        default=None,
-        description="Optional path to base model, useful if using a quantized base model and you want to apply LoRA to an f16 model."
-    )
-    lora_path: Optional[str] = Field(
-        default=None,
-        description="Path to a LoRA file to apply to the model.",
-    )
-    # Backend Params
-    numa: bool = Field(
-        default=False,
-        description="Enable NUMA support.",
-    )
-    # Chat Format Params
-    chat_format: str = Field(
-        default="llama-2",
-        description="Chat format to use.",
-    )
-    clip_model_path: Optional[str] = Field(
-        default=None,
-        description="Path to a CLIP model to use for multi-modal chat completion.",
-    )
-    # Cache Params
-    cache: bool = Field(
-        default=False,
-        description="Use a cache to reduce processing times for evaluated prompts.",
-    )
-    cache_type: Literal["ram", "disk"] = Field(
-        default="ram",
-        description="The type of cache to use. Only used if cache is True.",
-    )
-    cache_size: int = Field(
-        default=2 << 30,
-        description="The size of the cache in bytes. Only used if cache is True.",
-    )
-    # Misc
-    verbose: bool = Field(
-        default=True, description="Whether to print debug information."
-    )
-    # Server Params
-    host: str = Field(default="localhost", description="Listen address")
-    port: int = Field(default=8000, description="Listen port")
-    interrupt_requests: bool = Field(
-        default=True,
-        description="Whether to interrupt requests when a new request is received.",
-    )
-
+from llama_cpp.server.model import get_llama, llama_outer_lock, set_settings, get_settings
+from llama_cpp.server.model import router as models_router
+from llama_cpp.server.model import MultiLlama as Llama
+from llama_cpp.server.settings import Settings
 
 class ErrorResponse(TypedDict):
     """OpenAI style error response"""
@@ -175,7 +37,6 @@ class ErrorResponse(TypedDict):
     type: str
     param: Optional[str]
     code: Optional[str]
-
 
 class ErrorResponseFormatters:
     """Collection of formatters for error responses.
@@ -242,7 +103,6 @@ class ErrorResponseFormatters:
             param=None,
             code="model_not_found",
         )
-
 
 class RouteErrorHandler(APIRoute):
     """Custom APIRoute that handles application errors and exceptions"""
@@ -351,12 +211,7 @@ class RouteErrorHandler(APIRoute):
 
         return custom_route_handler
 
-
 router = APIRouter(route_class=RouteErrorHandler)
-
-settings: Optional[Settings] = None
-llama: Optional[llama_cpp.Llama] = None
-
 
 def create_app(settings: Optional[Settings] = None):
     if settings is None:
@@ -378,102 +233,10 @@ def create_app(settings: Optional[Settings] = None):
         allow_headers=["*"],
     )
     app.include_router(router)
-    global llama
-
-    ##
-    chat_handler = None
-    if settings.chat_format == "llava-1-5":
-        assert settings.clip_model_path is not None
-        chat_handler = llama_cpp.llama_chat_format.Llava15ChatHandler(clip_model_path=settings.clip_model_path, verbose=settings.verbose)
-    ##
-
-    llama = llama_cpp.Llama(
-        model_path=settings.model,
-        # Model Params
-        n_gpu_layers=settings.n_gpu_layers,
-        main_gpu=settings.main_gpu,
-        tensor_split=settings.tensor_split,
-        vocab_only=settings.vocab_only,
-        use_mmap=settings.use_mmap,
-        use_mlock=settings.use_mlock,
-        # Context Params
-        seed=settings.seed,
-        n_ctx=settings.n_ctx,
-        n_batch=settings.n_batch,
-        n_threads=settings.n_threads,
-        n_threads_batch=settings.n_threads_batch,
-        rope_scaling_type=settings.rope_scaling_type,
-        rope_freq_base=settings.rope_freq_base,
-        rope_freq_scale=settings.rope_freq_scale,
-        yarn_ext_factor=settings.yarn_ext_factor,
-        yarn_attn_factor=settings.yarn_attn_factor,
-        yarn_beta_fast=settings.yarn_beta_fast,
-        yarn_beta_slow=settings.yarn_beta_slow,
-        yarn_orig_ctx=settings.yarn_orig_ctx,
-        mul_mat_q=settings.mul_mat_q,
-        f16_kv=settings.f16_kv,
-        logits_all=settings.logits_all,
-        embedding=settings.embedding,
-        # Sampling Params
-        last_n_tokens_size=settings.last_n_tokens_size,
-        # LoRA Params
-        lora_base=settings.lora_base,
-        lora_path=settings.lora_path,
-        # Backend Params
-        numa=settings.numa,
-        # Chat Format Params
-        chat_format=settings.chat_format,
-        chat_handler=chat_handler,
-        # Misc
-        verbose=settings.verbose,
-    )
-    if settings.cache:
-        if settings.cache_type == "disk":
-            if settings.verbose:
-                print(f"Using disk cache with size {settings.cache_size}")
-            cache = llama_cpp.LlamaDiskCache(capacity_bytes=settings.cache_size)
-        else:
-            if settings.verbose:
-                print(f"Using ram cache with size {settings.cache_size}")
-            cache = llama_cpp.LlamaRAMCache(capacity_bytes=settings.cache_size)
-
-        cache = llama_cpp.LlamaCache(capacity_bytes=settings.cache_size)
-        llama.set_cache(cache)
-
-    def set_settings(_settings: Settings):
-        global settings
-        settings = _settings
+    app.include_router(models_router)
 
     set_settings(settings)
     return app
-
-
-llama_outer_lock = Lock()
-llama_inner_lock = Lock()
-
-
-def get_llama():
-    # NOTE: This double lock allows the currently streaming llama model to
-    # check if any other requests are pending in the same thread and cancel
-    # the stream if so.
-    llama_outer_lock.acquire()
-    release_outer_lock = True
-    try:
-        llama_inner_lock.acquire()
-        try:
-            llama_outer_lock.release()
-            release_outer_lock = False
-            yield llama
-        finally:
-            llama_inner_lock.release()
-    finally:
-        if release_outer_lock:
-            llama_outer_lock.release()
-
-
-def get_settings():
-    yield settings
-
 
 async def get_event_publisher(
     request: Request,
@@ -676,11 +439,13 @@ def make_logit_bias_processor(
 async def create_completion(
     request: Request,
     body: CreateCompletionRequest,
-    llama: llama_cpp.Llama = Depends(get_llama),
+    llama: Llama = Depends(get_llama),
 ) -> llama_cpp.Completion:
     if isinstance(body.prompt, list):
         assert len(body.prompt) <= 1
         body.prompt = body.prompt[0] if len(body.prompt) > 0 else ""
+    
+    llama = llama(body.model)
 
     exclude = {
         "n",
@@ -728,9 +493,8 @@ async def create_completion(
     else:
         return iterator_or_completion
 
-
 class CreateEmbeddingRequest(BaseModel):
-    model: Optional[str] = model_field
+    model: str = model_field
     input: Union[str, List[str]] = Field(description="The input to embed.")
     user: Optional[str] = Field(default=None)
 
@@ -744,15 +508,14 @@ class CreateEmbeddingRequest(BaseModel):
         }
     }
 
-
 @router.post(
     "/v1/embeddings",
 )
 async def create_embedding(
-    request: CreateEmbeddingRequest, llama: llama_cpp.Llama = Depends(get_llama)
+    request: CreateEmbeddingRequest, llama: Llama = Depends(get_llama)
 ):
     return await run_in_threadpool(
-        llama.create_embedding, **request.model_dump(exclude={"user"})
+        llama(request.model).create_embedding, **request.model_dump(exclude={"user"})
     )
 
 
@@ -799,7 +562,7 @@ class CreateChatCompletionRequest(BaseModel):
     )
 
     # ignored or currently unsupported
-    model: Optional[str] = model_field
+    model: str = model_field
     n: Optional[int] = 1
     user: Optional[str] = Field(None)
 
@@ -836,7 +599,7 @@ class CreateChatCompletionRequest(BaseModel):
 async def create_chat_completion(
     request: Request,
     body: CreateChatCompletionRequest,
-    llama: llama_cpp.Llama = Depends(get_llama),
+    llama: Llama = Depends(get_llama),
     settings: Settings = Depends(get_settings),
 ) -> llama_cpp.ChatCompletion:
     exclude = {
@@ -846,7 +609,7 @@ async def create_chat_completion(
         "user",
     }
     kwargs = body.model_dump(exclude=exclude)
-
+    llama = llama(body.model)
     if body.logit_bias is not None:
         kwargs["logits_processor"] = llama_cpp.LogitsProcessorList(
             [
@@ -900,6 +663,7 @@ class ModelList(TypedDict):
 @router.get("/v1/models")
 async def get_models(
     settings: Settings = Depends(get_settings),
+    llama: Llama = Depends(get_llama),
 ) -> ModelList:
     assert llama is not None
     return {
