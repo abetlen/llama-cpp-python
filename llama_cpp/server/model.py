@@ -2,9 +2,12 @@ import os
 from typing import Any, Optional
 from threading import Lock
 import llama_cpp
-
-from llama_cpp.server.util import models_root_dir
 from llama_cpp.server.settings import Settings, get_settings
+
+def models_root_dir(path = None):
+    path = os.path.abspath(path or os.environ.get('MODEL', '/models'))
+    if os.path.isdir(path): return path
+    return os.path.dirname(path)
 
 class MultiLlama:
     _model: Optional[llama_cpp.Llama] = None
