@@ -655,17 +655,14 @@ async def get_models(
     settings: Settings = Depends(get_settings),
     llama: Llama = Depends(get_llama),
 ) -> ModelList:
-    assert llama is not None
     return {
         "object": "list",
         "data": [
             {
-                "id": settings.model_alias
-                if settings.model_alias is not None
-                else llama.model_path,
+                "id": model,
                 "object": "model",
                 "owned_by": "me",
                 "permissions": [],
-            }
+            } for model in llama._models
         ],
     }

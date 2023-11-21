@@ -4,8 +4,12 @@ from threading import Lock
 import llama_cpp
 from llama_cpp.server.settings import Settings, get_settings
 
+FILE_EXT = ".gguf"
+MODEL_ENV_ARG = "MODEL"
+DEFAULT_MODEL_DIR = "/models"
+
 def models_root_dir(path = None):
-    path = os.path.abspath(path or os.environ.get('MODEL', '/models'))
+    path = os.path.abspath(path or os.environ.get(MODEL_ENV_ARG, DEFAULT_MODEL_DIR))
     if os.path.isdir(path): return path
     return os.path.dirname(path)
 
@@ -17,8 +21,8 @@ class MultiLlama:
         self._settings = settings
         model_root = models_root_dir(settings.model)
         for filename in os.listdir(model_root):
-            if filename.endswith('.gguf'):
-                self._models[filename.split('.gguf')[0]] = os.path.join(model_root, filename)
+            if filename.endswith(FILE_EXT):
+                self._models[filename.split(FILE_EXT)[0]] = os.path.join(model_root, filename)
 
     def __call__(self, model: str, **kwargs: Any) -> llama_cpp.Llama:
         try:
