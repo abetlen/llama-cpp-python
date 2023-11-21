@@ -1,15 +1,10 @@
 import os
-import shutil
-import tempfile
-from pathlib import Path
 from typing import Any, Optional
 from threading import Lock
-from fastapi import APIRouter, UploadFile, Depends, HTTPException
-from fastapi.background import BackgroundTasks
 import llama_cpp
 
-from llama_cpp.server.util import remove_file, models_root_dir
-from llama_cpp.server.settings import Settings, SETTINGS
+from llama_cpp.server.util import models_root_dir
+from llama_cpp.server.settings import Settings, get_settings
 
 class MultiLlama:
     _model: Optional[llama_cpp.Llama] = None
@@ -27,7 +22,7 @@ class MultiLlama:
             model_path = self._models[model]
         except KeyError:
             # TODO server raises 500 ?
-            raise HTTPException(404, f"Model file for {model} NOT found")
+            raise Exception(404, f"Model file for {model} NOT found")
         
         if self._model:
             if self._model.model_path == model_path:
@@ -90,9 +85,9 @@ class MultiLlama:
     
 LLAMA: Optional[MultiLlama] = None
 
-def init_llama():
+def _set_llama(settings: Optional[Settings] = None):
     global LLAMA
-    LLAMA = MultiLlama(SETTINGS)
+    LLAMA = MultiLlama(settings or next(get_settings()))
 
 llama_outer_lock = Lock()
 llama_inner_lock = Lock()
@@ -107,7 +102,7 @@ def get_llama():
         llama_inner_lock.acquire()
         try:
             if not LLAMA:
-                init_llama()
+                _set_llama()
             llama_outer_lock.release()
             release_outer_lock = False
             yield LLAMA
@@ -116,40 +111,3 @@ def get_llama():
     finally:
         if release_outer_lock:
             llama_outer_lock.release()
-
-
-router = APIRouter(
-    prefix="/models",
-    tags=["Model"],
-    responses={404: {"description": "Not found"}},
-)
-
-@router.put("/")
-async def api_update_model(
-    file: UploadFile,
-    background_tasks: BackgroundTasks
-   # user: User = Depends(RBAC(settings.auth_role)),
-):
-    ext = "".join(Path(file.filename).suffixes) if file.filename else ".gguf"
-    model_file = tempfile.NamedTemporaryFile(suffix=ext).name
-    with open(model_file, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-        background_tasks.add_task(remove_file, model_file)
-    models_dir = os.path.dirname(os.path.abspath(os.environ.get('MODEL', '/')))
-    target_path = os.path.join(models_dir, file.filename)
-    shutil.copy(model_file, target_path)
-    LLAMA[file.filename] = target_path
-    return {"model": target_path}
-
-@router.delete("/{model}")
-async def api_delete_model(
-    model: str,
-    background_tasks: BackgroundTasks
-    # user: User = Depends(RBAC(settings.auth_role)),
-):
-    models_dir = models_root_dir()
-    target_path = os.path.join(models_dir, LLAMA[model])
-    if not os.path.exists(target_path):
-        raise HTTPException(status_code=404, detail=f"Model File NOT Found for {model}")
-    background_tasks.add_task(remove_file, target_path)
-    return 'success'

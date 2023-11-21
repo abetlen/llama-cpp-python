@@ -26,9 +26,7 @@ import numpy as np
 import numpy.typing as npt
 
 from llama_cpp.server.model import get_llama, llama_outer_lock, MultiLlama as Llama
-from llama_cpp.server.model import router as models_router
-#from llama_cpp.server.model import MultiLlama as Llama
-from llama_cpp.server.settings import Settings, SETTINGS, set_settings, get_settings
+from llama_cpp.server.settings import Settings, set_settings, get_settings
 
 class ErrorResponse(TypedDict):
     """OpenAI style error response"""
@@ -233,7 +231,6 @@ def create_app(settings: Optional[Settings] = None):
         allow_headers=["*"],
     )
     app.include_router(router)
-    app.include_router(models_router)
 
     set_settings(settings)
     return app
@@ -249,7 +246,7 @@ async def get_event_publisher(
                 await inner_send_chan.send(dict(data=json.dumps(chunk)))
                 if await request.is_disconnected():
                     raise anyio.get_cancelled_exc_class()()
-                if SETTINGS.interrupt_requests and llama_outer_lock.locked():
+                if next(get_settings()).interrupt_requests and llama_outer_lock.locked():
                     await inner_send_chan.send(dict(data="[DONE]"))
                     raise anyio.get_cancelled_exc_class()()
             await inner_send_chan.send(dict(data="[DONE]"))
