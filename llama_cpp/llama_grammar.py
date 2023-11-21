@@ -58,7 +58,7 @@ class LlamaGrammar:
         )  # type: std.vector[std.vector[LlamaGrammarElement]]
         self._n_rules = self._grammar_rules.size()  # type: int
         self._start_rule_index = parsed_grammar.symbol_ids.at("root")  # type: int
-        self.grammar = self.init()
+        self.init()
 
     @classmethod
     def from_string(cls, grammar: str, verbose: bool = True) -> "LlamaGrammar":
