@@ -237,6 +237,7 @@ def create_app(settings: Optional[Settings] = None):
         return "pong"
 
     set_settings(settings)
+    next(get_llama())
     return app
 
 async def get_event_publisher(

@@ -23,6 +23,8 @@ class MultiLlama:
         for filename in os.listdir(model_root):
             if filename.endswith(FILE_EXT):
                 self._models[filename.split(FILE_EXT)[0]] = os.path.join(model_root, filename)
+        if os.path.isfile(settings.model):
+            self(settings.model.split(os.path.sep)[-1].split(FILE_EXT)[0])
 
     def __call__(self, model: str, **kwargs: Any) -> llama_cpp.Llama:
         try:
