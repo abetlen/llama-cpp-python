@@ -45,6 +45,7 @@ class LlamaChatCompletionHandler(Protocol):
         model: Optional[str] = None,
         logits_processor: Optional[llama.LogitsProcessorList] = None,
         grammar: Optional[llama.LlamaGrammar] = None,
+        logit_bias: Optional[Dict[str, float]] = None,
         **kwargs,  # type: ignore
     ) -> Union[
         llama_types.CreateChatCompletionResponse,
@@ -308,6 +309,7 @@ def register_chat_format(name: str):
             model: Optional[str] = None,
             logits_processor: Optional[llama.LogitsProcessorList] = None,
             grammar: Optional[llama.LlamaGrammar] = None,
+            logit_bias: Optional[Dict[str, float]] = None,
             **kwargs,  # type: ignore
         ) -> Union[
             llama_types.CreateChatCompletionResponse,
@@ -350,6 +352,7 @@ def register_chat_format(name: str):
                 model=model,
                 logits_processor=logits_processor,
                 grammar=grammar,
+                logit_bias=logit_bias,
             )
             return _convert_completion_to_chat(completion_or_chunks, stream=stream)
 

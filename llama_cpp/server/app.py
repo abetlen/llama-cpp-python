@@ -646,36 +646,16 @@ class CreateCompletionRequest(BaseModel):
     }
 
 
-def make_logit_bias_processor(
+def _logit_bias_tokens_to_input_ids(
     llama: llama_cpp.Llama,
     logit_bias: Dict[str, float],
-    logit_bias_type: Optional[Literal["input_ids", "tokens"]],
-):
-    if logit_bias_type is None:
-        logit_bias_type = "input_ids"
-
-    to_bias: Dict[int, float] = {}
-    if logit_bias_type == "input_ids":
-        for input_id, score in logit_bias.items():
-            input_id = int(input_id)
-            to_bias[input_id] = score
-
-    elif logit_bias_type == "tokens":
-        for token, score in logit_bias.items():
-            token = token.encode("utf-8")
-            for input_id in llama.tokenize(token, add_bos=False, special=True):
-                to_bias[input_id] = score
-
-    def logit_bias_processor(
-        input_ids: npt.NDArray[np.intc],
-        scores: npt.NDArray[np.single],
-    ) -> npt.NDArray[np.single]:
-        new_scores = np.copy(scores)         # Does it make sense to copy the whole array or can we just overwrite the original one?
-        for input_id, score in to_bias.items():
-            new_scores[input_id] = score + scores[input_id]
-        return new_scores
-
-    return logit_bias_processor
+) -> Dict[str, float]:
+    to_bias: Dict[str, float] = {}
+    for token, score in logit_bias.items():
+        token = token.encode("utf-8")
+        for input_id in llama.tokenize(token, add_bos=False, special=True):
+            to_bias[str(input_id)] = score
+    return to_bias
 
 
 @router.post(
@@ -694,17 +674,16 @@ async def create_completion(
     exclude = {
         "n",
         "best_of",
-        "logit_bias",
         "logit_bias_type",
         "user",
     }
     kwargs = body.model_dump(exclude=exclude)
 
     if body.logit_bias is not None:
-        kwargs["logits_processor"] = llama_cpp.LogitsProcessorList(
-            [
-                make_logit_bias_processor(llama, body.logit_bias, body.logit_bias_type),
-            ]
+        kwargs["logit_bias"] = (
+            _logit_bias_tokens_to_input_ids(llama, body.logit_bias)
+            if body.logit_bias_type == "tokens"
+            else body.logit_bias
         )
 
     if body.grammar is not None:
@@ -851,17 +830,16 @@ async def create_chat_completion(
 ) -> llama_cpp.ChatCompletion:
     exclude = {
         "n",
-        "logit_bias",
         "logit_bias_type",
         "user",
     }
     kwargs = body.model_dump(exclude=exclude)
 
     if body.logit_bias is not None:
-        kwargs["logits_processor"] = llama_cpp.LogitsProcessorList(
-            [
-                make_logit_bias_processor(llama, body.logit_bias, body.logit_bias_type),
-            ]
+        kwargs["logit_bias"] = (
+            _logit_bias_tokens_to_input_ids(llama, body.logit_bias)
+            if body.logit_bias_type == "tokens"
+            else body.logit_bias
         )
 
     if body.grammar is not None:

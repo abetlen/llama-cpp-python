@@ -1327,6 +1327,7 @@ class Llama:
         stopping_criteria: Optional[StoppingCriteriaList] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
+        logit_bias: Optional[Dict[int, float]] = None,
     ) -> Union[
         Iterator[CreateCompletionResponse], Iterator[CreateCompletionStreamResponse]
     ]:
@@ -1354,6 +1355,28 @@ class Llama:
             stop if isinstance(stop, list) else [stop] if isinstance(stop, str) else []
         )
         model_name: str = model if model is not None else self.model_path
+
+        # NOTE: This likely doesn't work correctly for the first token in the prompt
+        # because of the extra space added to the start of the prompt_tokens
+        if logit_bias is not None:
+            logit_bias_map = {int(k): float(v) for k, v in logit_bias.items()}
+
+            def logit_bias_processor(
+                input_ids: npt.NDArray[np.intc],
+                scores: npt.NDArray[np.single],
+            ) -> npt.NDArray[np.single]:
+                new_scores = np.copy(
+                    scores
+                )  # Does it make sense to copy the whole array or can we just overwrite the original one?
+                for input_id, score in logit_bias_map.items():
+                    new_scores[input_id] = score + scores[input_id]
+                return new_scores
+
+            _logit_bias_processor = LogitsProcessorList([logit_bias_processor])
+            if logits_processor is None:
+                logits_processor = _logit_bias_processor
+            else:
+                logits_processor = logits_processor.extend(_logit_bias_processor)
 
         if self.verbose:
             self._ctx.reset_timings()
@@ -1963,6 +1986,7 @@ class Llama:
         model: Optional[str] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
+        logit_bias: Optional[Dict[str, float]] = None,
     ) -> Union[
         CreateChatCompletionResponse, Iterator[CreateChatCompletionStreamResponse]
     ]:
@@ -2011,6 +2035,7 @@ class Llama:
             model=model,
             logits_processor=logits_processor,
             grammar=grammar,
+            logit_bias=logit_bias,
         )
 
     def __getstate__(self):
