@@ -90,6 +90,10 @@ class MultiLlama:
     def __setitem__(self, model, path):
         self._models[model] = path
     
+    def __iter__(self):
+        for model in self._models:
+            yield model
+    
 LLAMA: Optional[MultiLlama] = None
 
 def _set_llama(settings: Optional[Settings] = None):

@@ -232,6 +232,10 @@ def create_app(settings: Optional[Settings] = None):
     )
     app.include_router(router)
 
+    @app.get('/')
+    async def root():
+        return "pong"
+
     set_settings(settings)
     return app
 
@@ -652,7 +656,6 @@ class ModelList(TypedDict):
 
 @router.get("/v1/models")
 async def get_models(
-    settings: Settings = Depends(get_settings),
     llama: Llama = Depends(get_llama),
 ) -> ModelList:
     return {
@@ -663,6 +666,6 @@ async def get_models(
                 "object": "model",
                 "owned_by": "me",
                 "permissions": [],
-            } for model in llama._models
+            } for model in llama
         ],
     }
