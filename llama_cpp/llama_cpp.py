@@ -205,6 +205,7 @@ LLAMA_ROPE_SCALING_LINEAR = 1
 LLAMA_ROPE_SCALING_YARN = 2
 LLAMA_ROPE_SCALING_MAX_VALUE = LLAMA_ROPE_SCALING_YARN
 
+
 # typedef struct llama_token_data {
 #     llama_token id; // token id
 #     float logit;    // log-odds of the token
@@ -660,6 +661,62 @@ def llama_rope_freq_scale_train(model: llama_model_p) -> float:
 
 _lib.llama_rope_freq_scale_train.argtypes = [llama_model_p]
 _lib.llama_rope_freq_scale_train.restype = c_float
+
+# // Functions to access the model's GGUF metadata scalar values
+# // - The functions return the length of the string on success, or -1 on failure
+# // - The output string is always null-terminated and cleared on failure
+# // - GGUF array values are not supported by these functions
+
+
+# // Get metadata value as a string by key name
+# LLAMA_API int llama_model_meta_val_str(const struct llama_model * model, const char * key, char * buf, size_t buf_size);
+def llama_model_meta_val_str(
+    model: llama_model_p, key: Union[c_char_p, bytes], buf: bytes, buf_size: int
+) -> int:
+    return _lib.llama_model_meta_val_str(model, key, buf, buf_size)
+
+
+_lib.llama_model_meta_val_str.argtypes = [llama_model_p, c_char_p, c_char_p, c_size_t]
+_lib.llama_model_meta_val_str.restype = c_int
+
+
+# // Get the number of metadata key/value pairs
+# LLAMA_API int llama_model_meta_count(const struct llama_model * model);
+def llama_model_meta_count(model: llama_model_p) -> int:
+    return _lib.llama_model_meta_count(model)
+
+
+_lib.llama_model_meta_count.argtypes = [llama_model_p]
+_lib.llama_model_meta_count.restype = c_int
+
+
+# // Get metadata key name by index
+# LLAMA_API int llama_model_meta_key_by_index(const struct llama_model * model, int i, char * buf, size_t buf_size);
+def llama_model_meta_key_by_index(
+    model: llama_model_p, i: Union[c_int, int], buf: bytes, buf_size: int
+) -> int:
+    return _lib.llama_model_meta_key_by_index(model, i, buf, buf_size)
+
+
+_lib.llama_model_meta_key_by_index.argtypes = [llama_model_p, c_int, c_char_p, c_size_t]
+_lib.llama_model_meta_key_by_index.restype = c_int
+
+
+# // Get metadata value as a string by index
+# LLAMA_API int llama_model_meta_val_str_by_index(const struct llama_model * model, int i, char * buf, size_t buf_size);
+def llama_model_meta_val_str_by_index(
+    model: llama_model_p, i: Union[c_int, int], buf: bytes, buf_size: int
+) -> int:
+    return _lib.llama_model_meta_val_str_by_index(model, i, buf, buf_size)
+
+
+_lib.llama_model_meta_val_str_by_index.argtypes = [
+    llama_model_p,
+    c_int,
+    c_char_p,
+    c_size_t,
+]
+_lib.llama_model_meta_val_str_by_index.restype = c_int
 
 
 # // Get a string describing the model type
@@ -1213,7 +1270,9 @@ _lib.llama_token_get_text.restype = c_char_p
 
 
 # LLAMA_API float llama_token_get_score(const struct llama_model * model, llama_token token);
-def llama_token_get_score(model: llama_model_p, token: Union[llama_token, int]) -> float:
+def llama_token_get_score(
+    model: llama_model_p, token: Union[llama_token, int]
+) -> float:
     return _lib.llama_token_get_score(model, token)
 
 
@@ -1258,6 +1317,26 @@ def llama_token_nl(model: llama_model_p) -> int:
 
 _lib.llama_token_nl.argtypes = [llama_model_p]
 _lib.llama_token_nl.restype = llama_token
+
+
+# // Returns -1 if unknown, 1 for true or 0 for false.
+# LLAMA_API int         llama_add_bos_token(const struct llama_model * model);
+def llama_add_bos_token(model: llama_model_p) -> int:
+    return _lib.llama_add_bos_token(model)
+
+
+_lib.llama_add_bos_token.argtypes = [llama_model_p]
+_lib.llama_add_bos_token.restype = c_int
+
+
+# // Returns -1 if unknown, 1 for true or 0 for false.
+# LLAMA_API int         llama_add_eos_token(const struct llama_model * model);
+def llama_add_eos_token(model: llama_model_p) -> int:
+    return _lib.llama_add_eos_token(model)
+
+
+_lib.llama_add_eos_token.argtypes = [llama_model_p]
+_lib.llama_add_eos_token.restype = c_int
 
 
 # // codellama infill tokens

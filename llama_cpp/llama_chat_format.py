@@ -26,6 +26,8 @@ class LlamaChatCompletionHandler(Protocol):
         temperature: float = 0.2,
         top_p: float = 0.95,
         top_k: int = 40,
+        min_p: float = 0.05,
+        typical_p: float = 1.0,
         stream: bool = False,
         stop: Optional[Union[str, List[str]]] = [],
         seed: Optional[int] = None,
@@ -43,6 +45,7 @@ class LlamaChatCompletionHandler(Protocol):
         model: Optional[str] = None,
         logits_processor: Optional[llama.LogitsProcessorList] = None,
         grammar: Optional[llama.LlamaGrammar] = None,
+        logit_bias: Optional[Dict[str, float]] = None,
         **kwargs,  # type: ignore
     ) -> Union[
         llama_types.CreateChatCompletionResponse,
@@ -287,6 +290,8 @@ def register_chat_format(name: str):
             temperature: float = 0.2,
             top_p: float = 0.95,
             top_k: int = 40,
+            min_p: float = 0.05,
+            typical_p: float = 1.0,
             stream: bool = False,
             stop: Optional[Union[str, List[str]]] = [],
             seed: Optional[int] = None,
@@ -304,6 +309,7 @@ def register_chat_format(name: str):
             model: Optional[str] = None,
             logits_processor: Optional[llama.LogitsProcessorList] = None,
             grammar: Optional[llama.LlamaGrammar] = None,
+            logit_bias: Optional[Dict[str, float]] = None,
             **kwargs,  # type: ignore
         ) -> Union[
             llama_types.CreateChatCompletionResponse,
@@ -330,6 +336,8 @@ def register_chat_format(name: str):
                 temperature=temperature,
                 top_p=top_p,
                 top_k=top_k,
+                min_p=min_p,
+                typical_p=typical_p,
                 stream=stream,
                 stop=stop,
                 seed=seed,
@@ -344,6 +352,7 @@ def register_chat_format(name: str):
                 model=model,
                 logits_processor=logits_processor,
                 grammar=grammar,
+                logit_bias=logit_bias,
             )
             return _convert_completion_to_chat(completion_or_chunks, stream=stream)
 
@@ -524,6 +533,20 @@ def format_phind(
     return ChatFormatterResponse(prompt=_prompt)
 
 
+@register_chat_format("intel")
+def format_intel(
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    **kwargs: Any,
+) -> ChatFormatterResponse:
+    _roles = dict(user="### User:", assistant="### Assistant:")
+    _sep = "\n"
+    _system_message = "### System:\n{system_message}"
+    _messages = _map_roles(messages, _roles)
+    _messages.append((_roles["assistant"], None))
+    _prompt = _format_add_colon_single(_system_message, _messages, _sep)
+    return ChatFormatterResponse(prompt=_prompt)
+
+
 @register_chat_format("open-orca")
 def format_open_orca(
     messages: List[llama_types.ChatCompletionRequestMessage],
@@ -551,6 +574,22 @@ def format_open_orca(
     return ChatFormatterResponse(prompt=_prompt, stop=stop_str)
 
 
+@register_chat_format("mistrallite")
+def format_mistrallite(
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    **kwargs: Any,
+) -> ChatFormatterResponse:
+    _roles = dict(user="<|prompter|>", assistant="</s>\n<|assistant|>")
+    _sep = " "
+    system_template = """<|system|>{system_message}</s>"""
+    system_message = _get_system_message(messages)
+    system_message = system_template.format(system_message=system_message)
+    _messages = _map_roles(messages, _roles)
+    _messages.append((_roles["assistant"], None))
+    _prompt = _format_no_colon_single(system_message, _messages, _sep)
+    return ChatFormatterResponse(prompt=_prompt)
+
+
 @register_chat_format("chatml")
 def format_chatml(
     messages: List[llama_types.ChatCompletionRequestMessage],
@@ -568,6 +607,24 @@ def format_chatml(
     return ChatFormatterResponse(prompt=_prompt, stop=_sep)
 
 
+@register_chat_format("openchat")
+def format_openchat(
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    **kwargs: Any,
+) -> ChatFormatterResponse:
+    system_template = "{system_message}<|end_of_turn|>"
+    system_message = _get_system_message(messages)
+    system_message = system_template.format(system_message=system_message)
+    _roles = dict(
+        user="GPT4 Correct User: ", assistant="<|end_of_turn|>GPT4 Correct Assistant: "
+    )
+    _sep = "<|end_of_turn|>"
+    _messages = _map_roles(messages, _roles)
+    _messages.append((_roles["assistant"], None))
+    _prompt = _format_chatml(system_message, _messages, _sep)
+    return ChatFormatterResponse(prompt=_prompt, stop=_sep)
+
+
 @register_chat_completion_handler("functionary")
 def functionary_chat_handler(
     llama: llama.Llama,
@@ -579,6 +636,8 @@ def functionary_chat_handler(
     temperature: float = 0.2,
     top_p: float = 0.95,
     top_k: int = 40,
+    min_p: float = 0.05,
+    typical_p: float = 1.0,
     stream: bool = False,
     stop: Optional[Union[str, List[str]]] = [],
     response_format: Optional[llama_types.ChatCompletionRequestResponseFormat] = None,
@@ -597,46 +656,60 @@ def functionary_chat_handler(
 ) -> Union[llama_types.ChatCompletion, Iterator[llama_types.ChatCompletionChunk]]:
     SYSTEM_MESSAGE = """A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. The assistant calls functions with appropriate input when necessary"""
 
-    def generate_type_definition(param: Dict[str, llama_types.JsonType], indent_level: int, shared_defs) -> str:
-        indent = '  ' * indent_level
-        if '$ref' in param:
+    def generate_type_definition(
+        param: Dict[str, llama_types.JsonType], indent_level: int, shared_defs
+    ) -> str:
+        indent = "  " * indent_level
+        if "$ref" in param:
             # Reference to a shared definition
-            ref_name = param['$ref'].split('/')[-1]  # Extract the type name from the reference
+            ref_name = param["$ref"].split("/")[
+                -1
+            ]  # Extract the type name from the reference
             return ref_name
-        elif param.get('type') == 'array':
-            items = param.get('items', {})
+        elif param.get("type") == "array":
+            items = param.get("items", {})
             item_type = generate_type_definition(items, indent_level + 1, shared_defs)
             return f"Array<{item_type}>"
-        elif param.get('type') == 'object':
-            properties = param.get('properties', {})
+        elif param.get("type") == "object":
+            properties = param.get("properties", {})
             nested_schema = "{\n"
             for nested_param_name, nested_param in properties.items():
-                nested_param_type = generate_type_definition(nested_param, indent_level + 1, shared_defs)
-                nested_schema += f"{indent}  {nested_param_name}: {nested_param_type},\n"
+                nested_param_type = generate_type_definition(
+                    nested_param, indent_level + 1, shared_defs
+                )
+                nested_schema += (
+                    f"{indent}  {nested_param_name}: {nested_param_type},\n"
+                )
             nested_schema += indent + "}"
             return nested_schema
-        elif 'enum' in param:
+        elif "enum" in param:
             # Enum type
-            return " | ".join([f'"{enum_value}"' for enum_value in param['enum']])
+            return " | ".join([f'"{enum_value}"' for enum_value in param["enum"]])
         else:
             # Simple type
-            return param.get('type', 'any')
+            return param.get("type", "any")
 
     def generate_shared_definitions(shared_defs, indent_level: int) -> str:
-        indent = '  ' * indent_level
+        indent = "  " * indent_level
         shared_definitions = ""
         for def_name, def_properties in shared_defs.items():
             shared_definitions += f"{indent}type {def_name} = "
-            if def_properties.get('type') == 'object':
-                shared_definitions += generate_type_definition(def_properties, indent_level, shared_defs)
-            elif 'enum' in def_properties:
+            if def_properties.get("type") == "object":
+                shared_definitions += generate_type_definition(
+                    def_properties, indent_level, shared_defs
+                )
+            elif "enum" in def_properties:
                 # Enum type
-                shared_definitions += " | ".join([f'"{enum_value}"' for enum_value in def_properties['enum']])
+                shared_definitions += " | ".join(
+                    [f'"{enum_value}"' for enum_value in def_properties["enum"]]
+                )
             shared_definitions += ";\n"
         return shared_definitions
 
     def generate_schema_from_functions(functions, namespace="functions") -> str:
-        schema = "// Supported function definitions that should be called when necessary.\n"
+        schema = (
+            "// Supported function definitions that should be called when necessary.\n"
+        )
         schema += f"namespace {namespace} {{\n\n"
 
         # Generate shared definitions
@@ -652,10 +725,10 @@ def functionary_chat_handler(
             description = function.get("description", "")
             parameters = function.get("parameters", {})
             required_params = parameters.get("required", [])
-            
+
             schema += f"  // {description}\n"
             schema += f"  type {function_name} = (_: {{\n"
-            
+
             for param_name, param in parameters.get("properties", {}).items():
                 param_description = param.get("description", "")
                 param_type = generate_type_definition(param, 2, shared_definitions)
@@ -679,13 +752,18 @@ def functionary_chat_handler(
                     role="system", content=generate_schema_from_functions(functions)
                 )
             )
-        
+
         if tools is not None:
             all_messages.append(
                 llama_types.ChatCompletionRequestSystemMessage(
-                    role="system", content=generate_schema_from_functions(
-                        [tool["function"] for tool in tools if tool["type"] == "function"]
-                    )
+                    role="system",
+                    content=generate_schema_from_functions(
+                        [
+                            tool["function"]
+                            for tool in tools
+                            if tool["type"] == "function"
+                        ]
+                    ),
                 )
             )
 
@@ -736,7 +814,9 @@ def functionary_chat_handler(
                 elif "function_call" in msg:
                     return f"assistant to={msg['function_call']['name']}:\n{msg['function_call']['arguments']}</s>\n"
                 elif "tool_calls" in msg and len(msg["tool_calls"]) > 0:
-                    for tool_call in msg["tool_calls"]: # NOTE: probably doesn't work with the functionary model
+                    for tool_call in msg[
+                        "tool_calls"
+                    ]:  # NOTE: probably doesn't work with the functionary model
                         return f"assistant to={tool_call['id']}:\n{tool_call['function']['arguments']}</s>\n"
                 elif msg["content"] is None:
                     return "assistant"
@@ -746,12 +826,14 @@ def functionary_chat_handler(
                 raise ValueError(f"Unsupported role: {msg['role']}")
 
         return "".join([message_to_str(msg) for msg in all_messages])
-    
+
     if tools is not None:
         functions = [tool["function"] for tool in tools if tool["type"] == "function"]
-    
+
     if tool_choice is not None:
-        function_call = tool_choice if isinstance(tool_choice, str) else tool_choice["function"]
+        function_call = (
+            tool_choice if isinstance(tool_choice, str) else tool_choice["function"]
+        )
 
     prompt = prepare_messages_for_inference(messages, functions, tools)
 
@@ -761,6 +843,8 @@ def functionary_chat_handler(
             temperature=temperature,
             top_p=top_p,
             top_k=top_k,
+            min_p=min_p,
+            typical_p=typical_p,
             stream=stream,
             stop=["user:", "</s>"],
             max_tokens=max_tokens,
@@ -805,19 +889,27 @@ def functionary_chat_handler(
         if tool["type"] == "function" and tool["function"]["name"] == function_call:
             function_body = tool["function"]["parameters"]
             break
-    
+
     if function_body is not None:
         try:
             with suppress_stdout_stderr(disable=llama.verbose):
-                grammar_text = llama_grammar.json_schema_to_gbnf(json.dumps(function_body))
-                grammar = llama_grammar.LlamaGrammar.from_string(llama_grammar.json_schema_to_gbnf(json.dumps(function_body)))
+                grammar_text = llama_grammar.json_schema_to_gbnf(
+                    json.dumps(function_body)
+                )
+                grammar = llama_grammar.LlamaGrammar.from_string(
+                    llama_grammar.json_schema_to_gbnf(json.dumps(function_body))
+                )
                 print(grammar_text)
         except Exception as e:
             if llama.verbose:
-                print("Failed to parse function body as JSON schema, falling back to default grammar")
+                print(
+                    "Failed to parse function body as JSON schema, falling back to default grammar"
+                )
                 print(e)
             with suppress_stdout_stderr(disable=llama.verbose):
-                grammar = llama_grammar.LlamaGrammar.from_string(llama_grammar.JSON_GBNF)
+                grammar = llama_grammar.LlamaGrammar.from_string(
+                    llama_grammar.JSON_GBNF
+                )
     else:
         with suppress_stdout_stderr(disable=llama.verbose):
             grammar = llama_grammar.LlamaGrammar.from_string(llama_grammar.JSON_GBNF)
@@ -831,6 +923,8 @@ def functionary_chat_handler(
         temperature=temperature,
         top_p=top_p,
         top_k=top_k,
+        min_p=min_p,
+        typical_p=typical_p,
         presence_penalty=presence_penalty,
         frequency_penalty=frequency_penalty,
         repeat_penalty=repeat_penalty,
@@ -871,9 +965,9 @@ def functionary_chat_handler(
                             "function": {
                                 "name": function_call,
                                 "arguments": completion["choices"][0]["text"],
-                            }
+                            },
                         }
-                    ]
+                    ],
                 },
                 "finish_reason": "tool_calls",
             }
@@ -929,6 +1023,8 @@ class Llava15ChatHandler:
         temperature: float = 0.2,
         top_p: float = 0.95,
         top_k: int = 40,
+        min_p: float = 0.05,
+        typical_p: float = 1.0,
         stream: bool = False,
         stop: Optional[Union[str, List[str]]] = [],
         response_format: Optional[
@@ -1045,6 +1141,8 @@ class Llava15ChatHandler:
                 temperature=temperature,
                 top_p=top_p,
                 top_k=top_k,
+                min_p=min_p,
+                typical_p=typical_p,
                 stream=stream,
                 stop=stop,
                 max_tokens=max_tokens,

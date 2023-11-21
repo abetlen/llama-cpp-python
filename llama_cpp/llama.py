@@ -1036,9 +1036,9 @@ class Llama:
             offset = (
                 0 if self.context_params.logits_all else n_tokens - 1
             )  # NOTE: Only save the last token logits if logits_all is False
-            self.scores[n_past + offset : n_past + n_tokens, :].reshape(
-                -1
-            )[:] = self._ctx.get_logits()[offset * cols: rows * cols]
+            self.scores[n_past + offset : n_past + n_tokens, :].reshape(-1)[
+                :
+            ] = self._ctx.get_logits()[offset * cols : rows * cols]
             # Update n_tokens
             self.n_tokens += n_tokens
 
@@ -1046,6 +1046,8 @@ class Llama:
         self,
         top_k: int = 40,
         top_p: float = 0.95,
+        min_p: float = 0.05,
+        typical_p: float = 1.0,
         temp: float = 0.80,
         repeat_penalty: float = 1.1,
         frequency_penalty: float = 0.0,
@@ -1108,7 +1110,10 @@ class Llama:
                 grammar=grammar,
             )
 
-        if temp == 0.0:
+        if temp < 0.0:
+            self._ctx.sample_softmax(candidates=self._candidates)
+            id = self._candidates.candidates.data[0].id
+        elif temp == 0.0:
             id = self._ctx.sample_token_greedy(candidates=self._candidates)
         elif mirostat_mode == 1:
             self._ctx.sample_temp(candidates=self._candidates, temp=temp)
@@ -1130,8 +1135,11 @@ class Llama:
         else:
             self._ctx.sample_top_k(candidates=self._candidates, k=top_k, min_keep=1)
             self._ctx.sample_tail_free(candidates=self._candidates, z=tfs_z, min_keep=1)
-            self._ctx.sample_typical(candidates=self._candidates, p=1.0, min_keep=1)
+            self._ctx.sample_typical(
+                candidates=self._candidates, p=typical_p, min_keep=1
+            )
             self._ctx.sample_top_p(candidates=self._candidates, p=top_p, min_keep=1)
+            self._ctx.sample_min_p(candidates=self._candidates, p=min_p, min_keep=1)
             self._ctx.sample_temp(candidates=self._candidates, temp=temp)
             id = self._ctx.sample_token(candidates=self._candidates)
         if grammar is not None:
@@ -1143,6 +1151,8 @@ class Llama:
         tokens: Sequence[int],
         top_k: int = 40,
         top_p: float = 0.95,
+        min_p: float = 0.05,
+        typical_p: float = 1.0,
         temp: float = 0.80,
         repeat_penalty: float = 1.1,
         reset: bool = True,
@@ -1200,6 +1210,8 @@ class Llama:
             token = self.sample(
                 top_k=top_k,
                 top_p=top_p,
+                min_p=min_p,
+                typical_p=typical_p,
                 temp=temp,
                 repeat_penalty=repeat_penalty,
                 frequency_penalty=frequency_penalty,
@@ -1298,6 +1310,8 @@ class Llama:
         max_tokens: Optional[int] = 16,
         temperature: float = 0.8,
         top_p: float = 0.95,
+        min_p: float = 0.05,
+        typical_p: float = 1.0,
         logprobs: Optional[int] = None,
         echo: bool = False,
         stop: Optional[Union[str, List[str]]] = [],
@@ -1315,6 +1329,7 @@ class Llama:
         stopping_criteria: Optional[StoppingCriteriaList] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
+        logit_bias: Optional[Dict[str, float]] = None,
     ) -> Union[
         Iterator[CreateCompletionResponse], Iterator[CreateCompletionStreamResponse]
     ]:
@@ -1323,7 +1338,9 @@ class Llama:
 
         completion_id: str = f"cmpl-{str(uuid.uuid4())}"
         created: int = int(time.time())
-        completion_tokens: List[int] = []
+        # If prompt is empty, initialize completion with BOS token to avoid
+        # detokenization including a space at the beginning of the completion
+        completion_tokens: List[int] = [] if len(prompt) > 0 else [self.token_bos()]
         # Add blank space to start of prompt to match OG llama tokenizer
         prompt_tokens: List[int] = (
             (
@@ -1340,6 +1357,28 @@ class Llama:
             stop if isinstance(stop, list) else [stop] if isinstance(stop, str) else []
         )
         model_name: str = model if model is not None else self.model_path
+
+        # NOTE: This likely doesn't work correctly for the first token in the prompt
+        # because of the extra space added to the start of the prompt_tokens
+        if logit_bias is not None:
+            logit_bias_map = {int(k): float(v) for k, v in logit_bias.items()}
+
+            def logit_bias_processor(
+                input_ids: npt.NDArray[np.intc],
+                scores: npt.NDArray[np.single],
+            ) -> npt.NDArray[np.single]:
+                new_scores = np.copy(
+                    scores
+                )  # Does it make sense to copy the whole array or can we just overwrite the original one?
+                for input_id, score in logit_bias_map.items():
+                    new_scores[input_id] = score + scores[input_id]
+                return new_scores
+
+            _logit_bias_processor = LogitsProcessorList([logit_bias_processor])
+            if logits_processor is None:
+                logits_processor = _logit_bias_processor
+            else:
+                logits_processor = logits_processor.extend(_logit_bias_processor)
 
         if self.verbose:
             self._ctx.reset_timings()
@@ -1396,6 +1435,8 @@ class Llama:
             prompt_tokens,
             top_k=top_k,
             top_p=top_p,
+            min_p=min_p,
+            typical_p=typical_p,
             temp=temperature,
             tfs_z=tfs_z,
             mirostat_mode=mirostat_mode,
@@ -1459,6 +1500,8 @@ class Llama:
                     # not sure how to handle this branch when dealing
                     # with CJK output, so keep it unchanged
                     for token in remaining_tokens:
+                        if token == self.token_bos():
+                            continue
                         token_end_position += len(self.detokenize([token]))
                         # Check if stop sequence is in the token
                         if token_end_position > (
@@ -1582,6 +1625,8 @@ class Llama:
 
                 logprobs_or_none: Optional[CompletionLogprobs] = None
                 if logprobs is not None:
+                    if token == self.token_bos():
+                        continue
                     token_str = self.detokenize([token]).decode(
                         "utf-8", errors="ignore"
                     )
@@ -1709,6 +1754,8 @@ class Llama:
             for token, token_str, logprobs_token in zip(
                 all_tokens, all_token_strs, all_logprobs
             ):
+                if token == self.token_bos():
+                    continue
                 text_offsets.append(text_offset)
                 text_offset += len(token_str)
                 tokens.append(token_str)
@@ -1764,6 +1811,8 @@ class Llama:
         max_tokens: Optional[int] = 16,
         temperature: float = 0.8,
         top_p: float = 0.95,
+        min_p: float = 0.05,
+        typical_p: float = 1.0,
         logprobs: Optional[int] = None,
         echo: bool = False,
         stop: Optional[Union[str, List[str]]] = [],
@@ -1781,6 +1830,7 @@ class Llama:
         stopping_criteria: Optional[StoppingCriteriaList] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
+        logit_bias: Optional[Dict[str, float]] = None,
     ) -> Union[CreateCompletionResponse, Iterator[CreateCompletionStreamResponse]]:
         """Generate text from a prompt.
 
@@ -1810,6 +1860,8 @@ class Llama:
             max_tokens=max_tokens,
             temperature=temperature,
             top_p=top_p,
+            min_p=min_p,
+            typical_p=typical_p,
             logprobs=logprobs,
             echo=echo,
             stop=stop,
@@ -1827,6 +1879,7 @@ class Llama:
             stopping_criteria=stopping_criteria,
             logits_processor=logits_processor,
             grammar=grammar,
+            logit_bias=logit_bias,
         )
         if stream:
             chunks: Iterator[CreateCompletionStreamResponse] = completion_or_chunks
@@ -1841,6 +1894,8 @@ class Llama:
         max_tokens: int = 128,
         temperature: float = 0.8,
         top_p: float = 0.95,
+        min_p: float = 0.05,
+        typical_p: float = 1.0,
         logprobs: Optional[int] = None,
         echo: bool = False,
         stop: Optional[Union[str, List[str]]] = [],
@@ -1858,6 +1913,7 @@ class Llama:
         stopping_criteria: Optional[StoppingCriteriaList] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
+        logit_bias: Optional[Dict[str, float]] = None,
     ) -> Union[CreateCompletionResponse, Iterator[CreateCompletionStreamResponse]]:
         """Generate text from a prompt.
 
@@ -1887,6 +1943,8 @@ class Llama:
             max_tokens=max_tokens,
             temperature=temperature,
             top_p=top_p,
+            min_p=min_p,
+            typical_p=typical_p,
             logprobs=logprobs,
             echo=echo,
             stop=stop,
@@ -1904,6 +1962,7 @@ class Llama:
             stopping_criteria=stopping_criteria,
             logits_processor=logits_processor,
             grammar=grammar,
+            logit_bias=logit_bias,
         )
 
     def create_chat_completion(
@@ -1916,6 +1975,8 @@ class Llama:
         temperature: float = 0.2,
         top_p: float = 0.95,
         top_k: int = 40,
+        min_p: float = 0.05,
+        typical_p: float = 1.0,
         stream: bool = False,
         stop: Optional[Union[str, List[str]]] = [],
         seed: Optional[int] = None,
@@ -1931,6 +1992,7 @@ class Llama:
         model: Optional[str] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
+        logit_bias: Optional[Dict[str, float]] = None,
     ) -> Union[
         CreateChatCompletionResponse, Iterator[CreateChatCompletionStreamResponse]
     ]:
@@ -1962,6 +2024,8 @@ class Llama:
             temperature=temperature,
             top_p=top_p,
             top_k=top_k,
+            min_p=min_p,
+            typical_p=typical_p,
             stream=stream,
             stop=stop,
             seed=seed,
@@ -1977,6 +2041,7 @@ class Llama:
             model=model,
             logits_processor=logits_processor,
             grammar=grammar,
+            logit_bias=logit_bias,
         )
 
     def __getstate__(self):

@@ -30,7 +30,7 @@ import numpy.typing as npt
 
 
 # Disable warning for model and model_alias settings
-BaseSettings.model_config['protected_namespaces'] = ()
+BaseSettings.model_config["protected_namespaces"] = ()
 
 
 class Settings(BaseSettings):
@@ -68,7 +68,9 @@ class Settings(BaseSettings):
         description="Use mlock.",
     )
     # Context Params
-    seed: int = Field(default=llama_cpp.LLAMA_DEFAULT_SEED, description="Random seed. -1 for random.")
+    seed: int = Field(
+        default=llama_cpp.LLAMA_DEFAULT_SEED, description="Random seed. -1 for random."
+    )
     n_ctx: int = Field(default=2048, ge=1, description="The context size.")
     n_batch: int = Field(
         default=512, ge=1, description="The batch size to use per eval."
@@ -83,30 +85,16 @@ class Settings(BaseSettings):
         ge=0,
         description="The number of threads to use when batch processing.",
     )
-    rope_scaling_type: int = Field(
-        default=llama_cpp.LLAMA_ROPE_SCALING_UNSPECIFIED
-    )
-    rope_freq_base: float = Field(
-        default=0.0, description="RoPE base frequency"
-    )
+    rope_scaling_type: int = Field(default=llama_cpp.LLAMA_ROPE_SCALING_UNSPECIFIED)
+    rope_freq_base: float = Field(default=0.0, description="RoPE base frequency")
     rope_freq_scale: float = Field(
         default=0.0, description="RoPE frequency scaling factor"
     )
-    yarn_ext_factor: float = Field(
-        default=-1.0
-    )
-    yarn_attn_factor: float = Field(
-        default=1.0
-    )
-    yarn_beta_fast: float = Field(
-        default=32.0
-    )
-    yarn_beta_slow: float = Field(
-        default=1.0
-    )
-    yarn_orig_ctx: int = Field(
-        default=0
-    )
+    yarn_ext_factor: float = Field(default=-1.0)
+    yarn_attn_factor: float = Field(default=1.0)
+    yarn_beta_fast: float = Field(default=32.0)
+    yarn_beta_slow: float = Field(default=1.0)
+    yarn_orig_ctx: int = Field(default=0)
     mul_mat_q: bool = Field(
         default=True, description="if true, use experimental mul_mat_q kernels"
     )
@@ -122,7 +110,7 @@ class Settings(BaseSettings):
     # LoRA Params
     lora_base: Optional[str] = Field(
         default=None,
-        description="Optional path to base model, useful if using a quantized base model and you want to apply LoRA to an f16 model."
+        description="Optional path to base model, useful if using a quantized base model and you want to apply LoRA to an f16 model.",
     )
     lora_path: Optional[str] = Field(
         default=None,
@@ -384,7 +372,9 @@ def create_app(settings: Optional[Settings] = None):
     chat_handler = None
     if settings.chat_format == "llava-1-5":
         assert settings.clip_model_path is not None
-        chat_handler = llama_cpp.llama_chat_format.Llava15ChatHandler(clip_model_path=settings.clip_model_path, verbose=settings.verbose)
+        chat_handler = llama_cpp.llama_chat_format.Llava15ChatHandler(
+            clip_model_path=settings.clip_model_path, verbose=settings.verbose
+        )
     ##
 
     llama = llama_cpp.Llama(
@@ -521,6 +511,14 @@ top_p_field = Field(
     + "Top-p sampling, also known as nucleus sampling, is another text generation method that selects the next token from a subset of tokens that together have a cumulative probability of at least p. This method provides a balance between diversity and quality by considering both the probabilities of tokens and the number of tokens to sample from. A higher value for top_p (e.g., 0.95) will lead to more diverse text, while a lower value (e.g., 0.5) will generate more focused and conservative text.",
 )
 
+min_p_field = Field(
+    default=0.05,
+    ge=0.0,
+    le=1.0,
+    description="Sets a minimum base probability threshold for token selection.\n\n"
+    + "The Min-P sampling method was designed as an alternative to Top-P, and aims to ensure a balance of quality and variety. The parameter min_p represents the minimum probability for a token to be considered, relative to the probability of the most likely token. For example, with min_p=0.05 and the most likely token having a probability of 0.9, logits with a value less than 0.045 are filtered out.",
+)
+
 stop_field = Field(
     default=None,
     description="A list of tokens at which to stop generation. If None, no stop tokens are used.",
@@ -579,8 +577,9 @@ mirostat_eta_field = Field(
 
 grammar = Field(
     default=None,
-    description="A CBNF grammar (as string) to be used for formatting the model's output."
+    description="A CBNF grammar (as string) to be used for formatting the model's output.",
 )
+
 
 class CreateCompletionRequest(BaseModel):
     prompt: Union[str, List[str]] = Field(
@@ -593,6 +592,7 @@ class CreateCompletionRequest(BaseModel):
     max_tokens: int = max_tokens_field
     temperature: float = temperature_field
     top_p: float = top_p_field
+    min_p: float = min_p_field
     echo: bool = Field(
         default=False,
         description="Whether to echo the prompt in the generated text. Useful for chatbots.",
@@ -637,36 +637,16 @@ class CreateCompletionRequest(BaseModel):
     }
 
 
-def make_logit_bias_processor(
+def _logit_bias_tokens_to_input_ids(
     llama: llama_cpp.Llama,
     logit_bias: Dict[str, float],
-    logit_bias_type: Optional[Literal["input_ids", "tokens"]],
-):
-    if logit_bias_type is None:
-        logit_bias_type = "input_ids"
-
-    to_bias: Dict[int, float] = {}
-    if logit_bias_type == "input_ids":
-        for input_id, score in logit_bias.items():
-            input_id = int(input_id)
-            to_bias[input_id] = score
-
-    elif logit_bias_type == "tokens":
-        for token, score in logit_bias.items():
-            token = token.encode("utf-8")
-            for input_id in llama.tokenize(token, add_bos=False, special=True):
-                to_bias[input_id] = score
-
-    def logit_bias_processor(
-        input_ids: npt.NDArray[np.intc],
-        scores: npt.NDArray[np.single],
-    ) -> npt.NDArray[np.single]:
-        new_scores = np.copy(scores)         # Does it make sense to copy the whole array or can we just overwrite the original one?
-        for input_id, score in to_bias.items():
-            new_scores[input_id] = score + scores[input_id]
-        return new_scores
-
-    return logit_bias_processor
+) -> Dict[str, float]:
+    to_bias: Dict[str, float] = {}
+    for token, score in logit_bias.items():
+        token = token.encode("utf-8")
+        for input_id in llama.tokenize(token, add_bos=False, special=True):
+            to_bias[str(input_id)] = score
+    return to_bias
 
 
 @router.post(
@@ -685,24 +665,24 @@ async def create_completion(
     exclude = {
         "n",
         "best_of",
-        "logit_bias",
         "logit_bias_type",
         "user",
     }
     kwargs = body.model_dump(exclude=exclude)
 
     if body.logit_bias is not None:
-        kwargs["logits_processor"] = llama_cpp.LogitsProcessorList(
-            [
-                make_logit_bias_processor(llama, body.logit_bias, body.logit_bias_type),
-            ]
+        kwargs["logit_bias"] = (
+            _logit_bias_tokens_to_input_ids(llama, body.logit_bias)
+            if body.logit_bias_type == "tokens"
+            else body.logit_bias
         )
 
     if body.grammar is not None:
         kwargs["grammar"] = llama_cpp.LlamaGrammar.from_string(body.grammar)
 
     iterator_or_completion: Union[
-        llama_cpp.CreateCompletionResponse, Iterator[llama_cpp.CreateCompletionStreamResponse]
+        llama_cpp.CreateCompletionResponse,
+        Iterator[llama_cpp.CreateCompletionStreamResponse],
     ] = await run_in_threadpool(llama, **kwargs)
 
     if isinstance(iterator_or_completion, Iterator):
@@ -760,7 +740,9 @@ class ChatCompletionRequestMessage(BaseModel):
     role: Literal["system", "user", "assistant", "function"] = Field(
         default="user", description="The role of the message."
     )
-    content: Optional[str] = Field(default="", description="The content of the message.")
+    content: Optional[str] = Field(
+        default="", description="The content of the message."
+    )
 
 
 class CreateChatCompletionRequest(BaseModel):
@@ -782,13 +764,15 @@ class CreateChatCompletionRequest(BaseModel):
     tool_choice: Optional[llama_cpp.ChatCompletionToolChoiceOption] = Field(
         default=None,
         description="A tool to apply to the generated completions.",
-    ) # TODO: verify
+    )  # TODO: verify
     max_tokens: Optional[int] = Field(
-        default=None, description="The maximum number of tokens to generate. Defaults to inf"
+        default=None,
+        description="The maximum number of tokens to generate. Defaults to inf",
     )
     temperature: float = temperature_field
     top_p: float = top_p_field
-    stop: Optional[List[str]] = stop_field
+    min_p: float = min_p_field
+    stop: Optional[Union[str, List[str]]] = stop_field
     stream: bool = stream_field
     presence_penalty: Optional[float] = presence_penalty_field
     frequency_penalty: Optional[float] = frequency_penalty_field
@@ -841,17 +825,16 @@ async def create_chat_completion(
 ) -> llama_cpp.ChatCompletion:
     exclude = {
         "n",
-        "logit_bias",
         "logit_bias_type",
         "user",
     }
     kwargs = body.model_dump(exclude=exclude)
 
     if body.logit_bias is not None:
-        kwargs["logits_processor"] = llama_cpp.LogitsProcessorList(
-            [
-                make_logit_bias_processor(llama, body.logit_bias, body.logit_bias_type),
-            ]
+        kwargs["logit_bias"] = (
+            _logit_bias_tokens_to_input_ids(llama, body.logit_bias)
+            if body.logit_bias_type == "tokens"
+            else body.logit_bias
         )
 
     if body.grammar is not None:
