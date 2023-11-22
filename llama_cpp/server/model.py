@@ -53,9 +53,18 @@ class MultiLlama:
             if self._settings.verbose: logger.warn(f"Loading settings for {model} FAILED! Using default")
             settings = self._settings
 
+        chat_handler = None
+        if settings.chat_format == "llava-1-5":
+            assert settings.clip_model_path is not None, "clip model not found"
+            chat_handler = llama_cpp.llama_chat_format.Llava15ChatHandler(
+                clip_model_path=settings.clip_model_path,
+                verbose=settings.verbose
+            )
+
         self._model = llama_cpp.Llama(
             model_path=model_path,
-            **(settings.model_dump(exclude={"model",}))
+            chat_handler=chat_handler,
+            **(settings.model_dump(exclude={"model","clip_model_path",}))
         )
         return self._model
 
