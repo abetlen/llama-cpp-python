@@ -12,8 +12,8 @@ This package provides:
 
 - Low-level access to C API via `ctypes` interface.
 - High-level Python API for text completion
-  - OpenAI-like API
-  - LangChain compatibility
+    - OpenAI-like API
+    - LangChain compatibility
 
 Documentation is available at [https://llama-cpp-python.readthedocs.io/en/latest](https://llama-cpp-python.readthedocs.io/en/latest).
 
