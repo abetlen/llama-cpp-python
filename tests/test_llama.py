@@ -47,40 +47,104 @@ def test_llama_cpp_tokenization():
 @pytest.fixture
 def mock_llama(monkeypatch):
     def setup_mock(llama: llama_cpp.Llama, output_text: str):
-        llama.reset()
+        n_ctx = llama.n_ctx()
         n_vocab = llama.n_vocab()
         output_tokens = llama.tokenize(
             output_text.encode("utf-8"), add_bos=True, special=True
         )
+        logits = (llama_cpp.c_float * (n_vocab * n_ctx))(-100.0)
+        for i in range(n_ctx):
+            output_idx = i + 1  # logits for first tokens predict second token
+            if output_idx < len(output_tokens):
+                logits[i * n_vocab + output_tokens[output_idx]] = 100.0
+            else:
+                logits[i * n_vocab + llama.token_eos()] = 100.0
         n = 0
         last_n_tokens = 0
 
         def mock_decode(ctx: llama_cpp.llama_context_p, batch: llama_cpp.llama_batch):
+            # Test some basic invariants of this mocking technique
+            assert ctx == llama._ctx.ctx, "context does not match mock_llama"
+            assert batch.n_tokens > 0, "no tokens in batch"
+            assert all(
+                batch.n_seq_id[i] == 1 for i in range(batch.n_tokens)
+            ), "n_seq >1 not supported by mock_llama"
+            assert all(
+                batch.seq_id[i][0] == 0 for i in range(batch.n_tokens)
+            ), "n_seq >1 not supported by mock_llama"
+            assert batch.logits[
+                batch.n_tokens - 1
+            ], "logits not allocated for last token"
+            # Update the mock context state
             nonlocal n
             nonlocal last_n_tokens
-            # Test some basic invariants of this mocking technique
-            assert ctx == llama._ctx.ctx
-            assert llama.n_tokens == n
-            assert batch.n_tokens > 0
-            n += batch.n_tokens
+            n = max(batch.pos[i] for i in range(batch.n_tokens)) + 1
             last_n_tokens = batch.n_tokens
             return 0
 
-        def mock_get_logits(*args, **kwargs):
-            nonlocal last_n_tokens
-            size = n_vocab * last_n_tokens
-            return (llama_cpp.c_float * size)()
-
-        def mock_sample(*args, **kwargs):
-            nonlocal n
-            if n < len(output_tokens):
-                return output_tokens[n]
-            else:
-                return llama.token_eos()
+        def mock_get_logits(ctx: llama_cpp.llama_context_p):
+            # Test some basic invariants of this mocking technique
+            assert ctx == llama._ctx.ctx, "context does not match mock_llama"
+            assert n > 0, "mock_llama_decode not called"
+            assert last_n_tokens > 0, "mock_llama_decode not called"
+            # Return view of logits for last_n_tokens
+            return (llama_cpp.c_float * (last_n_tokens * n_vocab)).from_address(
+                ctypes.addressof(logits)
+                + (n - last_n_tokens) * n_vocab * ctypes.sizeof(llama_cpp.c_float)
+            )
 
         monkeypatch.setattr("llama_cpp.llama_cpp.llama_decode", mock_decode)
         monkeypatch.setattr("llama_cpp.llama_cpp.llama_get_logits", mock_get_logits)
-        monkeypatch.setattr("llama_cpp.llama_cpp.llama_sample_token", mock_sample)
+
+        def mock_kv_cache_clear(ctx: llama_cpp.llama_context_p):
+            # Test some basic invariants of this mocking technique
+            assert ctx == llama._ctx.ctx, "context does not match mock_llama"
+            return
+
+        def mock_kv_cache_seq_rm(
+            ctx: llama_cpp.llama_context_p,
+            seq_id: llama_cpp.llama_seq_id,
+            pos0: llama_cpp.llama_pos,
+            pos1: llama_cpp.llama_pos,
+        ):
+            # Test some basic invariants of this mocking technique
+            assert ctx == llama._ctx.ctx, "context does not match mock_llama"
+            return
+
+        def mock_kv_cache_seq_cp(
+            ctx: llama_cpp.llama_context_p,
+            seq_id_src: llama_cpp.llama_seq_id,
+            seq_id_dst: llama_cpp.llama_seq_id,
+            pos0: llama_cpp.llama_pos,
+            pos1: llama_cpp.llama_pos,
+        ):
+            # Test some basic invariants of this mocking technique
+            assert ctx == llama._ctx.ctx, "context does not match mock_llama"
+            return
+    
+        def mock_kv_cache_seq_keep(
+            ctx: llama_cpp.llama_context_p,
+            seq_id: llama_cpp.llama_seq_id,
+        ):
+            # Test some basic invariants of this mocking technique
+            assert ctx == llama._ctx.ctx, "context does not match mock_llama"
+            return
+
+        def mock_kv_cache_seq_shift(
+            ctx: llama_cpp.llama_context_p,
+            seq_id: llama_cpp.llama_seq_id,
+            pos0: llama_cpp.llama_pos,
+            pos1: llama_cpp.llama_pos,
+        ):
+            # Test some basic invariants of this mocking technique
+            assert ctx == llama._ctx.ctx, "context does not match mock_llama"
+            return
+
+        monkeypatch.setattr("llama_cpp.llama_cpp.llama_kv_cache_clear", mock_kv_cache_clear)
+        monkeypatch.setattr("llama_cpp.llama_cpp.llama_kv_cache_seq_rm", mock_kv_cache_seq_rm)
+        monkeypatch.setattr("llama_cpp.llama_cpp.llama_kv_cache_seq_cp", mock_kv_cache_seq_cp)
+        monkeypatch.setattr("llama_cpp.llama_cpp.llama_kv_cache_seq_keep", mock_kv_cache_seq_keep)
+        monkeypatch.setattr("llama_cpp.llama_cpp.llama_kv_cache_seq_shift", mock_kv_cache_seq_shift)
 
     return setup_mock
 
@@ -160,55 +224,18 @@ def test_llama_pickle():
     assert llama.detokenize(llama.tokenize(text)) == text
 
 
-def test_utf8(mock_llama, monkeypatch):
+def test_utf8(mock_llama):
     llama = llama_cpp.Llama(model_path=MODEL, vocab_only=True, logits_all=True)
-    n_ctx = llama.n_ctx()
-    n_vocab = llama.n_vocab()
 
     output_text = "😀"
-    output_tokens = llama.tokenize(
-        output_text.encode("utf-8"), add_bos=True, special=True
-    )
-    token_eos = llama.token_eos()
-    n = 0
-
-    def reset():
-        nonlocal n
-        llama.reset()
-        n = 0
-
-    ## Set up mock function
-    def mock_decode(ctx: llama_cpp.llama_context_p, batch: llama_cpp.llama_batch):
-        nonlocal n
-        assert batch.n_tokens > 0
-        assert llama.n_tokens == n
-        n += batch.n_tokens
-        return 0
-
-    def mock_get_logits(*args, **kwargs):
-        size = n_vocab * n_ctx
-        return (llama_cpp.c_float * size)()
-
-    def mock_sample(*args, **kwargs):
-        nonlocal n
-        if n <= len(output_tokens):
-            return output_tokens[n - 1]
-        else:
-            return token_eos
-
-    monkeypatch.setattr("llama_cpp.llama_cpp.llama_decode", mock_decode)
-    monkeypatch.setattr("llama_cpp.llama_cpp.llama_get_logits", mock_get_logits)
-    monkeypatch.setattr("llama_cpp.llama_cpp.llama_sample_token", mock_sample)
 
     ## Test basic completion with utf8 multibyte
-    # mock_llama(llama, output_text)
-    reset()
+    mock_llama(llama, output_text)
     completion = llama.create_completion("", max_tokens=4)
     assert completion["choices"][0]["text"] == output_text
 
     ## Test basic completion with incomplete utf8 multibyte
-    # mock_llama(llama, output_text)
-    reset()
+    mock_llama(llama, output_text)
     completion = llama.create_completion("", max_tokens=1)
     assert completion["choices"][0]["text"] == ""
 
