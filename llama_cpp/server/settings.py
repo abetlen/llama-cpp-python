@@ -1,20 +1,13 @@
 import multiprocessing
 from typing import Optional, List, Literal
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 import llama_cpp
 
 # Disable warning for model and model_alias settings
 BaseSettings.model_config['protected_namespaces'] = ()
 
-class Settings(BaseSettings):
-    model: str = Field(
-        description="The path to the model to use for generating completions."
-    )
-    model_alias: Optional[str] = Field(
-        default=None,
-        description="The alias of the model to use for generating completions.",
-    )
+class ModelSettings(BaseSettings):
     # Model Params
     n_gpu_layers: int = Field(
         default=0,
@@ -133,12 +126,24 @@ class Settings(BaseSettings):
     verbose: bool = Field(
         default=True, description="Whether to print debug information."
     )
+
+class ServerSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_file='.env')
     # Server Params
     host: str = Field(default="localhost", description="Listen address")
     port: int = Field(default=8000, description="Listen port")
     interrupt_requests: bool = Field(
         default=True,
         description="Whether to interrupt requests when a new request is received.",
+    )
+
+class Settings(ModelSettings, ServerSettings):
+    model: str = Field(
+        description="The path to the model to use for generating completions."
+    )
+    model_alias: Optional[str] = Field(
+        default=None,
+        description="The alias of the model to use for generating completions.",
     )
 
 SETTINGS: Optional[Settings] = None

@@ -3,7 +3,7 @@ from typing import Any, Optional
 from threading import Lock
 import logging
 import llama_cpp
-from llama_cpp.server.settings import Settings, get_settings
+from llama_cpp.server.settings import Settings, ModelSettings, get_settings
 
 FILE_EXT = ".gguf"
 MODEL_ENV_ARG = "MODEL"
@@ -29,22 +29,30 @@ class MultiLlama:
         if os.path.isfile(settings.model):
             self(settings.model.split(os.path.sep)[-1].split(FILE_EXT)[0])
 
-    def __call__(self, model: str, **kwargs: Any) -> llama_cpp.Llama:
+    def __call__(self, model: Optional[str] = None) -> llama_cpp.Llama:
+        # handle backward compatibility, model param optional
         try:
             model_path = self._models[model]
         except KeyError:
             if self._model:
-                if self._settings.verbose: logger.info(f"Model file for {model} NOT found! Using preloaded")
+                if self._settings.verbose: logger.warn(f"Model file for {model} NOT found! Using preloaded")
                 return self._model
             else: raise Exception(404, f"Model file for {model} NOT found")
-
         
         if self._model:
             if self._model.model_path == model_path:
                 return self._model
             del self._model
 
-        settings = self._settings
+        settings_path = os.path.join(os.path.dirname(model_path), 
+                                     model_path.split(os.path.sep)[-1].split(FILE_EXT)[0] + ".json")
+        try:
+            with open(settings_path, 'rb') as f:
+                settings = ModelSettings.model_validate_json(f.read())
+        except Exception as e:
+            if self._settings.verbose: logger.warn(f"Loading settings for {model} FAILED! Using default")
+            settings = self._settings
+
         self._model = llama_cpp.Llama(
             model_path=model_path,
             # Model Params
@@ -88,14 +96,13 @@ class MultiLlama:
             cache_size=settings.cache_size,
             # Misc
             verbose=settings.verbose,
-            **kwargs
         )
         return self._model
 
-    def __getitem__(self, model):
+    def __getitem__(self, model: str) -> str:
         return self._models[model]
     
-    def __setitem__(self, model, path):
+    def __setitem__(self, model: str, path: str):
         self._models[model] = path
     
     def __iter__(self):
