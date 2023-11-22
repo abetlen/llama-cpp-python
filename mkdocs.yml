@@ -12,6 +12,14 @@ watch:
   - llama_cpp
   - README.md
 
+nav:
+  - "Getting Started": "index.md"
+  - "Installation Guides":
+    - "macOS (Metal)": "install/macos.md"
+  - "API Reference": "api-reference.md"
+  - "OpenAI Compatible Web Server": "server.md"
+  - "Changelog": "changelog.md"
+
 markdown_extensions:
   - pymdownx.highlight:
       anchor_linenums: true
