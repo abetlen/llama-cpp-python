@@ -924,6 +924,7 @@ class Llama:
         if self.verbose:
             print(llama_cpp.llama_print_system_info().decode("utf-8"), file=sys.stderr)
 
+        # TODO move out of class
         chat_handler = None
         if chat_format == "llava-1-5":
             assert clip_model_path is not None, "clip model not found"
@@ -931,6 +932,7 @@ class Llama:
                 clip_model_path=clip_model_path,
                 verbose=verbose
             )
+        ## 
         
         self.chat_format = chat_format
         self.chat_handler = chat_handler

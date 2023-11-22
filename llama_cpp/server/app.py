@@ -486,7 +486,7 @@ async def create_completion(
         return iterator_or_completion
 
 class CreateEmbeddingRequest(BaseModel):
-    model: [str] = model_field
+    model: Optional[str] = model_field
     input: Union[str, List[str]] = Field(description="The input to embed.")
     user: Optional[str] = Field(default=None)
 
@@ -558,7 +558,7 @@ class CreateChatCompletionRequest(BaseModel):
     )
 
     # ignored or currently unsupported
-    model: [str] = model_field
+    model: Optional[str] = model_field
     n: Optional[int] = 1
     user: Optional[str] = Field(None)
 
