@@ -18,7 +18,7 @@ def models_root_dir(path = None):
 
 class MultiLlama:
     _model: Optional[llama_cpp.Llama] = None
-    _models = {}
+    _models: dict[str,str] = {}
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
@@ -49,53 +49,13 @@ class MultiLlama:
         try:
             with open(settings_path, 'rb') as f:
                 settings = ModelSettings.model_validate_json(f.read())
-        except Exception as e:
+        except:
             if self._settings.verbose: logger.warn(f"Loading settings for {model} FAILED! Using default")
             settings = self._settings
 
         self._model = llama_cpp.Llama(
             model_path=model_path,
-            # Model Params
-            n_gpu_layers=settings.n_gpu_layers,
-            main_gpu=settings.main_gpu,
-            tensor_split=settings.tensor_split,
-            vocab_only=settings.vocab_only,
-            use_mmap=settings.use_mmap,
-            use_mlock=settings.use_mlock,
-            # Context Params
-            seed=settings.seed,
-            n_ctx=settings.n_ctx,
-            n_batch=settings.n_batch,
-            n_threads=settings.n_threads,
-            n_threads_batch=settings.n_threads_batch,
-            rope_scaling_type=settings.rope_scaling_type,
-            rope_freq_base=settings.rope_freq_base,
-            rope_freq_scale=settings.rope_freq_scale,
-            yarn_ext_factor=settings.yarn_ext_factor,
-            yarn_attn_factor=settings.yarn_attn_factor,
-            yarn_beta_fast=settings.yarn_beta_fast,
-            yarn_beta_slow=settings.yarn_beta_slow,
-            yarn_orig_ctx=settings.yarn_orig_ctx,
-            mul_mat_q=settings.mul_mat_q,
-            f16_kv=settings.f16_kv,
-            logits_all=settings.logits_all,
-            embedding=settings.embedding,
-            # Sampling Params
-            last_n_tokens_size=settings.last_n_tokens_size,
-            # LoRA Params
-            lora_base=settings.lora_base,
-            lora_path=settings.lora_path,
-            # Backend Params
-            numa=settings.numa,
-            # Chat Format Params
-            chat_format=settings.chat_format,
-            clip_model_path=settings.clip_model_path,
-            # Cache
-            cache=settings.cache,
-            cache_type=settings.cache_type,
-            cache_size=settings.cache_size,
-            # Misc
-            verbose=settings.verbose,
+            **(settings.model_dump(exclude={"model",}))
         )
         return self._model
 
