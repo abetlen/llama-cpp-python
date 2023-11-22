@@ -143,13 +143,6 @@ For instance, if you want to work with larger contexts, you can expand the conte
 llm = Llama(model_path="./models/7B/llama-model.gguf", n_ctx=2048)
 ```
 
-### Loading llama-2 70b
-
-Llama2 70b must set the `n_gqa` parameter (grouped-query attention factor) to 8 when loading:
-
-```python
-llm = Llama(model_path="./models/70B/llama-model.gguf", n_gqa=8)
-```
 
 ## Web Server
 
