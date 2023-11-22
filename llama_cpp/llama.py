@@ -758,7 +758,7 @@ class Llama:
         numa: bool = False,
         # Chat Format Params
         chat_format: str = "llama-2",
-        clip_model_path: Optional[str] = None, # only for multimodal, when chat_format=llava-1-5
+        chat_handler: Optional[llama_chat_format.LlamaChatCompletionHandler] = None,
         # Cache
         cache: bool = False,
         cache_type: str = "ram",
@@ -795,7 +795,7 @@ class Llama:
             lora_path: Path to a LoRA file to apply to the model.
             numa: Enable NUMA support. (NOTE: The initial value of this parameter is used for the remainder of the program as this value is set in llama_backend_init)
             chat_format: String specifying the chat format to use when calling create_chat_completion.
-            clip_model_path: Optional clip model path to use when using multimodal mode, expected when chat_format=llava-1-5.
+            chat_handler: Optional chat handler to use when calling create_chat_completion.
             cache: Optional if true enables caching.
             cache_type: String can be "ram" or "disk".
             cache_size: Number of bytes to cache, defaults to 2GB
@@ -923,16 +923,6 @@ class Llama:
 
         if self.verbose:
             print(llama_cpp.llama_print_system_info().decode("utf-8"), file=sys.stderr)
-
-        # TODO move out of class
-        chat_handler = None
-        if chat_format == "llava-1-5":
-            assert clip_model_path is not None, "clip model not found"
-            chat_handler = llama_chat_format.Llava15ChatHandler(
-                clip_model_path=clip_model_path,
-                verbose=verbose
-            )
-        ## 
         
         self.chat_format = chat_format
         self.chat_handler = chat_handler
