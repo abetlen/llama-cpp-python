@@ -100,7 +100,7 @@ See the above instructions and set `CMAKE_ARGS` to the BLAS backend you want to 
 
 #### MacOS remarks
 
-Detailed MacOS Metal GPU install documentation is available at [docs/install/macos.md](docs/install/macos.md)
+Detailed MacOS Metal GPU install documentation is available at [docs/install/macos.md](https://llama-cpp-python.readthedocs.io/en/latest/install/macos/)
 
 ## High-level API
 
