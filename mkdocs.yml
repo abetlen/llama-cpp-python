@@ -10,6 +10,7 @@ plugins:
 
 watch:
   - llama_cpp
+  - README.md
 
 markdown_extensions:
   - pymdownx.highlight:
