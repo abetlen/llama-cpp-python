@@ -135,6 +135,7 @@ Below is a short example demonstrating how to use the high-level API to generate
 ```
 
 ### Adjusting the Context Window
+
 The context window of the Llama models determines the maximum number of tokens that can be processed at once. By default, this is set to 512 tokens, but can be adjusted based on your requirements.
 
 For instance, if you want to work with larger contexts, you can expand the context window by setting the n_ctx parameter when initializing the Llama object:
