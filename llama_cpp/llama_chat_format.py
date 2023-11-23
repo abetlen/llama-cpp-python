@@ -471,6 +471,23 @@ def format_baichuan2(
     _prompt = _format_no_colon_single(system_message, _messages, _sep)
     return ChatFormatterResponse(prompt=_prompt)
 
+
+@register_chat_format("baichuan")
+def format_baichuan(
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    **kwargs: Any,
+) -> ChatFormatterResponse:
+    _system_template = "{system_message}"
+    _roles = dict(user="<reserved_102>", assistant="<reserved_103>")
+    _sep = ""
+    system_message = _get_system_message(messages)
+    system_message = _system_template.format(system_message=system_message)
+    _messages = _map_roles(messages, _roles)
+    _messages.append((_roles["assistant"], None))
+    _prompt = _format_no_colon_single(system_message, _messages, _sep)
+    return ChatFormatterResponse(prompt=_prompt)
+
+
 @register_chat_format("openbuddy")
 def format_openbuddy(
     messages: List[llama_types.ChatCompletionRequestMessage],
