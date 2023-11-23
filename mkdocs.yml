@@ -2,7 +2,22 @@ site_name: llama-cpp-python
 repo_url: https://github.com/abetlen/llama-cpp-python
 
 theme:
-  name: "material"
+  name: material
+  palette: 
+
+    # Palette toggle for light mode
+    - scheme: default
+      primary: indigo
+      toggle:
+        icon: material/brightness-7 
+        name: Switch to dark mode
+
+    # Palette toggle for dark mode
+    - scheme: slate
+      primary: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
 
 plugins:
   - mkdocstrings
@@ -21,6 +36,10 @@ nav:
   - "Changelog": "changelog.md"
 
 markdown_extensions:
+  - attr_list
+  - pymdownx.emoji:
+      emoji_index: !!python/name:materialx.emoji.twemoji
+      emoji_generator: !!python/name:materialx.emoji.to_svg
   - pymdownx.highlight:
       anchor_linenums: true
       line_spans: __span
@@ -32,3 +51,7 @@ markdown_extensions:
       repo: llama-cpp-python
   - pymdownx.snippets
   - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true 
+  - pymdownx.tilde
+  - tables
