@@ -26,11 +26,16 @@ plugins:
         python:
           options:
             members_order: source
+            group_by_category: false
             signature_crossrefs: true
             show_signature: true
             docstring_section_style: list
             show_root_heading: true
             heading_level: 3
+            preload_modules:
+              - typing
+              - typing_extensions
+              - ctypes
           import:
             - https://docs.python.org/3/objects.inv
             - https://numpy.org/doc/stable/objects.inv
