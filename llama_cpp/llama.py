@@ -765,6 +765,30 @@ class Llama:
         **kwargs,  # type: ignore
     ):
         """Load a llama.cpp model from `model_path`.
+    
+        Examples:
+            Basic usage
+
+            >>> import llama_cpp
+            >>> model = llama_cpp.Llama(
+            ...     model_path="path/to/model",
+            ... )
+            >>> print(model("The quick brown fox jumps ", stop=["."])["choices"][0]["text"])
+            the lazy dog
+
+            Loading a chat model
+
+            >>> import llama_cpp
+            >>> model = llama_cpp.Llama(
+            ...     model_path="path/to/model",
+            ...     chat_format="llama-2",
+            ... )
+            >>> print(model.create_chat_completion(
+            ...     messages=[{
+            ...         "role": "user",
+            ...         "content": "what is the meaning of life?"
+            ...     }]
+            ... ))
 
         Args:
             model_path: Path to the model.
