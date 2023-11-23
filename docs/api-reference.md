@@ -26,6 +26,12 @@ title: API Reference
             - token_eos
         show_root_heading: true
 
+::: llama_cpp.LlamaGrammar
+    options:
+        members:
+            - from_string
+            - from_json_schema
+
 ::: llama_cpp.LlamaCache
     options:
         show_root_heading: true
@@ -68,3 +74,9 @@ title: API Reference
         # filter only members starting with `LLAMA_`
         filters:
             - "^LLAMA_"
+
+## Misc
+
+::: llama_cpp.llama_types
+    options:
+        show_if_no_docstring: true
