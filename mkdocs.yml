@@ -30,6 +30,7 @@ plugins:
             show_signature: true
             docstring_section_style: list
             show_root_heading: true
+            heading_level: 3
           import:
             - https://docs.python.org/3/objects.inv
             - https://numpy.org/doc/stable/objects.inv
