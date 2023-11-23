@@ -621,6 +621,21 @@ def format_mistrallite(
     _prompt = _format_no_colon_single(system_message, _messages, _sep)
     return ChatFormatterResponse(prompt=_prompt)
 
+@register_chat_format("zephyr")
+def format_zephyr(
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    **kwargs: Any,
+) -> ChatFormatterResponse:
+    system_template = """<|system|>
+{system_message}"""
+    system_message = _get_system_message(messages)
+    system_message = system_template.format(system_message=system_message)
+    _roles = dict(user="<|user|>\n", assistant="<|assistant|>\n")
+    _sep = "</s>"
+    _messages = _map_roles(messages, _roles)
+    _messages.append((_roles["assistant"], None))
+    _prompt = _format_chatml(system_message, _messages, _sep)
+    return ChatFormatterResponse(prompt=_prompt, stop=_sep)
 
 @register_chat_format("chatml")
 def format_chatml(
