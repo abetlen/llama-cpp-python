@@ -283,6 +283,15 @@ Navigate to [http://localhost:8000/docs](http://localhost:8000/docs) to see the 
 To bind to `0.0.0.0` to enable remote connections, use `python3 -m llama_cpp.server --host 0.0.0.0`.
 Similarly, to change the port (default is 8000), use `--port`.
 
+You probably also want to set the prompt format. For chatml, use
+
+```bash
+python3 -m llama_cpp.server --model models/7B/llama-model.gguf --chat_format chatml
+```
+
+That will format the prompt according to how model expects it. You can find the prompt format in the model card.
+For possible options, see [llama_cpp/llama_chat_format.py](llama_cpp/llama_chat_format.py) and look for lines starting with "@register_chat_format".
+
 ## Docker image
 
 A Docker image is available on [GHCR](https://ghcr.io/abetlen/llama-cpp-python). To run the server:
