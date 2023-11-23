@@ -233,7 +233,11 @@ Then you'll need to use a custom chat handler to load the clip model and process
 >>> from llama_cpp import Llama
 >>> from llama_cpp.llama_chat_format import Llava15ChatHandler
 >>> chat_handler = Llava15ChatHandler(clip_model_path="path/to/llava/mmproj.bin")
->>> llm = Llama(model_path="./path/to/llava/llama-model.gguf", chat_handler=chat_handler)
+>>> llm = Llama(
+  model_path="./path/to/llava/llama-model.gguf",
+  chat_handler=chat_handler,
+  n_ctx=2048 # n_ctx should be increased to accomodate the image embedding
+)
 >>> llm.create_chat_completion(
     messages = [
         {"role": "system", "content": "You are an assistant who perfectly describes images."},
