@@ -20,8 +20,19 @@ theme:
         name: Switch to light mode
 
 plugins:
-  - mkdocstrings
   - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            members_order: source
+            signature_crossrefs: true
+            show_signature: true
+            docstring_section_style: list
+            show_root_heading: true
+          import:
+            - https://docs.python.org/3/objects.inv
+            - https://numpy.org/doc/stable/objects.inv
 
 watch:
   - llama_cpp
