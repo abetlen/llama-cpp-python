@@ -25,7 +25,7 @@ from starlette_context.middleware import RawContextMiddleware
 import numpy as np
 import numpy.typing as npt
 
-from llama_cpp.server.model import get_llama, llama_outer_lock, MultiLlama as Llama
+from llama_cpp.server.model import get_llama, set_llama, llama_outer_lock, LlamaProxy as Llama
 from llama_cpp.server.settings import Settings, set_settings, get_settings
 
 class ErrorResponse(TypedDict):
@@ -211,10 +211,7 @@ class RouteErrorHandler(APIRoute):
 
 router = APIRouter(route_class=RouteErrorHandler)
 
-def create_app(settings: Optional[Settings] = None):
-    if settings is None:
-        settings = Settings()
-
+def create_app(settings: Settings):
     middleware = [
         Middleware(RawContextMiddleware, plugins=(plugins.RequestIdPlugin(),))
     ]
@@ -236,8 +233,7 @@ def create_app(settings: Optional[Settings] = None):
     async def root():
         return "pong"
 
-    set_settings(settings)
-    next(get_llama())
+    set_llama(settings)
     return app
 
 async def get_event_publisher(
@@ -596,7 +592,7 @@ async def create_chat_completion(
     request: Request,
     body: CreateChatCompletionRequest,
     llama: Llama = Depends(get_llama),
-    settings: Settings = Depends(get_settings),
+    #settings: Settings = Depends(get_settings),
 ) -> llama_cpp.ChatCompletion:
     exclude = {
         "n",
