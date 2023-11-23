@@ -12,13 +12,15 @@ This package provides:
 
 - Low-level access to C API via `ctypes` interface.
 - High-level Python API for text completion
-  - OpenAI-like API
-  - LangChain compatibility
+    - OpenAI-like API
+    - [LangChain compatibility](https://python.langchain.com/docs/integrations/llms/llamacpp)
+- OpenAI compatible web server
+    - [Local Copilot replacement](https://llama-cpp-python.readthedocs.io/en/latest/server/#code-completion)
+    - [Function Calling support](https://llama-cpp-python.readthedocs.io/en/latest/server/#function-calling)
+    - [Vision API support](https://llama-cpp-python.readthedocs.io/en/latest/server/#multimodal-models)
 
 Documentation is available at [https://llama-cpp-python.readthedocs.io/en/latest](https://llama-cpp-python.readthedocs.io/en/latest).
 
-> [!WARNING]  
-> Starting with version 0.1.79 the model format has changed from `ggmlv3` to `gguf`. Old model files can be converted using the `convert-llama-ggmlv3-to-gguf.py` script in [`llama.cpp`](https://github.com/ggerganov/llama.cpp)
 
 
 ## Installation from PyPI
@@ -102,18 +104,23 @@ See the above instructions and set `CMAKE_ARGS` to the BLAS backend you want to 
 
 #### MacOS remarks
 
-Detailed MacOS Metal GPU install documentation is available at [docs/install/macos.md](docs/install/macos.md)
+Detailed MacOS Metal GPU install documentation is available at [docs/install/macos.md](https://llama-cpp-python.readthedocs.io/en/latest/install/macos/)
 
 ## High-level API
 
 The high-level API provides a simple managed interface through the `Llama` class.
 
-Below is a short example demonstrating how to use the high-level API to generate text:
+Below is a short example demonstrating how to use the high-level API to for basic text completion:
 
 ```python
 >>> from llama_cpp import Llama
 >>> llm = Llama(model_path="./models/7B/llama-model.gguf")
->>> output = llm("Q: Name the planets in the solar system? A: ", max_tokens=32, stop=["Q:", "\n"], echo=True)
+>>> output = llm(
+  "Q: Name the planets in the solar system? A: ", # Prompt
+  max_tokens=32, # Generate up to 32 tokens
+  stop=["Q:", "\n"], # Stop generating just before the model would generate a new question
+  echo=True # Echo the prompt back in the output
+)
 >>> print(output)
 {
   "id": "cmpl-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
@@ -136,7 +143,117 @@ Below is a short example demonstrating how to use the high-level API to generate
 }
 ```
 
+### Chat Completion
+
+The high-level API also provides a simple interface for chat completion.
+
+Note that `chat_format` option must be set for the particular model you are using.
+
+```python
+>>> from llama_cpp import Llama
+>>> llm = Llama(model_path="path/to/llama-2/llama-model.gguf", chat_format="llama-2")
+>>> llm.create_chat_completion(
+    messages = [
+        {"role": "system", "content": "You are an assistant who perfectly describes images."},
+        {
+            "role": "user",
+            "content": "Describe this image in detail please."
+        }
+    ]
+)
+```
+
+### Function Calling
+
+The high-level API also provides a simple interface for function calling.
+
+Note that the only model that supports full function calling at this time is "functionary".
+The gguf-converted files for this model can be found here: [functionary-7b-v1](https://huggingface.co/abetlen/functionary-7b-v1-GGUF)
+
+
+```python
+>>> from llama_cpp import Llama
+>>> llm = Llama(model_path="path/to/functionary/llama-model.gguf", chat_format="functionary")
+>>> llm.create_chat_completion(
+    messages = [
+      {
+        "role": "system",
+        "content": "A chat between a curious user and an artificial intelligence assitant. The assistant gives helpful, detailed, and polite answers to the user's questions. The assistant callse functions with appropriate input when necessary"
+      },
+      {
+        "role": "user",
+        "content": "Extract Jason is 25 years old"
+      }
+    ],
+    tools=[{
+      "type": "function",
+      "function": {
+        "name": "UserDetail",
+        "parameters": {
+          "type": "object"
+          "title": "UserDetail",
+          "properties": {
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "age": {
+              "title": "Age",
+              "type": "integer"
+            }
+          },
+          "required": [ "name", "age" ]
+        }
+      }
+    }],
+    tool_choices=[{
+      "type": "function",
+      "function": {
+        "name": "UserDetail"
+      }
+    }]
+)
+```
+
+### Multi-modal Models
+
+
+`llama-cpp-python` supports the llava1.5 family of multi-modal models which allow the language model to
+read information from both text and images.
+
+You'll first need to download one of the available multi-modal models in GGUF format:
+
+- [llava-v1.5-7b](https://huggingface.co/mys/ggml_llava-v1.5-7b)
+- [llava-v1.5-13b](https://huggingface.co/mys/ggml_llava-v1.5-13b)
+- [bakllava-1-7b](https://huggingface.co/mys/ggml_bakllava-1)
+
+Then you'll need to use a custom chat handler to load the clip model and process the chat messages and images.
+
+```python
+>>> from llama_cpp import Llama
+>>> from llama_cpp.llama_chat_format import Llava15ChatHandler
+>>> chat_handler = Llava15ChatHandler(clip_model_path="path/to/llava/mmproj.bin")
+>>> llm = Llama(
+  model_path="./path/to/llava/llama-model.gguf",
+  chat_handler=chat_handler,
+  n_ctx=2048 # n_ctx should be increased to accomodate the image embedding
+)
+>>> llm.create_chat_completion(
+    messages = [
+        {"role": "system", "content": "You are an assistant who perfectly describes images."},
+        {
+            "role": "user",
+            "content": [
+                {"type": "image_url", "image_url": {"url": "https://.../image.png"}},
+                {"type" : "text", "text": "Describe this image in detail please."}
+            ]
+        }
+    ]
+)
+```
+
 ### Adjusting the Context Window
+
 The context window of the Llama models determines the maximum number of tokens that can be processed at once. By default, this is set to 512 tokens, but can be adjusted based on your requirements.
 
 For instance, if you want to work with larger contexts, you can expand the context window by setting the n_ctx parameter when initializing the Llama object:
@@ -145,13 +262,6 @@ For instance, if you want to work with larger contexts, you can expand the conte
 llm = Llama(model_path="./models/7B/llama-model.gguf", n_ctx=2048)
 ```
 
-### Loading llama-2 70b
-
-Llama2 70b must set the `n_gqa` parameter (grouped-query attention factor) to 8 when loading:
-
-```python
-llm = Llama(model_path="./models/70B/llama-model.gguf", n_gqa=8)
-```
 
 ## Web Server
 
