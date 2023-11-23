@@ -64,6 +64,7 @@ class LlamaGrammar:
 
     @classmethod
     def from_string(cls, grammar: str, verbose: bool = True) -> "LlamaGrammar":
+        """Convert a GBNF grammar to a Llama grammar."""
         parsed_grammar = parse(const_char_p(grammar))  # type: parse_state
         if parsed_grammar.rules.empty():
             raise ValueError(
@@ -74,6 +75,15 @@ class LlamaGrammar:
             print_grammar(sys.stdout, parsed_grammar)
             print(file=sys.stderr)
         return cls(parsed_grammar)
+
+    @classmethod
+    def from_json_schema(
+        cls,
+        json_schema: str,
+        verbose: bool = True,
+    ) -> "LlamaGrammar":
+        """Convert a JSON schema to a Llama grammar."""
+        return cls.from_string(json_schema_to_gbnf(json_schema), verbose=verbose)
 
     @classmethod
     def from_file(cls, file: Union[str, Path], verbose: bool = True) -> "LlamaGrammar":
