@@ -22,13 +22,14 @@ Then visit http://localhost:8000/docs to see the interactive API docs.
 
 """
 import os
+import sys
 import argparse
 from typing import List, Literal, Union
 
 import uvicorn
 
 from llama_cpp.server.app import create_app
-from llama_cpp.server.settings import Settings
+from llama_cpp.server.settings import Settings, ServerSettings, set_settings
 
 def get_base_type(annotation):
     if getattr(annotation, '__origin__', None) is Literal:
@@ -68,9 +69,9 @@ def parse_bool_arg(arg):
     else:
         raise ValueError(f'Invalid boolean argument: {arg}')
 
-if __name__ == "__main__":
+def create_parser(settings_dict):
     parser = argparse.ArgumentParser()
-    for name, field in Settings.model_fields.items():
+    for name, field in settings_dict.items():
         description = field.description
         if field.default is not None and description is not None:
             description += f" (default: {field.default})"
@@ -91,11 +92,28 @@ if __name__ == "__main__":
                 type=parse_bool_arg,
                 help=f"{description}",
             )
+    return parser
 
-    args = parser.parse_args()
-    settings = Settings(**{k: v for k, v in vars(args).items() if v is not None})
-    app = create_app(settings=settings)
+if __name__ == "__main__":
+    server_arg_parser = create_parser(ServerSettings.model_fields)
+    parser = create_parser(Settings.model_fields)
+    
+    try:
+        server_args, _ = server_arg_parser.parse_known_args()
+        server_settings = ServerSettings(**{k: v for k, v in vars(server_args).items() if v is not None})
+        set_settings(server_settings)
+        if server_settings.config and os.path.exists(server_settings.config):
+            with open(server_settings.config, 'rb') as f:
+                llama_settings = Settings.model_validate_json(f.read())
+        else:
+            args, _ = parser.parse_known_args()
+            llama_settings = Settings(**{k: v for k, v in vars(args).items() if v is not None})
+        app = create_app(settings=llama_settings)
+    except Exception as e:
+        print(e, file=sys.stderr)
+        parser.print_help()
+        sys.exit(1)
 
     uvicorn.run(
-        app, host=os.getenv("HOST", settings.host), port=int(os.getenv("PORT", settings.port))
+        app, host=server_settings.host, port=server_settings.port
     )

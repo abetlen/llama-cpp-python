@@ -1,3 +1,4 @@
+import os
 import multiprocessing
 from typing import Optional, List, Literal
 from pydantic import Field
@@ -8,6 +9,13 @@ import llama_cpp
 BaseSettings.model_config['protected_namespaces'] = ()
 
 class ModelSettings(BaseSettings):
+    model: str = Field(
+        description="The path to the model to use for generating completions."
+    )
+    model_alias: Optional[str] = Field(
+        default=None,
+        description="The alias of the model to use for generating completions.",
+    )
     # Model Params
     n_gpu_layers: int = Field(
         default=0,
@@ -129,26 +137,23 @@ class ModelSettings(BaseSettings):
 
 class ServerSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file='.env')
-    # Server Params
     host: str = Field(default="localhost", description="Listen address")
     port: int = Field(default=8000, description="Listen port")
     interrupt_requests: bool = Field(
         default=True,
         description="Whether to interrupt requests when a new request is received.",
     )
+    config: Optional[str] = Field(default=None, description="Path to config file")
 
-class Settings(ModelSettings, ServerSettings):
-    model: str = Field(
-        description="The path to the model to use for generating completions."
-    )
-    model_alias: Optional[str] = Field(
-        default=None,
-        description="The alias of the model to use for generating completions.",
+class Settings(ModelSettings):
+    models: Optional[List[ModelSettings]] = Field(
+        default = [],
+        description="Model configs, overwrites default config"
     )
 
-SETTINGS: Optional[Settings] = None
+SETTINGS: Optional[ServerSettings] = None
 
-def set_settings(settings: Settings):
+def set_settings(settings: ServerSettings):
     global SETTINGS
     SETTINGS = settings
 
