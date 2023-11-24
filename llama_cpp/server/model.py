@@ -84,13 +84,16 @@ class LlamaProxy:
         return self._models[model].model_dump()
 
     def __setitem__(self, model: str, settings: Union[ModelSettings, str, bytes]):
-        if isinstance(settings, bytes) or isinstance(settings, str):
+        if isinstance(settings, (bytes, str)):
             settings = ModelSettings.model_validate_json(settings)
         self._models[model] = settings
     
     def __iter__(self):
         for model in self._models:
             yield model
+
+    def free(self):
+        if self._model: del self._model
     
 LLAMA: Optional[LlamaProxy] = None
 
