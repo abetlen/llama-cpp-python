@@ -77,6 +77,8 @@ Then when you run the server you'll need to also specify the `functionary-7b-v1`
 python3 -m llama_cpp.server --model <model_path> --chat_format functionary
 ```
 
+Check out the example notebook [here](https://github.com/abetlen/llama-cpp-python/blob/main/examples/notebooks/Functions.ipynb) for a walkthrough of some interesting use cases for function calling.
+
 ### Multimodal Models
 
 `llama-cpp-python` supports the llava1.5 family of multi-modal models which allow the language model to
