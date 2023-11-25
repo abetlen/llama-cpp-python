@@ -63,6 +63,9 @@ sdist.include = [".git", "vendor/llama.cpp/.git"]
 provider = "scikit_build_core.metadata.regex"
 input = "llama_cpp/__init__.py"
 
+[project.scripts]
+llama_server = "llama_cpp.server.__main__:main"
+
 [project.urls]
 Homepage = "https://github.com/abetlen/llama-cpp-python"
 Issues = "https://github.com/abetlen/llama-cpp-python/issues"

@@ -31,6 +31,8 @@ import uvicorn
 from llama_cpp.server.app import create_app
 from llama_cpp.server.settings import Settings, ServerSettings, set_settings
 
+EXE_NAME = 'llama_server'
+
 def get_base_type(annotation):
     if getattr(annotation, '__origin__', None) is Literal:
         return type(annotation.__args__[0])
@@ -69,11 +71,12 @@ def parse_bool_arg(arg):
     else:
         raise ValueError(f'Invalid boolean argument: {arg}')
 
-def create_parser(settings_dict):
-    parser = argparse.ArgumentParser()
-    for name, field in settings_dict.items():
+def main():
+    description = "🦙 Llama.cpp python server. Host your own LLMs!🚀"
+    parser = argparse.ArgumentParser(EXE_NAME, description=description)
+    for name, field in (ServerSettings.model_fields|Settings.model_fields).items():
         description = field.description
-        if field.default is not None and description is not None:
+        if field.default and description and not field.is_required():
             description += f" (default: {field.default})"
         base_type = get_base_type(field.annotation) if field.annotation is not None else str
         list_type = contains_list_type(field.annotation)
@@ -92,21 +95,15 @@ def create_parser(settings_dict):
                 type=parse_bool_arg,
                 help=f"{description}",
             )
-    return parser
-
-if __name__ == "__main__":
-    server_arg_parser = create_parser(ServerSettings.model_fields)
-    parser = create_parser(Settings.model_fields)
     
     try:
-        server_args, _ = server_arg_parser.parse_known_args()
-        server_settings = ServerSettings(**{k: v for k, v in vars(server_args).items() if v is not None})
+        args = parser.parse_args()
+        server_settings = ServerSettings(**{k: v for k, v in vars(args).items() if v is not None})
         set_settings(server_settings)
         if server_settings.config and os.path.exists(server_settings.config):
             with open(server_settings.config, 'rb') as f:
                 llama_settings = Settings.model_validate_json(f.read())
         else:
-            args, _ = parser.parse_known_args()
             llama_settings = Settings(**{k: v for k, v in vars(args).items() if v is not None})
         app = create_app(settings=llama_settings)
     except Exception as e:
@@ -117,3 +114,6 @@ if __name__ == "__main__":
     uvicorn.run(
         app, host=server_settings.host, port=server_settings.port
     )
+
+if __name__ == "__main__":
+    main()

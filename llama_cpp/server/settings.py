@@ -136,7 +136,7 @@ class ModelSettings(BaseSettings):
     )
 
 class ServerSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_file='.env')
+    model_config = SettingsConfigDict(env_file='.env', extra='ignore')
     host: str = Field(default="localhost", description="Listen address")
     port: int = Field(default=8000, description="Listen port")
     interrupt_requests: bool = Field(
