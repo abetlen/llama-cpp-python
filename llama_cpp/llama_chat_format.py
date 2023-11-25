@@ -987,9 +987,11 @@ def functionary_chat_handler(
     assert isinstance(function_call, str)
     assert stream is False  # TODO: support stream mode
 
-    print(new_prompt)
-    print(completion["choices"][0]["text"])
+    if llama.verbose:
+        print(new_prompt)
+        print(completion["choices"][0]["text"])
 
+    # TODO: support stream mode
     return llama_types.CreateChatCompletionResponse(
         id="chat" + completion["id"],
         object="chat.completion",
