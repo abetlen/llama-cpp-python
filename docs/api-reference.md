@@ -2,6 +2,8 @@
 title: API Reference
 ---
 
+## High Level API
+
 ::: llama_cpp.Llama
     options:
         members:
@@ -23,6 +25,12 @@ title: API Reference
             - token_bos
             - token_eos
         show_root_heading: true
+
+::: llama_cpp.LlamaGrammar
+    options:
+        members:
+            - from_string
+            - from_json_schema
 
 ::: llama_cpp.LlamaCache
     options:
@@ -48,6 +56,27 @@ title: API Reference
     options:
         show_root_heading: true
 
+## Low Level API
+
 ::: llama_cpp.llama_cpp
+    options:
+        show_if_no_docstring: true
+        # filter only members starting with `llama_`
+        filters:
+            - "^llama_"
+
+::: llama_cpp.llama_cpp
+    options:
+        show_if_no_docstring: true
+        show_root_heading: false
+        show_root_toc_entry: false
+        heading_level: 4
+        # filter only members starting with `LLAMA_`
+        filters:
+            - "^LLAMA_"
+
+## Misc
+
+::: llama_cpp.llama_types
     options:
         show_if_no_docstring: true

@@ -456,6 +456,38 @@ def format_oasst_llama(
     return ChatFormatterResponse(prompt=_prompt)
 
 
+@register_chat_format("baichuan-2")
+def format_baichuan2(
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    **kwargs: Any,
+) -> ChatFormatterResponse:
+    _system_template = "{system_message}"
+    _roles = dict(user="<reserved_106>", assistant="<reserved_107>")
+    _sep = ""
+    system_message = _get_system_message(messages)
+    system_message = _system_template.format(system_message=system_message)
+    _messages = _map_roles(messages, _roles)
+    _messages.append((_roles["assistant"], None))
+    _prompt = _format_no_colon_single(system_message, _messages, _sep)
+    return ChatFormatterResponse(prompt=_prompt)
+
+
+@register_chat_format("baichuan")
+def format_baichuan(
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    **kwargs: Any,
+) -> ChatFormatterResponse:
+    _system_template = "{system_message}"
+    _roles = dict(user="<reserved_102>", assistant="<reserved_103>")
+    _sep = ""
+    system_message = _get_system_message(messages)
+    system_message = _system_template.format(system_message=system_message)
+    _messages = _map_roles(messages, _roles)
+    _messages.append((_roles["assistant"], None))
+    _prompt = _format_no_colon_single(system_message, _messages, _sep)
+    return ChatFormatterResponse(prompt=_prompt)
+
+
 @register_chat_format("openbuddy")
 def format_openbuddy(
     messages: List[llama_types.ChatCompletionRequestMessage],
@@ -555,14 +587,14 @@ def format_open_orca(
     system_template = "{system_message}"
     system_message = (
         "You are a helpful assistant. Please answer truthfully and write out your "
+        "thinking step by step to be sure you get the right answer. If you make a mistake or encounter "
+        "an error in your thinking, say so out loud and attempt to correct it. If you don't know or "
+        "aren't sure about something, say so clearly. You will act as a professional logician, mathematician, "
+        "and physicist. You will also act as the most appropriate type of expert to answer any particular "
+        "question or solve the relevant problem; state which expert type your are, if so. Also think of "
+        "any particular named expert that would be ideal to answer the relevant question or solve the "
+        "relevant problem; name and act as them, if appropriate."
     )
-    "thinking step by step to be sure you get the right answer. If you make a mistake or encounter "
-    "an error in your thinking, say so out loud and attempt to correct it. If you don't know or "
-    "aren't sure about something, say so clearly. You will act as a professional logician, mathematician, "
-    "and physicist. You will also act as the most appropriate type of expert to answer any particular "
-    "question or solve the relevant problem; state which expert type your are, if so. Also think of "
-    "any particular named expert that would be ideal to answer the relevant question or solve the "
-    "relevant problem; name and act as them, if appropriate."
     roles = ("User", "Assistant")
     sep = "<|end_of_turn|>\n"
     # stop_token_ids=[32000, 32001],  # "<|end_of_turn|>"
@@ -589,6 +621,21 @@ def format_mistrallite(
     _prompt = _format_no_colon_single(system_message, _messages, _sep)
     return ChatFormatterResponse(prompt=_prompt)
 
+@register_chat_format("zephyr")
+def format_zephyr(
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    **kwargs: Any,
+) -> ChatFormatterResponse:
+    system_template = """<|system|>
+{system_message}"""
+    system_message = _get_system_message(messages)
+    system_message = system_template.format(system_message=system_message)
+    _roles = dict(user="<|user|>\n", assistant="<|assistant|>\n")
+    _sep = "</s>"
+    _messages = _map_roles(messages, _roles)
+    _messages.append((_roles["assistant"], None))
+    _prompt = _format_chatml(system_message, _messages, _sep)
+    return ChatFormatterResponse(prompt=_prompt, stop=_sep)
 
 @register_chat_format("chatml")
 def format_chatml(
@@ -940,9 +987,11 @@ def functionary_chat_handler(
     assert isinstance(function_call, str)
     assert stream is False  # TODO: support stream mode
 
-    print(new_prompt)
-    print(completion["choices"][0]["text"])
+    if llama.verbose:
+        print(new_prompt)
+        print(completion["choices"][0]["text"])
 
+    # TODO: support stream mode
     return llama_types.CreateChatCompletionResponse(
         id="chat" + completion["id"],
         object="chat.completion",

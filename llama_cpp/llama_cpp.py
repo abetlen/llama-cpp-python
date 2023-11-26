@@ -272,6 +272,19 @@ llama_progress_callback = ctypes.CFUNCTYPE(None, c_float, c_void_p)
 #     llama_seq_id all_seq_id; // used if seq_id == NULL
 # } llama_batch;
 class llama_batch(Structure):
+    """Input data for llama_decode
+
+    A llama_batch object can contain input about one or many sequences
+
+    The provided arrays (i.e. token, embd, pos, etc.) must have size of n_tokens
+
+    Attributes:
+        token (ctypes.Array[llama_token]): the token ids of the input (used when embd is NULL)
+        embd (ctypes.Array[ctypes.c_float]): token embeddings (i.e. float vector of size n_embd) (used when token is NULL)
+        pos (ctypes.Array[ctypes.Array[llama_pos]]): the positions of the respective token in the sequence
+        seq_id (ctypes.Array[ctypes.Array[llama_seq_id]]): the sequence to which the respective token belongs
+    """
+
     _fields_ = [
         ("n_tokens", c_int32),
         ("token", POINTER(llama_token)),
@@ -326,7 +339,7 @@ class llama_model_params(Structure):
 #     // ref: https://github.com/ggerganov/llama.cpp/pull/2054
 #     float    rope_freq_base;   // RoPE base frequency, 0 = from model
 #     float    rope_freq_scale;  // RoPE frequency scaling factor, 0 = from model
-#     float    yarn_ext_factor;  // YaRN extrapolation mix factor, NaN = from model
+#     float    yarn_ext_factor;  // YaRN extrapolation mix factor, negative = from model
 #     float    yarn_attn_factor; // YaRN magnitude scaling factor
 #     float    yarn_beta_fast;   // YaRN low correction dim
 #     float    yarn_beta_slow;   // YaRN high correction dim
@@ -368,6 +381,11 @@ class llama_context_params(Structure):
 # // It might not exist for progress report where '.' is output repeatedly.
 # typedef void (*llama_log_callback)(enum llama_log_level level, const char * text, void * user_data);
 llama_log_callback = ctypes.CFUNCTYPE(None, c_int, c_char_p, c_void_p)
+"""Signature for logging events
+Note that text includes the new line character at the end for most events.
+If your logging mechanism cannot handle that, check if the last character is '\n' and strip it
+if it exists.
+It might not exist for progress report where '.' is output repeatedly."""
 
 
 # // model quantization parameters
@@ -501,6 +519,9 @@ _lib.llama_model_quantize_default_params.restype = llama_model_quantize_params
 # // Call once at the start of the program
 # LLAMA_API void llama_backend_init(bool numa);
 def llama_backend_init(numa: Union[c_bool, bool]):
+    """Initialize the llama + ggml backend
+    If numa is true, use NUMA optimizations
+    Call once at the start of the program"""
     return _lib.llama_backend_init(numa)
 
 
@@ -511,6 +532,7 @@ _lib.llama_backend_init.restype = None
 # // Call once at the end of the program - currently only used for MPI
 # LLAMA_API void llama_backend_free(void);
 def llama_backend_free():
+    """Call once at the end of the program - currently only used for MPI"""
     return _lib.llama_backend_free()
 
 
@@ -556,6 +578,7 @@ _lib.llama_new_context_with_model.restype = llama_context_p
 # // Frees all allocated memory
 # LLAMA_API void llama_free(struct llama_context * ctx);
 def llama_free(ctx: llama_context_p):
+    """Frees all allocated memory"""
     return _lib.llama_free(ctx)
 
 
@@ -656,6 +679,7 @@ _lib.llama_n_embd.restype = c_int
 # // Get the model's RoPE frequency scaling factor
 # LLAMA_API float llama_rope_freq_scale_train(const struct llama_model * model);
 def llama_rope_freq_scale_train(model: llama_model_p) -> float:
+    """Get the model's RoPE frequency scaling factor"""
     return _lib.llama_rope_freq_scale_train(model)
 
 
@@ -673,6 +697,7 @@ _lib.llama_rope_freq_scale_train.restype = c_float
 def llama_model_meta_val_str(
     model: llama_model_p, key: Union[c_char_p, bytes], buf: bytes, buf_size: int
 ) -> int:
+    """Get metadata value as a string by key name"""
     return _lib.llama_model_meta_val_str(model, key, buf, buf_size)
 
 
@@ -683,6 +708,7 @@ _lib.llama_model_meta_val_str.restype = c_int
 # // Get the number of metadata key/value pairs
 # LLAMA_API int llama_model_meta_count(const struct llama_model * model);
 def llama_model_meta_count(model: llama_model_p) -> int:
+    """Get the number of metadata key/value pairs"""
     return _lib.llama_model_meta_count(model)
 
 
@@ -695,6 +721,7 @@ _lib.llama_model_meta_count.restype = c_int
 def llama_model_meta_key_by_index(
     model: llama_model_p, i: Union[c_int, int], buf: bytes, buf_size: int
 ) -> int:
+    """Get metadata key name by index"""
     return _lib.llama_model_meta_key_by_index(model, i, buf, buf_size)
 
 
@@ -707,6 +734,7 @@ _lib.llama_model_meta_key_by_index.restype = c_int
 def llama_model_meta_val_str_by_index(
     model: llama_model_p, i: Union[c_int, int], buf: bytes, buf_size: int
 ) -> int:
+    """Get metadata value as a string by index"""
     return _lib.llama_model_meta_val_str_by_index(model, i, buf, buf_size)
 
 
@@ -724,6 +752,7 @@ _lib.llama_model_meta_val_str_by_index.restype = c_int
 def llama_model_desc(
     model: llama_model_p, buf: bytes, buf_size: Union[c_size_t, int]
 ) -> int:
+    """Get a string describing the model type"""
     return _lib.llama_model_desc(model, buf, buf_size)
 
 
@@ -734,6 +763,7 @@ _lib.llama_model_desc.restype = c_int
 # // Returns the total size of all the tensors in the model in bytes
 # LLAMA_API uint64_t llama_model_size(const struct llama_model * model);
 def llama_model_size(model: llama_model_p) -> int:
+    """Returns the total size of all the tensors in the model in bytes"""
     return _lib.llama_model_size(model)
 
 
@@ -744,6 +774,7 @@ _lib.llama_model_size.restype = ctypes.c_uint64
 # // Returns the total number of parameters in the model
 # LLAMA_API uint64_t llama_model_n_params(const struct llama_model * model);
 def llama_model_n_params(model: llama_model_p) -> int:
+    """Returns the total number of parameters in the model"""
     return _lib.llama_model_n_params(model)
 
 
@@ -756,6 +787,7 @@ _lib.llama_model_n_params.restype = ctypes.c_uint64
 def llama_get_model_tensor(
     model: llama_model_p, name: Union[c_char_p, bytes]
 ) -> c_void_p:
+    """Get a llama model tensor"""
     return _lib.llama_get_model_tensor(model, name)
 
 
@@ -773,6 +805,7 @@ def llama_model_quantize(
     fname_out: bytes,
     params,  # type: POINTER(llama_model_quantize_params) # type: ignore
 ) -> int:
+    """Returns 0 on success"""
     return _lib.llama_model_quantize(fname_inp, fname_out, params)
 
 
@@ -804,6 +837,12 @@ def llama_apply_lora_from_file(
     path_base_model: Union[c_char_p, bytes],
     n_threads: Union[c_int, int],
 ) -> int:
+    """Apply a LoRA adapter to a loaded model
+    path_base_model is the path to a higher quality model to use as a base for
+    the layers modified by the adapter. Can be NULL to use the current loaded model.
+    The model needs to be reloaded before applying a new adapter, otherwise the adapter
+    will be applied on top of the previous one
+    Returns 0 on success"""
     return _lib.llama_apply_lora_from_file(
         ctx, path_lora, scale, path_base_model, n_threads
     )
@@ -851,10 +890,103 @@ _lib.llama_model_apply_lora_from_file.restype = c_int
 # //
 
 
-# // Returns the number of tokens in the KV cache
-# LLAMA_API DEPRECATED(int llama_get_kv_cache_token_count(const struct llama_context * ctx),
-#         "avoid using this, it will be removed in the future, instead - count the tokens in user code");
+# // Information associated with an individual cell in the KV cache view.
+# struct llama_kv_cache_view_cell {
+#     // The position for this cell. Takes KV cache shifts into account.
+#     // May be negative if the cell is not populated.
+#     llama_pos pos;
+# };
+class llama_kv_cache_view_cell(Structure):
+    _fields_ = [("pos", llama_pos)]
+
+
+# // An updateable view of the KV cache.
+# struct llama_kv_cache_view {
+#     // Number of KV cache cells. This will be the same as the context size.
+#     int32_t n_cells;
+
+#     // Maximum number of sequences that can exist in a cell. It's not an error
+#     // if there are more sequences in a cell than this value, however they will
+#     // not be visible in the view cells_sequences.
+#     int32_t n_max_seq;
+
+#     // Number of tokens in the cache. For example, if there are two populated
+#     // cells, the first with 1 sequence id in it and the second with 2 sequence
+#     // ids then you'll have 3 tokens.
+#     int32_t token_count;
+
+#     // Number of populated cache cells.
+#     int32_t used_cells;
+
+#     // Maximum contiguous empty slots in the cache.
+#     int32_t max_contiguous;
+
+#     // Index to the start of the max_contiguous slot range. Can be negative
+#     // when cache is full.
+#     int32_t max_contiguous_idx;
+
+#     // Information for an individual cell.
+#     struct llama_kv_cache_view_cell * cells;
+
+
+#     // The sequences for each cell. There will be n_max_seq items per cell.
+#     llama_seq_id * cells_sequences;
+# };
+class llama_kv_cache_view(Structure):
+    _fields_ = [
+        ("n_cells", c_int32),
+        ("n_max_seq", c_int32),
+        ("token_count", c_int32),
+        ("used_cells", c_int32),
+        ("max_contiguous", c_int32),
+        ("max_contiguous_idx", c_int32),
+        ("cells", POINTER(llama_kv_cache_view_cell)),
+        ("cells_sequences", POINTER(llama_seq_id)),
+    ]
+
+
+# // Create an empty KV cache view. (use only for debugging purposes)
+# LLAMA_API struct llama_kv_cache_view llama_kv_cache_view_init(const struct llama_context * ctx, int32_t n_max_seq);
+def llama_kv_cache_view_init(
+    ctx: llama_context_p, n_max_seq: Union[c_int32, int]
+) -> llama_kv_cache_view:
+    """Create an empty KV cache view. (use only for debugging purposes)"""
+    return _lib.llama_kv_cache_view_init(ctx, n_max_seq)
+
+
+_lib.llama_kv_cache_view_init.argtypes = [llama_context_p, c_int32]
+_lib.llama_kv_cache_view_init.restype = llama_kv_cache_view
+
+
+# // Free a KV cache view. (use only for debugging purposes)
+# LLAMA_API void llama_kv_cache_view_free(struct llama_kv_cache_view * view);
+def llama_kv_cache_view_free(view: llama_kv_cache_view):
+    """Free a KV cache view. (use only for debugging purposes)"""
+    return _lib.llama_kv_cache_view_free(view)
+
+
+_lib.llama_kv_cache_view_free.argtypes = [llama_kv_cache_view]
+_lib.llama_kv_cache_view_free.restype = None
+
+
+# // Update the KV cache view structure with the current state of the KV cache. (use only for debugging purposes)
+# LLAMA_API void llama_kv_cache_view_update(const struct llama_context * ctx, struct llama_kv_cache_view * view);
+def llama_kv_cache_view_update(ctx: llama_context_p, view: llama_kv_cache_view):
+    """Update the KV cache view structure with the current state of the KV cache. (use only for debugging purposes)"""
+    return _lib.llama_kv_cache_view_update(ctx, view)
+
+
+_lib.llama_kv_cache_view_update.argtypes = [llama_context_p, llama_kv_cache_view]
+_lib.llama_kv_cache_view_update.restype = None
+
+
+# // Returns the number of tokens in the KV cache (slow, use only for debug)
+# // If a KV cell has multiple sequences assigned to it, it will be counted multiple times
+# LLAMA_API int llama_get_kv_cache_token_count(const struct llama_context * ctx);
 def llama_get_kv_cache_token_count(ctx: llama_context_p) -> int:
+    """Returns the number of tokens in the KV cache (slow, use only for debug)
+    If a KV cell has multiple sequences assigned to it, it will be counted multiple times
+    """
     return _lib.llama_get_kv_cache_token_count(ctx)
 
 
@@ -862,10 +994,22 @@ _lib.llama_get_kv_cache_token_count.argtypes = [llama_context_p]
 _lib.llama_get_kv_cache_token_count.restype = c_int
 
 
+# // Returns the number of used KV cells (i.e. have at least one sequence assigned to them)
+# LLAMA_API int llama_get_kv_cache_used_cells(const struct llama_context * ctx);
+def llama_get_kv_cache_used_cells(ctx: llama_context_p) -> int:
+    """Returns the number of used KV cells (i.e. have at least one sequence assigned to them)"""
+    return _lib.llama_get_kv_cache_used_cells(ctx)
+
+
+_lib.llama_get_kv_cache_used_cells.argtypes = [llama_context_p]
+_lib.llama_get_kv_cache_used_cells.restype = c_int
+
+
 # // Clear the KV cache
 # LLAMA_API void llama_kv_cache_clear(
 #         struct llama_context * ctx);
 def llama_kv_cache_clear(ctx: llama_context_p):
+    """Clear the KV cache"""
     return _lib.llama_kv_cache_clear(ctx)
 
 
@@ -888,6 +1032,10 @@ def llama_kv_cache_seq_rm(
     p0: Union[llama_pos, int],
     p1: Union[llama_pos, int],
 ):
+    """Removes all tokens that belong to the specified sequence and have positions in [p0, p1)
+    seq_id < 0 : match any sequence
+    p0 < 0     : [0,  p1]
+    p1 < 0     : [p0, inf)"""
     return _lib.llama_kv_cache_seq_rm(ctx, seq_id, p0, p1)
 
 
@@ -917,6 +1065,10 @@ def llama_kv_cache_seq_cp(
     p0: Union[llama_pos, int],
     p1: Union[llama_pos, int],
 ):
+    """Copy all tokens that belong to the specified sequence to another sequence
+    Note that this does not allocate extra KV cache memory - it simply assigns the tokens to the new sequence
+    p0 < 0 : [0,  p1]
+    p1 < 0 : [p0, inf)"""
     return _lib.llama_kv_cache_seq_cp(ctx, seq_id_src, seq_id_dst, p0, p1)
 
 
@@ -938,6 +1090,7 @@ def llama_kv_cache_seq_keep(
     ctx: llama_context_p,
     seq_id: Union[llama_seq_id, int],
 ):
+    """Removes all tokens that do not belong to the specified sequence"""
     return _lib.llama_kv_cache_seq_keep(ctx, seq_id)
 
 
@@ -962,6 +1115,10 @@ def llama_kv_cache_seq_shift(
     p1: Union[llama_pos, int],
     delta: Union[llama_pos, int],
 ):
+    """Adds relative position "delta" to all tokens that belong to the specified sequence and have positions in [p0, p1)
+    If the KV cache is RoPEd, the KV data is updated accordingly
+    p0 < 0 : [0,  p1]
+    p1 < 0 : [p0, inf)"""
     return _lib.llama_kv_cache_seq_shift(ctx, seq_id, p0, p1, delta)
 
 
@@ -983,6 +1140,8 @@ _lib.llama_kv_cache_seq_shift.restype = None
 # and kv_cache) - will often be smaller after compacting tokens
 # LLAMA_API size_t llama_get_state_size(const struct llama_context * ctx);
 def llama_get_state_size(ctx: llama_context_p) -> int:
+    """Returns the maximum size in bytes of the state (rng, logits, embedding
+    and kv_cache) - will often be smaller after compacting tokens"""
     return _lib.llama_get_state_size(ctx)
 
 
@@ -999,6 +1158,9 @@ _lib.llama_get_state_size.restype = c_size_t
 def llama_copy_state_data(
     ctx: llama_context_p, dst  # type: Array[c_uint8]
 ) -> int:
+    """Copies the state to the specified destination address.
+    Destination needs to have allocated enough memory.
+    Returns the number of bytes copied"""
     return _lib.llama_copy_state_data(ctx, dst)
 
 
@@ -1014,6 +1176,7 @@ _lib.llama_copy_state_data.restype = c_size_t
 def llama_set_state_data(
     ctx: llama_context_p, src  # type: Array[c_uint8]
 ) -> int:
+    """Set the state reading from the specified address"""
     return _lib.llama_set_state_data(ctx, src)
 
 
@@ -1094,6 +1257,11 @@ def llama_eval(
     n_tokens: Union[c_int, int],
     n_past: Union[c_int, int],
 ) -> int:
+    """Run the llama inference to obtain the logits and probabilities for the next token(s).
+    tokens + n_tokens is the provided batch of new tokens to process
+    n_past is the number of tokens to use from previous eval calls
+    Returns 0 on success
+    DEPRECATED: use llama_decode() instead"""
     return _lib.llama_eval(ctx, tokens, n_tokens, n_past)
 
 
@@ -1115,6 +1283,8 @@ def llama_eval_embd(
     n_tokens: Union[c_int, int],
     n_past: Union[c_int, int],
 ) -> int:
+    """Same as llama_eval, but use float matrix input directly.
+    DEPRECATED: use llama_decode() instead"""
     return _lib.llama_eval_embd(ctx, embd, n_tokens, n_past)
 
 
@@ -1137,6 +1307,10 @@ def llama_batch_get_one(
     pos_0: Union[llama_pos, int],
     seq_id: llama_seq_id,
 ) -> llama_batch:
+    """Return batch for single sequence of tokens starting at pos_0
+
+    NOTE: this is a helper function to facilitate transition to the new batch API - avoid using it
+    """
     return _lib.llama_batch_get_one(tokens, n_tokens, pos_0, seq_id)
 
 
@@ -1165,6 +1339,13 @@ def llama_batch_init(
     embd: Union[c_int32, int],
     n_seq_max: Union[c_int32, int],
 ) -> llama_batch:
+    """Allocates a batch of tokens on the heap that can hold a maximum of n_tokens
+    Each token can be assigned up to n_seq_max sequence ids
+    The batch has to be freed with llama_batch_free()
+    If embd != 0, llama_batch.embd will be allocated with size of n_tokens * embd * sizeof(float)
+    Otherwise, llama_batch.token will be allocated to store n_tokens llama_token
+    The rest of the llama_batch members are allocated with size n_tokens
+    All members are left uninitialized"""
     return _lib.llama_batch_init(n_tokens, embd, n_seq_max)
 
 
@@ -1175,6 +1356,7 @@ _lib.llama_batch_init.restype = llama_batch
 # // Frees a batch of tokens allocated with llama_batch_init()
 # LLAMA_API void llama_batch_free(struct llama_batch batch);
 def llama_batch_free(batch: llama_batch):
+    """Frees a batch of tokens allocated with llama_batch_init()"""
     return _lib.llama_batch_free(batch)
 
 
@@ -1190,6 +1372,10 @@ _lib.llama_batch_free.restype = None
 #         struct llama_context * ctx,
 #           struct llama_batch   batch);
 def llama_decode(ctx: llama_context_p, batch: llama_batch) -> int:
+    """Positive return values does not mean a fatal error, but rather a warning.
+    0 - success
+    1 - could not find a KV slot for the batch (try reducing the size of the batch or increase the context)
+    < 0 - error"""
     return _lib.llama_decode(ctx, batch)
 
 
@@ -1206,6 +1392,10 @@ def llama_set_n_threads(
     n_threads: Union[c_uint32, int],
     n_threads_batch: Union[c_uint32, int],
 ):
+    """Set the number of threads used for decoding
+    n_threads is the number of threads used for generation (single token)
+    n_threads_batch is the number of threads used for prompt and batch processing (multiple tokens)
+    """
     return _lib.llama_set_n_threads(ctx, n_threads, n_threads_batch)
 
 
@@ -1222,6 +1412,11 @@ _lib.llama_set_n_threads.restype = None
 def llama_get_logits(
     ctx: llama_context_p,
 ):  # type: (...) -> Array[float] # type: ignore
+    """Token logits obtained from the last call to llama_eval()
+    The logits for the last token are stored in the last row
+    Logits for which llama_batch.logits[i] == 0 are undefined
+    Rows: n_tokens provided with llama_batch
+    Cols: n_vocab"""
     return _lib.llama_get_logits(ctx)
 
 
@@ -1235,6 +1430,8 @@ _lib.llama_get_logits.restype = c_float_p
 def llama_get_logits_ith(
     ctx: llama_context_p, i: Union[c_int32, int]
 ):  # type: (...) -> Array[float] # type: ignore
+    """Logits for the ith token. Equivalent to:
+    llama_get_logits(ctx) + i*n_vocab"""
     return _lib.llama_get_logits_ith(ctx, i)
 
 
@@ -1248,6 +1445,8 @@ _lib.llama_get_logits_ith.restype = c_float_p
 def llama_get_embeddings(
     ctx: llama_context_p,
 ):  # type: (...) -> Array[float] # type: ignore
+    """Get the embeddings for the input
+    shape: [n_embd] (1-dimensional)"""
     return _lib.llama_get_embeddings(ctx)
 
 
@@ -1294,6 +1493,7 @@ _lib.llama_token_get_type.restype = ctypes.c_int
 
 # LLAMA_API llama_token llama_token_bos(const struct llama_model * model); // beginning-of-sentence
 def llama_token_bos(model: llama_model_p) -> int:
+    """beginning-of-sentence"""
     return _lib.llama_token_bos(model)
 
 
@@ -1303,6 +1503,7 @@ _lib.llama_token_bos.restype = llama_token
 
 # LLAMA_API llama_token llama_token_eos(const struct llama_model * model); // end-of-sentence
 def llama_token_eos(model: llama_model_p) -> int:
+    """end-of-sentence"""
     return _lib.llama_token_eos(model)
 
 
@@ -1312,6 +1513,7 @@ _lib.llama_token_eos.restype = llama_token
 
 # LLAMA_API llama_token llama_token_nl (const struct llama_model * model); // next-line
 def llama_token_nl(model: llama_model_p) -> int:
+    """next-line"""
     return _lib.llama_token_nl(model)
 
 
@@ -1322,6 +1524,7 @@ _lib.llama_token_nl.restype = llama_token
 # // Returns -1 if unknown, 1 for true or 0 for false.
 # LLAMA_API int         llama_add_bos_token(const struct llama_model * model);
 def llama_add_bos_token(model: llama_model_p) -> int:
+    """Returns -1 if unknown, 1 for true or 0 for false."""
     return _lib.llama_add_bos_token(model)
 
 
@@ -1332,6 +1535,7 @@ _lib.llama_add_bos_token.restype = c_int
 # // Returns -1 if unknown, 1 for true or 0 for false.
 # LLAMA_API int         llama_add_eos_token(const struct llama_model * model);
 def llama_add_eos_token(model: llama_model_p) -> int:
+    """Returns -1 if unknown, 1 for true or 0 for false."""
     return _lib.llama_add_eos_token(model)
 
 
@@ -1342,6 +1546,7 @@ _lib.llama_add_eos_token.restype = c_int
 # // codellama infill tokens
 # LLAMA_API llama_token llama_token_prefix(const struct llama_model * model); // Beginning of infill prefix
 def llama_token_prefix(model: llama_model_p) -> int:
+    """codellama infill tokens"""
     return _lib.llama_token_prefix(model)
 
 
@@ -1404,6 +1609,7 @@ def llama_tokenize(
     add_bos: Union[c_bool, bool],
     special: Union[c_bool, bool],
 ) -> int:
+    """Convert the provided text into tokens."""
     return _lib.llama_tokenize(
         model, text, text_len, tokens, n_max_tokens, add_bos, special
     )
@@ -1436,6 +1642,11 @@ def llama_token_to_piece(
     buf: Union[c_char_p, bytes],
     length: Union[c_int, int],
 ) -> int:
+    """Token Id -> Piece.
+    Uses the vocabulary in the provided context.
+    Does not write null terminator to the buffer.
+    User code is responsible to remove the leading whitespace of the first non-BOS token when decoding multiple tokens.
+    """
     return _lib.llama_token_to_piece(model, token, buf, length)
 
 
@@ -1493,6 +1704,7 @@ _lib.llama_grammar_copy.restype = llama_grammar_p
 # // Sets the current rng seed.
 # LLAMA_API void llama_set_rng_seed(struct llama_context * ctx, uint32_t seed);
 def llama_set_rng_seed(ctx: llama_context_p, seed: Union[c_uint32, int]):
+    """Sets the current rng seed."""
     return _lib.llama_set_rng_seed(ctx, seed)
 
 
@@ -1519,6 +1731,9 @@ def llama_sample_repetition_penalties(
     penalty_freq: Union[c_float, float],
     penalty_present: Union[c_float, float],
 ):
+    """Repetition penalty described in CTRL academic paper https://arxiv.org/abs/1909.05858, with negative logit fix.
+    Frequency and presence penalties described in OpenAI API https://platform.openai.com/docs/api-reference/parameter-details.
+    """
     return _lib.llama_sample_repetition_penalties(
         ctx,
         candidates,
@@ -1557,6 +1772,7 @@ def llama_sample_classifier_free_guidance(
     guidance_ctx: llama_context_p,
     scale: Union[c_float, float],
 ):
+    """Apply classifier-free guidance to the logits as described in academic paper "Stay on topic with Classifier-Free Guidance" https://arxiv.org/abs/2306.17806"""
     return _lib.llama_sample_classifier_free_guidance(
         ctx, candidates, guidance_ctx, scale
     )
@@ -1578,6 +1794,7 @@ _lib.llama_sample_classifier_free_guidance.restype = None
 def llama_sample_softmax(
     ctx: llama_context_p, candidates  # type: _Pointer[llama_token_data]
 ):
+    """Sorts candidate tokens by their logits in descending order and calculate probabilities based on logits."""
     return _lib.llama_sample_softmax(ctx, candidates)
 
 
@@ -1600,6 +1817,7 @@ def llama_sample_top_k(
     k: Union[c_int, int],
     min_keep: Union[c_size_t, int],
 ):
+    """Top-K sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751"""
     return _lib.llama_sample_top_k(ctx, candidates, k, min_keep)
 
 
@@ -1624,6 +1842,7 @@ def llama_sample_top_p(
     p: Union[c_float, float],
     min_keep: Union[c_size_t, int],
 ):
+    """Nucleus sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751"""
     return _lib.llama_sample_top_p(ctx, candidates, p, min_keep)
 
 
@@ -1648,6 +1867,7 @@ def llama_sample_min_p(
     p: Union[c_float, float],
     min_keep: Union[c_size_t, int],
 ):
+    """Minimum P sampling as described in https://github.com/ggerganov/llama.cpp/pull/3841"""
     return _lib.llama_sample_min_p(ctx, candidates, p, min_keep)
 
 
@@ -1672,6 +1892,7 @@ def llama_sample_tail_free(
     z: Union[c_float, float],
     min_keep: Union[c_size_t, int],
 ):
+    """Tail Free Sampling described in https://www.trentonbricken.com/Tail-Free-Sampling/."""
     return _lib.llama_sample_tail_free(ctx, candidates, z, min_keep)
 
 
@@ -1696,6 +1917,7 @@ def llama_sample_typical(
     p: Union[c_float, float],
     min_keep: Union[c_size_t, int],
 ):
+    """Locally Typical Sampling implementation described in the paper https://arxiv.org/abs/2202.00666."""
     return _lib.llama_sample_typical(ctx, candidates, p, min_keep)
 
 

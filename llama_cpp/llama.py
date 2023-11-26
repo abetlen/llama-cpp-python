@@ -765,6 +765,30 @@ class Llama:
         **kwargs,  # type: ignore
     ):
         """Load a llama.cpp model from `model_path`.
+    
+        Examples:
+            Basic usage
+
+            >>> import llama_cpp
+            >>> model = llama_cpp.Llama(
+            ...     model_path="path/to/model",
+            ... )
+            >>> print(model("The quick brown fox jumps ", stop=["."])["choices"][0]["text"])
+            the lazy dog
+
+            Loading a chat model
+
+            >>> import llama_cpp
+            >>> model = llama_cpp.Llama(
+            ...     model_path="path/to/model",
+            ...     chat_format="llama-2",
+            ... )
+            >>> print(model.create_chat_completion(
+            ...     messages=[{
+            ...         "role": "user",
+            ...         "content": "what is the meaning of life?"
+            ...     }]
+            ... ))
 
         Args:
             model_path: Path to the model.
@@ -774,17 +798,21 @@ class Llama:
             vocab_only: Only load the vocabulary no weights.
             use_mmap: Use mmap if possible.
             use_mlock: Force the system to keep the model in RAM.
-            seed: Random seed. -1 for random.
-            n_ctx: Context size.
-            n_batch: Batch size for prompt processing (must be >= 32 to use BLAS)
-            n_threads: Number of threads to use. If None, the number of threads is automatically determined.
-            n_threads_batch: Number of threads to use for batch processing. If None, use n_threads.
-            rope_scaling_type: Type of rope scaling to use.
-            rope_freq_base: Base frequency for rope sampling.
-            rope_freq_scale: Scale factor for rope sampling.
-            mul_mat_q: if true, use experimental mul_mat_q kernels
-            f16_kv: Use half-precision for key/value cache.
-            logits_all: Return logits for all tokens, not just the last token.
+            seed: RNG seed, -1 for random
+            n_ctx: Text context, 0 = from model
+            n_batch: Prompt processing maximum batch size
+            n_threads: Number of threads to use for generation
+            n_threads_batch: Number of threads to use for batch processing
+            rope_scaling_type: RoPE scaling type, from `enum llama_rope_scaling_type`. ref: https://github.com/ggerganov/llama.cpp/pull/2054
+            rope_freq_base: RoPE base frequency, 0 = from model
+            rope_freq_scale: RoPE frequency scaling factor, 0 = from model
+            yarn_ext_factor: YaRN extrapolation mix factor, negative = from model
+            yarn_attn_factor: YaRN magnitude scaling factor
+            yarn_beta_fast: YaRN low correction dim
+            yarn_beta_slow: YaRN high correction dim
+            yarn_orig_ctx: YaRN original context size
+            f16_kv: Use fp16 for KV cache, fp32 otherwise
+            logits_all: Return logits for all tokens, not just the last token. Must be True for completion to return logprobs.
             embedding: Embedding mode only.
             last_n_tokens_size: Maximum number of tokens to keep in the last_n_tokens deque.
             lora_base: Optional path to base model, useful if using a quantized base model and you want to apply LoRA to an f16 model.
@@ -1839,13 +1867,27 @@ class Llama:
             suffix: A suffix to append to the generated text. If None, no suffix is appended.
             max_tokens: The maximum number of tokens to generate. If max_tokens <= 0 or None, the maximum number of tokens to generate is unlimited and depends on n_ctx.
             temperature: The temperature to use for sampling.
-            top_p: The top-p value to use for sampling.
+            top_p: The top-p value to use for nucleus sampling. Nucleus sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
+            min_p: The min-p value to use for minimum p sampling. Minimum P sampling as described in https://github.com/ggerganov/llama.cpp/pull/3841
+            typical_p: The typical-p value to use for sampling. Locally Typical Sampling implementation described in the paper https://arxiv.org/abs/2202.00666.
             logprobs: The number of logprobs to return. If None, no logprobs are returned.
             echo: Whether to echo the prompt.
             stop: A list of strings to stop generation when encountered.
+            frequency_penalty: The penalty to apply to tokens based on their frequency in the prompt.
+            presence_penalty: The penalty to apply to tokens based on their presence in the prompt.
             repeat_penalty: The penalty to apply to repeated tokens.
-            top_k: The top-k value to use for sampling.
+            top_k: The top-k value to use for sampling. Top-K sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
             stream: Whether to stream the results.
+            seed: The seed to use for sampling.
+            tfs_z: The tail-free sampling parameter. Tail Free Sampling described in https://www.trentonbricken.com/Tail-Free-Sampling/.
+            mirostat_mode: The mirostat sampling mode.
+            mirostat_tau: The target cross-entropy (or surprise) value you want to achieve for the generated text. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text.
+            mirostat_eta: The learning rate used to update `mu` based on the error between the target and observed surprisal of the sampled word. A larger learning rate will cause `mu` to be updated more quickly, while a smaller learning rate will result in slower updates.
+            model: The name to use for the model in the completion object.
+            stopping_criteria: A list of stopping criteria to use.
+            logits_processor: A list of logits processors to use.
+            grammar: A grammar to use for constrained sampling.
+            logit_bias: A logit bias to use.
 
         Raises:
             ValueError: If the requested tokens exceed the context window.
@@ -1920,15 +1962,29 @@ class Llama:
         Args:
             prompt: The prompt to generate text from.
             suffix: A suffix to append to the generated text. If None, no suffix is appended.
-            max_tokens: The maximum number of tokens to generate. If max_tokens <= 0, the maximum number of tokens to generate is unlimited and depends on n_ctx.
+            max_tokens: The maximum number of tokens to generate. If max_tokens <= 0 or None, the maximum number of tokens to generate is unlimited and depends on n_ctx.
             temperature: The temperature to use for sampling.
-            top_p: The top-p value to use for sampling.
+            top_p: The top-p value to use for nucleus sampling. Nucleus sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
+            min_p: The min-p value to use for minimum p sampling. Minimum P sampling as described in https://github.com/ggerganov/llama.cpp/pull/3841
+            typical_p: The typical-p value to use for sampling. Locally Typical Sampling implementation described in the paper https://arxiv.org/abs/2202.00666.
             logprobs: The number of logprobs to return. If None, no logprobs are returned.
             echo: Whether to echo the prompt.
             stop: A list of strings to stop generation when encountered.
+            frequency_penalty: The penalty to apply to tokens based on their frequency in the prompt.
+            presence_penalty: The penalty to apply to tokens based on their presence in the prompt.
             repeat_penalty: The penalty to apply to repeated tokens.
-            top_k: The top-k value to use for sampling.
+            top_k: The top-k value to use for sampling. Top-K sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
             stream: Whether to stream the results.
+            seed: The seed to use for sampling.
+            tfs_z: The tail-free sampling parameter. Tail Free Sampling described in https://www.trentonbricken.com/Tail-Free-Sampling/.
+            mirostat_mode: The mirostat sampling mode.
+            mirostat_tau: The target cross-entropy (or surprise) value you want to achieve for the generated text. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text.
+            mirostat_eta: The learning rate used to update `mu` based on the error between the target and observed surprisal of the sampled word. A larger learning rate will cause `mu` to be updated more quickly, while a smaller learning rate will result in slower updates.
+            model: The name to use for the model in the completion object.
+            stopping_criteria: A list of stopping criteria to use.
+            logits_processor: A list of logits processors to use.
+            grammar: A grammar to use for constrained sampling.
+            logit_bias: A logit bias to use.
 
         Raises:
             ValueError: If the requested tokens exceed the context window.
@@ -2000,13 +2056,31 @@ class Llama:
 
         Args:
             messages: A list of messages to generate a response for.
+            functions: A list of functions to use for the chat completion.
+            function_call: A function call to use for the chat completion.
+            tools: A list of tools to use for the chat completion.
+            tool_choice: A tool choice to use for the chat completion.
             temperature: The temperature to use for sampling.
-            top_p: The top-p value to use for sampling.
-            top_k: The top-k value to use for sampling.
+            top_p: The top-p value to use for nucleus sampling. Nucleus sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
+            top_k: The top-k value to use for sampling. Top-K sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
+            min_p: The min-p value to use for minimum p sampling. Minimum P sampling as described in https://github.com/ggerganov/llama.cpp/pull/3841
+            typical_p: The typical-p value to use for sampling. Locally Typical Sampling implementation described in the paper https://arxiv.org/abs/2202.00666.
             stream: Whether to stream the results.
             stop: A list of strings to stop generation when encountered.
+            seed: The seed to use for sampling.
+            response_format: The response format to use for the chat completion. Use { "type": "json_object" } to contstrain output to only valid json.
             max_tokens: The maximum number of tokens to generate. If max_tokens <= 0 or None, the maximum number of tokens to generate is unlimited and depends on n_ctx.
+            presence_penalty: The penalty to apply to tokens based on their presence in the prompt.
+            frequency_penalty: The penalty to apply to tokens based on their frequency in the prompt.
             repeat_penalty: The penalty to apply to repeated tokens.
+            tfs_z: The tail-free sampling parameter.
+            mirostat_mode: The mirostat sampling mode.
+            mirostat_tau: The mirostat sampling tau parameter.
+            mirostat_eta: The mirostat sampling eta parameter.
+            model: The name to use for the model in the completion object.
+            logits_processor: A list of logits processors to use.
+            grammar: A grammar to use.
+            logit_bias: A logit bias to use.
 
         Returns:
             Generated chat completion or a stream of chat completion chunks.
