@@ -4,6 +4,8 @@ title: API Reference
 
 ## High Level API
 
+High-level Python bindings for llama.cpp.
+
 ::: llama_cpp.Llama
     options:
         members:
@@ -57,6 +59,8 @@ title: API Reference
         show_root_heading: true
 
 ## Low Level API
+
+Low-level Python bindings for llama.cpp using Python's ctypes library.
 
 ::: llama_cpp.llama_cpp
     options:
