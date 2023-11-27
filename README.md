@@ -108,7 +108,9 @@ Detailed MacOS Metal GPU install documentation is available at [docs/install/mac
 
 ## High-level API
 
-The high-level API provides a simple managed interface through the `Llama` class.
+[API Reference](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#high-level-api)
+
+The high-level API provides a simple managed interface through the [`Llama`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama) class.
 
 Below is a short example demonstrating how to use the high-level API to for basic text completion:
 
@@ -143,6 +145,8 @@ Below is a short example demonstrating how to use the high-level API to for basi
 }
 ```
 
+Text completion is available through the [`__call__`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.__call__) and [`create_completion`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.create_completion) methods of the [`Llama`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama) class.
+
 ### Chat Completion
 
 The high-level API also provides a simple interface for chat completion.
@@ -162,6 +166,8 @@ Note that `chat_format` option must be set for the particular model you are usin
       ]
 )
 ```
+
+Chat completion is available through the [`create_chat_completion`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.create_chat_completion) method of the [`Llama`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama) class.
 
 ### Function Calling
 
@@ -296,6 +302,12 @@ python3 -m llama_cpp.server --model models/7B/llama-model.gguf --chat_format cha
 That will format the prompt according to how model expects it. You can find the prompt format in the model card.
 For possible options, see [llama_cpp/llama_chat_format.py](llama_cpp/llama_chat_format.py) and look for lines starting with "@register_chat_format".
 
+### Web Server Examples
+
+- [Local Copilot replacement](https://llama-cpp-python.readthedocs.io/en/latest/server/#code-completion)
+- [Function Calling support](https://llama-cpp-python.readthedocs.io/en/latest/server/#function-calling)
+- [Vision API support](https://llama-cpp-python.readthedocs.io/en/latest/server/#multimodal-models)
+
 ## Docker image
 
 A Docker image is available on [GHCR](https://ghcr.io/abetlen/llama-cpp-python). To run the server:
@@ -306,6 +318,8 @@ docker run --rm -it -p 8000:8000 -v /path/to/models:/models -e MODEL=/models/lla
 [Docker on termux (requires root)](https://gist.github.com/FreddieOliveira/efe850df7ff3951cb62d74bd770dce27) is currently the only known way to run this on phones, see [termux support issue](https://github.com/abetlen/llama-cpp-python/issues/389) 
 
 ## Low-level API
+
+[API Reference](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#low-level-api)
 
 The low-level API is a direct [`ctypes`](https://docs.python.org/3/library/ctypes.html) binding to the C API provided by `llama.cpp`.
 The entire low-level API can be found in [llama_cpp/llama_cpp.py](https://github.com/abetlen/llama-cpp-python/blob/master/llama_cpp/llama_cpp.py) and directly mirrors the C API in [llama.h](https://github.com/ggerganov/llama.cpp/blob/master/llama.h).
