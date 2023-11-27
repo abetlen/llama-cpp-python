@@ -332,7 +332,7 @@ Check out the [examples folder](examples/low_level_api) for more examples of usi
 
 # Documentation
 
-Documentation is available at [https://abetlen.github.io/llama-cpp-python](https://abetlen.github.io/llama-cpp-python).
+Documentation is available via [https://llama-cpp-python.readthedocs.io/](https://llama-cpp-python.readthedocs.io/).
 If you find any issues with the documentation, please open an issue or submit a PR.
 
 # Development
