@@ -116,11 +116,11 @@ Below is a short example demonstrating how to use the high-level API to for basi
 >>> from llama_cpp import Llama
 >>> llm = Llama(model_path="./models/7B/llama-model.gguf")
 >>> output = llm(
-  "Q: Name the planets in the solar system? A: ", # Prompt
-  max_tokens=32, # Generate up to 32 tokens
-  stop=["Q:", "\n"], # Stop generating just before the model would generate a new question
-  echo=True # Echo the prompt back in the output
-)
+      "Q: Name the planets in the solar system? A: ", # Prompt
+      max_tokens=32, # Generate up to 32 tokens
+      stop=["Q:", "\n"], # Stop generating just before the model would generate a new question
+      echo=True # Echo the prompt back in the output
+) # Generate a completion, can also call create_completion
 >>> print(output)
 {
   "id": "cmpl-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
@@ -153,13 +153,13 @@ Note that `chat_format` option must be set for the particular model you are usin
 >>> from llama_cpp import Llama
 >>> llm = Llama(model_path="path/to/llama-2/llama-model.gguf", chat_format="llama-2")
 >>> llm.create_chat_completion(
-    messages = [
-        {"role": "system", "content": "You are an assistant who perfectly describes images."},
-        {
-            "role": "user",
-            "content": "Describe this image in detail please."
-        }
-    ]
+      messages = [
+          {"role": "system", "content": "You are an assistant who perfectly describes images."},
+          {
+              "role": "user",
+              "content": "Describe this image in detail please."
+          }
+      ]
 )
 ```
 
@@ -175,43 +175,43 @@ The gguf-converted files for this model can be found here: [functionary-7b-v1](h
 >>> from llama_cpp import Llama
 >>> llm = Llama(model_path="path/to/functionary/llama-model.gguf", chat_format="functionary")
 >>> llm.create_chat_completion(
-    messages = [
-      {
-        "role": "system",
-        "content": "A chat between a curious user and an artificial intelligence assitant. The assistant gives helpful, detailed, and polite answers to the user's questions. The assistant callse functions with appropriate input when necessary"
-      },
-      {
-        "role": "user",
-        "content": "Extract Jason is 25 years old"
-      }
-    ],
-    tools=[{
-      "type": "function",
-      "function": {
-        "name": "UserDetail",
-        "parameters": {
-          "type": "object"
-          "title": "UserDetail",
-          "properties": {
-            "name": {
-              "title": "Name",
-              "type": "string"
-            },
-            "age": {
-              "title": "Age",
-              "type": "integer"
-            }
-          },
-          "required": [ "name", "age" ]
+      messages = [
+        {
+          "role": "system",
+          "content": "A chat between a curious user and an artificial intelligence assitant. The assistant gives helpful, detailed, and polite answers to the user's questions. The assistant callse functions with appropriate input when necessary"
+        },
+        {
+          "role": "user",
+          "content": "Extract Jason is 25 years old"
         }
-      }
-    }],
-    tool_choices=[{
-      "type": "function",
-      "function": {
-        "name": "UserDetail"
-      }
-    }]
+      ],
+      tools=[{
+        "type": "function",
+        "function": {
+          "name": "UserDetail",
+          "parameters": {
+            "type": "object"
+            "title": "UserDetail",
+            "properties": {
+              "name": {
+                "title": "Name",
+                "type": "string"
+              },
+              "age": {
+                "title": "Age",
+                "type": "integer"
+              }
+            },
+            "required": [ "name", "age" ]
+          }
+        }
+      }],
+      tool_choices=[{
+        "type": "function",
+        "function": {
+          "name": "UserDetail"
+        }
+      }]
 )
 ```
 
