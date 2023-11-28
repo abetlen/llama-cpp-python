@@ -349,6 +349,10 @@ Check out the [examples folder](examples/low_level_api) for more examples of usi
 Documentation is available via [https://llama-cpp-python.readthedocs.io/](https://llama-cpp-python.readthedocs.io/).
 If you find any issues with the documentation, please open an issue or submit a PR.
 
+# Hugging Space
+
+Implementation available at Huggingface Space [here](https://huggingface.co/spaces/abhishekmamdapure/llama-cpp-python).
+
 # Development
 
 This package is under active development and I welcome any contributions.
@@ -374,6 +378,7 @@ pip install -e .[all]
 # to clear the local build cache
 make clean
 ```
+
 
 # How does this compare to other Python bindings of `llama.cpp`?
 
