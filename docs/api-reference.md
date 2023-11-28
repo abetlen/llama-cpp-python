@@ -26,16 +26,6 @@ title: API Reference
             - token_eos
         show_root_heading: true
 
-::: llama_cpp.LlamaGrammar
-    options:
-        members:
-            - from_string
-            - from_json_schema
-
-::: llama_cpp.LlamaCache
-    options:
-        show_root_heading: true
-
 ::: llama_cpp.LlamaState
     options:
         show_root_heading: true
@@ -55,6 +45,13 @@ title: API Reference
 ::: llama_cpp.StoppingCriteriaList
     options:
         show_root_heading: true
+
+::: llama_cpp.LlamaGrammar
+    options:
+        members:
+            - from_string
+            - from_json_schema
+
 
 ## Low Level API
 
