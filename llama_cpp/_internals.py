@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import os
+import ctypes
 
 from typing import (
     List,
     Optional,
     Sequence,
 )
-
-import ctypes
+from dataclasses import dataclass, field
 
 import numpy as np
 import numpy.typing as npt
@@ -20,6 +20,8 @@ import llama_cpp.llama_cpp as llama_cpp
 
 from ._utils import suppress_stdout_stderr
 
+
+# Python wrappers over llama.h structs
 
 
 class _LlamaModel:
@@ -403,7 +405,7 @@ class _LlamaContext:
         tau: float,
         eta: float,
         m: int,
-        mu: float,
+        mu: ctypes._Pointer[ctypes.c_float],  # type: ignore
     ) -> int:
         assert self.ctx is not None
         return llama_cpp.llama_sample_token_mirostat(
@@ -412,11 +414,11 @@ class _LlamaContext:
             tau,
             eta,
             m,
-            ctypes.pointer(ctypes.c_float(mu)),
+            mu,
         )
 
     def sample_token_mirostat_v2(
-        self, candidates: "_LlamaTokenDataArray", tau: float, eta: float, mu: float
+        self, candidates: "_LlamaTokenDataArray", tau: float, eta: float, mu: ctypes._Pointer[ctypes.c_float]  # type: ignore
     ) -> int:
         assert self.ctx is not None
         return llama_cpp.llama_sample_token_mirostat_v2(
@@ -424,7 +426,7 @@ class _LlamaContext:
             ctypes.byref(candidates.candidates),  # type: ignore
             tau,
             eta,
-            ctypes.pointer(ctypes.c_float(mu)),
+            mu,
         )
 
     def sample_token_greedy(self, candidates: "_LlamaTokenDataArray") -> int:
@@ -526,3 +528,162 @@ class _LlamaTokenDataArray:
         )
         self.candidates.sorted = llama_cpp.c_bool(False)
         self.candidates.size = llama_cpp.c_size_t(self.n_vocab)
+
+
+# Python wrappers over common/sampling structs
+
+
+@dataclass
+class _LlamaSamplingParams:
+    n_prev: int = 64
+    n_probs: int = 0
+    top_k: int = 40
+    top_p: float = 0.95
+    min_p: float = 0.05
+    tfs_z: float = 1.00
+    typical_p: float = 1.00
+    temp: float = 0.80
+    penalty_last_n: int = 64
+    penalty_repeat: float = 1.10
+    penalty_freq: float = 0.00
+    penalty_present: float = 0.00
+    mirostat: int = 0
+    mirostat_tau: float = 5.00
+    mirostat_eta: float = 0.10
+    penalize_nl: bool = True
+
+    grammar: str = ""
+
+    cfg_negative_prompt: str = ""
+    cfg_scale: float = 1.00
+
+    logit_bias: dict[int, float] = field(default_factory=dict)
+
+
+@dataclass
+class _LlamaSamplingContext:
+    params: _LlamaSamplingParams = field(default_factory=_LlamaSamplingParams)
+    mirostat_mu: ctypes.c_float = field(default_factory=ctypes.c_float)
+    grammar: Optional[LlamaGrammar] = None
+    # NOTE: Missing parsed_grammar
+    prev: list[int] = field(default_factory=list)
+    cur: list[llama_cpp.llama_token_data] = field(default_factory=list)
+
+    def reset(self):
+        self.prev = []
+        self.cur = []
+        if self.grammar is not None:
+            self.grammar.reset()
+
+    def cp(self):
+        return _LlamaSamplingContext(
+            params=self.params,
+            mirostat_mu=self.mirostat_mu,
+            grammar=self.grammar,
+            prev=self.prev.copy(),
+            cur=self.cur.copy(),
+        )
+
+    def last(self) -> Optional[int]:
+        if len(self.prev) > 0:
+            return self.prev[-1]
+        else:
+            return None
+
+    def prev_str(self, ctx_main: _LlamaContext, n: int) -> str:
+        return ctx_main.model.detokenize(self.prev[-n:]).decode("utf-8")
+
+    def sample(
+        self, ctx_main: _LlamaContext, ctx_cfg: Optional[_LlamaContext], idx: int = 0
+    ):
+        n_vocab = ctx_main.model.n_vocab()
+        id = 0
+        logits = ctx_main.get_logits_ith(idx)
+
+        # apply logit_bias
+        for token, logit_bias in self.params.logit_bias.items():
+            logits[token] += logit_bias
+
+        logits_array = np.array(
+            ctypes.cast(logits, ctypes.POINTER(ctypes.c_float * n_vocab)).contents,
+            dtype=np.single,
+        )
+        token_data_array = _LlamaTokenDataArray(
+            n_vocab=n_vocab
+        )  # TODO: Only create this once
+        token_data_array.copy_logits(logits_array)
+
+        if ctx_cfg is not None:
+            ctx_main.sample_classifier_free_guidance(
+                token_data_array, ctx_cfg, self.params.cfg_scale
+            )
+
+        # apply penalties
+        if len(self.prev) > 0:
+            nl_token = ctx_main.model.token_nl()
+            nl_logit = logits[nl_token]
+            if self.params.penalty_last_n > 0:
+                ctx_main.sample_repetition_penalties(
+                    token_data_array,
+                    # TODO: Only create this once
+                    (llama_cpp.llama_token * len(self.prev))(*self.prev),  # type: ignore
+                    self.params.penalty_last_n,
+                    self.params.penalty_repeat,
+                    self.params.penalty_freq,
+                    self.params.penalty_present,
+                )
+            if not self.params.penalize_nl:
+                token_data_array.candidates_data["logit"][nl_token] = nl_logit
+
+        if self.grammar is not None:
+            ctx_main.sample_grammar(token_data_array, self.grammar)
+
+        if self.params.temp < 0:
+            ctx_main.sample_softmax(token_data_array)
+            id = token_data_array.candidates_data["id"][0]
+        elif self.params.temp == 0:
+            id = ctx_main.sample_token_greedy(token_data_array)
+        else:
+            if self.params.mirostat == 1:
+                mirostat_m = 100
+                ctx_main.sample_temp(token_data_array, self.params.temp)
+                id = ctx_main.sample_token_mirostat(
+                    token_data_array,
+                    self.params.mirostat_tau,
+                    self.params.mirostat_eta,
+                    mirostat_m,
+                    ctypes.pointer(self.mirostat_mu),
+                )
+            elif self.params.mirostat == 2:
+                ctx_main.sample_temp(token_data_array, self.params.temp)
+                id = ctx_main.sample_token_mirostat_v2(
+                    token_data_array,
+                    self.params.mirostat_tau,
+                    self.params.mirostat_eta,
+                    ctypes.pointer(self.mirostat_mu),
+                )
+            else:
+                min_keep = max(1, self.params.n_probs)
+                ctx_main.sample_top_k(
+                    token_data_array, self.params.top_k, min_keep=min_keep
+                )
+                ctx_main.sample_tail_free(
+                    token_data_array, self.params.tfs_z, min_keep=min_keep
+                )
+                ctx_main.sample_typical(
+                    token_data_array, self.params.typical_p, min_keep=min_keep
+                )
+                ctx_main.sample_top_p(
+                    token_data_array, self.params.top_p, min_keep=min_keep
+                )
+                ctx_main.sample_min_p(
+                    token_data_array, self.params.min_p, min_keep=min_keep
+                )
+                ctx_main.sample_temp(token_data_array, self.params.temp)
+                id = ctx_main.sample_token(token_data_array)
+        return id
+
+    def accept(self, ctx_main: _LlamaContext, id: int, apply_grammar: bool):
+        if apply_grammar and self.grammar is not None:
+            ctx_main.grammar_accept_token(self.grammar, id)
+        self.prev.append(id)

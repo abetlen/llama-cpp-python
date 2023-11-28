@@ -466,21 +466,23 @@ class Llama:
         elif temp == 0.0:
             id = self._ctx.sample_token_greedy(candidates=self._candidates)
         elif mirostat_mode == 1:
+            mu = 2.0 * mirostat_tau
             self._ctx.sample_temp(candidates=self._candidates, temp=temp)
             id = self._ctx.sample_token_mirostat(
                 candidates=self._candidates,
                 tau=mirostat_tau,
                 eta=mirostat_eta,
-                mu=2.0 * mirostat_tau,
+                mu=ctypes.pointer(ctypes.c_float(mu)),
                 m=100,
             )
         elif mirostat_mode == 2:
+            mu = 2.0 * mirostat_tau
             self._ctx.sample_temp(candidates=self._candidates, temp=temp)
             id = self._ctx.sample_token_mirostat_v2(
                 candidates=self._candidates,
                 tau=mirostat_tau,
                 eta=mirostat_eta,
-                mu=2.0 * mirostat_tau,
+                mu=ctypes.pointer(ctypes.c_float(mu)),
             )
         else:
             self._ctx.sample_top_k(candidates=self._candidates, k=top_k, min_keep=1)
