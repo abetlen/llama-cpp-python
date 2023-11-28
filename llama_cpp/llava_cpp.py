@@ -48,8 +48,8 @@ def _load_shared_library(lib_base_name: str):
     else:
         raise RuntimeError("Unsupported platform")
 
-    if "LLAMA_CPP_LIB" in os.environ:
-        lib_base_name = os.environ["LLAMA_CPP_LIB"]
+    if "LLAVA_CPP_LIB" in os.environ:
+        lib_base_name = os.environ["LLAVA_CPP_LIB"]
         _lib = pathlib.Path(lib_base_name)
         _base_path = _lib.parent.resolve()
         _lib_paths = [_lib.resolve()]
