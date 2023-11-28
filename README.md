@@ -25,31 +25,40 @@ Documentation is available at [https://llama-cpp-python.readthedocs.io/en/latest
 
 ## Installation
 
-Install from PyPI (requires a c compiler):
+`llama-cpp-python` can be installed directly from PyPI as a source distribution by running:
 
 ```bash
 pip install llama-cpp-python
 ```
 
-The above command will attempt to install the package and build `llama.cpp` from source.
-This is the recommended installation method as it ensures that `llama.cpp` is built with the available optimizations for your system.
+This will build `llama.cpp` from source using cmake and your system's c compiler (required) and install the library alongside this python package.
 
-If you have previously installed `llama-cpp-python` through pip and want to upgrade your version or rebuild the package with different  compiler options, please add the following flags to ensure that the package is rebuilt correctly:
+If you run into issues during installation add the `--verbose` flag to the `pip install` command to see the full cmake build log.
+
+
+### Installation with Specific Hardware Acceleration (BLAS, CUDA, Metal, etc)
+
+The default pip install behaviour is to build `llama.cpp` for CPU only on Linux and Windows and use Metal on MacOS.
+
+`llama.cpp` supports a number of hardware acceleration backends depending including OpenBLAS, cuBLAS, CLBlast, HIPBLAS, and Metal.
+See the [llama.cpp README](https://github.com/ggerganov/llama.cpp#build) for a full list of supported backends.
+
+All of these backends are supported by `llama-cpp-python` and can be enabled by setting the `CMAKE_ARGS` environment variable before installing.
+
+On Linux and Mac you set the `CMAKE_ARGS` like this:
 
 ```bash
-pip install llama-cpp-python --force-reinstall --upgrade --no-cache-dir
+CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS" pip install llama-cpp-python
 ```
 
-Note: If you are using Apple Silicon (M1) Mac, make sure you have installed a version of Python that supports arm64 architecture. For example:
-```
-wget https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-arm64.sh
-bash Miniforge3-MacOSX-arm64.sh
-```
-Otherwise, while installing it will build the llama.cpp x86 version which will be 10x slower on Apple Silicon (M1) Mac.
+On Windows you can set the `CMAKE_ARGS` like this:
 
-### Installation with Hardware Acceleration
+```ps
+$env:CMAKE_ARGS = "-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS"
+pip install llama-cpp-python
+```
 
-`llama.cpp` supports multiple BLAS backends for faster processing.
+#### OpenBLAS
 
 To install with OpenBLAS, set the `LLAMA_BLAS and LLAMA_BLAS_VENDOR` environment variables before installing:
 
@@ -57,17 +66,15 @@ To install with OpenBLAS, set the `LLAMA_BLAS and LLAMA_BLAS_VENDOR` environment
 CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS" pip install llama-cpp-python
 ```
 
+#### cuBLAS
+
 To install with cuBLAS, set the `LLAMA_CUBLAS=1` environment variable before installing:
 
 ```bash
 CMAKE_ARGS="-DLLAMA_CUBLAS=on" pip install llama-cpp-python
 ```
 
-To install with CLBlast, set the `LLAMA_CLBLAST=1` environment variable before installing:
-
-```bash
-CMAKE_ARGS="-DLLAMA_CLBLAST=on" pip install llama-cpp-python
-```
+#### Metal
 
 To install with Metal (MPS), set the `LLAMA_METAL=on` environment variable before installing:
 
@@ -75,24 +82,23 @@ To install with Metal (MPS), set the `LLAMA_METAL=on` environment variable befor
 CMAKE_ARGS="-DLLAMA_METAL=on" pip install llama-cpp-python
 ```
 
+#### CLBlast
+
+To install with CLBlast, set the `LLAMA_CLBLAST=1` environment variable before installing:
+
+```bash
+CMAKE_ARGS="-DLLAMA_CLBLAST=on" pip install llama-cpp-python
+```
+
+#### hipBLAS
+
 To install with hipBLAS / ROCm support for AMD cards, set the `LLAMA_HIPBLAS=on` environment variable before installing:
 
 ```bash
 CMAKE_ARGS="-DLLAMA_HIPBLAS=on" pip install llama-cpp-python
 ```
 
-#### Windows remarks
-
-To set the variables `CMAKE_ARGS`in PowerShell, follow the next steps (Example using, OpenBLAS):
-
-```ps
-$env:CMAKE_ARGS = "-DLLAMA_OPENBLAS=on"
-```
-
-Then, call `pip` after setting the variables:
-```
-pip install llama-cpp-python
-```
+### Windows Notes
 
 If you run into issues where it complains it can't find `'nmake'` `'?'` or CMAKE_C_COMPILER, you can extract w64devkit as [mentioned in llama.cpp repo](https://github.com/ggerganov/llama.cpp#openblas) and add those manually to CMAKE_ARGS before running `pip` install:
 ```ps
@@ -102,9 +108,26 @@ $env:CMAKE_ARGS = "-DLLAMA_OPENBLAS=on -DCMAKE_C_COMPILER=C:/w64devkit/bin/gcc.e
 
 See the above instructions and set `CMAKE_ARGS` to the BLAS backend you want to use.
 
-#### MacOS remarks
+### MacOS Notes
+
+Note: If you are using Apple Silicon (M1) Mac, make sure you have installed a version of Python that supports arm64 architecture. For example:
+```
+wget https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-arm64.sh
+bash Miniforge3-MacOSX-arm64.sh
+```
+Otherwise, while installing it will build the llama.cpp x86 version which will be 10x slower on Apple Silicon (M1) Mac.
 
 Detailed MacOS Metal GPU install documentation is available at [docs/install/macos.md](https://llama-cpp-python.readthedocs.io/en/latest/install/macos/)
+
+### Upgrading and Reinstalling
+
+To upgrade or rebuild `llama-cpp-python` add the following flags to ensure that the package is rebuilt correctly:
+
+```bash
+pip install llama-cpp-python  --upgrade --force-reinstall --no-cache-dir
+```
+
+This will ensure that all source files are re-built with the most recently set `CMAKE_ARGS` flags.
 
 ## High-level API
 
@@ -386,7 +409,7 @@ Using pre-built binaries would require disabling these optimizations or supporti
 That being said there are some pre-built binaries available through the Releases as well as some community provided wheels.
 
 In the future, I would like to provide pre-built binaries and wheels for common platforms and I'm happy to accept any useful contributions in this area.
-This is currently being tracked in #741
+This is currently being tracked in [#741](https://github.com/abetlen/llama-cpp-python/issues/741)
 
 ### How does this compare to other Python bindings of `llama.cpp`?
 
