@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.21]
+
+- Update llama.cpp to ggerganov/llama.cpp@64e64aa2557d97490b2fe1262b313e2f4a1607e3
+- Make building llava optional by setting `CMAKE_ARGS="-DLLAVA_BUILD=OFF"` and using `LLAVA_CPP_LIB` to specify alternative path to shared library by @abetlen in e3941d9c674dbd9891dc3ceda390daeb21f05fd1
+
+## [0.2.20]
+
+- Update llama.cpp to ggerganov/llama.cpp@b38a16dfcff88d547f78f52d1bea31b84a05aff7
+- Add `zephyr` chat format by @fakerybakery in #938
+- Add `baichuan` chat format by @caiyesd in #938
+- Add `baichuan-2` chat format by @caiyesd in #936
+- Improve documentation for server chat formats by @jooray in #934
+- Fix typo in README by @antonvice in 940
+- Fix typo in the Open Orca chat format by @gardner in #947
+
 ## [0.2.19]
 
 - Update llama.cpp to ggerganov/llama.cpp@0b871f1a04ef60e114bbe43004fd9c21114e802d
