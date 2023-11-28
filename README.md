@@ -1,5 +1,4 @@
 # 🦙 Python Bindings for [`llama.cpp`](https://github.com/ggerganov/llama.cpp)
----
 
 [![Documentation Status](https://readthedocs.org/projects/llama-cpp-python/badge/?version=latest)](https://llama-cpp-python.readthedocs.io/en/latest/?badge=latest)
 [![Tests](https://github.com/abetlen/llama-cpp-python/actions/workflows/test.yaml/badge.svg?branch=main)](https://github.com/abetlen/llama-cpp-python/actions/workflows/test.yaml)
@@ -25,7 +24,6 @@ Documentation is available at [https://llama-cpp-python.readthedocs.io/en/latest
 
 
 ## Installation
----
 
 Install from PyPI (requires a c compiler):
 
@@ -109,7 +107,6 @@ See the above instructions and set `CMAKE_ARGS` to the BLAS backend you want to 
 Detailed MacOS Metal GPU install documentation is available at [docs/install/macos.md](https://llama-cpp-python.readthedocs.io/en/latest/install/macos/)
 
 ## High-level API
----
 
 [API Reference](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#high-level-api)
 
@@ -273,7 +270,6 @@ llm = Llama(model_path="./models/7B/llama-model.gguf", n_ctx=2048)
 
 
 ## OpenAI Compatible Web Server
----
 
 `llama-cpp-python` offers a web server which aims to act as a drop-in replacement for the OpenAI API.
 This allows you to use llama.cpp compatible models with any OpenAI compatible client (language libraries, services, etc).
@@ -313,7 +309,6 @@ For possible options, see [llama_cpp/llama_chat_format.py](llama_cpp/llama_chat_
 - [Vision API support](https://llama-cpp-python.readthedocs.io/en/latest/server/#multimodal-models)
 
 ## Docker image
----
 
 A Docker image is available on [GHCR](https://ghcr.io/abetlen/llama-cpp-python). To run the server:
 
@@ -323,7 +318,6 @@ docker run --rm -it -p 8000:8000 -v /path/to/models:/models -e MODEL=/models/lla
 [Docker on termux (requires root)](https://gist.github.com/FreddieOliveira/efe850df7ff3951cb62d74bd770dce27) is currently the only known way to run this on phones, see [termux support issue](https://github.com/abetlen/llama-cpp-python/issues/389) 
 
 ## Low-level API
----
 
 [API Reference](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#low-level-api)
 
@@ -351,13 +345,11 @@ Check out the [examples folder](examples/low_level_api) for more examples of usi
 
 
 ## Documentation
----
 
 Documentation is available via [https://llama-cpp-python.readthedocs.io/](https://llama-cpp-python.readthedocs.io/).
 If you find any issues with the documentation, please open an issue or submit a PR.
 
 ## Development
----
 
 This package is under active development and I welcome any contributions.
 
@@ -384,7 +376,6 @@ make clean
 ```
 
 ## FAQ
----
 
 ### Are there pre-built binaries / binary wheels available?
 
@@ -407,6 +398,5 @@ I originally wrote this package for my own use with two goals in mind:
 Any contributions and changes to this package will be made with these goals in mind.
 
 ## License
----
 
 This project is licensed under the terms of the MIT license.
