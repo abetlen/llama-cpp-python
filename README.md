@@ -1,4 +1,5 @@
 # 🦙 Python Bindings for [`llama.cpp`](https://github.com/ggerganov/llama.cpp)
+---
 
 [![Documentation Status](https://readthedocs.org/projects/llama-cpp-python/badge/?version=latest)](https://llama-cpp-python.readthedocs.io/en/latest/?badge=latest)
 [![Tests](https://github.com/abetlen/llama-cpp-python/actions/workflows/test.yaml/badge.svg?branch=main)](https://github.com/abetlen/llama-cpp-python/actions/workflows/test.yaml)
@@ -23,7 +24,8 @@ Documentation is available at [https://llama-cpp-python.readthedocs.io/en/latest
 
 
 
-## Installation from PyPI
+## Installation
+---
 
 Install from PyPI (requires a c compiler):
 
@@ -107,6 +109,7 @@ See the above instructions and set `CMAKE_ARGS` to the BLAS backend you want to 
 Detailed MacOS Metal GPU install documentation is available at [docs/install/macos.md](https://llama-cpp-python.readthedocs.io/en/latest/install/macos/)
 
 ## High-level API
+---
 
 [API Reference](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#high-level-api)
 
@@ -269,7 +272,8 @@ llm = Llama(model_path="./models/7B/llama-model.gguf", n_ctx=2048)
 ```
 
 
-## Web Server
+## OpenAI Compatible Web Server
+---
 
 `llama-cpp-python` offers a web server which aims to act as a drop-in replacement for the OpenAI API.
 This allows you to use llama.cpp compatible models with any OpenAI compatible client (language libraries, services, etc).
@@ -302,13 +306,14 @@ python3 -m llama_cpp.server --model models/7B/llama-model.gguf --chat_format cha
 That will format the prompt according to how model expects it. You can find the prompt format in the model card.
 For possible options, see [llama_cpp/llama_chat_format.py](llama_cpp/llama_chat_format.py) and look for lines starting with "@register_chat_format".
 
-### Web Server Examples
+### Web Server Features
 
 - [Local Copilot replacement](https://llama-cpp-python.readthedocs.io/en/latest/server/#code-completion)
 - [Function Calling support](https://llama-cpp-python.readthedocs.io/en/latest/server/#function-calling)
 - [Vision API support](https://llama-cpp-python.readthedocs.io/en/latest/server/#multimodal-models)
 
 ## Docker image
+---
 
 A Docker image is available on [GHCR](https://ghcr.io/abetlen/llama-cpp-python). To run the server:
 
@@ -318,6 +323,7 @@ docker run --rm -it -p 8000:8000 -v /path/to/models:/models -e MODEL=/models/lla
 [Docker on termux (requires root)](https://gist.github.com/FreddieOliveira/efe850df7ff3951cb62d74bd770dce27) is currently the only known way to run this on phones, see [termux support issue](https://github.com/abetlen/llama-cpp-python/issues/389) 
 
 ## Low-level API
+---
 
 [API Reference](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#low-level-api)
 
@@ -344,12 +350,14 @@ Below is a short example demonstrating how to use the low-level API to tokenize 
 Check out the [examples folder](examples/low_level_api) for more examples of using the low-level API.
 
 
-# Documentation
+## Documentation
+---
 
 Documentation is available via [https://llama-cpp-python.readthedocs.io/](https://llama-cpp-python.readthedocs.io/).
 If you find any issues with the documentation, please open an issue or submit a PR.
 
-# Development
+## Development
+---
 
 This package is under active development and I welcome any contributions.
 
@@ -375,7 +383,21 @@ pip install -e .[all]
 make clean
 ```
 
-# How does this compare to other Python bindings of `llama.cpp`?
+## FAQ
+---
+
+### Are there pre-built binaries / binary wheels available?
+
+The recommended installation method is to install from source as described above.
+The reason for this is that `llama.cpp` is built with compiler optimizations that are specific to your system.
+Using pre-built binaries would require disabling these optimizations or supporting a large number of pre-built binaries for each platform.
+
+That being said there are some pre-built binaries available through the Releases as well as some community provided wheels.
+
+In the future, I would like to provide pre-built binaries and wheels for common platforms and I'm happy to accept any useful contributions in this area.
+This is currently being tracked in #741
+
+### How does this compare to other Python bindings of `llama.cpp`?
 
 I originally wrote this package for my own use with two goals in mind:
 
@@ -384,6 +406,7 @@ I originally wrote this package for my own use with two goals in mind:
 
 Any contributions and changes to this package will be made with these goals in mind.
 
-# License
+## License
+---
 
 This project is licensed under the terms of the MIT license.
