@@ -759,10 +759,6 @@ class Llama:
         # Chat Format Params
         chat_format: str = "llama-2",
         chat_handler: Optional[llama_chat_format.LlamaChatCompletionHandler] = None,
-        # Cache
-        cache: bool = False,
-        cache_type: str = "ram",
-        cache_size: int = 2 << 30,
         # Misc
         verbose: bool = True,
         # Extra Params
@@ -820,9 +816,6 @@ class Llama:
             numa: Enable NUMA support. (NOTE: The initial value of this parameter is used for the remainder of the program as this value is set in llama_backend_init)
             chat_format: String specifying the chat format to use when calling create_chat_completion.
             chat_handler: Optional chat handler to use when calling create_chat_completion.
-            cache: Optional if true enables caching.
-            cache_type: String can be "ram" or "disk".
-            cache_size: Number of bytes to cache, defaults to 2GB
             verbose: Print verbose output to stderr.
 
         Raises:
@@ -964,17 +957,6 @@ class Llama:
         self.scores: npt.NDArray[np.single] = np.ndarray(
             (n_ctx, self._n_vocab), dtype=np.single
         )
-
-        if cache:
-            if cache_type == "disk":
-                if verbose:
-                    print(f"Using disk cache with size {cache_size}")
-                cache = LlamaDiskCache(capacity_bytes=cache_size)
-            else:
-                if verbose:
-                    print(f"Using ram cache with size {cache_size}")
-                cache = LlamaRAMCache(capacity_bytes=cache_size)
-            self.set_cache(cache)
 
     @property
     def ctx(self) -> llama_cpp.llama_context_p:
