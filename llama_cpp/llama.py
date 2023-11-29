@@ -214,6 +214,8 @@ class _LlamaModel:
     NOTE: For stability it's recommended you use the Llama class instead."""
 
     _llama_free_model = None
+    # NOTE: this must be "saved" here to avoid exceptions when calling __del__
+    suppress_stdout_stderr = suppress_stdout_stderr
 
     def __init__(
         self,
@@ -237,7 +239,7 @@ class _LlamaModel:
             )
 
     def __del__(self):
-        with suppress_stdout_stderr(disable=self.verbose):
+        with self.suppress_stdout_stderr(disable=self.verbose):
             if self.model is not None and self._llama_free_model is not None:
                 self._llama_free_model(self.model)
                 self.model = None
@@ -399,6 +401,8 @@ class _LlamaContext:
     NOTE: For stability it's recommended you use the Llama class instead."""
 
     _llama_free = None
+    # NOTE: this must be "saved" here to avoid exceptions when calling __del__
+    suppress_stdout_stderr = suppress_stdout_stderr
 
     def __init__(
         self,
@@ -419,7 +423,7 @@ class _LlamaContext:
             )
 
     def __del__(self):
-        with suppress_stdout_stderr(disable=self.verbose):
+        with self.suppress_stdout_stderr(disable=self.verbose):
             if self.ctx is not None and self._llama_free is not None:
                 self._llama_free(self.ctx)
                 self.ctx = None
@@ -650,6 +654,8 @@ class _LlamaContext:
 
 class _LlamaBatch:
     _llama_batch_free = None
+    # NOTE: this must be "saved" here to avoid exceptions when calling __del__
+    suppress_stdout_stderr = suppress_stdout_stderr
 
     def __init__(
         self, *, n_tokens: int, embd: int, n_seq_max: int, verbose: bool = True
@@ -667,7 +673,7 @@ class _LlamaBatch:
             )
 
     def __del__(self):
-        with suppress_stdout_stderr(disable=self.verbose):
+        with self.suppress_stdout_stderr(disable=self.verbose):
             if self.batch is not None and self._llama_batch_free is not None:
                 self._llama_batch_free(self.batch)
                 self.batch = None
@@ -798,17 +804,21 @@ class Llama:
             vocab_only: Only load the vocabulary no weights.
             use_mmap: Use mmap if possible.
             use_mlock: Force the system to keep the model in RAM.
-            seed: Random seed. -1 for random.
-            n_ctx: Context size.
-            n_batch: Batch size for prompt processing (must be >= 32 to use BLAS)
-            n_threads: Number of threads to use. If None, the number of threads is automatically determined.
-            n_threads_batch: Number of threads to use for batch processing. If None, use n_threads.
-            rope_scaling_type: Type of rope scaling to use.
-            rope_freq_base: Base frequency for rope sampling.
-            rope_freq_scale: Scale factor for rope sampling.
-            mul_mat_q: if true, use experimental mul_mat_q kernels
-            f16_kv: Use half-precision for key/value cache.
-            logits_all: Return logits for all tokens, not just the last token.
+            seed: RNG seed, -1 for random
+            n_ctx: Text context, 0 = from model
+            n_batch: Prompt processing maximum batch size
+            n_threads: Number of threads to use for generation
+            n_threads_batch: Number of threads to use for batch processing
+            rope_scaling_type: RoPE scaling type, from `enum llama_rope_scaling_type`. ref: https://github.com/ggerganov/llama.cpp/pull/2054
+            rope_freq_base: RoPE base frequency, 0 = from model
+            rope_freq_scale: RoPE frequency scaling factor, 0 = from model
+            yarn_ext_factor: YaRN extrapolation mix factor, negative = from model
+            yarn_attn_factor: YaRN magnitude scaling factor
+            yarn_beta_fast: YaRN low correction dim
+            yarn_beta_slow: YaRN high correction dim
+            yarn_orig_ctx: YaRN original context size
+            f16_kv: Use fp16 for KV cache, fp32 otherwise
+            logits_all: Return logits for all tokens, not just the last token. Must be True for completion to return logprobs.
             embedding: Embedding mode only.
             last_n_tokens_size: Maximum number of tokens to keep in the last_n_tokens deque.
             lora_base: Optional path to base model, useful if using a quantized base model and you want to apply LoRA to an f16 model.

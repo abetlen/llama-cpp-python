@@ -422,8 +422,9 @@ def _logit_bias_tokens_to_input_ids(
 
 @router.post(
     "/v1/completions",
+    summary="Completion"
 )
-@router.post("/v1/engines/copilot-codex/completions")
+@router.post("/v1/engines/copilot-codex/completions", include_in_schema=False)
 async def create_completion(
     request: Request,
     body: CreateCompletionRequest,
@@ -498,6 +499,7 @@ class CreateEmbeddingRequest(BaseModel):
 
 @router.post(
     "/v1/embeddings",
+    summary="Embedding"
 )
 async def create_embedding(
     request: CreateEmbeddingRequest, llama: Llama = Depends(get_llama)
@@ -587,6 +589,7 @@ class CreateChatCompletionRequest(BaseModel):
 
 @router.post(
     "/v1/chat/completions",
+    summary="Chat"
 )
 async def create_chat_completion(
     request: Request,
@@ -651,7 +654,7 @@ class ModelList(TypedDict):
     data: List[ModelData]
 
 
-@router.get("/v1/models")
+@router.get("/v1/models", summary="Models")
 async def get_models(
     llama: Llama = Depends(get_llama),
 ) -> ModelList:
