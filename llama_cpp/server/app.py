@@ -659,10 +659,10 @@ async def get_models(
         "object": "list",
         "data": [
             {
-                "id": model,
+                "id": model_alias,
                 "object": "model",
                 "owned_by": "me",
                 "permissions": [],
-            } for model in llama
+            } for model_alias in llama
         ],
     }
