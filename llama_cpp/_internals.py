@@ -536,6 +536,81 @@ class _LlamaTokenDataArray:
         self.candidates.size = llama_cpp.c_size_t(self.n_vocab)
 
 
+# Python wrappers over common/common
+def _tokenize(model: _LlamaModel, text: str, add_bos: bool, special: bool) -> list[int]:
+    n_tokens = len(text) + 1 if add_bos else len(text)
+    result = (llama_cpp.llama_token * n_tokens)()
+    n_tokens = llama_cpp.llama_tokenize(
+        model.model,
+        text.encode("utf-8"),
+        len(text),
+        result,
+        n_tokens,
+        add_bos,
+        special,
+    )
+    if n_tokens < 0:
+        result = (llama_cpp.llama_token * -n_tokens)()
+        check = llama_cpp.llama_tokenize(
+            model.model,
+            text.encode("utf-8"),
+            len(text),
+            result,
+            len(result),
+            add_bos,
+            special,
+        )
+        if check != -n_tokens:
+            raise RuntimeError(f'Failed to tokenize: text="{text}" n_tokens={n_tokens}')
+    else:
+        result = result[:n_tokens]
+    return list(result)
+
+
+def _token_to_piece(model: _LlamaModel, token: int) -> str:
+    assert model.model is not None
+    result = (ctypes.c_char * 8)(0)
+    n_tokens = llama_cpp.llama_token_to_piece(model.model, token, result, len(result))
+    if n_tokens < 0:
+        result = (ctypes.c_char * -n_tokens)(0)
+        check = llama_cpp.llama_token_to_piece(model.model, token, result, len(result))
+        if check != -n_tokens:
+            raise RuntimeError(f"Failed to get piece: token={token}")
+    else:
+        result = result[:n_tokens]
+    return bytes(result).decode("utf-8")
+
+
+def _detokenize_spm(model: _LlamaModel, tokens: List[int]) -> str:
+    bos_id = model.token_bos()
+    result = ""
+    for i, token in enumerate(tokens):
+        piece = _token_to_piece(model, token)
+        if (
+            (tokens[0] == bos_id and i == 1) or (tokens[0] != bos_id and i == 0)
+        ) and piece[0] == " ":
+            piece = piece[1:]
+        result += piece
+    return result
+
+
+def _detokenize_bpe(model: _LlamaModel, tokens: List[int]) -> str:
+    result = ""
+    for token in tokens:
+        piece = _token_to_piece(model, token)
+        result += piece
+    return result
+
+
+def _should_add_bos(model: _LlamaModel) -> bool:
+    assert model.model is not None
+    add_bos = llama_cpp.llama_add_bos_token(model.model)
+    if add_bos != -1:
+        return add_bos != 0
+    else:
+        return llama_cpp.llama_vocab_type(model.model) == llama_cpp.LLAMA_VOCAB_TYPE_SPM
+
+
 # Python wrappers over common/sampling structs
 
 
