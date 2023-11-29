@@ -31,7 +31,7 @@ import uvicorn
 from llama_cpp.server.app import create_app
 from llama_cpp.server.settings import Settings, ServerSettings, set_settings
 
-EXE_NAME = 'llama_server'
+EXE_NAME = 'llama_cpp.server'
 
 def get_base_type(annotation):
     if getattr(annotation, '__origin__', None) is Literal:
