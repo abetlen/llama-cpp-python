@@ -940,7 +940,7 @@ class Llama:
 
         if self.verbose:
             print(llama_cpp.llama_print_system_info().decode("utf-8"), file=sys.stderr)
-        
+
         self.chat_format = chat_format
         self.chat_handler = chat_handler
 
