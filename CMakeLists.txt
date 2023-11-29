@@ -8,6 +8,12 @@ option(LLAVA_BUILD "Build llava shared library and install alongside python pack
 if (LLAMA_BUILD)
     set(BUILD_SHARED_LIBS "On")
 
+    set(LLAMA_PY_VENDOR_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/llama.cpp)
+    set(LLAMA_PY_LIB_INSTALL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/lib)
+    file(COPY ${LLAMA_PY_VENDOR_DIR}/LICENSE 
+        DESTINATION ${LLAMA_PY_LIB_INSTALL_DIR}
+    )
+
     # Building llama
     if (APPLE AND NOT CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
         # Need to disable these llama.cpp flags on Apple x86_64,
@@ -29,11 +35,11 @@ if (LLAMA_BUILD)
     # Temporary fix for https://github.com/scikit-build/scikit-build-core/issues/374
     install(
         TARGETS llama 
-        LIBRARY DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
-        RUNTIME DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
-        ARCHIVE DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
-        FRAMEWORK DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
-        RESOURCE DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
+        LIBRARY DESTINATION ${LLAMA_PY_LIB_INSTALL_DIR}
+        RUNTIME DESTINATION ${LLAMA_PY_LIB_INSTALL_DIR}
+        ARCHIVE DESTINATION ${LLAMA_PY_LIB_INSTALL_DIR}
+        FRAMEWORK DESTINATION ${LLAMA_PY_LIB_INSTALL_DIR}
+        RESOURCE DESTINATION ${LLAMA_PY_LIB_INSTALL_DIR}
     )
     # Workaround for Windows + CUDA https://github.com/abetlen/llama-cpp-python/issues/563
     install(
@@ -42,7 +48,7 @@ if (LLAMA_BUILD)
     )
     install(
         FILES $<TARGET_RUNTIME_DLLS:llama>
-        DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
+        DESTINATION ${LLAMA_PY_LIB_INSTALL_DIR}
     )
 
     if (LLAVA_BUILD)
@@ -64,11 +70,11 @@ if (LLAMA_BUILD)
         # Temporary fix for https://github.com/scikit-build/scikit-build-core/issues/374
         install(
             TARGETS llava_shared
-            LIBRARY DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
-            RUNTIME DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
-            ARCHIVE DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
-            FRAMEWORK DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
-            RESOURCE DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
+            LIBRARY DESTINATION ${LLAMA_PY_LIB_INSTALL_DIR}
+            RUNTIME DESTINATION ${LLAMA_PY_LIB_INSTALL_DIR}
+            ARCHIVE DESTINATION ${LLAMA_PY_LIB_INSTALL_DIR}
+            FRAMEWORK DESTINATION ${LLAMA_PY_LIB_INSTALL_DIR}
+            RESOURCE DESTINATION ${LLAMA_PY_LIB_INSTALL_DIR}
         )
     endif()
 endif()
