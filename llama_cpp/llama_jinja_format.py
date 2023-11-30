@@ -68,7 +68,7 @@ class AutoChatFormatter(ChatFormatterInterface):
         else:
             self._template = llama2_template  # default template
 
-        self._renderer = jinja2.Environment(
+        self._environment = jinja2.Environment(
             loader=jinja2.BaseLoader(),
             trim_blocks=True,
             lstrip_blocks=True,
@@ -82,7 +82,7 @@ class AutoChatFormatter(ChatFormatterInterface):
         messages: List[Dict[str, str]],
         **kwargs: Any,
     ) -> ChatFormatterResponse:
-        formatted_sequence = self._renderer.render(messages=messages, **kwargs)
+        formatted_sequence = self._environment.render(messages=messages, **kwargs)
         return ChatFormatterResponse(prompt=formatted_sequence)
 
     @property
