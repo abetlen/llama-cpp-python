@@ -780,6 +780,79 @@ class Llama:
 
         if seed is not None:
             self._ctx.set_rng_seed(seed)
+        
+        def _completion_stream_response(text: str, logprobs_or_none: Optional[CompletionLogprobs] = None, finish_reason: Optional[Literal["stop", "length"]] = None) -> CreateCompletionStreamResponse:
+            return {
+                "id": completion_id,
+                "object": "text_completion",
+                "created": created,
+                "model": model_name,
+                "choices": [
+                    {
+                        "text": text,
+                        "index": 0,
+                        "logprobs": logprobs_or_none,
+                        "finish_reason": finish_reason,
+                    }
+                ],
+            }
+
+        def _completion_response(text: str, finish_reason: Literal["stop", "length"], logprobs_or_none: Optional[CompletionLogprobs] = None) -> CreateCompletionResponse:
+            return {
+                "id": completion_id,
+                "object": "text_completion",
+                "created": created,
+                "model": model_name,
+                "choices": [
+                    {
+                        "text": text,
+                        "index": 0,
+                        "logprobs": logprobs_or_none,
+                        "finish_reason": finish_reason,
+                    }
+                ],
+                "usage": {
+                    "prompt_tokens": len(prompt_tokens),
+                    "completion_tokens": len(completion_tokens),
+                    "total_tokens": len(prompt_tokens) + len(completion_tokens),
+                },
+            }
+
+        def _logprobs_or_none(all_tokens: List[int], all_token_strs: List[str], all_logprobs: List[List[float]], text_offset: int) -> CompletionLogprobs:
+            tokens: List[str] = []
+            text_offsets: List[int] = []
+            token_logprobs: List[Optional[float]] = []
+            top_logprobs: List[Optional[Dict[str, float]]] = []
+
+            for token, token_str, token_logprob in zip(
+                all_tokens, all_token_strs, all_logprobs
+            ):
+                if token == self.token_bos():
+                    continue
+
+                text_offset += len(token_str)
+                sorted_logprobs = list(
+                    sorted(
+                        zip(token_logprob, range(len(token_logprob))), reverse=True
+                    )
+                )
+                top_logprob = {
+                    self.detokenize([i]).decode("utf-8", errors="ignore"): logprob
+                    for logprob, i in sorted_logprobs[:logprobs]
+                }
+                top_logprob.update({token_str: token_logprob[int(token)]})
+
+                tokens.append(token_str)
+                text_offsets.append(text_offset)
+                token_logprobs.append(token_logprob[int(token)])
+                top_logprobs.append(top_logprob)
+
+            return {
+                "tokens": tokens,
+                "text_offset": text_offsets,
+                "token_logprobs": token_logprobs,
+                "top_logprobs": top_logprobs,
+            }
 
         finish_reason = "length"
         multibyte_fix = 0
@@ -868,10 +941,10 @@ class Llama:
                         )
                         token_offset = len(prompt_tokens) + returned_tokens
                         logits = self._scores[token_offset - 1, :].tolist()
-                        current_logprobs = Llama.logits_to_logprobs(logits)
+                        token_logprob = Llama.logits_to_logprobs(logits)
                         sorted_logprobs = list(
                             sorted(
-                                zip(current_logprobs, range(len(current_logprobs))),
+                                zip(token_logprob, range(len(token_logprob))),
                                 reverse=True,
                             )
                         )
@@ -881,7 +954,7 @@ class Llama:
                             ): logprob
                             for logprob, i in sorted_logprobs[:logprobs]
                         }
-                        top_logprob.update({token_str: current_logprobs[int(token)]})
+                        top_logprob.update({token_str: token_logprob[int(token)]})
                         logprobs_or_none = {
                             "tokens": [
                                 self.detokenize([token]).decode(
@@ -889,26 +962,14 @@ class Llama:
                                 )
                             ],
                             "text_offset": [text_offset],
-                            "token_logprobs": [current_logprobs[int(token)]],
+                            "token_logprobs": [token_logprob[int(token)]],
                             "top_logprobs": [top_logprob],
                         }
                         returned_tokens += 1
-                        yield {
-                            "id": completion_id,
-                            "object": "text_completion",
-                            "created": created,
-                            "model": model_name,
-                            "choices": [
-                                {
-                                    "text": self.detokenize([token]).decode(
-                                        "utf-8", errors="ignore"
-                                    ),
-                                    "index": 0,
-                                    "logprobs": logprobs_or_none,
-                                    "finish_reason": None,
-                                }
-                            ],
-                        }
+                        yield _completion_stream_response(
+                            self.detokenize([token]).decode("utf-8", errors="ignore"),
+                            logprobs_or_none,
+                        )
                 else:
                     while len(remaining_tokens) > 0:
                         decode_success = False
@@ -933,20 +994,7 @@ class Llama:
                         remaining_tokens = remaining_tokens[i:]
                         returned_tokens += i
 
-                        yield {
-                            "id": completion_id,
-                            "object": "text_completion",
-                            "created": created,
-                            "model": model_name,
-                            "choices": [
-                                {
-                                    "text": ts,
-                                    "index": 0,
-                                    "logprobs": None,
-                                    "finish_reason": None,
-                                }
-                            ],
-                        }
+                        yield _completion_stream_response(text=ts)
 
             if len(completion_tokens) >= max_tokens:
                 text = self.detokenize(completion_tokens)
@@ -986,11 +1034,10 @@ class Llama:
                         self.detokenize(completion_tokens[:returned_tokens])
                     )
                     token_offset = len(prompt_tokens) + returned_tokens - 1
-                    logits = self._scores[token_offset, :].tolist()
-                    current_logprobs = Llama.logits_to_logprobs(logits)
+                    token_logprob = Llama.logits_to_logprobs(self._scores[token_offset, :].tolist())
                     sorted_logprobs = list(
                         sorted(
-                            zip(current_logprobs, range(len(current_logprobs))),
+                            zip(token_logprob, range(len(token_logprob))),
                             reverse=True,
                         )
                     )
@@ -998,13 +1045,11 @@ class Llama:
                         self.detokenize([i]).decode("utf-8", errors="ignore"): logprob
                         for logprob, i in sorted_logprobs[:logprobs]
                     }
-                    top_logprob.update({token_str: current_logprobs[int(token)]})
+                    top_logprob.update({token_str: token_logprob[int(token)]})
                     logprobs_or_none = {
-                        "tokens": [
-                            self.detokenize([token]).decode("utf-8", errors="ignore")
-                        ],
+                        "tokens": [token_str],
                         "text_offset": [text_offset],
-                        "token_logprobs": [current_logprobs[int(token)]],
+                        "token_logprobs": [token_logprob[int(token)]],
                         "top_logprobs": [top_logprob],
                     }
 
@@ -1013,54 +1058,17 @@ class Llama:
                     if token_end_position == end - 1:
                         break
                     returned_tokens += 1
-                    yield {
-                        "id": completion_id,
-                        "object": "text_completion",
-                        "created": created,
-                        "model": model_name,
-                        "choices": [
-                            {
-                                "text": last_text[
-                                    : len(last_text) - (token_end_position - end)
-                                ].decode("utf-8", errors="ignore"),
-                                "index": 0,
-                                "logprobs": logprobs_or_none,
-                                "finish_reason": None,
-                            }
-                        ],
-                    }
+                    yield _completion_stream_response(
+                        text=last_text[: len(last_text) - (token_end_position - end)].decode("utf-8", errors="ignore"), logprobs_or_none=logprobs_or_none
+                    )
                     break
                 returned_tokens += 1
-                yield {
-                    "id": completion_id,
-                    "object": "text_completion",
-                    "created": created,
-                    "model": model_name,
-                    "choices": [
-                        {
-                            "text": self.detokenize([token]).decode(
-                                "utf-8", errors="ignore"
-                            ),
-                            "index": 0,
-                            "logprobs": logprobs_or_none,
-                            "finish_reason": None,
-                        }
-                    ],
-                }
-            yield {
-                "id": completion_id,
-                "object": "text_completion",
-                "created": created,
-                "model": model_name,
-                "choices": [
-                    {
-                        "text": "",
-                        "index": 0,
-                        "logprobs": None,
-                        "finish_reason": finish_reason,
-                    }
-                ],
-            }
+                yield _completion_stream_response(
+                    text=self.detokenize([token]).decode("utf-8", errors="ignore"), logprobs_or_none=logprobs_or_none
+                )
+            yield _completion_stream_response(
+                text=self.detokenize(completion_tokens[returned_tokens:]).decode("utf-8", errors="ignore"), finish_reason=finish_reason
+            )
             if self.cache:
                 if self.verbose:
                     print("Llama._create_completion: cache save", file=sys.stderr)
@@ -1076,6 +1084,7 @@ class Llama:
         text_str = text.decode("utf-8", errors="ignore")
 
         if echo:
+            assert isinstance(prompt, str)
             text_str = prompt + text_str
 
         if suffix is not None:
@@ -1083,19 +1092,10 @@ class Llama:
 
         logprobs_or_none: Optional[CompletionLogprobs] = None
         if logprobs is not None:
+            # Remove leading BOS token
+            all_tokens = prompt_tokens[1:] + completion_tokens if echo else completion_tokens
             text_offset = 0 if echo else len(prompt)
             token_offset = 0 if echo else len(prompt_tokens[1:])
-            text_offsets: List[int] = []
-            token_logprobs: List[Optional[float]] = []
-            tokens: List[str] = []
-            top_logprobs: List[Optional[Dict[str, float]]] = []
-
-            if echo:
-                # Remove leading BOS token
-                all_tokens = prompt_tokens[1:] + completion_tokens
-            else:
-                all_tokens = completion_tokens
-
             all_token_strs = [
                 self.detokenize([token]).decode("utf-8", errors="ignore")
                 for token in all_tokens
@@ -1103,58 +1103,17 @@ class Llama:
             all_logprobs = [
                 Llama.logits_to_logprobs(row.tolist()) for row in self._scores
             ][token_offset:]
-            for token, token_str, logprobs_token in zip(
-                all_tokens, all_token_strs, all_logprobs
-            ):
-                if token == self.token_bos():
-                    continue
-                text_offsets.append(text_offset)
-                text_offset += len(token_str)
-                tokens.append(token_str)
-                sorted_logprobs = list(
-                    sorted(
-                        zip(logprobs_token, range(len(logprobs_token))), reverse=True
-                    )
-                )
-                token_logprobs.append(logprobs_token[int(token)])
-                top_logprob: Optional[Dict[str, float]] = {
-                    self.detokenize([i]).decode("utf-8", errors="ignore"): logprob
-                    for logprob, i in sorted_logprobs[:logprobs]
-                }
-                top_logprob.update({token_str: logprobs_token[int(token)]})
-                top_logprobs.append(top_logprob)
+            logprobs_or_none = _logprobs_or_none(
+                all_tokens, all_token_strs, all_logprobs, text_offset
+            )
             # Weird idosincracy of the OpenAI API where
             # token_logprobs and top_logprobs are null for
             # the first token.
             if echo and len(all_tokens) > 0:
-                token_logprobs[0] = None
-                top_logprobs[0] = None
-            logprobs_or_none = {
-                "tokens": tokens,
-                "text_offset": text_offsets,
-                "token_logprobs": token_logprobs,
-                "top_logprobs": top_logprobs,
-            }
+                logprobs_or_none["token_logprobs"][0] = None
+                logprobs_or_none["top_logprobs"][0] = None
 
-        yield {
-            "id": completion_id,
-            "object": "text_completion",
-            "created": created,
-            "model": model_name,
-            "choices": [
-                {
-                    "text": text_str,
-                    "index": 0,
-                    "logprobs": logprobs_or_none,
-                    "finish_reason": finish_reason,
-                }
-            ],
-            "usage": {
-                "prompt_tokens": len(prompt_tokens),
-                "completion_tokens": len(completion_tokens),
-                "total_tokens": len(prompt_tokens) + len(completion_tokens),
-            },
-        }
+        yield _completion_response(text_str, finish_reason, logprobs_or_none)
 
     def create_completion(
         self,
