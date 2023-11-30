@@ -66,16 +66,19 @@ Then just update your settings in `.vscode/settings.json` to point to your code 
 ### Function Calling
 
 `llama-cpp-python` supports structured function calling based on a JSON schema.
+Function calling is completely compatible with the OpenAI function calling API and can be used by connecting with the official OpenAI Python client.
 
 You'll first need to download one of the available function calling models in GGUF format:
 
 - [functionary-7b-v1](https://huggingface.co/abetlen/functionary-7b-v1-GGUF)
 
-Then when you run the server you'll need to also specify the `functionary-7b-v1` chat_format
+Then when you run the server you'll need to also specify the `functionary` chat_format
 
 ```bash
 python3 -m llama_cpp.server --model <model_path> --chat_format functionary
 ```
+
+Check out this [example notebook](https://github.com/abetlen/llama-cpp-python/blob/main/examples/notebooks/Functions.ipynb) for a walkthrough of some interesting use cases for function calling.
 
 ### Multimodal Models
 
