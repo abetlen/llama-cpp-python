@@ -31,8 +31,6 @@ import uvicorn
 from llama_cpp.server.app import create_app
 from llama_cpp.server.settings import Settings, ServerSettings, set_settings
 
-EXE_NAME = 'llama_cpp.server'
-
 def get_base_type(annotation):
     if getattr(annotation, '__origin__', None) is Literal:
         return type(annotation.__args__[0])
@@ -73,7 +71,7 @@ def parse_bool_arg(arg):
 
 def main():
     description = "🦙 Llama.cpp python server. Host your own LLMs!🚀"
-    parser = argparse.ArgumentParser(EXE_NAME, description=description)
+    parser = argparse.ArgumentParser(description=description)
     for name, field in (ServerSettings.model_fields|Settings.model_fields).items():
         description = field.description
         if field.default and description and not field.is_required():
