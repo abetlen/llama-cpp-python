@@ -47,4 +47,4 @@ jobs:
       - name: Publish to GitHub Tag
         if: steps.docker_build.outputs.digest && startsWith(github.ref, 'refs/tags/')
         run: |
-          echo "Docker image published for tag: ${{ github.ref_name }
+          echo "Docker image published for tag: ${{ github.ref_name }}"
