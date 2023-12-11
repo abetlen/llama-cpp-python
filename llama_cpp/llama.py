@@ -904,7 +904,7 @@ class Llama:
         )
         self.context_params.yarn_orig_ctx = yarn_orig_ctx if yarn_orig_ctx != 0 else 0
         self.context_params.mul_mat_q = mul_mat_q
-        self.context_params.f16_kv = f16_kv
+        # self.context_params.f16_kv = f16_kv
         self.context_params.logits_all = logits_all
         self.context_params.embedding = embedding
 
