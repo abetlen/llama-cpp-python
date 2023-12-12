@@ -2289,7 +2289,7 @@ class Llama:
             logits_maxs[~np.isfinite(logits_maxs)] = 0
         elif not np.isfinite(logits_maxs):
             logits_maxs = 0
-        subtract_maxs = logits - logits_maxs
+        subtract_maxs = np.subtract(logits, logits_maxs, dtype=np.single)
         exp = np.exp(subtract_maxs)
         # Suppress warnings about log of zero
         with np.errstate(divide='ignore'):

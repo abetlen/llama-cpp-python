@@ -284,6 +284,7 @@ def test_logits_to_logprobs(size_and_axis, convert_to_list: bool, atol: float = 
         logits = logits.tolist()
     log_probs = llama_cpp.Llama.logits_to_logprobs(logits, axis=axis)
     log_probs_correct = log_softmax(logits, axis=axis)
+    assert log_probs.dtype == np.single
     assert np.allclose(log_probs, log_probs_correct, atol=atol)
 
 
