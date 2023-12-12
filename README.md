@@ -266,7 +266,8 @@ Then you'll need to use a custom chat handler to load the clip model and process
 >>> llm = Llama(
   model_path="./path/to/llava/llama-model.gguf",
   chat_handler=chat_handler,
-  n_ctx=2048 # n_ctx should be increased to accomodate the image embedding
+  n_ctx=2048, # n_ctx should be increased to accomodate the image embedding
+  logits_all=True,# needed to make llava work
 )
 >>> llm.create_chat_completion(
     messages = [
