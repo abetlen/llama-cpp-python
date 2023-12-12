@@ -2280,10 +2280,14 @@ class Llama:
         return self._model.token_nl()
 
     @staticmethod
-    def logits_to_logprobs(logits: List[float]) -> List[float]:
-        exps = [math.exp(float(x)) for x in logits]
-        sum_exps = sum(exps)
-        return [math.log(x / sum_exps) for x in exps]
+    def logits_to_logprobs(logits: npt.NDArray[np.single]) -> npt.NDArray[np.single]:
+        maximum = np.max(logits)
+        tmp = np.subtract(logits, maximum, dtype=np.single)
+        np.exp(tmp, out=tmp)
+        normalizer = 1.0 / np.sum(tmp)
+        np.multiply(normalizer, tmp, out=tmp)
+        np.log(tmp, out=tmp)
+        return tmp
 
     @staticmethod
     def longest_token_prefix(a: Sequence[int], b: Sequence[int]):
