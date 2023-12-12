@@ -207,7 +207,7 @@ The gguf-converted files for this model can be found here: [functionary-7b-v1](h
       messages = [
         {
           "role": "system",
-          "content": "A chat between a curious user and an artificial intelligence assitant. The assistant gives helpful, detailed, and polite answers to the user's questions. The assistant calls functions with appropriate input when necessary"
+          "content": "A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. The assistant calls functions with appropriate input when necessary"
           
         },
         {
