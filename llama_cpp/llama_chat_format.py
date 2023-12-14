@@ -423,6 +423,21 @@ def format_alpaca(
     _prompt = _format_add_colon_two(system_message, _messages, _sep, _sep2)
     return ChatFormatterResponse(prompt=_prompt)
 
+@register_chat_format("qwen")
+def format_qwen(
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    **kwargs: Any,
+) -> ChatFormatterResponse:
+    _roles = dict(user="<|im_start|>user", assistant="<|im_start|>assistant")
+    system_message="You are a helpful assistant."
+    system_template="<|im_start|>system\n{system_message}"
+    system_message=system_template.format(system_message=system_message)
+    _messages = _map_roles(messages, _roles)
+    _messages.append((_roles["assistant"], None))
+    _sep = "<|im_end|>"
+    _prompt = _format_chatml(system_message, _messages, _sep)
+    _sep2 = "<|endoftext|>"
+    return ChatFormatterResponse(prompt=_prompt,stop=_sep2)
 
 @register_chat_format("vicuna")
 def format(
