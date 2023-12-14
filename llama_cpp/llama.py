@@ -736,6 +736,7 @@ class Llama:
         vocab_only: bool = False,
         use_mmap: bool = True,
         use_mlock: bool = False,
+        kv_overrides: Optional[str] = None,
         # Context Params
         seed: int = llama_cpp.LLAMA_DEFAULT_SEED,
         n_ctx: int = 512,
@@ -866,6 +867,32 @@ class Llama:
         self.model_params.vocab_only = vocab_only
         self.model_params.use_mmap = use_mmap if lora_path is None else False
         self.model_params.use_mlock = use_mlock
+
+        overrides = kv_overrides.split()
+        KvOverrideArray = llama_cpp.llama_model_kv_override * (len(overrides) + 1)
+        kv_overrides_array = KvOverrideArray()
+
+        for i, override in enumerate(overrides):
+            k, tv = override.split("=")
+            t, v = tv.split(":")
+
+            kv_overrides_array[i].key = k.encode()  # to bytes
+
+            if t == "int":
+                kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_INT
+                kv_overrides_array[i].value.int_value = int(v)
+            elif t == "float":
+                kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_FLOAT
+                kv_overrides_array[i].value.float_value = float(v)
+            elif t == "bool":
+                kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_BOOL
+                kv_overrides_array[i].value.bool_value = v.lower() in ["true", "1"]
+            else:
+                raise ValueError(f"Unknown value type: {t}")
+
+        # null array sentinel
+        kv_overrides_array[len(overrides)].key = b'\0'
+        self.model_params.kv_overrides = ctypes.pointer(kv_overrides_array[0])
 
         self.n_batch = min(n_ctx, n_batch)  # ???
         self.n_threads = n_threads or max(multiprocessing.cpu_count() // 2, 1)

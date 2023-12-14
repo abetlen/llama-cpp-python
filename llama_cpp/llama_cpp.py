@@ -314,11 +314,16 @@ class llama_batch(Structure):
 #     LLAMA_KV_OVERRIDE_FLOAT,
 #     LLAMA_KV_OVERRIDE_BOOL,
 # };
-class llama_model_kv_override_type(Structure):
+LLAMA_KV_OVERRIDE_INT = 0
+LLAMA_KV_OVERRIDE_FLOAT = 1
+LLAMA_KV_OVERRIDE_BOOL = 2
+
+# Union for different data types
+class ValueUnion(ctypes.Union):
     _fields_ = [
-        ("LLAMA_KV_OVERRIDE_INT", c_int),
-        ("LLAMA_KV_OVERRIDE_FLOAT", c_int),
-        ("LLAMA_KV_OVERRIDE_BOOL", c_int),
+        ("int_value", ctypes.c_int64),
+        ("float_value", c_double),
+        ("bool_value", c_bool),
     ]
 
 # struct llama_model_kv_override {
@@ -333,10 +338,8 @@ class llama_model_kv_override_type(Structure):
 class llama_model_kv_override(Structure):
     _fields_ = [
         ("key", ctypes.c_char * 128),
-        ("tag", llama_model_kv_override_type),
-        ("int_value", ctypes.c_int64),
-        ("float_value", c_double),
-        ("bool_value", c_bool),
+        ("tag", ctypes.c_int),
+        ("value", ValueUnion),
     ]
 
 # struct llama_model_params {
