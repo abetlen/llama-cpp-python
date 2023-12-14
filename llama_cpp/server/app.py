@@ -150,6 +150,13 @@ class Settings(BaseSettings):
     # Server Params
     host: str = Field(default="localhost", description="Listen address")
     port: int = Field(default=8000, description="Listen port")
+    # SSL Params
+    ssl_keyfile: Optional[str] = Field(
+        default=None, description="SSL key file for HTTPS"
+    )
+    ssl_certfile: Optional[str] = Field(
+        default=None, description="SSL certificate file for HTTPS"
+    )
     interrupt_requests: bool = Field(
         default=True,
         description="Whether to interrupt requests when a new request is received.",

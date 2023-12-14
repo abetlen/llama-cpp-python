@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.23]
+
+- Update llama.cpp to ggerganov/llama.cpp@948ff137ec37f1ec74c02905917fa0afc9b97514
+- Add qwen chat format by @yhfgyyf in #1005
+- Add support for running the server with SSL by @rgerganov in #994
+- Replace logits_to_logprobs implementation with numpy equivalent to llama.cpp by @player1537 in #991
+- Fix UnsupportedOperation: fileno in suppress_stdout_stderr by @zocainViken in #961
+- Add Pygmalion chat format by @chiensen in #986
+- README.md multimodal params fix by @zocainViken in #967
+- Fix minor typo in README by @aniketmaurya in #958
+
 ## [0.2.22]
 
 - Update llama.cpp to ggerganov/llama.cpp@8a7b2fa528f130631a5f43648481596ab320ed5a
