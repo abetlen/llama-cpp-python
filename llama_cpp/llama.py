@@ -771,7 +771,7 @@ class Llama:
         **kwargs,  # type: ignore
     ):
         """Load a llama.cpp model from `model_path`.
-    
+
         Examples:
             Basic usage
 
@@ -2280,14 +2280,22 @@ class Llama:
         return self._model.token_nl()
 
     @staticmethod
-    def logits_to_logprobs(logits: npt.NDArray[np.single]) -> npt.NDArray[np.single]:
-        maximum = np.max(logits)
-        tmp = np.subtract(logits, maximum, dtype=np.single)
-        np.exp(tmp, out=tmp)
-        normalizer = 1.0 / np.sum(tmp)
-        np.multiply(normalizer, tmp, out=tmp)
-        np.log(tmp, out=tmp)
-        return tmp
+    def logits_to_logprobs(
+        logits: Union[List, npt.NDArray[np.single]], axis: int = -1
+    ) -> npt.NDArray[np.single]:
+        # https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.log_softmax.html
+        logits_maxs: np.ndarray = np.amax(logits, axis=axis, keepdims=True)
+        if logits_maxs.ndim > 0:
+            logits_maxs[~np.isfinite(logits_maxs)] = 0
+        elif not np.isfinite(logits_maxs):
+            logits_maxs = 0
+        subtract_maxs = np.subtract(logits, logits_maxs, dtype=np.single)
+        exp = np.exp(subtract_maxs)
+        # Suppress warnings about log of zero
+        with np.errstate(divide='ignore'):
+            summed = np.sum(exp, axis=axis, keepdims=True)
+            out = np.log(summed)
+        return subtract_maxs - out
 
     @staticmethod
     def longest_token_prefix(a: Sequence[int], b: Sequence[int]):
