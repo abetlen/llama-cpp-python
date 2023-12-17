@@ -1555,7 +1555,7 @@ class Llama:
                             self.detokenize(completion_tokens[:returned_tokens])
                         )
                         token_offset = len(prompt_tokens) + returned_tokens
-                        logits = self._scores[token_offset - 1, :].tolist()
+                        logits = self._scores[token_offset - 1, :]
                         current_logprobs = Llama.logits_to_logprobs(logits)
                         sorted_logprobs = list(
                             sorted(
@@ -1674,7 +1674,7 @@ class Llama:
                         self.detokenize(completion_tokens[:returned_tokens])
                     )
                     token_offset = len(prompt_tokens) + returned_tokens - 1
-                    logits = self._scores[token_offset, :].tolist()
+                    logits = self._scores[token_offset, :]
                     current_logprobs = Llama.logits_to_logprobs(logits)
                     sorted_logprobs = list(
                         sorted(
@@ -1788,9 +1788,8 @@ class Llama:
                 self.detokenize([token]).decode("utf-8", errors="ignore")
                 for token in all_tokens
             ]
-            all_logprobs = [
-                Llama.logits_to_logprobs(row.tolist()) for row in self._scores
-            ][token_offset:]
+            all_logprobs = Llama.logits_to_logprobs(self._scores)[token_offset:]
+            # TODO: may be able to change this loop to use np.take_along_dim
             for token, token_str, logprobs_token in zip(
                 all_tokens, all_token_strs, all_logprobs
             ):
@@ -2287,7 +2286,7 @@ class Llama:
 
     @staticmethod
     def logits_to_logprobs(
-        logits: Union[List, npt.NDArray[np.single]], axis: int = -1
+        logits: Union[npt.NDArray[np.single], List], axis: int = -1
     ) -> npt.NDArray[np.single]:
         # https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.log_softmax.html
         logits_maxs: np.ndarray = np.amax(logits, axis=axis, keepdims=True)
@@ -2298,7 +2297,7 @@ class Llama:
         subtract_maxs = np.subtract(logits, logits_maxs, dtype=np.single)
         exp = np.exp(subtract_maxs)
         # Suppress warnings about log of zero
-        with np.errstate(divide='ignore'):
+        with np.errstate(divide="ignore"):
             summed = np.sum(exp, axis=axis, keepdims=True)
             out = np.log(summed)
         return subtract_maxs - out
