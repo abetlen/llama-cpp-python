@@ -1059,7 +1059,7 @@ _lib.llama_kv_cache_view_init.restype = llama_kv_cache_view
 
 # // Free a KV cache view. (use only for debugging purposes)
 # LLAMA_API void llama_kv_cache_view_free(struct llama_kv_cache_view * view);
-def llama_kv_cache_view_free(view: "ctypes._Pointer[llama_kv_cache_view]"): # type: ignore
+def llama_kv_cache_view_free(view: "ctypes.pointer[llama_kv_cache_view]"): # type: ignore
     """Free a KV cache view. (use only for debugging purposes)"""
     return _lib.llama_kv_cache_view_free(view)
 
@@ -1070,7 +1070,7 @@ _lib.llama_kv_cache_view_free.restype = None
 
 # // Update the KV cache view structure with the current state of the KV cache. (use only for debugging purposes)
 # LLAMA_API void llama_kv_cache_view_update(const struct llama_context * ctx, struct llama_kv_cache_view * view);
-def llama_kv_cache_view_update(ctx: llama_context_p, view: "ctypes._Pointer[llama_kv_cache_view]"): # type: ignore
+def llama_kv_cache_view_update(ctx: llama_context_p, view: "ctypes.pointer[llama_kv_cache_view]"): # type: ignore
     """Update the KV cache view structure with the current state of the KV cache. (use only for debugging purposes)"""
     return _lib.llama_kv_cache_view_update(ctx, view)
 
