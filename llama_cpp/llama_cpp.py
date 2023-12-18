@@ -1059,7 +1059,7 @@ _lib.llama_kv_cache_view_init.restype = llama_kv_cache_view
 
 # // Free a KV cache view. (use only for debugging purposes)
 # LLAMA_API void llama_kv_cache_view_free(struct llama_kv_cache_view * view);
-def llama_kv_cache_view_free(view: llama_kv_cache_view_p):
+def llama_kv_cache_view_free(view: "ctypes._Pointer[llama_kv_cache_view]"): # type: ignore
     """Free a KV cache view. (use only for debugging purposes)"""
     return _lib.llama_kv_cache_view_free(view)
 
