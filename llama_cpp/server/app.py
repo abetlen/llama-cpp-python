@@ -98,9 +98,11 @@ class Settings(BaseSettings):
     mul_mat_q: bool = Field(
         default=True, description="if true, use experimental mul_mat_q kernels"
     )
-    f16_kv: bool = Field(default=True, description="Whether to use f16 key/value.")
     logits_all: bool = Field(default=True, description="Whether to return logits.")
     embedding: bool = Field(default=True, description="Whether to use embeddings.")
+    offload_kqv: bool = Field(
+        default=False, description="Whether to offload kqv to the GPU."
+    )
     # Sampling Params
     last_n_tokens_size: int = Field(
         default=64,
@@ -408,9 +410,9 @@ def create_app(settings: Optional[Settings] = None):
         yarn_beta_slow=settings.yarn_beta_slow,
         yarn_orig_ctx=settings.yarn_orig_ctx,
         mul_mat_q=settings.mul_mat_q,
-        f16_kv=settings.f16_kv,
         logits_all=settings.logits_all,
         embedding=settings.embedding,
+        offload_kqv=settings.offload_kqv,
         # Sampling Params
         last_n_tokens_size=settings.last_n_tokens_size,
         # LoRA Params

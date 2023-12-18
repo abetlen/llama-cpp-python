@@ -220,7 +220,7 @@ The gguf-converted files for this model can be found here: [functionary-7b-v1](h
         "function": {
           "name": "UserDetail",
           "parameters": {
-            "type": "object"
+            "type": "object",
             "title": "UserDetail",
             "properties": {
               "name": {

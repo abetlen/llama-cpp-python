@@ -98,6 +98,9 @@ LLAMA_DEFAULT_SEED = 0xFFFFFFFF
 # define LLAMA_MAX_RNG_STATE (64*1024)
 LLAMA_MAX_RNG_STATE = 64 * 1024
 
+#define LLAMA_FILE_MAGIC_GGLA 0x67676c61u // 'ggla'
+LLAMA_FILE_MAGIC_GGLA = 0x67676C61
+
 # define LLAMA_FILE_MAGIC_GGSN 0x6767736eu // 'ggsn'
 LLAMA_FILE_MAGIC_GGSN = 0x6767736E
 
@@ -408,7 +411,7 @@ class llama_model_params(Structure):
 
 #     // Keep the booleans together to avoid misalignment during copy-by-value.
 #     bool mul_mat_q;   // if true, use experimental mul_mat_q kernels (DEPRECATED - always true)
-#     bool logits_all;  // the llama_eval() call computes all logits, not just the last one
+#     bool logits_all;  // the llama_eval() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
 #     bool embedding;   // embedding mode only
 #     bool offload_kqv; // whether to offload the KQV ops (including the KV cache) to GPU
 # };
@@ -432,9 +435,9 @@ class llama_context_params(Structure):
         type_k (int): data type for K cache
         type_v (int): data type for V cache
         mul_mat_q (bool): if true, use experimental mul_mat_q kernels (DEPRECATED - always true)
-        f16_kv (bool): use fp16 for KV cache, fp32 otherwise
-        logits_all (bool): the llama_eval() call computes all logits, not just the last one
-        embedding (bool): embedding mode only"""
+        logits_all (bool): the llama_eval() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
+        embedding (bool): embedding mode only
+        offload_kqv (bool): whether to offload the KQV ops (including the KV cache) to GPU"""
     _fields_ = [
         ("seed", c_uint32),
         ("n_ctx", c_uint32),
@@ -452,9 +455,9 @@ class llama_context_params(Structure):
         ("type_k", c_int),
         ("type_v", c_int),
         ("mul_mat_q", c_bool),
-        ("f16_kv", c_bool),
         ("logits_all", c_bool),
         ("embedding", c_bool),
+        ("offload_kqv", c_bool),
     ]
 
 
