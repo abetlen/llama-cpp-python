@@ -752,6 +752,7 @@ class Llama:
         mul_mat_q: bool = True,
         logits_all: bool = False,
         embedding: bool = False,
+        offload_kqv: bool = False,
         # Sampling Params
         last_n_tokens_size: int = 64,
         # LoRA Params
@@ -817,6 +818,7 @@ class Llama:
             yarn_orig_ctx: YaRN original context size
             logits_all: Return logits for all tokens, not just the last token. Must be True for completion to return logprobs.
             embedding: Embedding mode only.
+            offload_kqv: Offload K, Q, V to GPU.
             last_n_tokens_size: Maximum number of tokens to keep in the last_n_tokens deque.
             lora_base: Optional path to base model, useful if using a quantized base model and you want to apply LoRA to an f16 model.
             lora_path: Path to a LoRA file to apply to the model.
@@ -903,6 +905,7 @@ class Llama:
         self.context_params.mul_mat_q = mul_mat_q
         self.context_params.logits_all = logits_all
         self.context_params.embedding = embedding
+        self.context_params.offload_kqv = offload_kqv
 
         # Sampling Params
         self.last_n_tokens_size = last_n_tokens_size

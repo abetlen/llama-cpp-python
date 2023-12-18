@@ -100,6 +100,9 @@ class Settings(BaseSettings):
     )
     logits_all: bool = Field(default=True, description="Whether to return logits.")
     embedding: bool = Field(default=True, description="Whether to use embeddings.")
+    offload_kqv: bool = Field(
+        default=False, description="Whether to offload kqv to the GPU."
+    )
     # Sampling Params
     last_n_tokens_size: int = Field(
         default=64,
@@ -409,6 +412,7 @@ def create_app(settings: Optional[Settings] = None):
         mul_mat_q=settings.mul_mat_q,
         logits_all=settings.logits_all,
         embedding=settings.embedding,
+        offload_kqv=settings.offload_kqv,
         # Sampling Params
         last_n_tokens_size=settings.last_n_tokens_size,
         # LoRA Params
