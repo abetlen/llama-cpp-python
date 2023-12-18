@@ -1555,7 +1555,7 @@ class Llama:
                         )
                         token_offset = len(prompt_tokens) + returned_tokens
                         logits = self._scores[token_offset - 1, :]
-                        current_logprobs = Llama.logits_to_logprobs(logits)
+                        current_logprobs = Llama.logits_to_logprobs(logits).tolist()
                         sorted_logprobs = list(
                             sorted(
                                 zip(current_logprobs, range(len(current_logprobs))),
@@ -1674,7 +1674,7 @@ class Llama:
                     )
                     token_offset = len(prompt_tokens) + returned_tokens - 1
                     logits = self._scores[token_offset, :]
-                    current_logprobs = Llama.logits_to_logprobs(logits)
+                    current_logprobs = Llama.logits_to_logprobs(logits).tolist()
                     sorted_logprobs = list(
                         sorted(
                             zip(current_logprobs, range(len(current_logprobs))),
