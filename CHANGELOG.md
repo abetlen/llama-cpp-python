@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- fix: ctypes definitions of llama_kv_cache_view_update and llama_kv_cache_view_free. by @e-c-d in #1028
+
 ## [0.2.24]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@0e18b2e7d0b5c0a509ea40098def234b8d4a938a
