@@ -432,9 +432,9 @@ class llama_context_params(Structure):
         type_k (int): data type for K cache
         type_v (int): data type for V cache
         mul_mat_q (bool): if true, use experimental mul_mat_q kernels (DEPRECATED - always true)
-        f16_kv (bool): use fp16 for KV cache, fp32 otherwise
         logits_all (bool): the llama_eval() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
-        embedding (bool): embedding mode only"""
+        embedding (bool): embedding mode only
+        offload_kqv (bool): whether to offload the KQV ops (including the KV cache) to GPU"""
     _fields_ = [
         ("seed", c_uint32),
         ("n_ctx", c_uint32),
@@ -452,9 +452,9 @@ class llama_context_params(Structure):
         ("type_k", c_int),
         ("type_v", c_int),
         ("mul_mat_q", c_bool),
-        ("f16_kv", c_bool),
         ("logits_all", c_bool),
         ("embedding", c_bool),
+        ("offload_kqv", c_bool),
     ]
 
 

@@ -751,7 +751,6 @@ class Llama:
         yarn_beta_slow: float = 1.0,
         yarn_orig_ctx: int = 0,
         mul_mat_q: bool = True,
-        f16_kv: bool = True,
         logits_all: bool = False,
         embedding: bool = False,
         # Sampling Params
@@ -817,7 +816,6 @@ class Llama:
             yarn_beta_fast: YaRN low correction dim
             yarn_beta_slow: YaRN high correction dim
             yarn_orig_ctx: YaRN original context size
-            f16_kv: Use fp16 for KV cache, fp32 otherwise
             logits_all: Return logits for all tokens, not just the last token. Must be True for completion to return logprobs.
             embedding: Embedding mode only.
             last_n_tokens_size: Maximum number of tokens to keep in the last_n_tokens deque.
@@ -904,7 +902,6 @@ class Llama:
         )
         self.context_params.yarn_orig_ctx = yarn_orig_ctx if yarn_orig_ctx != 0 else 0
         self.context_params.mul_mat_q = mul_mat_q
-        # self.context_params.f16_kv = f16_kv
         self.context_params.logits_all = logits_all
         self.context_params.embedding = embedding
 
@@ -2155,7 +2152,6 @@ class Llama:
             yarn_beta_slow=self.context_params.yarn_beta_slow,
             yarn_orig_ctx=self.context_params.yarn_orig_ctx,
             mul_mat_q=self.context_params.mul_mat_q,
-            f16_kv=self.context_params.f16_kv,
             logits_all=self.context_params.logits_all,
             embedding=self.context_params.embedding,
             # Sampling Params
@@ -2198,7 +2194,6 @@ class Llama:
             yarn_beta_slow=state["yarn_beta_slow"],
             yarn_orig_ctx=state["yarn_orig_ctx"],
             mul_mat_q=state["mul_mat_q"],
-            f16_kv=state["f16_kv"],
             logits_all=state["logits_all"],
             embedding=state["embedding"],
             # Sampling Params
