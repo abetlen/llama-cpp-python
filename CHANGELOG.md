@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- fix: ctypes definitions of llama_kv_cache_view_update and llama_kv_cache_view_free. by @e-c-d in #1028
+
+## [0.2.24]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@0e18b2e7d0b5c0a509ea40098def234b8d4a938a
+- feat: Add offload_kqv option to llama and server by @abetlen in 095c65000642a3cf73055d7428232fb18b73c6f3
+- feat: n_ctx=0 now uses the n_ctx_train of the model by @DanieleMorotti in #1015
+- feat: logits_to_logprobs supports both 2-D and 3-D logits arrays by @kddubey in #1002
+- fix: Remove f16_kv, add offload_kqv fields in low level and llama apis by @brandonrobertz in #1019
+- perf: Don't convert logprobs arrays to lists by @kddubey in #1021
+- docs: Fix README.md functionary demo typo by @evelynmitchell in #996
+- examples: Update low_level_api_llama_cpp.py to match current API by @jsoma in #1023
+
+## [0.2.23]
+
+- Update llama.cpp to ggerganov/llama.cpp@948ff137ec37f1ec74c02905917fa0afc9b97514
+- Add qwen chat format by @yhfgyyf in #1005
+- Add support for running the server with SSL by @rgerganov in #994
+- Replace logits_to_logprobs implementation with numpy equivalent to llama.cpp by @player1537 in #991
+- Fix UnsupportedOperation: fileno in suppress_stdout_stderr by @zocainViken in #961
+- Add Pygmalion chat format by @chiensen in #986
+- README.md multimodal params fix by @zocainViken in #967
+- Fix minor typo in README by @aniketmaurya in #958
+
 ## [0.2.22]
 
 - Update llama.cpp to ggerganov/llama.cpp@8a7b2fa528f130631a5f43648481596ab320ed5a

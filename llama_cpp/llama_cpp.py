@@ -98,6 +98,9 @@ LLAMA_DEFAULT_SEED = 0xFFFFFFFF
 # define LLAMA_MAX_RNG_STATE (64*1024)
 LLAMA_MAX_RNG_STATE = 64 * 1024
 
+#define LLAMA_FILE_MAGIC_GGLA 0x67676c61u // 'ggla'
+LLAMA_FILE_MAGIC_GGLA = 0x67676C61
+
 # define LLAMA_FILE_MAGIC_GGSN 0x6767736eu // 'ggsn'
 LLAMA_FILE_MAGIC_GGSN = 0x6767736E
 
@@ -405,7 +408,7 @@ class llama_model_params(Structure):
 
 #     // Keep the booleans together to avoid misalignment during copy-by-value.
 #     bool mul_mat_q;   // if true, use experimental mul_mat_q kernels (DEPRECATED - always true)
-#     bool logits_all;  // the llama_eval() call computes all logits, not just the last one
+#     bool logits_all;  // the llama_eval() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
 #     bool embedding;   // embedding mode only
 #     bool offload_kqv; // whether to offload the KQV ops (including the KV cache) to GPU
 # };
@@ -429,9 +432,9 @@ class llama_context_params(Structure):
         type_k (int): data type for K cache
         type_v (int): data type for V cache
         mul_mat_q (bool): if true, use experimental mul_mat_q kernels (DEPRECATED - always true)
-        f16_kv (bool): use fp16 for KV cache, fp32 otherwise
-        logits_all (bool): the llama_eval() call computes all logits, not just the last one
-        embedding (bool): embedding mode only"""
+        logits_all (bool): the llama_eval() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
+        embedding (bool): embedding mode only
+        offload_kqv (bool): whether to offload the KQV ops (including the KV cache) to GPU"""
     _fields_ = [
         ("seed", c_uint32),
         ("n_ctx", c_uint32),
@@ -449,9 +452,9 @@ class llama_context_params(Structure):
         ("type_k", c_int),
         ("type_v", c_int),
         ("mul_mat_q", c_bool),
-        ("f16_kv", c_bool),
         ("logits_all", c_bool),
         ("embedding", c_bool),
+        ("offload_kqv", c_bool),
     ]
 
 
@@ -1038,6 +1041,9 @@ class llama_kv_cache_view(Structure):
     ]
 
 
+llama_kv_cache_view_p = POINTER(llama_kv_cache_view)
+
+
 # // Create an empty KV cache view. (use only for debugging purposes)
 # LLAMA_API struct llama_kv_cache_view llama_kv_cache_view_init(const struct llama_context * ctx, int32_t n_max_seq);
 def llama_kv_cache_view_init(
@@ -1053,23 +1059,23 @@ _lib.llama_kv_cache_view_init.restype = llama_kv_cache_view
 
 # // Free a KV cache view. (use only for debugging purposes)
 # LLAMA_API void llama_kv_cache_view_free(struct llama_kv_cache_view * view);
-def llama_kv_cache_view_free(view: llama_kv_cache_view):
+def llama_kv_cache_view_free(view: "ctypes.pointer[llama_kv_cache_view]"): # type: ignore
     """Free a KV cache view. (use only for debugging purposes)"""
     return _lib.llama_kv_cache_view_free(view)
 
 
-_lib.llama_kv_cache_view_free.argtypes = [llama_kv_cache_view]
+_lib.llama_kv_cache_view_free.argtypes = [llama_kv_cache_view_p]
 _lib.llama_kv_cache_view_free.restype = None
 
 
 # // Update the KV cache view structure with the current state of the KV cache. (use only for debugging purposes)
 # LLAMA_API void llama_kv_cache_view_update(const struct llama_context * ctx, struct llama_kv_cache_view * view);
-def llama_kv_cache_view_update(ctx: llama_context_p, view: llama_kv_cache_view):
+def llama_kv_cache_view_update(ctx: llama_context_p, view: "ctypes.pointer[llama_kv_cache_view]"): # type: ignore
     """Update the KV cache view structure with the current state of the KV cache. (use only for debugging purposes)"""
     return _lib.llama_kv_cache_view_update(ctx, view)
 
 
-_lib.llama_kv_cache_view_update.argtypes = [llama_context_p, llama_kv_cache_view]
+_lib.llama_kv_cache_view_update.argtypes = [llama_context_p, llama_kv_cache_view_p]
 _lib.llama_kv_cache_view_update.restype = None
 
 

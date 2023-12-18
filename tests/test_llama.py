@@ -1,6 +1,8 @@
 import ctypes
 
+import numpy as np
 import pytest
+from scipy.special import log_softmax
 
 import llama_cpp
 
@@ -262,6 +264,29 @@ def test_llama_server():
             }
         ],
     }
+
+
+@pytest.mark.parametrize(
+    "size_and_axis",
+    [
+        ((32_000,), -1),  # last token's next-token logits
+        ((10, 32_000), -1),  # many tokens' next-token logits, or batch of last tokens
+        ((4, 10, 32_000), -1),  # batch of texts
+    ],
+)
+@pytest.mark.parametrize("convert_to_list", [True, False])
+def test_logits_to_logprobs(size_and_axis, convert_to_list: bool, atol: float = 1e-7):
+    size, axis = size_and_axis
+    logits: np.ndarray = -np.random.uniform(low=0, high=60, size=size)
+    logits = logits.astype(np.single)
+    if convert_to_list:
+        # Currently, logits are converted from arrays to lists. This may change soon
+        logits = logits.tolist()
+    log_probs = llama_cpp.Llama.logits_to_logprobs(logits, axis=axis)
+    log_probs_correct = log_softmax(logits, axis=axis)
+    assert log_probs.dtype == np.single
+    assert log_probs.shape == size
+    assert np.allclose(log_probs, log_probs_correct, atol=atol)
 
 
 def test_llama_cpp_version():

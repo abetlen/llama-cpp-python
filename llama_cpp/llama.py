@@ -4,7 +4,6 @@ import os
 import sys
 import uuid
 import time
-import math
 import multiprocessing
 
 from typing import (
@@ -67,9 +66,9 @@ class Llama:
         yarn_beta_slow: float = 1.0,
         yarn_orig_ctx: int = 0,
         mul_mat_q: bool = True,
-        f16_kv: bool = True,
         logits_all: bool = False,
         embedding: bool = False,
+        offload_kqv: bool = False,
         # Sampling Params
         last_n_tokens_size: int = 64,
         # LoRA Params
@@ -87,7 +86,7 @@ class Llama:
         **kwargs,  # type: ignore
     ):
         """Load a llama.cpp model from `model_path`.
-    
+
         Examples:
             Basic usage
 
@@ -133,9 +132,9 @@ class Llama:
             yarn_beta_fast: YaRN low correction dim
             yarn_beta_slow: YaRN high correction dim
             yarn_orig_ctx: YaRN original context size
-            f16_kv: Use fp16 for KV cache, fp32 otherwise
             logits_all: Return logits for all tokens, not just the last token. Must be True for completion to return logprobs.
             embedding: Embedding mode only.
+            offload_kqv: Offload K, Q, V to GPU.
             last_n_tokens_size: Maximum number of tokens to keep in the last_n_tokens deque.
             lora_base: Optional path to base model, useful if using a quantized base model and you want to apply LoRA to an f16 model.
             lora_path: Path to a LoRA file to apply to the model.
@@ -220,9 +219,9 @@ class Llama:
         )
         self.context_params.yarn_orig_ctx = yarn_orig_ctx if yarn_orig_ctx != 0 else 0
         self.context_params.mul_mat_q = mul_mat_q
-        # self.context_params.f16_kv = f16_kv
         self.context_params.logits_all = logits_all
         self.context_params.embedding = embedding
+        self.context_params.offload_kqv = offload_kqv
 
         # Sampling Params
         self.last_n_tokens_size = last_n_tokens_size
@@ -239,6 +238,12 @@ class Llama:
         self._model = _LlamaModel(
             path_model=self.model_path, params=self.model_params, verbose=self.verbose
         )
+        # Set the default value for the context and correct the batch
+        if n_ctx == 0:
+            n_ctx = self._model.n_ctx_train()
+            self.n_batch = min(n_ctx, n_batch)
+            self.context_params.n_ctx = self._model.n_ctx_train()
+            self.context_params.n_batch = self.n_batch
 
         self._ctx = _LlamaContext(
             model=self._model,
@@ -940,7 +945,7 @@ class Llama:
                             self.detokenize(completion_tokens[:returned_tokens])
                         )
                         token_offset = len(prompt_tokens) + returned_tokens
-                        logits = self._scores[token_offset - 1, :].tolist()
+                        logits = self._scores[token_offset - 1, :]
                         token_logprob = Llama.logits_to_logprobs(logits)
                         sorted_logprobs = list(
                             sorted(
@@ -1034,7 +1039,8 @@ class Llama:
                         self.detokenize(completion_tokens[:returned_tokens])
                     )
                     token_offset = len(prompt_tokens) + returned_tokens - 1
-                    token_logprob = Llama.logits_to_logprobs(self._scores[token_offset, :].tolist())
+                    logits = self._scores[token_offset, :]
+                    token_logprob = Llama.logits_to_logprobs(logits)
                     sorted_logprobs = list(
                         sorted(
                             zip(token_logprob, range(len(token_logprob))),
@@ -1101,7 +1107,7 @@ class Llama:
                 for token in all_tokens
             ]
             all_logprobs = [
-                Llama.logits_to_logprobs(row.tolist()) for row in self._scores
+                Llama.logits_to_logprobs(row).tolist() for row in self._scores
             ][token_offset:]
             logprobs_or_none = _logprobs_or_none(
                 all_tokens, all_token_strs, all_logprobs, text_offset
@@ -1426,7 +1432,6 @@ class Llama:
             yarn_beta_slow=self.context_params.yarn_beta_slow,
             yarn_orig_ctx=self.context_params.yarn_orig_ctx,
             mul_mat_q=self.context_params.mul_mat_q,
-            f16_kv=self.context_params.f16_kv,
             logits_all=self.context_params.logits_all,
             embedding=self.context_params.embedding,
             # Sampling Params
@@ -1469,7 +1474,6 @@ class Llama:
             yarn_beta_slow=state["yarn_beta_slow"],
             yarn_orig_ctx=state["yarn_orig_ctx"],
             mul_mat_q=state["mul_mat_q"],
-            f16_kv=state["f16_kv"],
             logits_all=state["logits_all"],
             embedding=state["embedding"],
             # Sampling Params
@@ -1557,10 +1561,22 @@ class Llama:
         return self._model.token_nl()
 
     @staticmethod
-    def logits_to_logprobs(logits: List[float]) -> List[float]:
-        exps = [math.exp(float(x)) for x in logits]
-        sum_exps = sum(exps)
-        return [math.log(x / sum_exps) for x in exps]
+    def logits_to_logprobs(
+        logits: Union[npt.NDArray[np.single], List], axis: int = -1
+    ) -> npt.NDArray[np.single]:
+        # https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.log_softmax.html
+        logits_maxs: np.ndarray = np.amax(logits, axis=axis, keepdims=True)
+        if logits_maxs.ndim > 0:
+            logits_maxs[~np.isfinite(logits_maxs)] = 0
+        elif not np.isfinite(logits_maxs):
+            logits_maxs = 0
+        subtract_maxs = np.subtract(logits, logits_maxs, dtype=np.single)
+        exp = np.exp(subtract_maxs)
+        # Suppress warnings about log of zero
+        with np.errstate(divide="ignore"):
+            summed = np.sum(exp, axis=axis, keepdims=True)
+            out = np.log(summed)
+        return subtract_maxs - out
 
     @staticmethod
     def longest_token_prefix(a: Sequence[int], b: Sequence[int]):
