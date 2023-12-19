@@ -30,11 +30,21 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push
+        id: docker_build
         uses: docker/build-push-action@v4
         with:
           context: .
           file: "docker/simple/Dockerfile"
-          push: true # push to registry
-          pull: true # always fetch the latest base images
-          platforms: linux/amd64,linux/arm64 # build for both amd64 and arm64
-          tags: ghcr.io/abetlen/llama-cpp-python:latest
+          push: ${{ startsWith(github.ref, 'refs/tags/') }}
+          pull: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ghcr.io/abetlen/llama-cpp-python:latest
+            ghcr.io/abetlen/llama-cpp-python:${{ github.ref_name }}
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
+
+      - name: Publish to GitHub Tag
+        if: steps.docker_build.outputs.digest && startsWith(github.ref, 'refs/tags/')
+        run: |
+          echo "Docker image published for tag: ${{ github.ref_name }}"

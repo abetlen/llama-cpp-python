@@ -2,7 +2,6 @@ import os
 import sys
 import uuid
 import time
-import math
 import multiprocessing
 from abc import ABC, abstractmethod
 from typing import (
@@ -214,6 +213,8 @@ class _LlamaModel:
     NOTE: For stability it's recommended you use the Llama class instead."""
 
     _llama_free_model = None
+    # NOTE: this must be "saved" here to avoid exceptions when calling __del__
+    suppress_stdout_stderr = suppress_stdout_stderr
 
     def __init__(
         self,
@@ -237,7 +238,7 @@ class _LlamaModel:
             )
 
     def __del__(self):
-        with suppress_stdout_stderr(disable=self.verbose):
+        with self.suppress_stdout_stderr(disable=self.verbose):
             if self.model is not None and self._llama_free_model is not None:
                 self._llama_free_model(self.model)
                 self.model = None
@@ -399,6 +400,8 @@ class _LlamaContext:
     NOTE: For stability it's recommended you use the Llama class instead."""
 
     _llama_free = None
+    # NOTE: this must be "saved" here to avoid exceptions when calling __del__
+    suppress_stdout_stderr = suppress_stdout_stderr
 
     def __init__(
         self,
@@ -419,7 +422,7 @@ class _LlamaContext:
             )
 
     def __del__(self):
-        with suppress_stdout_stderr(disable=self.verbose):
+        with self.suppress_stdout_stderr(disable=self.verbose):
             if self.ctx is not None and self._llama_free is not None:
                 self._llama_free(self.ctx)
                 self.ctx = None
@@ -650,6 +653,8 @@ class _LlamaContext:
 
 class _LlamaBatch:
     _llama_batch_free = None
+    # NOTE: this must be "saved" here to avoid exceptions when calling __del__
+    suppress_stdout_stderr = suppress_stdout_stderr
 
     def __init__(
         self, *, n_tokens: int, embd: int, n_seq_max: int, verbose: bool = True
@@ -667,7 +672,7 @@ class _LlamaBatch:
             )
 
     def __del__(self):
-        with suppress_stdout_stderr(disable=self.verbose):
+        with self.suppress_stdout_stderr(disable=self.verbose):
             if self.batch is not None and self._llama_batch_free is not None:
                 self._llama_batch_free(self.batch)
                 self.batch = None
@@ -745,9 +750,9 @@ class Llama:
         yarn_beta_slow: float = 1.0,
         yarn_orig_ctx: int = 0,
         mul_mat_q: bool = True,
-        f16_kv: bool = True,
         logits_all: bool = False,
         embedding: bool = False,
+        offload_kqv: bool = False,
         # Sampling Params
         last_n_tokens_size: int = 64,
         # LoRA Params
@@ -766,6 +771,30 @@ class Llama:
     ):
         """Load a llama.cpp model from `model_path`.
 
+        Examples:
+            Basic usage
+
+            >>> import llama_cpp
+            >>> model = llama_cpp.Llama(
+            ...     model_path="path/to/model",
+            ... )
+            >>> print(model("The quick brown fox jumps ", stop=["."])["choices"][0]["text"])
+            the lazy dog
+
+            Loading a chat model
+
+            >>> import llama_cpp
+            >>> model = llama_cpp.Llama(
+            ...     model_path="path/to/model",
+            ...     chat_format="llama-2",
+            ... )
+            >>> print(model.create_chat_completion(
+            ...     messages=[{
+            ...         "role": "user",
+            ...         "content": "what is the meaning of life?"
+            ...     }]
+            ... ))
+
         Args:
             model_path: Path to the model.
             n_gpu_layers: Number of layers to offload to GPU (-ngl). If -1, all layers are offloaded.
@@ -774,18 +803,22 @@ class Llama:
             vocab_only: Only load the vocabulary no weights.
             use_mmap: Use mmap if possible.
             use_mlock: Force the system to keep the model in RAM.
-            seed: Random seed. -1 for random.
-            n_ctx: Context size.
-            n_batch: Batch size for prompt processing (must be >= 32 to use BLAS)
-            n_threads: Number of threads to use. If None, the number of threads is automatically determined.
-            n_threads_batch: Number of threads to use for batch processing. If None, use n_threads.
-            rope_scaling_type: Type of rope scaling to use.
-            rope_freq_base: Base frequency for rope sampling.
-            rope_freq_scale: Scale factor for rope sampling.
-            mul_mat_q: if true, use experimental mul_mat_q kernels
-            f16_kv: Use half-precision for key/value cache.
-            logits_all: Return logits for all tokens, not just the last token.
+            seed: RNG seed, -1 for random
+            n_ctx: Text context, 0 = from model
+            n_batch: Prompt processing maximum batch size
+            n_threads: Number of threads to use for generation
+            n_threads_batch: Number of threads to use for batch processing
+            rope_scaling_type: RoPE scaling type, from `enum llama_rope_scaling_type`. ref: https://github.com/ggerganov/llama.cpp/pull/2054
+            rope_freq_base: RoPE base frequency, 0 = from model
+            rope_freq_scale: RoPE frequency scaling factor, 0 = from model
+            yarn_ext_factor: YaRN extrapolation mix factor, negative = from model
+            yarn_attn_factor: YaRN magnitude scaling factor
+            yarn_beta_fast: YaRN low correction dim
+            yarn_beta_slow: YaRN high correction dim
+            yarn_orig_ctx: YaRN original context size
+            logits_all: Return logits for all tokens, not just the last token. Must be True for completion to return logprobs.
             embedding: Embedding mode only.
+            offload_kqv: Offload K, Q, V to GPU.
             last_n_tokens_size: Maximum number of tokens to keep in the last_n_tokens deque.
             lora_base: Optional path to base model, useful if using a quantized base model and you want to apply LoRA to an f16 model.
             lora_path: Path to a LoRA file to apply to the model.
@@ -870,9 +903,9 @@ class Llama:
         )
         self.context_params.yarn_orig_ctx = yarn_orig_ctx if yarn_orig_ctx != 0 else 0
         self.context_params.mul_mat_q = mul_mat_q
-        self.context_params.f16_kv = f16_kv
         self.context_params.logits_all = logits_all
         self.context_params.embedding = embedding
+        self.context_params.offload_kqv = offload_kqv
 
         # Sampling Params
         self.last_n_tokens_size = last_n_tokens_size
@@ -889,6 +922,12 @@ class Llama:
         self._model = _LlamaModel(
             path_model=self.model_path, params=self.model_params, verbose=self.verbose
         )
+        # Set the default value for the context and correct the batch
+        if n_ctx == 0:
+            n_ctx = self._model.n_ctx_train()
+            self.n_batch = min(n_ctx, n_batch)
+            self.context_params.n_ctx = self._model.n_ctx_train()
+            self.context_params.n_batch = self.n_batch
 
         self._ctx = _LlamaContext(
             model=self._model,
@@ -1036,9 +1075,9 @@ class Llama:
             offset = (
                 0 if self.context_params.logits_all else n_tokens - 1
             )  # NOTE: Only save the last token logits if logits_all is False
-            self.scores[n_past + offset : n_past + n_tokens, :].reshape(
-                -1
-            )[:] = self._ctx.get_logits()[offset * cols: rows * cols]
+            self.scores[n_past + offset : n_past + n_tokens, :].reshape(-1)[
+                :
+            ] = self._ctx.get_logits()[offset * cols : rows * cols]
             # Update n_tokens
             self.n_tokens += n_tokens
 
@@ -1046,6 +1085,8 @@ class Llama:
         self,
         top_k: int = 40,
         top_p: float = 0.95,
+        min_p: float = 0.05,
+        typical_p: float = 1.0,
         temp: float = 0.80,
         repeat_penalty: float = 1.1,
         frequency_penalty: float = 0.0,
@@ -1108,7 +1149,10 @@ class Llama:
                 grammar=grammar,
             )
 
-        if temp == 0.0:
+        if temp < 0.0:
+            self._ctx.sample_softmax(candidates=self._candidates)
+            id = self._candidates.candidates.data[0].id
+        elif temp == 0.0:
             id = self._ctx.sample_token_greedy(candidates=self._candidates)
         elif mirostat_mode == 1:
             self._ctx.sample_temp(candidates=self._candidates, temp=temp)
@@ -1130,8 +1174,11 @@ class Llama:
         else:
             self._ctx.sample_top_k(candidates=self._candidates, k=top_k, min_keep=1)
             self._ctx.sample_tail_free(candidates=self._candidates, z=tfs_z, min_keep=1)
-            self._ctx.sample_typical(candidates=self._candidates, p=1.0, min_keep=1)
+            self._ctx.sample_typical(
+                candidates=self._candidates, p=typical_p, min_keep=1
+            )
             self._ctx.sample_top_p(candidates=self._candidates, p=top_p, min_keep=1)
+            self._ctx.sample_min_p(candidates=self._candidates, p=min_p, min_keep=1)
             self._ctx.sample_temp(candidates=self._candidates, temp=temp)
             id = self._ctx.sample_token(candidates=self._candidates)
         if grammar is not None:
@@ -1143,6 +1190,8 @@ class Llama:
         tokens: Sequence[int],
         top_k: int = 40,
         top_p: float = 0.95,
+        min_p: float = 0.05,
+        typical_p: float = 1.0,
         temp: float = 0.80,
         repeat_penalty: float = 1.1,
         reset: bool = True,
@@ -1200,6 +1249,8 @@ class Llama:
             token = self.sample(
                 top_k=top_k,
                 top_p=top_p,
+                min_p=min_p,
+                typical_p=typical_p,
                 temp=temp,
                 repeat_penalty=repeat_penalty,
                 frequency_penalty=frequency_penalty,
@@ -1298,6 +1349,8 @@ class Llama:
         max_tokens: Optional[int] = 16,
         temperature: float = 0.8,
         top_p: float = 0.95,
+        min_p: float = 0.05,
+        typical_p: float = 1.0,
         logprobs: Optional[int] = None,
         echo: bool = False,
         stop: Optional[Union[str, List[str]]] = [],
@@ -1315,6 +1368,7 @@ class Llama:
         stopping_criteria: Optional[StoppingCriteriaList] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
+        logit_bias: Optional[Dict[str, float]] = None,
     ) -> Union[
         Iterator[CreateCompletionResponse], Iterator[CreateCompletionStreamResponse]
     ]:
@@ -1323,7 +1377,9 @@ class Llama:
 
         completion_id: str = f"cmpl-{str(uuid.uuid4())}"
         created: int = int(time.time())
-        completion_tokens: List[int] = []
+        # If prompt is empty, initialize completion with BOS token to avoid
+        # detokenization including a space at the beginning of the completion
+        completion_tokens: List[int] = [] if len(prompt) > 0 else [self.token_bos()]
         # Add blank space to start of prompt to match OG llama tokenizer
         prompt_tokens: List[int] = (
             (
@@ -1340,6 +1396,28 @@ class Llama:
             stop if isinstance(stop, list) else [stop] if isinstance(stop, str) else []
         )
         model_name: str = model if model is not None else self.model_path
+
+        # NOTE: This likely doesn't work correctly for the first token in the prompt
+        # because of the extra space added to the start of the prompt_tokens
+        if logit_bias is not None:
+            logit_bias_map = {int(k): float(v) for k, v in logit_bias.items()}
+
+            def logit_bias_processor(
+                input_ids: npt.NDArray[np.intc],
+                scores: npt.NDArray[np.single],
+            ) -> npt.NDArray[np.single]:
+                new_scores = np.copy(
+                    scores
+                )  # Does it make sense to copy the whole array or can we just overwrite the original one?
+                for input_id, score in logit_bias_map.items():
+                    new_scores[input_id] = score + scores[input_id]
+                return new_scores
+
+            _logit_bias_processor = LogitsProcessorList([logit_bias_processor])
+            if logits_processor is None:
+                logits_processor = _logit_bias_processor
+            else:
+                logits_processor = logits_processor.extend(_logit_bias_processor)
 
         if self.verbose:
             self._ctx.reset_timings()
@@ -1396,6 +1474,8 @@ class Llama:
             prompt_tokens,
             top_k=top_k,
             top_p=top_p,
+            min_p=min_p,
+            typical_p=typical_p,
             temp=temperature,
             tfs_z=tfs_z,
             mirostat_mode=mirostat_mode,
@@ -1459,6 +1539,8 @@ class Llama:
                     # not sure how to handle this branch when dealing
                     # with CJK output, so keep it unchanged
                     for token in remaining_tokens:
+                        if token == self.token_bos():
+                            continue
                         token_end_position += len(self.detokenize([token]))
                         # Check if stop sequence is in the token
                         if token_end_position > (
@@ -1472,8 +1554,8 @@ class Llama:
                             self.detokenize(completion_tokens[:returned_tokens])
                         )
                         token_offset = len(prompt_tokens) + returned_tokens
-                        logits = self._scores[token_offset - 1, :].tolist()
-                        current_logprobs = Llama.logits_to_logprobs(logits)
+                        logits = self._scores[token_offset - 1, :]
+                        current_logprobs = Llama.logits_to_logprobs(logits).tolist()
                         sorted_logprobs = list(
                             sorted(
                                 zip(current_logprobs, range(len(current_logprobs))),
@@ -1582,6 +1664,8 @@ class Llama:
 
                 logprobs_or_none: Optional[CompletionLogprobs] = None
                 if logprobs is not None:
+                    if token == self.token_bos():
+                        continue
                     token_str = self.detokenize([token]).decode(
                         "utf-8", errors="ignore"
                     )
@@ -1589,8 +1673,8 @@ class Llama:
                         self.detokenize(completion_tokens[:returned_tokens])
                     )
                     token_offset = len(prompt_tokens) + returned_tokens - 1
-                    logits = self._scores[token_offset, :].tolist()
-                    current_logprobs = Llama.logits_to_logprobs(logits)
+                    logits = self._scores[token_offset, :]
+                    current_logprobs = Llama.logits_to_logprobs(logits).tolist()
                     sorted_logprobs = list(
                         sorted(
                             zip(current_logprobs, range(len(current_logprobs))),
@@ -1703,12 +1787,13 @@ class Llama:
                 self.detokenize([token]).decode("utf-8", errors="ignore")
                 for token in all_tokens
             ]
-            all_logprobs = [
-                Llama.logits_to_logprobs(row.tolist()) for row in self._scores
-            ][token_offset:]
+            all_logprobs = Llama.logits_to_logprobs(self._scores)[token_offset:]
+            # TODO: may be able to change this loop to use np.take_along_dim
             for token, token_str, logprobs_token in zip(
                 all_tokens, all_token_strs, all_logprobs
             ):
+                if token == self.token_bos():
+                    continue
                 text_offsets.append(text_offset)
                 text_offset += len(token_str)
                 tokens.append(token_str)
@@ -1764,6 +1849,8 @@ class Llama:
         max_tokens: Optional[int] = 16,
         temperature: float = 0.8,
         top_p: float = 0.95,
+        min_p: float = 0.05,
+        typical_p: float = 1.0,
         logprobs: Optional[int] = None,
         echo: bool = False,
         stop: Optional[Union[str, List[str]]] = [],
@@ -1781,6 +1868,7 @@ class Llama:
         stopping_criteria: Optional[StoppingCriteriaList] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
+        logit_bias: Optional[Dict[str, float]] = None,
     ) -> Union[CreateCompletionResponse, Iterator[CreateCompletionStreamResponse]]:
         """Generate text from a prompt.
 
@@ -1789,13 +1877,27 @@ class Llama:
             suffix: A suffix to append to the generated text. If None, no suffix is appended.
             max_tokens: The maximum number of tokens to generate. If max_tokens <= 0 or None, the maximum number of tokens to generate is unlimited and depends on n_ctx.
             temperature: The temperature to use for sampling.
-            top_p: The top-p value to use for sampling.
+            top_p: The top-p value to use for nucleus sampling. Nucleus sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
+            min_p: The min-p value to use for minimum p sampling. Minimum P sampling as described in https://github.com/ggerganov/llama.cpp/pull/3841
+            typical_p: The typical-p value to use for sampling. Locally Typical Sampling implementation described in the paper https://arxiv.org/abs/2202.00666.
             logprobs: The number of logprobs to return. If None, no logprobs are returned.
             echo: Whether to echo the prompt.
             stop: A list of strings to stop generation when encountered.
+            frequency_penalty: The penalty to apply to tokens based on their frequency in the prompt.
+            presence_penalty: The penalty to apply to tokens based on their presence in the prompt.
             repeat_penalty: The penalty to apply to repeated tokens.
-            top_k: The top-k value to use for sampling.
+            top_k: The top-k value to use for sampling. Top-K sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
             stream: Whether to stream the results.
+            seed: The seed to use for sampling.
+            tfs_z: The tail-free sampling parameter. Tail Free Sampling described in https://www.trentonbricken.com/Tail-Free-Sampling/.
+            mirostat_mode: The mirostat sampling mode.
+            mirostat_tau: The target cross-entropy (or surprise) value you want to achieve for the generated text. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text.
+            mirostat_eta: The learning rate used to update `mu` based on the error between the target and observed surprisal of the sampled word. A larger learning rate will cause `mu` to be updated more quickly, while a smaller learning rate will result in slower updates.
+            model: The name to use for the model in the completion object.
+            stopping_criteria: A list of stopping criteria to use.
+            logits_processor: A list of logits processors to use.
+            grammar: A grammar to use for constrained sampling.
+            logit_bias: A logit bias to use.
 
         Raises:
             ValueError: If the requested tokens exceed the context window.
@@ -1810,6 +1912,8 @@ class Llama:
             max_tokens=max_tokens,
             temperature=temperature,
             top_p=top_p,
+            min_p=min_p,
+            typical_p=typical_p,
             logprobs=logprobs,
             echo=echo,
             stop=stop,
@@ -1827,6 +1931,7 @@ class Llama:
             stopping_criteria=stopping_criteria,
             logits_processor=logits_processor,
             grammar=grammar,
+            logit_bias=logit_bias,
         )
         if stream:
             chunks: Iterator[CreateCompletionStreamResponse] = completion_or_chunks
@@ -1841,6 +1946,8 @@ class Llama:
         max_tokens: int = 128,
         temperature: float = 0.8,
         top_p: float = 0.95,
+        min_p: float = 0.05,
+        typical_p: float = 1.0,
         logprobs: Optional[int] = None,
         echo: bool = False,
         stop: Optional[Union[str, List[str]]] = [],
@@ -1858,21 +1965,36 @@ class Llama:
         stopping_criteria: Optional[StoppingCriteriaList] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
+        logit_bias: Optional[Dict[str, float]] = None,
     ) -> Union[CreateCompletionResponse, Iterator[CreateCompletionStreamResponse]]:
         """Generate text from a prompt.
 
         Args:
             prompt: The prompt to generate text from.
             suffix: A suffix to append to the generated text. If None, no suffix is appended.
-            max_tokens: The maximum number of tokens to generate. If max_tokens <= 0, the maximum number of tokens to generate is unlimited and depends on n_ctx.
+            max_tokens: The maximum number of tokens to generate. If max_tokens <= 0 or None, the maximum number of tokens to generate is unlimited and depends on n_ctx.
             temperature: The temperature to use for sampling.
-            top_p: The top-p value to use for sampling.
+            top_p: The top-p value to use for nucleus sampling. Nucleus sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
+            min_p: The min-p value to use for minimum p sampling. Minimum P sampling as described in https://github.com/ggerganov/llama.cpp/pull/3841
+            typical_p: The typical-p value to use for sampling. Locally Typical Sampling implementation described in the paper https://arxiv.org/abs/2202.00666.
             logprobs: The number of logprobs to return. If None, no logprobs are returned.
             echo: Whether to echo the prompt.
             stop: A list of strings to stop generation when encountered.
+            frequency_penalty: The penalty to apply to tokens based on their frequency in the prompt.
+            presence_penalty: The penalty to apply to tokens based on their presence in the prompt.
             repeat_penalty: The penalty to apply to repeated tokens.
-            top_k: The top-k value to use for sampling.
+            top_k: The top-k value to use for sampling. Top-K sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
             stream: Whether to stream the results.
+            seed: The seed to use for sampling.
+            tfs_z: The tail-free sampling parameter. Tail Free Sampling described in https://www.trentonbricken.com/Tail-Free-Sampling/.
+            mirostat_mode: The mirostat sampling mode.
+            mirostat_tau: The target cross-entropy (or surprise) value you want to achieve for the generated text. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text.
+            mirostat_eta: The learning rate used to update `mu` based on the error between the target and observed surprisal of the sampled word. A larger learning rate will cause `mu` to be updated more quickly, while a smaller learning rate will result in slower updates.
+            model: The name to use for the model in the completion object.
+            stopping_criteria: A list of stopping criteria to use.
+            logits_processor: A list of logits processors to use.
+            grammar: A grammar to use for constrained sampling.
+            logit_bias: A logit bias to use.
 
         Raises:
             ValueError: If the requested tokens exceed the context window.
@@ -1887,6 +2009,8 @@ class Llama:
             max_tokens=max_tokens,
             temperature=temperature,
             top_p=top_p,
+            min_p=min_p,
+            typical_p=typical_p,
             logprobs=logprobs,
             echo=echo,
             stop=stop,
@@ -1904,6 +2028,7 @@ class Llama:
             stopping_criteria=stopping_criteria,
             logits_processor=logits_processor,
             grammar=grammar,
+            logit_bias=logit_bias,
         )
 
     def create_chat_completion(
@@ -1916,6 +2041,8 @@ class Llama:
         temperature: float = 0.2,
         top_p: float = 0.95,
         top_k: int = 40,
+        min_p: float = 0.05,
+        typical_p: float = 1.0,
         stream: bool = False,
         stop: Optional[Union[str, List[str]]] = [],
         seed: Optional[int] = None,
@@ -1931,6 +2058,7 @@ class Llama:
         model: Optional[str] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
+        logit_bias: Optional[Dict[str, float]] = None,
     ) -> Union[
         CreateChatCompletionResponse, Iterator[CreateChatCompletionStreamResponse]
     ]:
@@ -1938,13 +2066,31 @@ class Llama:
 
         Args:
             messages: A list of messages to generate a response for.
+            functions: A list of functions to use for the chat completion.
+            function_call: A function call to use for the chat completion.
+            tools: A list of tools to use for the chat completion.
+            tool_choice: A tool choice to use for the chat completion.
             temperature: The temperature to use for sampling.
-            top_p: The top-p value to use for sampling.
-            top_k: The top-k value to use for sampling.
+            top_p: The top-p value to use for nucleus sampling. Nucleus sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
+            top_k: The top-k value to use for sampling. Top-K sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
+            min_p: The min-p value to use for minimum p sampling. Minimum P sampling as described in https://github.com/ggerganov/llama.cpp/pull/3841
+            typical_p: The typical-p value to use for sampling. Locally Typical Sampling implementation described in the paper https://arxiv.org/abs/2202.00666.
             stream: Whether to stream the results.
             stop: A list of strings to stop generation when encountered.
+            seed: The seed to use for sampling.
+            response_format: The response format to use for the chat completion. Use { "type": "json_object" } to contstrain output to only valid json.
             max_tokens: The maximum number of tokens to generate. If max_tokens <= 0 or None, the maximum number of tokens to generate is unlimited and depends on n_ctx.
+            presence_penalty: The penalty to apply to tokens based on their presence in the prompt.
+            frequency_penalty: The penalty to apply to tokens based on their frequency in the prompt.
             repeat_penalty: The penalty to apply to repeated tokens.
+            tfs_z: The tail-free sampling parameter.
+            mirostat_mode: The mirostat sampling mode.
+            mirostat_tau: The mirostat sampling tau parameter.
+            mirostat_eta: The mirostat sampling eta parameter.
+            model: The name to use for the model in the completion object.
+            logits_processor: A list of logits processors to use.
+            grammar: A grammar to use.
+            logit_bias: A logit bias to use.
 
         Returns:
             Generated chat completion or a stream of chat completion chunks.
@@ -1962,6 +2108,8 @@ class Llama:
             temperature=temperature,
             top_p=top_p,
             top_k=top_k,
+            min_p=min_p,
+            typical_p=typical_p,
             stream=stream,
             stop=stop,
             seed=seed,
@@ -1977,6 +2125,7 @@ class Llama:
             model=model,
             logits_processor=logits_processor,
             grammar=grammar,
+            logit_bias=logit_bias,
         )
 
     def __getstate__(self):
@@ -2004,7 +2153,6 @@ class Llama:
             yarn_beta_slow=self.context_params.yarn_beta_slow,
             yarn_orig_ctx=self.context_params.yarn_orig_ctx,
             mul_mat_q=self.context_params.mul_mat_q,
-            f16_kv=self.context_params.f16_kv,
             logits_all=self.context_params.logits_all,
             embedding=self.context_params.embedding,
             # Sampling Params
@@ -2047,7 +2195,6 @@ class Llama:
             yarn_beta_slow=state["yarn_beta_slow"],
             yarn_orig_ctx=state["yarn_orig_ctx"],
             mul_mat_q=state["mul_mat_q"],
-            f16_kv=state["f16_kv"],
             logits_all=state["logits_all"],
             embedding=state["embedding"],
             # Sampling Params
@@ -2135,10 +2282,22 @@ class Llama:
         return self._model.token_nl()
 
     @staticmethod
-    def logits_to_logprobs(logits: List[float]) -> List[float]:
-        exps = [math.exp(float(x)) for x in logits]
-        sum_exps = sum(exps)
-        return [math.log(x / sum_exps) for x in exps]
+    def logits_to_logprobs(
+        logits: Union[npt.NDArray[np.single], List], axis: int = -1
+    ) -> npt.NDArray[np.single]:
+        # https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.log_softmax.html
+        logits_maxs: np.ndarray = np.amax(logits, axis=axis, keepdims=True)
+        if logits_maxs.ndim > 0:
+            logits_maxs[~np.isfinite(logits_maxs)] = 0
+        elif not np.isfinite(logits_maxs):
+            logits_maxs = 0
+        subtract_maxs = np.subtract(logits, logits_maxs, dtype=np.single)
+        exp = np.exp(subtract_maxs)
+        # Suppress warnings about log of zero
+        with np.errstate(divide="ignore"):
+            summed = np.sum(exp, axis=axis, keepdims=True)
+            out = np.log(summed)
+        return subtract_maxs - out
 
     @staticmethod
     def longest_token_prefix(a: Sequence[int], b: Sequence[int]):

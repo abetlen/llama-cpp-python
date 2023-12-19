@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- fix: ctypes definitions of llama_kv_cache_view_update and llama_kv_cache_view_free. by @e-c-d in #1028
+
+## [0.2.24]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@0e18b2e7d0b5c0a509ea40098def234b8d4a938a
+- feat: Add offload_kqv option to llama and server by @abetlen in 095c65000642a3cf73055d7428232fb18b73c6f3
+- feat: n_ctx=0 now uses the n_ctx_train of the model by @DanieleMorotti in #1015
+- feat: logits_to_logprobs supports both 2-D and 3-D logits arrays by @kddubey in #1002
+- fix: Remove f16_kv, add offload_kqv fields in low level and llama apis by @brandonrobertz in #1019
+- perf: Don't convert logprobs arrays to lists by @kddubey in #1021
+- docs: Fix README.md functionary demo typo by @evelynmitchell in #996
+- examples: Update low_level_api_llama_cpp.py to match current API by @jsoma in #1023
+
+## [0.2.23]
+
+- Update llama.cpp to ggerganov/llama.cpp@948ff137ec37f1ec74c02905917fa0afc9b97514
+- Add qwen chat format by @yhfgyyf in #1005
+- Add support for running the server with SSL by @rgerganov in #994
+- Replace logits_to_logprobs implementation with numpy equivalent to llama.cpp by @player1537 in #991
+- Fix UnsupportedOperation: fileno in suppress_stdout_stderr by @zocainViken in #961
+- Add Pygmalion chat format by @chiensen in #986
+- README.md multimodal params fix by @zocainViken in #967
+- Fix minor typo in README by @aniketmaurya in #958
+
+## [0.2.22]
+
+- Update llama.cpp to ggerganov/llama.cpp@8a7b2fa528f130631a5f43648481596ab320ed5a
+- Fix conflict with transformers library by kddubey in #952
+
+## [0.2.21]
+
+- Update llama.cpp to ggerganov/llama.cpp@64e64aa2557d97490b2fe1262b313e2f4a1607e3
+- Make building llava optional by setting `CMAKE_ARGS="-DLLAVA_BUILD=OFF"` and using `LLAVA_CPP_LIB` to specify alternative path to shared library by @abetlen in e3941d9c674dbd9891dc3ceda390daeb21f05fd1
+
+## [0.2.20]
+
+- Update llama.cpp to ggerganov/llama.cpp@b38a16dfcff88d547f78f52d1bea31b84a05aff7
+- Add `zephyr` chat format by @fakerybakery in #938
+- Add `baichuan` chat format by @caiyesd in #938
+- Add `baichuan-2` chat format by @caiyesd in #936
+- Improve documentation for server chat formats by @jooray in #934
+- Fix typo in README by @antonvice in 940
+- Fix typo in the Open Orca chat format by @gardner in #947
+
+## [0.2.19]
+
+- Update llama.cpp to ggerganov/llama.cpp@0b871f1a04ef60e114bbe43004fd9c21114e802d
+- Fix #569: stop parameter in chat completion api should accept str by @abetlen in 128dc4731fa846ead7e684a137ca57d8931b8899
+- Document server host and port parameters by @jamesbraza in #768
+- Do not set grammar to None when initializing LlamaGrammar by @mthuurne in #834
+- Add mistrallite, intel, and openchat formats by @fakerybakery in #927
+- Add support for min_p parameter by @tk-master in #921
+- Fix #929: tokenizer adding leading space when generating from empty prompt by @abetlen in a34d48014192771d2e308a76c22f33bc0318d983
+- Fix low level api example by @zocainViken in #925
+- Fix missing package in openblas docker image by @ZisisTsatsas in #920
+
 ## [0.2.18]
 
 - Update llama.cpp to ggerganov/llama.cpp@6bb4908a17150b49373b5f977685b2e180a04f6f
