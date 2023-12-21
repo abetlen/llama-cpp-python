@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import multiprocessing
 from typing import Optional, List, Literal
 from pydantic import Field

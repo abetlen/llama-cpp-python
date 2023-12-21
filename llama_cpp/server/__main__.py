@@ -21,6 +21,8 @@ python3 -m llama_cpp.server
 Then visit http://localhost:8000/docs to see the interactive API docs.
 
 """
+from __future__ import annotations
+
 import os
 import sys
 import argparse
