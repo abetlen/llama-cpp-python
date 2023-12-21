@@ -74,10 +74,44 @@ class LlamaProxy:
 
         self._model = llama_cpp.Llama(
             model_path=settings.model,
-            **(settings.model_dump(exclude={'model', 'models'})),
-            chat_handler=chat_handler
+            # Model Params
+            n_gpu_layers=settings.n_gpu_layers,
+            main_gpu=settings.main_gpu,
+            tensor_split=settings.tensor_split,
+            vocab_only=settings.vocab_only,
+            use_mmap=settings.use_mmap,
+            use_mlock=settings.use_mlock,
+            # Context Params
+            seed=settings.seed,
+            n_ctx=settings.n_ctx,
+            n_batch=settings.n_batch,
+            n_threads=settings.n_threads,
+            n_threads_batch=settings.n_threads_batch,
+            rope_scaling_type=settings.rope_scaling_type,
+            rope_freq_base=settings.rope_freq_base,
+            rope_freq_scale=settings.rope_freq_scale,
+            yarn_ext_factor=settings.yarn_ext_factor,
+            yarn_attn_factor=settings.yarn_attn_factor,
+            yarn_beta_fast=settings.yarn_beta_fast,
+            yarn_beta_slow=settings.yarn_beta_slow,
+            yarn_orig_ctx=settings.yarn_orig_ctx,
+            mul_mat_q=settings.mul_mat_q,
+            logits_all=settings.logits_all,
+            embedding=settings.embedding,
+            offload_kqv=settings.offload_kqv,
+            # Sampling Params
+            last_n_tokens_size=settings.last_n_tokens_size,
+            # LoRA Params
+            lora_base=settings.lora_base,
+            lora_path=settings.lora_path,
+            # Backend Params
+            numa=settings.numa,
+            # Chat Format Params
+            chat_format=settings.chat_format,
+            chat_handler=chat_handler,
+            # Misc
+            verbose=settings.verbose,
         )
-        self._model.alias = model
         if settings.cache:
             if settings.cache_type == "disk":
                 if settings.verbose:

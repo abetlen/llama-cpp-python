@@ -1,4 +1,3 @@
-import os
 import multiprocessing
 from typing import Optional, List, Literal
 from pydantic import Field
@@ -6,7 +5,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 import llama_cpp
 
 # Disable warning for model and model_alias settings
-BaseSettings.model_config['protected_namespaces'] = ()
+BaseSettings.model_config["protected_namespaces"] = ()
+
 
 class ModelSettings(BaseSettings):
     model: str = Field(
@@ -43,7 +43,9 @@ class ModelSettings(BaseSettings):
         description="Use mlock.",
     )
     # Context Params
-    seed: int = Field(default=llama_cpp.LLAMA_DEFAULT_SEED, description="Random seed. -1 for random.")
+    seed: int = Field(
+        default=llama_cpp.LLAMA_DEFAULT_SEED, description="Random seed. -1 for random."
+    )
     n_ctx: int = Field(default=2048, ge=1, description="The context size.")
     n_batch: int = Field(
         default=512, ge=1, description="The batch size to use per eval."
@@ -58,36 +60,24 @@ class ModelSettings(BaseSettings):
         ge=0,
         description="The number of threads to use when batch processing.",
     )
-    rope_scaling_type: int = Field(
-        default=llama_cpp.LLAMA_ROPE_SCALING_UNSPECIFIED
-    )
-    rope_freq_base: float = Field(
-        default=0.0, description="RoPE base frequency"
-    )
+    rope_scaling_type: int = Field(default=llama_cpp.LLAMA_ROPE_SCALING_UNSPECIFIED)
+    rope_freq_base: float = Field(default=0.0, description="RoPE base frequency")
     rope_freq_scale: float = Field(
         default=0.0, description="RoPE frequency scaling factor"
     )
-    yarn_ext_factor: float = Field(
-        default=-1.0
-    )
-    yarn_attn_factor: float = Field(
-        default=1.0
-    )
-    yarn_beta_fast: float = Field(
-        default=32.0
-    )
-    yarn_beta_slow: float = Field(
-        default=1.0
-    )
-    yarn_orig_ctx: int = Field(
-        default=0
-    )
+    yarn_ext_factor: float = Field(default=-1.0)
+    yarn_attn_factor: float = Field(default=1.0)
+    yarn_beta_fast: float = Field(default=32.0)
+    yarn_beta_slow: float = Field(default=1.0)
+    yarn_orig_ctx: int = Field(default=0)
     mul_mat_q: bool = Field(
         default=True, description="if true, use experimental mul_mat_q kernels"
     )
-    f16_kv: bool = Field(default=True, description="Whether to use f16 key/value.")
     logits_all: bool = Field(default=True, description="Whether to return logits.")
     embedding: bool = Field(default=True, description="Whether to use embeddings.")
+    offload_kqv: bool = Field(
+        default=False, description="Whether to offload kqv to the GPU."
+    )
     # Sampling Params
     last_n_tokens_size: int = Field(
         default=64,
@@ -97,7 +87,7 @@ class ModelSettings(BaseSettings):
     # LoRA Params
     lora_base: Optional[str] = Field(
         default=None,
-        description="Optional path to base model, useful if using a quantized base model and you want to apply LoRA to an f16 model."
+        description="Optional path to base model, useful if using a quantized base model and you want to apply LoRA to an f16 model.",
     )
     lora_path: Optional[str] = Field(
         default=None,
@@ -135,8 +125,9 @@ class ModelSettings(BaseSettings):
         default=True, description="Whether to print debug information."
     )
 
+
 class ServerSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_file='.env', extra='ignore')
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     host: str = Field(default="localhost", description="Listen address")
     port: int = Field(default=8000, description="Listen port")
     interrupt_requests: bool = Field(
@@ -144,18 +135,31 @@ class ServerSettings(BaseSettings):
         description="Whether to interrupt requests when a new request is received.",
     )
     config: Optional[str] = Field(default=None, description="Path to config file")
+    ssl_keyfile: Optional[str] = Field(
+        default=None, description="SSL key file for HTTPS"
+    )
+    ssl_certfile: Optional[str] = Field(
+        default=None, description="SSL certificate file for HTTPS"
+    )
+    api_key: Optional[str] = Field(
+        default=None,
+        description="API key for authentication. If set all requests need to be authenticated.",
+    )
+
 
 class Settings(ModelSettings):
     models: Optional[List[ModelSettings]] = Field(
-        default = [],
-        description="Model configs, overwrites default config"
+        default=[], description="Model configs, overwrites default config"
     )
 
+
 SETTINGS: Optional[ServerSettings] = None
+
 
 def set_settings(settings: ServerSettings):
     global SETTINGS
     SETTINGS = settings
+
 
 def get_settings():
     yield SETTINGS
