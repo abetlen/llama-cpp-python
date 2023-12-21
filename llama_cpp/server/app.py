@@ -12,11 +12,12 @@ import llama_cpp
 import anyio
 from anyio.streams.memory import MemoryObjectSendStream
 from starlette.concurrency import run_in_threadpool, iterate_in_threadpool
-from fastapi import Depends, FastAPI, APIRouter, Request, Response
+from fastapi import Depends, FastAPI, APIRouter, Request, Response, HTTPException, status
 from fastapi.middleware import Middleware
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
+from fastapi.security import HTTPBearer
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 from starlette_context import plugins
@@ -175,6 +176,9 @@ class RouteErrorHandler(APIRoute):
                 elapsed_time_ms = int((time.perf_counter() - start_sec) * 1000)
                 response.headers["openai-processing-ms"] = f"{elapsed_time_ms}"
                 return response
+            except HTTPException as unauthorized:
+                # api key check failed
+                raise unauthorized
             except Exception as exc:
                 json_body = await request.json()
                 try:
@@ -420,6 +424,27 @@ def _logit_bias_tokens_to_input_ids(
     return to_bias
 
 
+# Setup Bearer authentication scheme
+bearer_scheme = HTTPBearer(auto_error=False)
+
+
+async def authenticate(settings: Settings = Depends(get_settings), authorization: Optional[str] = Depends(bearer_scheme)):
+    # Skip API key check if it's not set in settings
+    if settings.api_key is None:
+        return True
+
+    # check bearer credentials against the api_key
+    if authorization and authorization.credentials == settings.api_key:
+        # api key is valid
+        return authorization.credentials
+
+    # raise http error 401
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid API key",
+    )
+
+
 @router.post(
     "/v1/completions",
     summary="Completion"
@@ -428,7 +453,8 @@ def _logit_bias_tokens_to_input_ids(
 async def create_completion(
     request: Request,
     body: CreateCompletionRequest,
-    llama: Llama = Depends(get_llama),
+    llama: llama_cpp.Llama = Depends(get_llama),
+    authenticated: str = Depends(authenticate),
 ) -> llama_cpp.Completion:
     if isinstance(body.prompt, list):
         assert len(body.prompt) <= 1
@@ -502,7 +528,9 @@ class CreateEmbeddingRequest(BaseModel):
     summary="Embedding"
 )
 async def create_embedding(
-    request: CreateEmbeddingRequest, llama: Llama = Depends(get_llama)
+    request: CreateEmbeddingRequest,
+    llama: llama_cpp.Llama = Depends(get_llama),
+    authenticated: str = Depends(authenticate),
 ):
     return await run_in_threadpool(
         llama(request.model).create_embedding, **request.model_dump(exclude={"user"})
@@ -594,8 +622,9 @@ class CreateChatCompletionRequest(BaseModel):
 async def create_chat_completion(
     request: Request,
     body: CreateChatCompletionRequest,
-    llama: Llama = Depends(get_llama),
-    #settings: Settings = Depends(get_settings),
+    llama: llama_cpp.Llama = Depends(get_llama),
+    settings: Settings = Depends(get_settings),
+    authenticated: str = Depends(authenticate),
 ) -> llama_cpp.ChatCompletion:
     exclude = {
         "n",
@@ -656,7 +685,8 @@ class ModelList(TypedDict):
 
 @router.get("/v1/models", summary="Models")
 async def get_models(
-    llama: Llama = Depends(get_llama),
+    settings: Settings = Depends(get_settings),
+    authenticated: str = Depends(authenticate),
 ) -> ModelList:
     return {
         "object": "list",
