@@ -217,7 +217,9 @@ class RouteErrorHandler(APIRoute):
 
 router = APIRouter(route_class=RouteErrorHandler)
 
-def create_app(settings: Settings):
+def create_app(settings: Settings | None = None):
+    if settings is None:
+        settings = Settings()
     middleware = [
         Middleware(RawContextMiddleware, plugins=(plugins.RequestIdPlugin(),))
     ]
