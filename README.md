@@ -207,7 +207,8 @@ The gguf-converted files for this model can be found here: [functionary-7b-v1](h
       messages = [
         {
           "role": "system",
-          "content": "A chat between a curious user and an artificial intelligence assitant. The assistant gives helpful, detailed, and polite answers to the user's questions. The assistant callse functions with appropriate input when necessary"
+          "content": "A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. The assistant calls functions with appropriate input when necessary"
+          
         },
         {
           "role": "user",
@@ -219,7 +220,7 @@ The gguf-converted files for this model can be found here: [functionary-7b-v1](h
         "function": {
           "name": "UserDetail",
           "parameters": {
-            "type": "object"
+            "type": "object",
             "title": "UserDetail",
             "properties": {
               "name": {
@@ -265,7 +266,8 @@ Then you'll need to use a custom chat handler to load the clip model and process
 >>> llm = Llama(
   model_path="./path/to/llava/llama-model.gguf",
   chat_handler=chat_handler,
-  n_ctx=2048 # n_ctx should be increased to accomodate the image embedding
+  n_ctx=2048, # n_ctx should be increased to accomodate the image embedding
+  logits_all=True,# needed to make llava work
 )
 >>> llm.create_chat_completion(
     messages = [

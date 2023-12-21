@@ -98,13 +98,16 @@ LLAMA_DEFAULT_SEED = 0xFFFFFFFF
 # define LLAMA_MAX_RNG_STATE (64*1024)
 LLAMA_MAX_RNG_STATE = 64 * 1024
 
+#define LLAMA_FILE_MAGIC_GGLA 0x67676c61u // 'ggla'
+LLAMA_FILE_MAGIC_GGLA = 0x67676C61
+
 # define LLAMA_FILE_MAGIC_GGSN 0x6767736eu // 'ggsn'
 LLAMA_FILE_MAGIC_GGSN = 0x6767736E
 
 # define LLAMA_SESSION_MAGIC   LLAMA_FILE_MAGIC_GGSN
 LLAMA_SESSION_MAGIC = LLAMA_FILE_MAGIC_GGSN
-# define LLAMA_SESSION_VERSION 2
-LLAMA_SESSION_VERSION = 2
+# define LLAMA_SESSION_VERSION 3
+LLAMA_SESSION_VERSION = 3
 
 
 # struct llama_model;
@@ -309,6 +312,35 @@ class llama_batch(Structure):
         ("all_seq_id", llama_seq_id),
     ]
 
+# enum llama_model_kv_override_type {
+#     LLAMA_KV_OVERRIDE_INT,
+#     LLAMA_KV_OVERRIDE_FLOAT,
+#     LLAMA_KV_OVERRIDE_BOOL,
+# };
+class llama_model_kv_override_type(Structure):
+    _fields_ = [
+        ("LLAMA_KV_OVERRIDE_INT", c_int),
+        ("LLAMA_KV_OVERRIDE_FLOAT", c_int),
+        ("LLAMA_KV_OVERRIDE_BOOL", c_int),
+    ]
+
+# struct llama_model_kv_override {
+#     char key[128];
+#     enum llama_model_kv_override_type tag;
+#     union {
+#         int64_t int_value;
+#         double float_value;
+#         bool bool_value;
+#     };
+# };
+class llama_model_kv_override(Structure):
+    _fields_ = [
+        ("key", ctypes.c_char * 128),
+        ("tag", llama_model_kv_override_type),
+        ("int_value", ctypes.c_int64),
+        ("float_value", c_double),
+        ("bool_value", c_bool),
+    ]
 
 # struct llama_model_params {
 #     int32_t n_gpu_layers; // number of layers to store in VRAM
@@ -320,6 +352,8 @@ class llama_batch(Structure):
 #     // context pointer passed to the progress callback
 #     void * progress_callback_user_data;
 
+#     // override key-value pairs of the model meta data
+#     const struct llama_model_kv_override * kv_overrides;
 
 #     // Keep the booleans together to avoid misalignment during copy-by-value.
 #     bool vocab_only; // only load the vocabulary, no weights
@@ -335,6 +369,7 @@ class llama_model_params(Structure):
         tensor_split (ctypes.Array[ctypes.c_float]): how to split layers across multiple GPUs (size: LLAMA_MAX_DEVICES)
         progress_callback (llama_progress_callback): called with a progress value between 0 and 1, pass NULL to disable
         progress_callback_user_data (ctypes.c_void_p): context pointer passed to the progress callback
+        kv_overrides (ctypes.Array[llama_model_kv_override]): override key-value pairs of the model meta data
         vocab_only (bool): only load the vocabulary, no weights
         use_mmap (bool): use mmap if possible
         use_mlock (bool): force system to keep model in RAM"""
@@ -344,6 +379,7 @@ class llama_model_params(Structure):
         ("tensor_split", c_float_p),
         ("progress_callback", llama_progress_callback),
         ("progress_callback_user_data", c_void_p),
+        ("kv_overrides", POINTER(llama_model_kv_override)),
         ("vocab_only", c_bool),
         ("use_mmap", c_bool),
         ("use_mlock", c_bool),
@@ -367,12 +403,14 @@ class llama_model_params(Structure):
 #     float    yarn_beta_slow;   // YaRN high correction dim
 #     uint32_t yarn_orig_ctx;    // YaRN original context size
 
+#     enum ggml_type type_k; // data type for K cache
+#     enum ggml_type type_v; // data type for V cache
 
 #     // Keep the booleans together to avoid misalignment during copy-by-value.
-#     bool mul_mat_q;  // if true, use experimental mul_mat_q kernels (DEPRECATED - always true)
-#     bool f16_kv;     // use fp16 for KV cache, fp32 otherwise
-#     bool logits_all; // the llama_eval() call computes all logits, not just the last one
-#     bool embedding;  // embedding mode only
+#     bool mul_mat_q;   // if true, use experimental mul_mat_q kernels (DEPRECATED - always true)
+#     bool logits_all;  // the llama_eval() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
+#     bool embedding;   // embedding mode only
+#     bool offload_kqv; // whether to offload the KQV ops (including the KV cache) to GPU
 # };
 class llama_context_params(Structure):
     """Parameters for llama_context
@@ -391,10 +429,12 @@ class llama_context_params(Structure):
         yarn_beta_fast (float): YaRN low correction dim
         yarn_beta_slow (float): YaRN high correction dim
         yarn_orig_ctx (int): YaRN original context size
+        type_k (int): data type for K cache
+        type_v (int): data type for V cache
         mul_mat_q (bool): if true, use experimental mul_mat_q kernels (DEPRECATED - always true)
-        f16_kv (bool): use fp16 for KV cache, fp32 otherwise
-        logits_all (bool): the llama_eval() call computes all logits, not just the last one
-        embedding (bool): embedding mode only"""
+        logits_all (bool): the llama_eval() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
+        embedding (bool): embedding mode only
+        offload_kqv (bool): whether to offload the KQV ops (including the KV cache) to GPU"""
     _fields_ = [
         ("seed", c_uint32),
         ("n_ctx", c_uint32),
@@ -409,10 +449,12 @@ class llama_context_params(Structure):
         ("yarn_beta_fast", c_float),
         ("yarn_beta_slow", c_float),
         ("yarn_orig_ctx", c_uint32),
+        ("type_k", c_int),
+        ("type_v", c_int),
         ("mul_mat_q", c_bool),
-        ("f16_kv", c_bool),
         ("logits_all", c_bool),
         ("embedding", c_bool),
+        ("offload_kqv", c_bool),
     ]
 
 
@@ -999,6 +1041,9 @@ class llama_kv_cache_view(Structure):
     ]
 
 
+llama_kv_cache_view_p = POINTER(llama_kv_cache_view)
+
+
 # // Create an empty KV cache view. (use only for debugging purposes)
 # LLAMA_API struct llama_kv_cache_view llama_kv_cache_view_init(const struct llama_context * ctx, int32_t n_max_seq);
 def llama_kv_cache_view_init(
@@ -1014,23 +1059,23 @@ _lib.llama_kv_cache_view_init.restype = llama_kv_cache_view
 
 # // Free a KV cache view. (use only for debugging purposes)
 # LLAMA_API void llama_kv_cache_view_free(struct llama_kv_cache_view * view);
-def llama_kv_cache_view_free(view: llama_kv_cache_view):
+def llama_kv_cache_view_free(view: "ctypes.pointer[llama_kv_cache_view]"): # type: ignore
     """Free a KV cache view. (use only for debugging purposes)"""
     return _lib.llama_kv_cache_view_free(view)
 
 
-_lib.llama_kv_cache_view_free.argtypes = [llama_kv_cache_view]
+_lib.llama_kv_cache_view_free.argtypes = [llama_kv_cache_view_p]
 _lib.llama_kv_cache_view_free.restype = None
 
 
 # // Update the KV cache view structure with the current state of the KV cache. (use only for debugging purposes)
 # LLAMA_API void llama_kv_cache_view_update(const struct llama_context * ctx, struct llama_kv_cache_view * view);
-def llama_kv_cache_view_update(ctx: llama_context_p, view: llama_kv_cache_view):
+def llama_kv_cache_view_update(ctx: llama_context_p, view: "ctypes.pointer[llama_kv_cache_view]"): # type: ignore
     """Update the KV cache view structure with the current state of the KV cache. (use only for debugging purposes)"""
     return _lib.llama_kv_cache_view_update(ctx, view)
 
 
-_lib.llama_kv_cache_view_update.argtypes = [llama_context_p, llama_kv_cache_view]
+_lib.llama_kv_cache_view_update.argtypes = [llama_context_p, llama_kv_cache_view_p]
 _lib.llama_kv_cache_view_update.restype = None
 
 
