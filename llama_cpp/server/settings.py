@@ -149,7 +149,7 @@ class ServerSettings(BaseSettings):
     )
 
 
-class Settings(ModelSettings):
+class Settings(ServerSettings, ModelSettings):
     models: Optional[List[ModelSettings]] = Field(
         default=[], description="Model configs, overwrites default config"
     )

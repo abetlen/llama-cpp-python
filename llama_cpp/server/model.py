@@ -37,7 +37,7 @@ class LlamaProxy:
             if filename.endswith(FILE_EXT):
                 alias = model_alias(filename)
                 if alias in self._models: continue
-                exclude={'model', 'model_alias', 'models', 'host', 'port', 'interrupt_requests', 'config'}
+                exclude={'model', 'model_alias', 'models', 'host', 'port', 'interrupt_requests', 'config', 'ssl_keyfile', 'ssl_certfile', 'api_key'}
                 default_settings = settings.model_dump(exclude=exclude)
                 self._models[alias] = ModelSettings(model=os.path.join(model_root, filename), 
                                                     model_alias=alias, **default_settings)
@@ -114,6 +114,7 @@ class LlamaProxy:
             # Misc
             verbose=settings.verbose,
         )
+        self._model.alias = model_alias
         if settings.cache:
             if settings.cache_type == "disk":
                 if settings.verbose:

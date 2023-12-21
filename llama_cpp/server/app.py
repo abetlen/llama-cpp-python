@@ -220,6 +220,7 @@ router = APIRouter(route_class=RouteErrorHandler)
 def create_app(settings: Settings | None = None):
     if settings is None:
         settings = Settings()
+    set_settings(settings)
     middleware = [
         Middleware(RawContextMiddleware, plugins=(plugins.RequestIdPlugin(),))
     ]
