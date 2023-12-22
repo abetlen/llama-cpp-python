@@ -72,7 +72,7 @@ class ErrorResponseFormatters:
         return 400, ErrorResponse(
             message=message.format(
                 context_window,
-                completion_tokens + prompt_tokens,
+                (completion_tokens or 0) + prompt_tokens,
                 prompt_tokens,
                 completion_tokens,
             ), # type: ignore
