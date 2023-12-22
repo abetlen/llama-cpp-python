@@ -196,8 +196,14 @@ async def authenticate(
     )
 
 
-@router.post("/v1/completions", summary="Completion", dependencies=[Depends(authenticate)])
-@router.post("/v1/engines/copilot-codex/completions", include_in_schema=False, dependencies=[Depends(authenticate)])
+@router.post(
+    "/v1/completions", summary="Completion", dependencies=[Depends(authenticate)]
+)
+@router.post(
+    "/v1/engines/copilot-codex/completions",
+    include_in_schema=False,
+    dependencies=[Depends(authenticate)],
+)
 async def create_completion(
     request: Request,
     body: CreateCompletionRequest,
@@ -256,17 +262,22 @@ async def create_completion(
         return iterator_or_completion
 
 
-@router.post("/v1/embeddings", summary="Embedding", dependencies=[Depends(authenticate)])
+@router.post(
+    "/v1/embeddings", summary="Embedding", dependencies=[Depends(authenticate)]
+)
 async def create_embedding(
     request: CreateEmbeddingRequest,
     llama_proxy: LlamaProxy = Depends(get_llama_proxy),
 ):
     return await run_in_threadpool(
-        llama_proxy(request.model).create_embedding, **request.model_dump(exclude={"user"})
+        llama_proxy(request.model).create_embedding,
+        **request.model_dump(exclude={"user"}),
     )
 
 
-@router.post("/v1/chat/completions", summary="Chat", dependencies=[Depends(authenticate)])
+@router.post(
+    "/v1/chat/completions", summary="Chat", dependencies=[Depends(authenticate)]
+)
 async def create_chat_completion(
     request: Request,
     body: CreateChatCompletionRequest,

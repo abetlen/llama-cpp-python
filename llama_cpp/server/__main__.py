@@ -49,10 +49,10 @@ def main():
         type=str,
         help="Path to a config file to load.",
     )
+    server_settings: ServerSettings | None = None
+    model_settings: list[ModelSettings] = []
+    args = parser.parse_args()
     try:
-        args = parser.parse_args()
-        server_settings: ServerSettings | None = None
-        model_settings: list[ModelSettings] = []
         # Load server settings from config_file if provided
         config_file = os.environ.get("CONFIG_FILE", args.config_file)
         if config_file:
@@ -65,23 +65,23 @@ def main():
         else:
             server_settings = parse_model_from_args(ServerSettings, args)
             model_settings = [parse_model_from_args(ModelSettings, args)]
-        assert server_settings is not None
-        assert model_settings is not None
-        app = create_app(
-            server_settings=server_settings,
-            model_settings=model_settings,
-        )
-        uvicorn.run(
-            app,
-            host=os.getenv("HOST", server_settings.host),
-            port=int(os.getenv("PORT", server_settings.port)),
-            ssl_keyfile=server_settings.ssl_keyfile,
-            ssl_certfile=server_settings.ssl_certfile,
-        )
     except Exception as e:
         print(e, file=sys.stderr)
         parser.print_help()
         sys.exit(1)
+    assert server_settings is not None
+    assert model_settings is not None
+    app = create_app(
+        server_settings=server_settings,
+        model_settings=model_settings,
+    )
+    uvicorn.run(
+        app,
+        host=os.getenv("HOST", server_settings.host),
+        port=int(os.getenv("PORT", server_settings.port)),
+        ssl_keyfile=server_settings.ssl_keyfile,
+        ssl_certfile=server_settings.ssl_certfile,
+    )
 
 
 if __name__ == "__main__":
