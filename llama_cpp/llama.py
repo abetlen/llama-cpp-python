@@ -851,7 +851,7 @@ class Llama:
         )  # 0x7FFFFFFF is INT32 max, will be auto set to all layers
         self.model_params.main_gpu = main_gpu
         self.tensor_split = tensor_split
-        self._p_tensor_split = None
+        self._c_tensor_split = None
         if self.tensor_split is not None:
             if len(self.tensor_split) > llama_cpp.LLAMA_MAX_DEVICES:
                 raise ValueError(
@@ -1578,11 +1578,13 @@ class Llama:
                             "utf-8", errors="ignore"
                         )
                         text_offset = len(prompt) + len(
-                            self.detokenize(completion_tokens[:returned_tokens])
+                            self.detokenize(completion_tokens[:returned_tokens]).decode(
+                                "utf-8", errors="ignore"
+                            )
                         )
                         token_offset = len(prompt_tokens) + returned_tokens
                         logits = self._scores[token_offset - 1, :]
-                        current_logprobs = Llama.logits_to_logprobs(logits)
+                        current_logprobs = Llama.logits_to_logprobs(logits).tolist()
                         sorted_logprobs = list(
                             sorted(
                                 zip(current_logprobs, range(len(current_logprobs))),
@@ -1701,7 +1703,7 @@ class Llama:
                     )
                     token_offset = len(prompt_tokens) + returned_tokens - 1
                     logits = self._scores[token_offset, :]
-                    current_logprobs = Llama.logits_to_logprobs(logits)
+                    current_logprobs = Llama.logits_to_logprobs(logits).tolist()
                     sorted_logprobs = list(
                         sorted(
                             zip(current_logprobs, range(len(current_logprobs))),
@@ -1816,13 +1818,19 @@ class Llama:
             ]
             all_logprobs = Llama.logits_to_logprobs(self._scores)[token_offset:]
             # TODO: may be able to change this loop to use np.take_along_dim
-            for token, token_str, logprobs_token in zip(
-                all_tokens, all_token_strs, all_logprobs
+            for idx, (token, token_str, logprobs_token) in enumerate(
+                zip(all_tokens, all_token_strs, all_logprobs)
             ):
                 if token == self.token_bos():
                     continue
-                text_offsets.append(text_offset)
-                text_offset += len(token_str)
+                text_offsets.append(
+                    text_offset
+                    + len(
+                        self.detokenize(all_tokens[:idx]).decode(
+                            "utf-8", errors="ignore"
+                        )
+                    )
+                )
                 tokens.append(token_str)
                 sorted_logprobs = list(
                     sorted(
@@ -1936,7 +1944,7 @@ class Llama:
         completion_or_chunks = self._create_completion(
             prompt=prompt,
             suffix=suffix,
-            max_tokens=max_tokens,
+            max_tokens=-1 if max_tokens is None else max_tokens,
             temperature=temperature,
             top_p=top_p,
             min_p=min_p,
@@ -1970,7 +1978,7 @@ class Llama:
         self,
         prompt: str,
         suffix: Optional[str] = None,
-        max_tokens: int = 128,
+        max_tokens: Optional[int] = 16,
         temperature: float = 0.8,
         top_p: float = 0.95,
         min_p: float = 0.05,
