@@ -19,7 +19,9 @@ This package provides:
     - [Function Calling support](https://llama-cpp-python.readthedocs.io/en/latest/server/#function-calling)
     - [Vision API support](https://llama-cpp-python.readthedocs.io/en/latest/server/#multimodal-models)
     - [Multiple Models](https://llama-cpp-python.readthedocs.io/en/latest/server/#configuration-and-multi-model-support)
+
 Documentation is available at [https://llama-cpp-python.readthedocs.io/en/latest](https://llama-cpp-python.readthedocs.io/en/latest).
+
 
 
 
