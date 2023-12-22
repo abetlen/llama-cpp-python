@@ -1951,7 +1951,7 @@ class Llama:
         self,
         prompt: str,
         suffix: Optional[str] = None,
-        max_tokens: Optional[Union[int, None]] = 128,
+        max_tokens: Optional[int] = 16,
         temperature: float = 0.8,
         top_p: float = 0.95,
         min_p: float = 0.05,
