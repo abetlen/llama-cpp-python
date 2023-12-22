@@ -213,7 +213,11 @@ async def create_completion(
         assert len(body.prompt) <= 1
         body.prompt = body.prompt[0] if len(body.prompt) > 0 else ""
 
-    llama = llama_proxy(body.model)
+    llama = llama_proxy(
+        body.model
+        if request.url.path != "/v1/engines/copilot-codex/completions"
+        else "copilot-codex"
+    )
 
     exclude = {
         "n",
