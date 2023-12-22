@@ -317,7 +317,7 @@ async def create_chat_completion(
         return iterator_or_completion
 
 
-@router.get("/v1/models", summary="Models", dependencies=[Depends(authenticate)]])
+@router.get("/v1/models", summary="Models", dependencies=[Depends(authenticate)])
 async def get_models(
     llama_proxy: LlamaProxy = Depends(get_llama_proxy),
 ) -> ModelList:
