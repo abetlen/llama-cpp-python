@@ -1789,13 +1789,12 @@ class Llama:
             ]
             all_logprobs = Llama.logits_to_logprobs(self._scores)[token_offset:]
             # TODO: may be able to change this loop to use np.take_along_dim
-            for token, token_str, logprobs_token in zip(
+            for idx, (token, token_str, logprobs_token) in enumerate(zip(
                 all_tokens, all_token_strs, all_logprobs
-            ):
+            )):
                 if token == self.token_bos():
                     continue
-                text_offsets.append(text_offset)
-                text_offset += len(token_str)
+                text_offsets.append(text_offset + len(self.detokenize(all_tokens[:idx])))
                 tokens.append(token_str)
                 sorted_logprobs = list(
                     sorted(
