@@ -20,16 +20,22 @@ jobs:
 
       # Used to host cibuildwheel
       - uses: actions/setup-python@v3
+        with:
+          python-version: "3.8"
 
       - name: Install cibuildwheel
         run: python -m pip install cibuildwheel==2.12.1
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip pytest cmake scikit-build setuptools
+          python -m pip install --upgrade pip
+          python -m pip install -e .[all]
 
       - name: Build wheels
         run: python -m cibuildwheel --output-dir wheelhouse
+        env:
+          # disable repair
+          CIBW_REPAIR_WHEEL_COMMAND: ""
 
       - uses: actions/upload-artifact@v3
         with:
@@ -44,12 +50,15 @@ jobs:
         with:
           submodules: "true"
       - uses: actions/setup-python@v3
+        with:
+          python-version: "3.8"
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip pytest cmake scikit-build setuptools
+          python -m pip install --upgrade pip build
+          python -m pip install -e .[all]
       - name: Build source distribution
         run: |
-          python setup.py sdist
+          python -m build --sdist
       - uses: actions/upload-artifact@v3
         with:
           path: ./dist/*.tar.gz
