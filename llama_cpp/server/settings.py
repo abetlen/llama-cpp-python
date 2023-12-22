@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import multiprocessing
+
 from typing import Optional, List, Literal
 from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings
+
 import llama_cpp
 
 # Disable warning for model and model_alias settings
@@ -129,14 +131,12 @@ class ModelSettings(BaseSettings):
 
 
 class ServerSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     host: str = Field(default="localhost", description="Listen address")
     port: int = Field(default=8000, description="Listen port")
     interrupt_requests: bool = Field(
         default=True,
         description="Whether to interrupt requests when a new request is received.",
     )
-    config: Optional[str] = Field(default=None, description="Path to config file")
     ssl_keyfile: Optional[str] = Field(
         default=None, description="SSL key file for HTTPS"
     )
@@ -150,18 +150,16 @@ class ServerSettings(BaseSettings):
 
 
 class Settings(ServerSettings, ModelSettings):
-    models: Optional[List[ModelSettings]] = Field(
-        default=[], description="Model configs, overwrites default config"
+    pass
+
+
+class CommandLineSettings(Settings):
+    config_file: Optional[str] = Field(
+        default=None, description="Path to a config file to load."
     )
 
 
-SETTINGS: Optional[ServerSettings] = None
-
-
-def set_settings(settings: ServerSettings):
-    global SETTINGS
-    SETTINGS = settings
-
-
-def get_settings():
-    yield SETTINGS
+class ConfigFileSettings(ServerSettings):
+    models: List[ModelSettings] = Field(
+        default=[], description="Model configs, overwrites default config"
+    )

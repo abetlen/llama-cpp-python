@@ -26,113 +26,83 @@ from __future__ import annotations
 import os
 import sys
 import argparse
-from typing import List, Literal, Union
 
 import uvicorn
 
 from llama_cpp.server.app import create_app
-from llama_cpp.server.settings import Settings, ServerSettings, set_settings
-
-
-def get_base_type(annotation):
-    if getattr(annotation, "__origin__", None) is Literal:
-        return type(annotation.__args__[0])
-    elif getattr(annotation, "__origin__", None) is Union:
-        non_optional_args = [
-            arg for arg in annotation.__args__ if arg is not type(None)
-        ]
-        if non_optional_args:
-            return get_base_type(non_optional_args[0])
-    elif (
-        getattr(annotation, "__origin__", None) is list
-        or getattr(annotation, "__origin__", None) is List
-    ):
-        return get_base_type(annotation.__args__[0])
-    else:
-        return annotation
-
-
-def contains_list_type(annotation) -> bool:
-    origin = getattr(annotation, "__origin__", None)
-
-    if origin is list or origin is List:
-        return True
-    elif origin in (Literal, Union):
-        return any(contains_list_type(arg) for arg in annotation.__args__)
-    else:
-        return False
-
-
-def parse_bool_arg(arg):
-    if isinstance(arg, bytes):
-        arg = arg.decode("utf-8")
-
-    true_values = {"1", "on", "t", "true", "y", "yes"}
-    false_values = {"0", "off", "f", "false", "n", "no"}
-
-    arg_str = str(arg).lower().strip()
-
-    if arg_str in true_values:
-        return True
-    elif arg_str in false_values:
-        return False
-    else:
-        raise ValueError(f"Invalid boolean argument: {arg}")
+from llama_cpp.server.settings import (
+    Server,
+    ServerSettings,
+    ModelSettings,
+    ConfigFileSettings,
+    set_server_settings,
+)
+from llama_cpp.server.cli import add_args_from_model, parse_model_from_args
 
 
 def main():
     description = "🦙 Llama.cpp python server. Host your own LLMs!🚀"
     parser = argparse.ArgumentParser(description=description)
-    for name, field in (ServerSettings.model_fields | Settings.model_fields).items():
-        description = field.description
-        if field.default and description and not field.is_required():
-            description += f" (default: {field.default})"
-        base_type = (
-            get_base_type(field.annotation) if field.annotation is not None else str
-        )
-        list_type = contains_list_type(field.annotation)
-        if base_type is not bool:
-            parser.add_argument(
-                f"--{name}",
-                dest=name,
-                nargs="*" if list_type else None,
-                type=base_type,
-                help=description,
-            )
-        if base_type is bool:
-            parser.add_argument(
-                f"--{name}",
-                dest=name,
-                type=parse_bool_arg,
-                help=f"{description}",
-            )
 
+    add_args_from_model(parser, ModelSettings)
+    add_args_from_model(parser, ServerSettings)
+    parser.add_argument(
+        "--config-file",
+        type=str,
+        help="Path to a config file to load.",
+    )
     try:
         args = parser.parse_args()
-        server_settings = ServerSettings(
-            **{k: v for k, v in vars(args).items() if v is not None}
-        )
-        set_settings(server_settings)
-        if server_settings.config and os.path.exists(server_settings.config):
-            with open(server_settings.config, "rb") as f:
-                llama_settings = Settings.model_validate_json(f.read())
+        server_settings: ServerSettings | None = None
+        model_settings: list[ModelSettings] = []
+        # Load server settings from config_file if provided
+        config_file = os.environ.get("CONFIG_FILE", args.config_file)
+        if config_file:
+            if not os.path.exists(config_file):
+                raise ValueError(f"Config file {config_file} not found!")
+            with open(config_file, "rb") as f:
+                config_file_settings = ConfigFileSettings.model_validate_json(f.read())
+                server_settings = ServerSettings(
+                    **{
+                        k: v
+                        for k, v in config_file_settings.model_dump().items()
+                        if k in ServerSettings.model_fields
+                    }
+                )
+                model_settings = config_file_settings.models
         else:
-            llama_settings = Settings(
-                **{k: v for k, v in vars(args).items() if v is not None}
+            server_settings = ServerSettings(
+                **{
+                    k: v
+                    for k, v in vars(args).items()
+                    if k in ServerSettings.model_fields
+                }
             )
-        app = create_app(settings=llama_settings)
+            model_settings = [
+                ModelSettings(
+                    **{
+                        k: v
+                        for k, v in vars(args).items()
+                        if k in ModelSettings.model_fields
+                    }
+                )
+            ]
+        app = create_app(
+            settings=Server(
+                **server_settings.model_dump(), **model_settings[0].model_dump()
+            )
+        )
+        uvicorn.run(
+            app,
+            host=os.getenv("HOST", server_settings.host),
+            port=int(os.getenv("PORT", server_settings.port)),
+            ssl_keyfile=server_settings.ssl_keyfile,
+            ssl_certfile=server_settings.ssl_certfile,
+        )
     except Exception as e:
         print(e, file=sys.stderr)
         parser.print_help()
         sys.exit(1)
-
-    uvicorn.run(
-        app,
-        host=os.getenv("HOST", server_settings.host),
-        port=int(os.getenv("PORT", server_settings.port)),
-        ssl_keyfile=server_settings.ssl_keyfile,
-        ssl_certfile=server_settings.ssl_certfile,
-    )
 
 
 if __name__ == "__main__":
