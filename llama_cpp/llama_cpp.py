@@ -9,6 +9,7 @@ from ctypes import (
     c_int32,
     c_uint8,
     c_uint32,
+    c_int64,
     c_size_t,
     c_float,
     c_double,
@@ -16,6 +17,7 @@ from ctypes import (
     POINTER,
     _Pointer,  # type: ignore
     Structure,
+    Union as CtypesUnion,
     Array,
 )
 import pathlib
@@ -317,12 +319,9 @@ class llama_batch(Structure):
 #     LLAMA_KV_OVERRIDE_FLOAT,
 #     LLAMA_KV_OVERRIDE_BOOL,
 # };
-class llama_model_kv_override_type(Structure):
-    _fields_ = [
-        ("LLAMA_KV_OVERRIDE_INT", c_int),
-        ("LLAMA_KV_OVERRIDE_FLOAT", c_int),
-        ("LLAMA_KV_OVERRIDE_BOOL", c_int),
-    ]
+LLAMA_KV_OVERRIDE_INT = 0
+LLAMA_KV_OVERRIDE_FLOAT = 1
+LLAMA_KV_OVERRIDE_BOOL = 2
 
 # struct llama_model_kv_override {
 #     char key[128];
@@ -333,13 +332,18 @@ class llama_model_kv_override_type(Structure):
 #         bool bool_value;
 #     };
 # };
+class llama_model_kv_override_value(CtypesUnion):
+    _fields_ = [
+        ("int_value", c_int64),
+        ("float_value", c_double),
+        ("bool_value", c_bool),
+    ]
+
 class llama_model_kv_override(Structure):
     _fields_ = [
         ("key", ctypes.c_char * 128),
-        ("tag", llama_model_kv_override_type),
-        ("int_value", ctypes.c_int64),
-        ("float_value", c_double),
-        ("bool_value", c_bool),
+        ("tag", c_int),
+        ("value", llama_model_kv_override_value),
     ]
 
 # struct llama_model_params {
