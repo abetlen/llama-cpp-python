@@ -155,12 +155,6 @@ class Settings(ServerSettings, ModelSettings):
     pass
 
 
-class CommandLineSettings(Settings):
-    config_file: Optional[str] = Field(
-        default=None, description="Path to a config file to load."
-    )
-
-
 class ConfigFileSettings(ServerSettings):
     models: List[ModelSettings] = Field(
         default=[], description="Model configs, overwrites default config"
