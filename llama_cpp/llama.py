@@ -1917,7 +1917,7 @@ class Llama:
         completion_or_chunks = self._create_completion(
             prompt=prompt,
             suffix=suffix,
-            max_tokens=max_tokens,
+            max_tokens=-1 if max_tokens is None else max_tokens,
             temperature=temperature,
             top_p=top_p,
             min_p=min_p,
@@ -1951,7 +1951,7 @@ class Llama:
         self,
         prompt: str,
         suffix: Optional[str] = None,
-        max_tokens: int = 128,
+        max_tokens: Optional[int] = 16,
         temperature: float = 0.8,
         top_p: float = 0.95,
         min_p: float = 0.05,
