@@ -733,8 +733,14 @@ def llama_n_ctx(ctx: llama_context_p) -> int:
 
 
 _lib.llama_n_ctx.argtypes = [llama_context_p]
-_lib.llama_n_ctx.restype = c_int
+_lib.llama_n_ctx.restype = c_uint32
 
+# LLAMA_API uint32_t llama_n_batch    (const struct llama_context * ctx);
+def llama_n_batch(ctx: llama_context_p) -> int:
+    return _lib.llama_n_batch(ctx)
+
+_lib.llama_n_batch.argtypes = [llama_context_p]
+_lib.llama_n_batch.restype = c_uint32
 
 # LLAMA_API enum llama_vocab_type llama_vocab_type(const struct llama_model * model);
 def llama_vocab_type(model: llama_model_p) -> int:
