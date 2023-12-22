@@ -68,7 +68,7 @@ def main():
         assert server_settings is not None
         assert model_settings is not None
         app = create_app(
-            server_settings_or_none=server_settings,
+            server_settings=server_settings,
             model_settings=model_settings,
         )
         uvicorn.run(
