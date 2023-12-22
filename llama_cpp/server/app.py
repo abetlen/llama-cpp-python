@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import json
 
 from threading import Lock
@@ -30,6 +31,7 @@ from llama_cpp.server.model import (
     LlamaProxy,
 )
 from llama_cpp.server.settings import (
+    ConfigFileSettings,
     Settings,
     ModelSettings,
     ServerSettings,
@@ -92,6 +94,21 @@ def create_app(
     server_settings: ServerSettings | None = None,
     model_settings: List[ModelSettings] | None = None,
 ):
+    config_file = os.environ.get("CONFIG_FILE", None)
+    if config_file is not None:
+        if not os.path.exists(config_file):
+            raise ValueError(f"Config file {config_file} not found!")
+        with open(config_file, "rb") as f:
+            config_file_settings = ConfigFileSettings.model_validate_json(f.read())
+            server_settings = ServerSettings(
+                **{
+                    k: v
+                    for k, v in config_file_settings.model_dump().items()
+                    if k in ServerSettings.model_fields
+                }
+            )
+            model_settings = config_file_settings.models
+
     if server_settings is None and model_settings is None:
         if settings is None:
             settings = Settings()

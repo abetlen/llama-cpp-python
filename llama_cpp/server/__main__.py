@@ -31,11 +31,10 @@ import uvicorn
 
 from llama_cpp.server.app import create_app
 from llama_cpp.server.settings import (
-    Server,
+    Settings,
     ServerSettings,
     ModelSettings,
     ConfigFileSettings,
-    set_server_settings,
 )
 from llama_cpp.server.cli import add_args_from_model, parse_model_from_args
 
@@ -44,8 +43,7 @@ def main():
     description = "🦙 Llama.cpp python server. Host your own LLMs!🚀"
     parser = argparse.ArgumentParser(description=description)
 
-    add_args_from_model(parser, ModelSettings)
-    add_args_from_model(parser, ServerSettings)
+    add_args_from_model(parser, Settings)
     parser.add_argument(
         "--config-file",
         type=str,
@@ -88,7 +86,7 @@ def main():
                 )
             ]
         app = create_app(
-            settings=Server(
+            settings=Settings(
                 **server_settings.model_dump(), **model_settings[0].model_dump()
             )
         )

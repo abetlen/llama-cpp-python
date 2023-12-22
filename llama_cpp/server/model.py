@@ -34,12 +34,14 @@ class LlamaProxy:
         if model is None:
             model = self._default_model_alias
 
+        if model not in self._model_settings_dict:
+            model = self._default_model_alias
+
         if model == self._current_model_alias:
             if self._current_model is not None:
                 return self._current_model
-        
-        if model not in self._model_settings_dict:
-            model = self._default_model_alias
+
+        self._current_model = None
 
         settings = self._model_settings_dict[model]
         self._current_model = self.load_llama_from_model_settings(settings)
