@@ -252,8 +252,8 @@ class llama_token_data_array(Structure):
 
 llama_token_data_array_p = POINTER(llama_token_data_array)
 
-# typedef void (*llama_progress_callback)(float progress, void *ctx);
-llama_progress_callback = ctypes.CFUNCTYPE(None, c_float, c_void_p)
+# typedef bool (*llama_progress_callback)(float progress, void *ctx);
+llama_progress_callback = ctypes.CFUNCTYPE(c_bool, c_float, c_void_p)
 
 
 # // Input data for llama_decode
@@ -347,7 +347,9 @@ class llama_model_kv_override(Structure):
 #     int32_t main_gpu;     // the GPU that is used for scratch and small tensors
 #     const float * tensor_split; // how to split layers across multiple GPUs (size: LLAMA_MAX_DEVICES)
 
-#     // called with a progress value between 0 and 1, pass NULL to disable
+#     // Called with a progress value between 0.0 and 1.0. Pass NULL to disable.
+#     // If the provided progress_callback returns true, model loading continues.
+#     // If it returns false, model loading is immediately aborted.
 #     llama_progress_callback progress_callback;
 #     // context pointer passed to the progress callback
 #     void * progress_callback_user_data;
@@ -367,7 +369,7 @@ class llama_model_params(Structure):
         n_gpu_layers (int): number of layers to store in VRAM
         main_gpu (int): the GPU that is used for scratch and small tensors
         tensor_split (ctypes.Array[ctypes.c_float]): how to split layers across multiple GPUs (size: LLAMA_MAX_DEVICES)
-        progress_callback (llama_progress_callback): called with a progress value between 0 and 1, pass NULL to disable
+        progress_callback (llama_progress_callback): called with a progress value between 0.0 and 1.0. Pass NULL to disable. If the provided progress_callback returns true, model loading continues. If it returns false, model loading is immediately aborted.
         progress_callback_user_data (ctypes.c_void_p): context pointer passed to the progress callback
         kv_overrides (ctypes.Array[llama_model_kv_override]): override key-value pairs of the model meta data
         vocab_only (bool): only load the vocabulary, no weights
