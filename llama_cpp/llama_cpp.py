@@ -324,7 +324,6 @@ LLAMA_KV_OVERRIDE_INT = 0
 LLAMA_KV_OVERRIDE_FLOAT = 1
 LLAMA_KV_OVERRIDE_BOOL = 2
 
-
 # struct llama_model_kv_override {
 #     char key[128];
 #     enum llama_model_kv_override_type tag;
