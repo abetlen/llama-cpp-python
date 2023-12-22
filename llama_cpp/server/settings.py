@@ -13,6 +13,8 @@ BaseSettings.model_config["protected_namespaces"] = ()
 
 
 class ModelSettings(BaseSettings):
+    """Model settings used to load a Llama model."""
+
     model: str = Field(
         description="The path to the model to use for generating completions."
     )
@@ -131,6 +133,8 @@ class ModelSettings(BaseSettings):
 
 
 class ServerSettings(BaseSettings):
+    """Server settings used to configure the FastAPI and Uvicorn server."""
+
     # Uvicorn Settings
     host: str = Field(default="localhost", description="Listen address")
     port: int = Field(default=8000, description="Listen port")
@@ -156,6 +160,8 @@ class Settings(ServerSettings, ModelSettings):
 
 
 class ConfigFileSettings(ServerSettings):
+    """Configuration file format settings."""
+
     models: List[ModelSettings] = Field(
-        default=[], description="Model configs, overwrites default config"
+        default=[], description="Model configs"
     )
