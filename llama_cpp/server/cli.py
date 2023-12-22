@@ -6,8 +6,6 @@ from typing import List, Literal, Union, Any, Type, TypeVar
 
 from pydantic import BaseModel
 
-from llama_cpp.server.settings import CommandLineSettings
-
 
 def _get_base_type(annotation: Type[Any]) -> Type[Any]:
     if getattr(annotation, "__origin__", None) is Literal:

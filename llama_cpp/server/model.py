@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from typing import Optional, Union, List
-from threading import Lock
 
 import llama_cpp
 

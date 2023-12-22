@@ -47,30 +47,30 @@ from llama_cpp.server.errors import RouteErrorHandler
 
 router = APIRouter(route_class=RouteErrorHandler)
 
-_settings: Optional[ServerSettings] = None
+_server_settings: Optional[ServerSettings] = None
 
 
-def set_settings(settings: ServerSettings):
-    global _settings
-    _settings = settings
+def set_server_settings(server_settings: ServerSettings):
+    global _server_settings
+    _server_settings = server_settings
 
 
-def get_settings():
-    yield _settings
+def get_server_settings():
+    yield _server_settings
 
 
-LLAMA: Optional[LlamaProxy] = None
+_llama_proxy: Optional[LlamaProxy] = None
 
 llama_outer_lock = Lock()
 llama_inner_lock = Lock()
 
 
-def set_llama(models: List[ModelSettings]):
-    global LLAMA
-    LLAMA = LlamaProxy(models=models)
+def set_llama_proxy(model_settings: List[ModelSettings]):
+    global _llama_proxy
+    _llama_proxy = LlamaProxy(models=model_settings)
 
 
-def get_llama():
+def get_llama_proxy():
     # NOTE: This double lock allows the currently streaming llama model to
     # check if any other requests are pending in the same thread and cancel
     # the stream if so.
@@ -81,7 +81,7 @@ def get_llama():
         try:
             llama_outer_lock.release()
             release_outer_lock = False
-            yield LLAMA
+            yield _llama_proxy
         finally:
             llama_inner_lock.release()
     finally:
@@ -100,40 +100,20 @@ def create_app(
             raise ValueError(f"Config file {config_file} not found!")
         with open(config_file, "rb") as f:
             config_file_settings = ConfigFileSettings.model_validate_json(f.read())
-            server_settings = ServerSettings(
-                **{
-                    k: v
-                    for k, v in config_file_settings.model_dump().items()
-                    if k in ServerSettings.model_fields
-                }
-            )
+            server_settings = ServerSettings.model_validate(config_file_settings)
             model_settings = config_file_settings.models
 
     if server_settings is None and model_settings is None:
         if settings is None:
             settings = Settings()
-        server_settings = ServerSettings(
-            **{
-                k: v
-                for k, v in settings.model_dump().items()
-                if k in ServerSettings.model_fields
-            }
-        )
-        model_settings = [
-            ModelSettings(
-                **{
-                    k: v
-                    for k, v in settings.model_dump().items()
-                    if k in ModelSettings.model_fields
-                }
-            )
-        ]
+        server_settings = ServerSettings.model_validate(settings)
+        model_settings = [ModelSettings.model_validate(settings)]
 
     assert (
         server_settings is not None and model_settings is not None
     ), "server_settings and model_settings must be provided together"
 
-    set_settings(server_settings)
+    set_server_settings(server_settings)
     middleware = [Middleware(RawContextMiddleware, plugins=(RequestIdPlugin(),))]
     app = FastAPI(
         middleware=middleware,
@@ -150,7 +130,7 @@ def create_app(
     app.include_router(router)
 
     assert model_settings is not None
-    set_llama(models=model_settings)
+    set_llama_proxy(model_settings=model_settings)
 
     return app
 
@@ -167,7 +147,7 @@ async def get_event_publisher(
                 if await request.is_disconnected():
                     raise anyio.get_cancelled_exc_class()()
                 if (
-                    next(get_settings()).interrupt_requests
+                    next(get_server_settings()).interrupt_requests
                     and llama_outer_lock.locked()
                 ):
                     await inner_send_chan.send(dict(data="[DONE]"))
@@ -197,7 +177,7 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 
 async def authenticate(
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_server_settings),
     authorization: Optional[str] = Depends(bearer_scheme),
 ):
     # Skip API key check if it's not set in settings
@@ -216,19 +196,18 @@ async def authenticate(
     )
 
 
-@router.post("/v1/completions", summary="Completion")
-@router.post("/v1/engines/copilot-codex/completions", include_in_schema=False)
+@router.post("/v1/completions", summary="Completion", dependencies=[Depends(authenticate)])
+@router.post("/v1/engines/copilot-codex/completions", include_in_schema=False, dependencies=[Depends(authenticate)])
 async def create_completion(
     request: Request,
     body: CreateCompletionRequest,
-    llama: llama_cpp.Llama = Depends(get_llama),
-    authenticated: str = Depends(authenticate),
+    llama_proxy: LlamaProxy = Depends(get_llama_proxy),
 ) -> llama_cpp.Completion:
     if isinstance(body.prompt, list):
         assert len(body.prompt) <= 1
         body.prompt = body.prompt[0] if len(body.prompt) > 0 else ""
 
-    llama = llama(body.model)
+    llama = llama_proxy(body.model)
 
     exclude = {
         "n",
@@ -277,24 +256,21 @@ async def create_completion(
         return iterator_or_completion
 
 
-@router.post("/v1/embeddings", summary="Embedding")
+@router.post("/v1/embeddings", summary="Embedding", dependencies=[Depends(authenticate)])
 async def create_embedding(
     request: CreateEmbeddingRequest,
-    llama: llama_cpp.Llama = Depends(get_llama),
-    authenticated: str = Depends(authenticate),
+    llama_proxy: LlamaProxy = Depends(get_llama_proxy),
 ):
     return await run_in_threadpool(
-        llama(request.model).create_embedding, **request.model_dump(exclude={"user"})
+        llama_proxy(request.model).create_embedding, **request.model_dump(exclude={"user"})
     )
 
 
-@router.post("/v1/chat/completions", summary="Chat")
+@router.post("/v1/chat/completions", summary="Chat", dependencies=[Depends(authenticate)])
 async def create_chat_completion(
     request: Request,
     body: CreateChatCompletionRequest,
-    llama: llama_cpp.Llama = Depends(get_llama),
-    settings: Settings = Depends(get_settings),
-    authenticated: str = Depends(authenticate),
+    llama_proxy: LlamaProxy = Depends(get_llama_proxy),
 ) -> llama_cpp.ChatCompletion:
     exclude = {
         "n",
@@ -302,7 +278,7 @@ async def create_chat_completion(
         "user",
     }
     kwargs = body.model_dump(exclude=exclude)
-    llama = llama(body.model)
+    llama = llama_proxy(body.model)
     if body.logit_bias is not None:
         kwargs["logit_bias"] = (
             _logit_bias_tokens_to_input_ids(llama, body.logit_bias)
@@ -341,11 +317,9 @@ async def create_chat_completion(
         return iterator_or_completion
 
 
-@router.get("/v1/models", summary="Models")
+@router.get("/v1/models", summary="Models", dependencies=[Depends(authenticate)]])
 async def get_models(
-    settings: Settings = Depends(get_settings),
-    authenticated: str = Depends(authenticate),
-    llama: llama_cpp.Llama = Depends(get_llama),
+    llama_proxy: LlamaProxy = Depends(get_llama_proxy),
 ) -> ModelList:
     return {
         "object": "list",
@@ -356,6 +330,6 @@ async def get_models(
                 "owned_by": "me",
                 "permissions": [],
             }
-            for model_alias in llama
+            for model_alias in llama_proxy
         ],
     }

@@ -131,21 +131,23 @@ class ModelSettings(BaseSettings):
 
 
 class ServerSettings(BaseSettings):
+    # Uvicorn Settings
     host: str = Field(default="localhost", description="Listen address")
     port: int = Field(default=8000, description="Listen port")
-    interrupt_requests: bool = Field(
-        default=True,
-        description="Whether to interrupt requests when a new request is received.",
-    )
     ssl_keyfile: Optional[str] = Field(
         default=None, description="SSL key file for HTTPS"
     )
     ssl_certfile: Optional[str] = Field(
         default=None, description="SSL certificate file for HTTPS"
     )
+    # FastAPI Settings
     api_key: Optional[str] = Field(
         default=None,
         description="API key for authentication. If set all requests need to be authenticated.",
+    )
+    interrupt_requests: bool = Field(
+        default=True,
+        description="Whether to interrupt requests when a new request is received.",
     )
 
 

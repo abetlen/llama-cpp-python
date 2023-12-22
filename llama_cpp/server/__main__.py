@@ -9,7 +9,7 @@ export MODEL=../models/7B/...
 
 Then run:
 ```
-uvicorn llama_cpp.server.app:app --reload
+uvicorn llama_cpp.server.app:create_app --reload
 ```
 
 or
@@ -45,7 +45,7 @@ def main():
 
     add_args_from_model(parser, Settings)
     parser.add_argument(
-        "--config-file",
+        "--config_file",
         type=str,
         help="Path to a config file to load.",
     )
@@ -60,35 +60,16 @@ def main():
                 raise ValueError(f"Config file {config_file} not found!")
             with open(config_file, "rb") as f:
                 config_file_settings = ConfigFileSettings.model_validate_json(f.read())
-                server_settings = ServerSettings(
-                    **{
-                        k: v
-                        for k, v in config_file_settings.model_dump().items()
-                        if k in ServerSettings.model_fields
-                    }
-                )
+                server_settings = ServerSettings.model_validate(config_file_settings)
                 model_settings = config_file_settings.models
         else:
-            server_settings = ServerSettings(
-                **{
-                    k: v
-                    for k, v in vars(args).items()
-                    if k in ServerSettings.model_fields
-                }
-            )
-            model_settings = [
-                ModelSettings(
-                    **{
-                        k: v
-                        for k, v in vars(args).items()
-                        if k in ModelSettings.model_fields
-                    }
-                )
-            ]
+            server_settings = parse_model_from_args(ServerSettings, args)
+            model_settings = [parse_model_from_args(ModelSettings, args)]
+        assert server_settings is not None
+        assert model_settings is not None
         app = create_app(
-            settings=Settings(
-                **server_settings.model_dump(), **model_settings[0].model_dump()
-            )
+            server_settings_or_none=server_settings,
+            model_settings=model_settings,
         )
         uvicorn.run(
             app,
