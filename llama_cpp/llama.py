@@ -850,7 +850,7 @@ class Llama:
         )  # 0x7FFFFFFF is INT32 max, will be auto set to all layers
         self.model_params.main_gpu = main_gpu
         self.tensor_split = tensor_split
-        self._p_tensor_split = None
+        self._c_tensor_split = None
         if self.tensor_split is not None:
             if len(self.tensor_split) > llama_cpp.LLAMA_MAX_DEVICES:
                 raise ValueError(
