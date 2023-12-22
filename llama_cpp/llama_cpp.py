@@ -90,9 +90,7 @@ c_size_t_p = POINTER(c_size_t)
 
 # llama.h bindings
 
-GGML_USE_CUBLAS = hasattr(_lib, "ggml_init_cublas")
-GGML_CUDA_MAX_DEVICES = 16
-LLAMA_MAX_DEVICES = GGML_CUDA_MAX_DEVICES if GGML_USE_CUBLAS else 1
+LLAMA_MAX_DEVICES = _lib.llama_max_devices()
 
 # define LLAMA_DEFAULT_SEED 0xFFFFFFFF
 LLAMA_DEFAULT_SEED = 0xFFFFFFFF
