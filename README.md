@@ -238,7 +238,7 @@ The gguf-converted files for this model can be found here: [functionary-7b-v1](h
           }
         }
       }],
-      tool_choices=[{
+      tool_choice=[{
         "type": "function",
         "function": {
           "name": "UserDetail"
