@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.27]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@b3a7c20b5c035250257d2b62851c379b159c899a
+- feat: Add `saiga` chat format by @femoiseev in #1050
+- feat: Added `chatglm3` chat format by @xaviviro in #1059
+- fix: Correct typo in README.md by @qeleb in (#1058) 
+
 ## [0.2.26]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@f6793491b5af6da75edad34d6f503ef86d31b09f
