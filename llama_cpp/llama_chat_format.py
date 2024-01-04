@@ -734,6 +734,28 @@ def format_openchat(
     return ChatFormatterResponse(prompt=_prompt, stop=_sep)
 
 
+# Chat format for Saiga models, see more details and available models:
+# https://huggingface.co/collections/IlyaGusev/saiga2-saigamistral-6505d4ccc3d1e53166b636cd
+@register_chat_format("saiga")
+def format_saiga(
+    messages: list[llama_types.ChatCompletionRequestMessage],
+    **kwargs,
+) -> ChatFormatterResponse:
+    _message_template = "<s>{role}\n{content}</s>"
+    _roles = dict(user="user", bot="bot", system="system")
+    _messages = _map_roles(messages, _roles)
+
+    _prompt = ""
+    for role, content in _messages:
+        if content:
+            _prompt += _message_template.format(role=role, content=content)
+        else:
+            _prompt += f"<s>{role}\n"
+    # Response template
+    _prompt += "<s>bot"
+    return ChatFormatterResponse(prompt=_prompt.strip())
+
+
 @register_chat_completion_handler("functionary")
 def functionary_chat_handler(
     llama: llama.Llama,
