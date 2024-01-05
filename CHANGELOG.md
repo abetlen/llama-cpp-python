@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.27]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@b3a7c20b5c035250257d2b62851c379b159c899a
+- feat: Add `saiga` chat format by @femoiseev in #1050
+- feat: Added `chatglm3` chat format by @xaviviro in #1059
+- fix: Correct typo in README.md by @qeleb in (#1058) 
+
+## [0.2.26]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@f6793491b5af6da75edad34d6f503ef86d31b09f
+
+## [0.2.25]
+
+- feat(server): Multi model support by @D4ve-R in #931
+- feat(server): Support none defaulting to infinity for completions by @swg in #111
+- feat(server): Implement openai api compatible authentication by @docmeth2 in #1010
+- fix: text_offset of multi-token characters by @twaka in #1037
+- fix: ctypes bindings for kv override by @phiharri in #1011
 - fix: ctypes definitions of llama_kv_cache_view_update and llama_kv_cache_view_free. by @e-c-d in #1028
 
 ## [0.2.24]

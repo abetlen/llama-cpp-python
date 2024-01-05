@@ -18,8 +18,10 @@ This package provides:
     - [Local Copilot replacement](https://llama-cpp-python.readthedocs.io/en/latest/server/#code-completion)
     - [Function Calling support](https://llama-cpp-python.readthedocs.io/en/latest/server/#function-calling)
     - [Vision API support](https://llama-cpp-python.readthedocs.io/en/latest/server/#multimodal-models)
+    - [Multiple Models](https://llama-cpp-python.readthedocs.io/en/latest/server/#configuration-and-multi-model-support)
 
 Documentation is available at [https://llama-cpp-python.readthedocs.io/en/latest](https://llama-cpp-python.readthedocs.io/en/latest).
+
 
 
 
@@ -236,7 +238,7 @@ The gguf-converted files for this model can be found here: [functionary-7b-v1](h
           }
         }
       }],
-      tool_choices=[{
+      tool_choice=[{
         "type": "function",
         "function": {
           "name": "UserDetail"
@@ -332,6 +334,7 @@ For possible options, see [llama_cpp/llama_chat_format.py](llama_cpp/llama_chat_
 - [Local Copilot replacement](https://llama-cpp-python.readthedocs.io/en/latest/server/#code-completion)
 - [Function Calling support](https://llama-cpp-python.readthedocs.io/en/latest/server/#function-calling)
 - [Vision API support](https://llama-cpp-python.readthedocs.io/en/latest/server/#multimodal-models)
+- [Multiple Models](https://llama-cpp-python.readthedocs.io/en/latest/server/#configuration-and-multi-model-support)
 
 ## Docker image
 
