@@ -872,7 +872,7 @@ class Llama:
                 break
 
             if stream:
-                remaining_tokens = completion_tokens[returned_tokens:]
+                remaining_tokens = completion_tokens[returned_tokens:-1]
                 remaining_text = self.detokenize(remaining_tokens)
                 remaining_length = len(remaining_text)
 
@@ -1030,9 +1030,14 @@ class Llama:
                         break
                     returned_tokens += 1
                     yield _completion_stream_response(
-                        text=last_text[: len(last_text) - (token_end_position - end)].decode("utf-8", errors="ignore"), logprobs_or_none=logprobs_or_none
+                        text=last_text[: len(last_text) - (token_end_position - end)].decode("utf-8", errors="ignore"), logprobs_or_none=logprobs_or_none, finish_reason=finish_reason
                     )
-                    break
+                    if self.cache:
+                        if self.verbose:
+                            print("Llama._create_completion: cache save", file=sys.stderr)
+                        self.cache[prompt_tokens + completion_tokens] = self.save_state()
+                        print("Llama._create_completion: cache saved", file=sys.stderr)
+                    return
                 returned_tokens += 1
                 yield _completion_stream_response(
                     text=self.detokenize([token]).decode("utf-8", errors="ignore"), logprobs_or_none=logprobs_or_none
