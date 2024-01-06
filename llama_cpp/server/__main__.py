@@ -49,10 +49,20 @@ def main():
         type=str,
         help="Path to a config file to load.",
     )
+    parser.add_argument(
+        "--version",
+        action='store_true',
+        help="Display version of llama_cpp server.",
+    )
     server_settings: ServerSettings | None = None
     model_settings: list[ModelSettings] = []
     args = parser.parse_args()
     try:
+        # Display llama_cpp version
+        if args.version:
+            from llama_cpp import __version__
+            print(f"🦙 Llama.cpp python server version {__version__}")
+            sys.exit(0)
         # Load server settings from config_file if provided
         config_file = os.environ.get("CONFIG_FILE", args.config_file)
         if config_file:
