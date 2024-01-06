@@ -58,7 +58,7 @@ def main():
     model_settings: list[ModelSettings] = []
     args = parser.parse_args()
     try:
-        # Display version
+        # Display llama_cpp version
         if args.version:
             from llama_cpp import __version__
             print(f"🦙 Llama.cpp python server version {__version__}")
