@@ -1201,6 +1201,7 @@ class Llama:
         mirostat_mode: int = 0,
         mirostat_tau: float = 5.0,
         mirostat_eta: float = 0.1,
+        penalize_nl: bool = True,
         logits_processor: Optional[LogitsProcessorList] = None,
         stopping_criteria: Optional[StoppingCriteriaList] = None,
         grammar: Optional[LlamaGrammar] = None,
@@ -1261,6 +1262,7 @@ class Llama:
                 mirostat_eta=mirostat_eta,
                 logits_processor=logits_processor,
                 grammar=grammar,
+                penalize_nl=penalize_nl,
             )
             if stopping_criteria is not None and stopping_criteria(
                 self._input_ids, self._scores[-1, :]
