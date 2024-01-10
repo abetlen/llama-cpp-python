@@ -675,20 +675,22 @@ class _LlamaSamplingContext:
         return ctx_main.model.detokenize(self.prev[-n:]).decode("utf-8")
 
     def sample(
-        self, ctx_main: _LlamaContext, ctx_cfg: Optional[_LlamaContext], idx: int = 0
+        self, ctx_main: _LlamaContext, ctx_cfg: Optional[_LlamaContext] = None, idx: int = 0, logits_array: Optional[npt.NDArray[np.single]] = None
     ):
         n_vocab = ctx_main.model.n_vocab()
-        id = 0
-        logits = ctx_main.get_logits_ith(idx)
+        id: int = 0
+
+        if logits_array is None:
+            logits = ctx_main.get_logits_ith(idx)
+            logits_array = np.array(
+                ctypes.cast(logits, ctypes.POINTER(ctypes.c_float * n_vocab)).contents,
+                dtype=np.single,
+            )
 
         # apply logit_bias
         for token, logit_bias in self.params.logit_bias.items():
-            logits[token] += logit_bias
+            logits_array[token] += logit_bias
 
-        logits_array = np.array(
-            ctypes.cast(logits, ctypes.POINTER(ctypes.c_float * n_vocab)).contents,
-            dtype=np.single,
-        )
         token_data_array = _LlamaTokenDataArray(
             n_vocab=n_vocab
         )  # TODO: Only create this once
@@ -702,7 +704,7 @@ class _LlamaSamplingContext:
         # apply penalties
         if len(self.prev) > 0:
             nl_token = ctx_main.model.token_nl()
-            nl_logit = logits[nl_token]
+            nl_logit = logits_array[nl_token]
             if self.params.penalty_last_n > 0:
                 ctx_main.sample_repetition_penalties(
                     token_data_array,
