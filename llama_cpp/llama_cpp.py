@@ -104,7 +104,7 @@ LLAMA_DEFAULT_SEED = 0xFFFFFFFF
 # define LLAMA_MAX_RNG_STATE (64*1024)
 LLAMA_MAX_RNG_STATE = 64 * 1024
 
-#define LLAMA_FILE_MAGIC_GGLA 0x67676c61u // 'ggla'
+# define LLAMA_FILE_MAGIC_GGLA 0x67676c61u // 'ggla'
 LLAMA_FILE_MAGIC_GGLA = 0x67676C61
 
 # define LLAMA_FILE_MAGIC_GGSN 0x6767736eu // 'ggsn'
@@ -179,6 +179,7 @@ LLAMA_TOKEN_TYPE_BYTE = 6
 #     LLAMA_FTYPE_MOSTLY_Q5_K_S        = 16, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_Q5_K_M        = 17, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_Q6_K          = 18, // except 1d tensors
+#     LLAMA_FTYPE_MOSTLY_IQ2_XXS       = 19, // except 1d tensors
 
 #     LLAMA_FTYPE_GUESSED = 1024, // not specified in the model file
 # };
@@ -222,11 +223,12 @@ LLAMA_ROPE_SCALING_MAX_VALUE = LLAMA_ROPE_SCALING_YARN
 # } llama_token_data;
 class llama_token_data(Structure):
     """Used to store token data
-    
+
     Attributes:
         id (llama_token): token id
         logit (float): log-odds of the token
         p (float): probability of the token"""
+
     _fields_ = [
         ("id", llama_token),
         ("logit", c_float),
@@ -244,11 +246,12 @@ llama_token_data_p = POINTER(llama_token_data)
 # } llama_token_data_array;
 class llama_token_data_array(Structure):
     """Used to sample tokens given logits
-    
+
     Attributes:
         data (ctypes.Array[llama_token_data]): token data
         size (int): size of the array
         sorted (bool): whether the array is sorted"""
+
     _fields_ = [
         ("data", llama_token_data_p),
         ("size", c_size_t),
@@ -303,7 +306,8 @@ class llama_batch(Structure):
         token (ctypes.Array[llama_token]): the token ids of the input (used when embd is NULL)
         embd (ctypes.Array[ctypes.c_float]): token embeddings (i.e. float vector of size n_embd) (used when token is NULL)
         pos (ctypes.Array[ctypes.Array[llama_pos]]): the positions of the respective token in the sequence
-        seq_id (ctypes.Array[ctypes.Array[llama_seq_id]]): the sequence to which the respective token belongs"""
+        seq_id (ctypes.Array[ctypes.Array[llama_seq_id]]): the sequence to which the respective token belongs
+    """
 
     _fields_ = [
         ("n_tokens", c_int32),
@@ -318,6 +322,7 @@ class llama_batch(Structure):
         ("all_seq_id", llama_seq_id),
     ]
 
+
 # enum llama_model_kv_override_type {
 #     LLAMA_KV_OVERRIDE_INT,
 #     LLAMA_KV_OVERRIDE_FLOAT,
@@ -326,6 +331,7 @@ class llama_batch(Structure):
 LLAMA_KV_OVERRIDE_INT = 0
 LLAMA_KV_OVERRIDE_FLOAT = 1
 LLAMA_KV_OVERRIDE_BOOL = 2
+
 
 # struct llama_model_kv_override {
 #     char key[128];
@@ -343,12 +349,14 @@ class llama_model_kv_override_value(CtypesUnion):
         ("bool_value", c_bool),
     ]
 
+
 class llama_model_kv_override(Structure):
     _fields_ = [
         ("key", ctypes.c_char * 128),
         ("tag", c_int),
         ("value", llama_model_kv_override_value),
     ]
+
 
 # struct llama_model_params {
 #     int32_t n_gpu_layers; // number of layers to store in VRAM
@@ -365,6 +373,7 @@ class llama_model_kv_override(Structure):
 #     // override key-value pairs of the model meta data
 #     const struct llama_model_kv_override * kv_overrides;
 
+
 #     // Keep the booleans together to avoid misalignment during copy-by-value.
 #     bool vocab_only; // only load the vocabulary, no weights
 #     bool use_mmap;   // use mmap if possible
@@ -372,7 +381,7 @@ class llama_model_kv_override(Structure):
 # };
 class llama_model_params(Structure):
     """Parameters for llama_model
-    
+
     Attributes:
         n_gpu_layers (int): number of layers to store in VRAM
         main_gpu (int): the GPU that is used for scratch and small tensors
@@ -383,6 +392,7 @@ class llama_model_params(Structure):
         vocab_only (bool): only load the vocabulary, no weights
         use_mmap (bool): use mmap if possible
         use_mlock (bool): force system to keep model in RAM"""
+
     _fields_ = [
         ("n_gpu_layers", c_int32),
         ("main_gpu", c_int32),
@@ -416,6 +426,7 @@ class llama_model_params(Structure):
 #     enum ggml_type type_k; // data type for K cache
 #     enum ggml_type type_v; // data type for V cache
 
+
 #     // Keep the booleans together to avoid misalignment during copy-by-value.
 #     bool mul_mat_q;   // if true, use experimental mul_mat_q kernels (DEPRECATED - always true)
 #     bool logits_all;  // the llama_eval() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
@@ -424,7 +435,7 @@ class llama_model_params(Structure):
 # };
 class llama_context_params(Structure):
     """Parameters for llama_context
-    
+
     Attributes:
         seed (int): RNG seed, -1 for random
         n_ctx (int): text context, 0 = from model
@@ -444,7 +455,9 @@ class llama_context_params(Structure):
         mul_mat_q (bool): if true, use experimental mul_mat_q kernels (DEPRECATED - always true)
         logits_all (bool): the llama_eval() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
         embedding (bool): embedding mode only
-        offload_kqv (bool): whether to offload the KQV ops (including the KV cache) to GPU"""
+        offload_kqv (bool): whether to offload the KQV ops (including the KV cache) to GPU
+    """
+
     _fields_ = [
         ("seed", c_uint32),
         ("n_ctx", c_uint32),
@@ -493,14 +506,16 @@ It might not exist for progress report where '.' is output repeatedly."""
 # } llama_model_quantize_params;
 class llama_model_quantize_params(Structure):
     """Parameters for llama_model_quantize
-    
+
     Attributes:
         nthread (int): number of threads to use for quantizing, if <=0 will use std::thread::hardware_concurrency()
         ftype (int): quantize to this llama_ftype
         allow_requantize (bool): allow quantizing non-f32/f16 tensors
         quantize_output_tensor (bool): quantize output.weight
         only_copy (bool): only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
-        pure (bool): disable k-quant mixtures and quantize all tensors to the same type"""
+        pure (bool): disable k-quant mixtures and quantize all tensors to the same type
+    """
+
     _fields_ = [
         ("nthread", c_int32),
         ("ftype", c_int),
@@ -745,12 +760,15 @@ def llama_n_ctx(ctx: llama_context_p) -> int:
 _lib.llama_n_ctx.argtypes = [llama_context_p]
 _lib.llama_n_ctx.restype = c_uint32
 
+
 # LLAMA_API uint32_t llama_n_batch    (const struct llama_context * ctx);
 def llama_n_batch(ctx: llama_context_p) -> int:
     return _lib.llama_n_batch(ctx)
 
+
 _lib.llama_n_batch.argtypes = [llama_context_p]
 _lib.llama_n_batch.restype = c_uint32
+
 
 # LLAMA_API enum llama_vocab_type llama_vocab_type(const struct llama_model * model);
 def llama_vocab_type(model: llama_model_p) -> int:
@@ -1080,7 +1098,7 @@ _lib.llama_kv_cache_view_init.restype = llama_kv_cache_view
 
 # // Free a KV cache view. (use only for debugging purposes)
 # LLAMA_API void llama_kv_cache_view_free(struct llama_kv_cache_view * view);
-def llama_kv_cache_view_free(view: "ctypes.pointer[llama_kv_cache_view]"): # type: ignore
+def llama_kv_cache_view_free(view: "ctypes.pointer[llama_kv_cache_view]"):  # type: ignore
     """Free a KV cache view. (use only for debugging purposes)"""
     return _lib.llama_kv_cache_view_free(view)
 
@@ -1091,7 +1109,7 @@ _lib.llama_kv_cache_view_free.restype = None
 
 # // Update the KV cache view structure with the current state of the KV cache. (use only for debugging purposes)
 # LLAMA_API void llama_kv_cache_view_update(const struct llama_context * ctx, struct llama_kv_cache_view * view);
-def llama_kv_cache_view_update(ctx: llama_context_p, view: "ctypes.pointer[llama_kv_cache_view]"): # type: ignore
+def llama_kv_cache_view_update(ctx: llama_context_p, view: "ctypes.pointer[llama_kv_cache_view]"):  # type: ignore
     """Update the KV cache view structure with the current state of the KV cache. (use only for debugging purposes)"""
     return _lib.llama_kv_cache_view_update(ctx, view)
 
@@ -1250,6 +1268,40 @@ _lib.llama_kv_cache_seq_shift.argtypes = [
     llama_pos,
 ]
 _lib.llama_kv_cache_seq_shift.restype = None
+
+
+# // Integer division of the positions by factor of `d > 1`
+# // If the KV cache is RoPEd, the KV data is updated accordingly
+# // p0 < 0 : [0,  p1]
+# // p1 < 0 : [p0, inf)
+# LLAMA_API void llama_kv_cache_seq_div(
+#         struct llama_context * ctx,
+#                 llama_seq_id   seq_id,
+#                    llama_pos   p0,
+#                    llama_pos   p1,
+#                          int   d);
+def llama_kv_cache_seq_div(
+    ctx: llama_context_p,
+    seq_id: Union[llama_seq_id, int],
+    p0: Union[llama_pos, int],
+    p1: Union[llama_pos, int],
+    d: Union[c_int, int],
+):
+    """Integer division of the positions by factor of `d > 1`
+    If the KV cache is RoPEd, the KV data is updated accordingly
+    p0 < 0 : [0,  p1]
+    p1 < 0 : [p0, inf)"""
+    return _lib.llama_kv_cache_seq_div(ctx, seq_id, p0, p1, d)
+
+
+_lib.llama_kv_cache_seq_div.argtypes = [
+    llama_context_p,
+    llama_seq_id,
+    llama_pos,
+    llama_pos,
+    c_int,
+]
+_lib.llama_kv_cache_seq_div.restype = None
 
 # //
 # // State / sessions
@@ -2063,10 +2115,11 @@ def llama_sample_temp(
     temp: Union[c_float, float],
 ):
     """Temperature sampling described in academic paper "Generating Long Sequences with Sparse Transformers" https://arxiv.org/abs/1904.10509
-    
+
     Parameters:
         candidates: A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
-        temp: The temperature value to use for the sampling. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text."""
+        temp: The temperature value to use for the sampling. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text.
+    """
     return _lib.llama_sample_temp(ctx, candidates, temp)
 
 
@@ -2111,10 +2164,11 @@ def llama_sample_grammar(
     grammar,  # type: llama_grammar_p
 ):
     """Apply constraints from grammar
-    
+
     Parameters:
         candidates: A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
-        grammar: A grammar object containing the rules and constraints to apply to the generated text."""
+        grammar: A grammar object containing the rules and constraints to apply to the generated text.
+    """
     return _lib.llama_sample_grammar(ctx, candidates, grammar)
 
 
@@ -2148,13 +2202,14 @@ def llama_sample_token_mirostat(
     mu,  # type: _Pointer[c_float]
 ) -> int:
     """Mirostat 1.0 algorithm described in the paper https://arxiv.org/abs/2007.14966. Uses tokens instead of words.
-    
+
     Parameters:
         candidates: A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
         tau: The target cross-entropy (or surprise) value you want to achieve for the generated text. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text.
         eta: The learning rate used to update `mu` based on the error between the target and observed surprisal of the sampled word. A larger learning rate will cause `mu` to be updated more quickly, while a smaller learning rate will result in slower updates.
         m: The number of tokens considered in the estimation of `s_hat`. This is an arbitrary value that is used to calculate `s_hat`, which in turn helps to calculate the value of `k`. In the paper, they use `m = 100`, but you can experiment with different values to see how it affects the performance of the algorithm.
-        mu: Maximum cross-entropy. This value is initialized to be twice the target cross-entropy (`2 * tau`) and is updated in the algorithm based on the error between the target and observed surprisal."""
+        mu: Maximum cross-entropy. This value is initialized to be twice the target cross-entropy (`2 * tau`) and is updated in the algorithm based on the error between the target and observed surprisal.
+    """
     return _lib.llama_sample_token_mirostat(ctx, candidates, tau, eta, m, mu)
 
 
@@ -2188,12 +2243,13 @@ def llama_sample_token_mirostat_v2(
     mu,  # type: _Pointer[c_float]
 ) -> int:
     """Mirostat 2.0 algorithm described in the paper https://arxiv.org/abs/2007.14966. Uses tokens instead of words.
-    
+
     Parameters:
         candidates: A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
         tau: The target cross-entropy (or surprise) value you want to achieve for the generated text. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text.
         eta: The learning rate used to update `mu` based on the error between the target and observed surprisal of the sampled word. A larger learning rate will cause `mu` to be updated more quickly, while a smaller learning rate will result in slower updates.
-        mu: Maximum cross-entropy. This value is initialized to be twice the target cross-entropy (`2 * tau`) and is updated in the algorithm based on the error between the target and observed surprisal."""
+        mu: Maximum cross-entropy. This value is initialized to be twice the target cross-entropy (`2 * tau`) and is updated in the algorithm based on the error between the target and observed surprisal.
+    """
     return _lib.llama_sample_token_mirostat_v2(ctx, candidates, tau, eta, mu)
 
 
