@@ -72,7 +72,7 @@ class LlamaGrammar:
             )
         if verbose:
             print(f"{cls.from_string.__name__} grammar:", file=sys.stderr)
-            print_grammar(sys.stdout, parsed_grammar)
+            print_grammar(sys.stderr, parsed_grammar)
             print(file=sys.stderr)
         return cls(parsed_grammar)
 

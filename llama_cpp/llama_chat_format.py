@@ -172,6 +172,20 @@ def _format_chatml(
             ret += role + "\n"
     return ret
 
+def _format_chatglm3(
+    system_message: str, messages: List[Tuple[str, Optional[str]]], sep: str
+) -> str:
+    """Format the prompt with the chatglm3 style."""
+    ret = ""
+    if system_message:
+        ret += system_message
+    for role, message in messages:
+        if message:
+            ret += role + "\n" + " " + message
+        else:
+            ret += role
+    return ret
+
 
 @dataclasses.dataclass
 class ChatFormatterResponse:
@@ -685,6 +699,22 @@ def format_chatml(
     _prompt = _format_chatml(system_message, _messages, _sep)
     return ChatFormatterResponse(prompt=_prompt, stop=_sep)
 
+@register_chat_format("chatglm3")
+def format_chatglm3(
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    **kwargs: Any,
+) -> ChatFormatterResponse:
+    system_template = """<|system|>
+{system_message}"""
+    system_message = _get_system_message(messages)
+    system_message = system_template.format(system_message=system_message)
+    _roles = dict(user="<|user|>", assistant="<|assistant|>")
+    _sep = "</s>"
+    _messages = _map_roles(messages, _roles)
+    _messages.append((_roles["assistant"], None))
+    _prompt = _format_chatglm3(system_message, _messages, _sep)
+    return ChatFormatterResponse(prompt=_prompt, stop=_sep)
+
 
 @register_chat_format("openchat")
 def format_openchat(
@@ -702,6 +732,28 @@ def format_openchat(
     _messages.append((_roles["assistant"], None))
     _prompt = _format_chatml(system_message, _messages, _sep)
     return ChatFormatterResponse(prompt=_prompt, stop=_sep)
+
+
+# Chat format for Saiga models, see more details and available models:
+# https://huggingface.co/collections/IlyaGusev/saiga2-saigamistral-6505d4ccc3d1e53166b636cd
+@register_chat_format("saiga")
+def format_saiga(
+    messages: list[llama_types.ChatCompletionRequestMessage],
+    **kwargs,
+) -> ChatFormatterResponse:
+    _message_template = "<s>{role}\n{content}</s>"
+    _roles = dict(user="user", bot="bot", system="system")
+    _messages = _map_roles(messages, _roles)
+
+    _prompt = ""
+    for role, content in _messages:
+        if content:
+            _prompt += _message_template.format(role=role, content=content)
+        else:
+            _prompt += f"<s>{role}\n"
+    # Response template
+    _prompt += "<s>bot"
+    return ChatFormatterResponse(prompt=_prompt.strip())
 
 
 @register_chat_completion_handler("functionary")
