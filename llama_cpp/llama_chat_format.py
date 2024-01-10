@@ -927,8 +927,8 @@ def format_saiga(
     return ChatFormatterResponse(prompt=_prompt.strip())
 
 
-@register_chat_completion_handler("functionary")
-def functionary_chat_handler(
+@register_chat_completion_handler("functionary-v1")
+def functionary_v1_chat_handler(
     llama: llama.Llama,
     messages: List[llama_types.ChatCompletionRequestMessage],
     functions: Optional[List[llama_types.ChatCompletionFunction]] = None,
@@ -957,6 +957,12 @@ def functionary_chat_handler(
     **kwargs,  # type: ignore
 ) -> Union[llama_types.ChatCompletion, Iterator[llama_types.ChatCompletionChunk]]:
     SYSTEM_MESSAGE = """A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. The assistant calls functions with appropriate input when necessary"""
+    END_SYSTEM_TOKEN = "<|END_OF_SYSTEM|>"
+    END_USER_TOKEN = "<|END_OF_USER|>"
+    END_ASSISTANT_TOKEN = "<|END_OF_ASSISTANT|>"
+    END_FUNCTION_RESULT_TOKEN = "<|END_OF_FUNCTION_RESULT|>"
+    START_FUNCTION_CALL_TOKEN = "<|START_OF_FUNCTION_CALL|>"
+    END_FUNCTION_CALL_TOKEN = "<|END_OF_FUNCTION_CALL|>"
 
     def generate_type_definition(
         param: Dict[str, llama_types.JsonType], indent_level: int, shared_defs
@@ -1028,22 +1034,23 @@ def functionary_chat_handler(
             parameters = function.get("parameters", {})
             required_params = parameters.get("required", [])
 
-            schema += f"  // {description}\n"
-            schema += f"  type {function_name} = (_: {{\n"
+            schema += f"// {description}\n"
+            schema += f"type {function_name} = (_: {{\n"
 
             for param_name, param in parameters.get("properties", {}).items():
                 param_description = param.get("description", "")
                 param_type = generate_type_definition(param, 2, shared_definitions)
                 optional_indicator = "" if param_name in required_params else "?"
-                schema += f"    // {param_description}\n"
-                schema += f"    {param_name}{optional_indicator}: {param_type},\n"
-            schema += "  }) => any;\n\n"
+                schema += f"// {param_description}\n"
+                schema += f"{param_name}{optional_indicator}: {param_type},\n"
+            schema += "}) => any;\n\n"
 
-        schema += "}} // namespace {}\n".format(namespace)
+        schema += "}} // namespace {}".format(namespace)
         return schema
 
     def prepare_messages_for_inference(
         messages: List[llama_types.ChatCompletionRequestMessage],
+        tokenizer: AutoTokenizer,
         functions: Optional[List[llama_types.ChatCompletionFunctions]] = None,
         tools: Optional[List[llama_types.ChatCompletionTool]] = None,
     ):
@@ -1054,8 +1061,7 @@ def functionary_chat_handler(
                     role="system", content=generate_schema_from_functions(functions)
                 )
             )
-
-        if tools is not None:
+        elif tools is not None:
             all_messages.append(
                 llama_types.ChatCompletionRequestSystemMessage(
                     role="system",
@@ -1085,49 +1091,8 @@ def functionary_chat_handler(
                     "name"
                 ] = f"functions.{message['function_call']['name']}"
             all_messages.append(message)
-
-        all_messages.append(
-            llama_types.ChatCompletionRequestAssistantMessage(
-                role="assistant", content=None
-            )
-        )
-
-        def message_to_str(msg: llama_types.ChatCompletionRequestMessage):
-            if msg["role"] == "system":
-                return f"system:\n{msg['content']}\n"
-
-            elif msg["role"] == "function" and "name" in msg:
-                return f"function name={msg['name']}:\n{msg['content']}\n"
-            elif msg["role"] == "function" and "function_call" in msg:
-                return f"function name={msg['function_call']['name']}:\n{msg['function_call']['arguments']}\n"
-            elif msg["role"] == "tool":
-                if msg["content"] is not None:
-                    return f"function name={msg['tool_call_id']}:\n{msg['content']}\n"
-                else:
-                    return f"function name={msg['tool_call_id']}\n"
-            elif msg["role"] == "user":
-                if msg["content"] is None:
-                    return "user:\n</s></s>\n"
-                else:
-                    return f"user:\n</s>{msg['content']}</s>\n"
-            elif msg["role"] == "assistant":
-                if msg["content"] is not None and "function_call" in msg:
-                    return f"assistant:\n{msg['content']}\nassistant to={msg['function_call']['name']}:\n{msg['function_call']['arguments']}</s>\n"
-                elif "function_call" in msg:
-                    return f"assistant to={msg['function_call']['name']}:\n{msg['function_call']['arguments']}</s>\n"
-                elif "tool_calls" in msg and len(msg["tool_calls"]) > 0:
-                    for tool_call in msg[
-                        "tool_calls"
-                    ]:  # NOTE: probably doesn't work with the functionary model
-                        return f"assistant to={tool_call['id']}:\n{tool_call['function']['arguments']}</s>\n"
-                elif msg["content"] is None:
-                    return "assistant"
-                else:
-                    return f"assistant:\n{msg['content']}\n"
-            else:
-                raise ValueError(f"Unsupported role: {msg['role']}")
-
-        return "".join([message_to_str(msg) for msg in all_messages])
+        
+        return tokenizer.apply_chat_template(all_messages, tokenize=False) + "assistant:\n"
 
     if tools is not None:
         functions = [tool["function"] for tool in tools if tool["type"] == "function"]
@@ -1136,19 +1101,24 @@ def functionary_chat_handler(
         function_call = (
             tool_choice if isinstance(tool_choice, str) else tool_choice["function"]
         )
+        
+    from transformers import AutoTokenizer
+    
+    tokenizer_path = os.path.dirname(llama.model_path)
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
 
-    prompt = prepare_messages_for_inference(messages, functions, tools)
+    prompt = prepare_messages_for_inference(messages, tokenizer, functions, tools)
 
     if function_call is None and (functions is None or len(functions) == 0):
         completion_or_completion_chunks = llama.create_completion(
-            prompt=prompt + ":\n",
+            prompt=prompt,
             temperature=temperature,
             top_p=top_p,
             top_k=top_k,
             min_p=min_p,
             typical_p=typical_p,
             stream=stream,
-            stop=["user:", "</s>"],
+            stop=["user:", END_ASSISTANT_TOKEN],
             max_tokens=max_tokens,
             presence_penalty=presence_penalty,
             frequency_penalty=frequency_penalty,
@@ -1166,9 +1136,9 @@ def functionary_chat_handler(
     if function_call is None or (
         isinstance(function_call, str) and function_call == "auto"
     ):
-        stop = "\n"
+        stop = [END_ASSISTANT_TOKEN, END_FUNCTION_CALL_TOKEN]
         completion: llama_types.Completion = llama.create_completion(
-            prompt=prompt, stop=stop, stream=False
+            prompt=prompt + ":\n", stop=stop, stream=False, max_tokens=max_tokens
         )  # type: ignore
         completion_text = completion["choices"][0]["text"]
         # strip " to=functions." and ending ":"
