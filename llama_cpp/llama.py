@@ -1298,6 +1298,7 @@ class Llama:
             logits_processor: A list of logits processors to use.
             grammar: A grammar to use for constrained sampling.
             logit_bias: A logit bias to use.
+            hf_tokenizer: A HuggingFace AutoTokenizer to use optionally.
 
         Raises:
             ValueError: If the requested tokens exceed the context window.
@@ -1493,6 +1494,7 @@ class Llama:
             logits_processor: A list of logits processors to use.
             grammar: A grammar to use.
             logit_bias: A logit bias to use.
+            hf_tokenizer_path: A HuggingFace AutoTokenizer file path to use.
 
         Returns:
             Generated chat completion or a stream of chat completion chunks.

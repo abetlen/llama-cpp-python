@@ -209,8 +209,9 @@ Chat completion is available through the [`create_chat_completion`](https://llam
 
 The high-level API also provides a simple interface for function calling.
 
-Note that the only model that supports full function calling at this time is "functionary".
-The gguf-converted files for this model can be found here: [functionary-7b-v1](https://huggingface.co/abetlen/functionary-7b-v1-GGUF)
+Note that the only set of models that supports full function calling at this time is [functionary](https://github.com/MeetKai/functionary).
+The various gguf-converted files for this set of models can be found [here](https://huggingface.co/meetkai).
+Note that due to discrepancies between llama.cpp and HuggingFace's tokenizers, it is required to provide the path to the HF tokenizer for functionary. They are already included in the respective HF repositories hosting the gguf files.
 
 
 ```python
@@ -254,7 +255,8 @@ The gguf-converted files for this model can be found here: [functionary-7b-v1](h
         "function": {
           "name": "UserDetail"
         }
-      }]
+      }],
+      hf_tokenizer_path="path/to/functionary-gguf/"
 )
 ```
 
