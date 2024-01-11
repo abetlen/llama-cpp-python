@@ -1196,7 +1196,7 @@ def functionary_chat_handler(
     if function_call is None or (
         isinstance(function_call, str) and function_call == "auto"
     ):
-        stops = ["\n", END_ASSISTANT_TOKEN] if version == "v1" else CONTENT_TOKEN
+        stops = ["\n", END_ASSISTANT_TOKEN] if version == "v1" else STOP_TOKEN
     # If tool_choice/function_call is "none"
     elif isinstance(function_call, str) and function_call == "none":
         prompt = prepare_messages_for_inference(messages, tokenizer, version, [], []) + "all\n<|content|>"
@@ -1303,39 +1303,32 @@ def functionary_chat_handler(
             )  # type: ignore
             
             return _convert_completion_to_chat(completion, stream=stream)  # type: ignore
-        elif not prompt.endswith(CONTENT_TOKEN):
-            new_prompt = prompt + completion_text + CONTENT_TOKEN
-            function_call = completion_text[:-1].strip()
-            grammar = get_grammar(function_call)
-        
-            completion: llama_types.Completion = llama.create_completion(
-                prompt=new_prompt,
-                stop=STOP_TOKEN,
-                stream=stream,
-                grammar=grammar,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                top_p=top_p,
-                top_k=top_k,
-                min_p=min_p,
-                typical_p=typical_p,
-                presence_penalty=presence_penalty,
-                frequency_penalty=frequency_penalty,
-                repeat_penalty=repeat_penalty,
-                tfs_z=tfs_z,
-                mirostat_mode=mirostat_mode,
-                mirostat_tau=mirostat_tau,
-                mirostat_eta=mirostat_eta,
-                model=model,
-                logits_processor=logits_processor,
-                hf_tokenizer=tokenizer,
-            )  # type: ignore
+        elif prompt.endswith(RECIPIENT_TOKEN):
+            all_calls = completion_text.split(f"\n{FROM_TOKEN} assistant\n{RECIPIENT_TOKEN}")
+            function_calls = [curr_call.split(f"\n{CONTENT_TOKEN}")[0].strip() for curr_call in all_calls]
+            function_bodies = [curr_call.split(f"\n{CONTENT_TOKEN}")[1].strip() for curr_call in all_calls]
+            breakpoint()
         else:
             new_prompt = prompt
             
     
     assert "usage" in completion
-    assert isinstance(function_call, str)
+    if function_call is not None:
+        assert isinstance(function_call, str)
+        tool_calls = 
+    else:
+        tool_calls = []
+        for function_call, function_body in zip(function_calls, function_bodies):
+            tool_calls.append(
+                {
+                    "id": function_call,
+                    "type": "function",
+                    "function": {
+                        "name": function_call,
+                        "arguments": function_body,
+                    },
+                }
+            )
 
     if llama.verbose:
         print(new_prompt)
