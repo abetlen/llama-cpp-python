@@ -927,8 +927,8 @@ def format_saiga(
     return ChatFormatterResponse(prompt=_prompt.strip())
 
 
-@register_chat_completion_handler("functionary-v1")
-def functionary_v1_chat_handler(
+@register_chat_completion_handler("functionary")
+def functionary_chat_handler(
     llama: llama.Llama,
     messages: List[llama_types.ChatCompletionRequestMessage],
     functions: Optional[List[llama_types.ChatCompletionFunction]] = None,
@@ -954,6 +954,7 @@ def functionary_v1_chat_handler(
     model: Optional[str] = None,
     logits_processor: Optional[llama.LogitsProcessorList] = None,
     grammar: Optional[llama.LlamaGrammar] = None,
+    hf_tokenizer_path: Optional[str] = None,
     **kwargs,  # type: ignore
 ) -> Union[llama_types.ChatCompletion, Iterator[llama_types.ChatCompletionChunk]]:
     SYSTEM_MESSAGE = """A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. The assistant calls functions with appropriate input when necessary"""
@@ -1102,13 +1103,14 @@ def functionary_v1_chat_handler(
             tool_choice if isinstance(tool_choice, str) else tool_choice["function"]
         )
         
+    assert hf_tokenizer_path is not None, "Please provide a valid hf tokenizer path from https://huggingface.co/meetkai"
     from transformers import AutoTokenizer
     
-    tokenizer_path = os.path.dirname(llama.model_path)
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+    tokenizer = AutoTokenizer.from_pretrained(hf_tokenizer_path)
 
     prompt = prepare_messages_for_inference(messages, tokenizer, functions, tools)
-
+    
+    # If no tools/functions are provided
     if function_call is None and (functions is None or len(functions) == 0):
         completion_or_completion_chunks = llama.create_completion(
             prompt=prompt,
@@ -1130,39 +1132,23 @@ def functionary_v1_chat_handler(
             model=model,
             logits_processor=logits_processor,
             grammar=grammar,
+            hf_tokenizer=tokenizer
         )
         return _convert_completion_to_chat(completion_or_completion_chunks, stream=stream)  # type: ignore
-
-    if function_call is None or (
-        isinstance(function_call, str) and function_call == "auto"
-    ):
-        stop = [END_ASSISTANT_TOKEN, END_FUNCTION_CALL_TOKEN]
-        completion: llama_types.Completion = llama.create_completion(
-            prompt=prompt + ":\n", stop=stop, stream=False, max_tokens=max_tokens
-        )  # type: ignore
-        completion_text = completion["choices"][0]["text"]
-        # strip " to=functions." and ending ":"
-        function_call = completion_text.split(".")[-1][:-1]
-        new_prompt = prompt + completion_text + stop
-    elif isinstance(function_call, str) and function_call != "none":
-        new_prompt = prompt + f":\n"
-    elif isinstance(function_call, dict):
-        new_prompt = prompt + f" to=functions.{function_call['name']}:\n"
-        function_call = function_call["name"]
-    else:
-        new_prompt = prompt + f":\n"
-
-    function_body = None
-    for function in functions or []:
-        if function["name"] == function_call:
-            function_body = function["parameters"]
-            break
-    for tool in tools or []:
-        if tool["type"] == "function" and tool["function"]["name"] == function_call:
-            function_body = tool["function"]["parameters"]
-            break
-
-    if function_body is not None:
+    
+    assert stream is False  # TODO: support stream mode
+    
+    def get_grammar(function_call):
+        function_body = None
+        for function in functions or []:
+            if function["name"] == function_call:
+                function_body = function["parameters"]
+                break
+        for tool in tools or []:
+            if tool["type"] == "function" and tool["function"]["name"] == function_call:
+                function_body = tool["function"]["parameters"]
+                break
+            
         try:
             with suppress_stdout_stderr(disable=llama.verbose):
                 grammar_text = llama_grammar.json_schema_to_gbnf(
@@ -1182,21 +1168,38 @@ def functionary_v1_chat_handler(
                 grammar = llama_grammar.LlamaGrammar.from_string(
                     llama_grammar.JSON_GBNF
                 )
+        
+        return grammar
+    
+    # If no or "auto" tool_choice/function_call
+    if function_call is None or (
+        isinstance(function_call, str) and function_call == "auto"
+    ):
+        stops = ["\n", END_ASSISTANT_TOKEN]
+    # If tool_choice/function_call is "none"
+    elif isinstance(function_call, str) and function_call == "none":
+        prompt = prepare_messages_for_inference(messages, tokenizer, [], [])
+        stops = END_ASSISTANT_TOKEN
+    # If tool_choice/function_call is provided
+    elif isinstance(function_call, dict):
+        prompt += f"{START_FUNCTION_CALL_TOKEN}{function_call['name']}:\n"
+        function_call = function_call["name"]
+        stops = END_FUNCTION_CALL_TOKEN
+        grammar = get_grammar(function_call)
     else:
-        with suppress_stdout_stderr(disable=llama.verbose):
-            grammar = llama_grammar.LlamaGrammar.from_string(llama_grammar.JSON_GBNF)
-
+        prompt = prompt
+        stops = ["\n", END_ASSISTANT_TOKEN]
+        
     completion: llama_types.Completion = llama.create_completion(
-        prompt=new_prompt,
-        stop=["user:", "</s>"],
-        stream=False,
-        grammar=grammar,
-        max_tokens=max_tokens,
+        prompt=prompt,
         temperature=temperature,
         top_p=top_p,
         top_k=top_k,
         min_p=min_p,
         typical_p=typical_p,
+        stream=stream,
+        stop=stops,
+        max_tokens=max_tokens,
         presence_penalty=presence_penalty,
         frequency_penalty=frequency_penalty,
         repeat_penalty=repeat_penalty,
@@ -1206,11 +1209,46 @@ def functionary_v1_chat_handler(
         mirostat_eta=mirostat_eta,
         model=model,
         logits_processor=logits_processor,
-    )  # type: ignore
-
+        grammar=grammar,
+        hf_tokenizer=tokenizer,
+    )
+    completion_text = completion["choices"][0]["text"]
+    
+    # If the generation does not involve a function call
+    if START_FUNCTION_CALL_TOKEN not in prompt and START_FUNCTION_CALL_TOKEN not in completion_text:
+        return _convert_completion_to_chat(completion, stream=stream)  # type: ignore
+    elif START_FUNCTION_CALL_TOKEN not in prompt and START_FUNCTION_CALL_TOKEN in completion_text:
+        new_prompt = prompt + completion_text.replace(f"{START_FUNCTION_CALL_TOKEN} ", START_FUNCTION_CALL_TOKEN) + "\n"
+        function_call = completion_text.split(START_FUNCTION_CALL_TOKEN)[-1][:-1].strip()
+        grammar = get_grammar(function_call)
+        
+        completion: llama_types.Completion = llama.create_completion(
+            prompt=new_prompt,
+            stop=END_FUNCTION_CALL_TOKEN,
+            stream=stream,
+            grammar=grammar,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            min_p=min_p,
+            typical_p=typical_p,
+            presence_penalty=presence_penalty,
+            frequency_penalty=frequency_penalty,
+            repeat_penalty=repeat_penalty,
+            tfs_z=tfs_z,
+            mirostat_mode=mirostat_mode,
+            mirostat_tau=mirostat_tau,
+            mirostat_eta=mirostat_eta,
+            model=model,
+            logits_processor=logits_processor,
+            hf_tokenizer=tokenizer,
+        )  # type: ignore
+    else:
+        new_prompt = prompt
+    
     assert "usage" in completion
     assert isinstance(function_call, str)
-    assert stream is False  # TODO: support stream mode
 
     if llama.verbose:
         print(new_prompt)
@@ -1230,7 +1268,7 @@ def functionary_v1_chat_handler(
                     "content": None,
                     "function_call": {
                         "name": function_call,
-                        "arguments": completion["choices"][0]["text"],
+                        "arguments": completion["choices"][0]["text"].strip(),
                     },
                     "tool_calls": [
                         {
@@ -1238,7 +1276,7 @@ def functionary_v1_chat_handler(
                             "type": "function",
                             "function": {
                                 "name": function_call,
-                                "arguments": completion["choices"][0]["text"],
+                                "arguments": completion["choices"][0]["text"].strip(),
                             },
                         }
                     ],
