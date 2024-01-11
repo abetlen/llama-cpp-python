@@ -209,8 +209,8 @@ Chat completion is available through the [`create_chat_completion`](https://llam
 
 The high-level API also provides a simple interface for function calling.
 
-Note that the only set of models that supports full function calling at this time is [functionary](https://github.com/MeetKai/functionary).
-The various gguf-converted files for this set of models can be found [here](https://huggingface.co/meetkai).
+The only set of models that supports full function calling at this time is [functionary](https://github.com/MeetKai/functionary). The various gguf-converted files for this set of models can be found [here](https://huggingface.co/meetkai). Functionary is able to intelligently call functions and also analyze any provided function outputs to generate coherent responses. All v2 models of functionary supports **parallel function calling**.
+
 Note that due to discrepancies between llama.cpp and HuggingFace's tokenizers, it is required to provide the path to the HF tokenizer for functionary. They are already included in the respective HF repositories hosting the gguf files.
 
 
@@ -218,12 +218,8 @@ Note that due to discrepancies between llama.cpp and HuggingFace's tokenizers, i
 >>> from llama_cpp import Llama
 >>> llm = Llama(model_path="path/to/functionary/llama-model.gguf", chat_format="functionary")
 >>> llm.create_chat_completion(
+      hf_tokenizer_path="path/to/functionary-gguf/"
       messages = [
-        {
-          "role": "system",
-          "content": "A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. The assistant calls functions with appropriate input when necessary"
-          
-        },
         {
           "role": "user",
           "content": "Extract Jason is 25 years old"
@@ -256,7 +252,6 @@ Note that due to discrepancies between llama.cpp and HuggingFace's tokenizers, i
           "name": "UserDetail"
         }
       }],
-      hf_tokenizer_path="path/to/functionary-gguf/"
 )
 ```
 
