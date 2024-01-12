@@ -329,12 +329,12 @@ Note that due to discrepancies between llama.cpp and HuggingFace's tokenizers, i
           }
         }
       }],
-      tool_choice=[{
+      tool_choice={
         "type": "function",
         "function": {
           "name": "UserDetail"
         }
-      }],
+      },
 )
 ```
 
