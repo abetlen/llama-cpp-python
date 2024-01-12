@@ -218,7 +218,7 @@ Note that due to discrepancies between llama.cpp and HuggingFace's tokenizers, i
 >>> from llama_cpp import Llama
 >>> llm = Llama(model_path="path/to/functionary/llama-model.gguf", chat_format="functionary")
 >>> llm.create_chat_completion(
-      hf_tokenizer_path="path/to/functionary-gguf/"
+      hf_tokenizer_path="path/to/functionary-gguf/",
       messages = [
         {
           "role": "user",
