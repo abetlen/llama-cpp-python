@@ -18,7 +18,6 @@ from os import cpu_count, path
 import llama_cpp
 from common import GptParams, gpt_params_parse, gpt_random_prompt
 import util
-import os
 
 # A LLaMA interactive session
 class LLaMAInteract:
