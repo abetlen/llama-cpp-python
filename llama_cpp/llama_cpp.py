@@ -112,8 +112,8 @@ LLAMA_FILE_MAGIC_GGSN = 0x6767736E
 
 # define LLAMA_SESSION_MAGIC   LLAMA_FILE_MAGIC_GGSN
 LLAMA_SESSION_MAGIC = LLAMA_FILE_MAGIC_GGSN
-# define LLAMA_SESSION_VERSION 3
-LLAMA_SESSION_VERSION = 3
+# define LLAMA_SESSION_VERSION 4
+LLAMA_SESSION_VERSION = 4
 
 
 # struct llama_model;
@@ -220,6 +220,14 @@ LLAMA_ROPE_SCALING_LINEAR = 1
 LLAMA_ROPE_SCALING_YARN = 2
 LLAMA_ROPE_SCALING_MAX_VALUE = LLAMA_ROPE_SCALING_YARN
 
+# enum llama_split_mode {
+#     LLAMA_SPLIT_NONE    = 0, // single GPU
+#     LLAMA_SPLIT_LAYER   = 1, // split layers and KV across GPUs
+#     LLAMA_SPLIT_ROW     = 2, // split rows across GPUs
+# };
+LLAMA_SPLIT_NONE = 0
+LLAMA_SPLIT_LAYER = 1
+LLAMA_SPLIT_ROW = 2
 
 # typedef struct llama_token_data {
 #     llama_token id; // token id
@@ -365,19 +373,27 @@ class llama_model_kv_override(Structure):
 
 # struct llama_model_params {
 #     int32_t n_gpu_layers; // number of layers to store in VRAM
-#     int32_t main_gpu;     // the GPU that is used for scratch and small tensors
-#     const float * tensor_split; // how to split layers across multiple GPUs (size: LLAMA_MAX_DEVICES)
+#     enum llama_split_mode split_mode; // how to split the model across multiple GPUs
+
+#     // main_gpu interpretation depends on split_mode:
+#     // LLAMA_SPLIT_NONE: the GPU that is used for the entire model
+#     // LLAMA_SPLIT_ROW: the GPU that is used for small tensors and intermediate results
+#     // LLAMA_SPLIT_LAYER: ignored
+#     int32_t main_gpu;
+
+#     // proportion of the model (layers or rows) to offload to each GPU, size: LLAMA_MAX_DEVICES
+#     const float * tensor_split;
 
 #     // Called with a progress value between 0.0 and 1.0. Pass NULL to disable.
 #     // If the provided progress_callback returns true, model loading continues.
 #     // If it returns false, model loading is immediately aborted.
 #     llama_progress_callback progress_callback;
+
 #     // context pointer passed to the progress callback
 #     void * progress_callback_user_data;
 
 #     // override key-value pairs of the model meta data
 #     const struct llama_model_kv_override * kv_overrides;
-
 
 #     // Keep the booleans together to avoid misalignment during copy-by-value.
 #     bool vocab_only; // only load the vocabulary, no weights
@@ -389,8 +405,9 @@ class llama_model_params(Structure):
 
     Attributes:
         n_gpu_layers (int): number of layers to store in VRAM
-        main_gpu (int): the GPU that is used for scratch and small tensors
-        tensor_split (ctypes.Array[ctypes.c_float]): how to split layers across multiple GPUs (size: LLAMA_MAX_DEVICES)
+        split_mode (int): how to split the model across multiple GPUs
+        main_gpu (int): the GPU that is used for the entire model. main_gpu interpretation depends on split_mode: LLAMA_SPLIT_NONE: the GPU that is used for the entire model LLAMA_SPLIT_ROW: the GPU that is used for small tensors and intermediate results LLAMA_SPLIT_LAYER: ignored
+        tensor_split (ctypes.Array[ctypes.c_float]): proportion of the model (layers or rows) to offload to each GPU, size: LLAMA_MAX_DEVICES 
         progress_callback (llama_progress_callback): called with a progress value between 0.0 and 1.0. Pass NULL to disable. If the provided progress_callback returns true, model loading continues. If it returns false, model loading is immediately aborted.
         progress_callback_user_data (ctypes.c_void_p): context pointer passed to the progress callback
         kv_overrides (ctypes.Array[llama_model_kv_override]): override key-value pairs of the model meta data
@@ -400,6 +417,7 @@ class llama_model_params(Structure):
 
     _fields_ = [
         ("n_gpu_layers", c_int32),
+        ("split_mode", c_int),
         ("main_gpu", c_int32),
         ("tensor_split", c_float_p),
         ("progress_callback", llama_progress_callback),
