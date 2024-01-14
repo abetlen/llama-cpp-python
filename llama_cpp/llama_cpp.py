@@ -526,6 +526,7 @@ It might not exist for progress report where '.' is output repeatedly."""
 #     bool quantize_output_tensor; // quantize output.weight
 #     bool only_copy;              // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
 #     bool pure;                   // disable k-quant mixtures and quantize all tensors to the same type
+#     void * imatrix;              // pointer to importance matrix data
 # } llama_model_quantize_params;
 class llama_model_quantize_params(Structure):
     """Parameters for llama_model_quantize
@@ -537,6 +538,7 @@ class llama_model_quantize_params(Structure):
         quantize_output_tensor (bool): quantize output.weight
         only_copy (bool): only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
         pure (bool): disable k-quant mixtures and quantize all tensors to the same type
+        imatrix (ctypes.c_void_p): pointer to importance matrix data
     """
 
     _fields_ = [
@@ -545,6 +547,8 @@ class llama_model_quantize_params(Structure):
         ("allow_requantize", c_bool),
         ("quantize_output_tensor", c_bool),
         ("only_copy", c_bool),
+        ("pure", c_bool),
+        ("imatrix", c_void_p),
     ]
 
 
