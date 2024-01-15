@@ -50,7 +50,7 @@ class ModelSettings(BaseSettings):
     )
     kv_overrides: Optional[List[str]] = Field(
         default=None,
-        description="List of model kv overrides in the format key=value:type where type is one of (bool, int, float). Valid true values are (true, TRUE, 1), otherwise false.",
+        description="List of model kv overrides in the format key=type:value where type is one of (bool, int, float). Valid true values are (true, TRUE, 1), otherwise false.",
     )
     # Context Params
     seed: int = Field(

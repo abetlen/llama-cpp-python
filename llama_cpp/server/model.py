@@ -79,7 +79,7 @@ class LlamaProxy:
             for kv in settings.kv_overrides:
                 key, value = kv.split("=")
                 if ":" in value:
-                    value, value_type = value.split(":")
+                    value_type, value = value.split(":")
                     if value_type == "bool":
                         kv_overrides[key] = value.lower() in ["true", "1"]
                     elif value_type == "int":
