@@ -48,6 +48,10 @@ class ModelSettings(BaseSettings):
         default=llama_cpp.llama_mlock_supported(),
         description="Use mlock.",
     )
+    kv_overrides: Optional[List[str]] = Field(
+        default=None,
+        description="List of model kv overrides in the format key=value:type where type is one of (bool, int, float). Valid true values are (true, TRUE, 1), otherwise false.",
+    )
     # Context Params
     seed: int = Field(
         default=llama_cpp.LLAMA_DEFAULT_SEED, description="Random seed. -1 for random."

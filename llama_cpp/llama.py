@@ -735,7 +735,7 @@ class Llama:
         vocab_only: bool = False,
         use_mmap: bool = True,
         use_mlock: bool = False,
-        kv_overrides: Optional[str] = None,
+        kv_overrides: Optional[Dict[str, Union[bool, int, float]]] = None,
         # Context Params
         seed: int = llama_cpp.LLAMA_DEFAULT_SEED,
         n_ctx: int = 512,
@@ -804,6 +804,7 @@ class Llama:
             vocab_only: Only load the vocabulary no weights.
             use_mmap: Use mmap if possible.
             use_mlock: Force the system to keep the model in RAM.
+            kv_overrides: Key-value overrides for the model.
             seed: RNG seed, -1 for random
             n_ctx: Text context, 0 = from model
             n_batch: Prompt processing maximum batch size
@@ -867,31 +868,33 @@ class Llama:
         self.model_params.use_mmap = use_mmap if lora_path is None else False
         self.model_params.use_mlock = use_mlock
 
-        overrides = kv_overrides.split()
-        KvOverrideArray = llama_cpp.llama_model_kv_override * (len(overrides) + 1)
-        kv_overrides_array = KvOverrideArray()
+        self.kv_overrides = kv_overrides
+        if kv_overrides is not None:
+            n_overrides = len(kv_overrides)
+            self._kv_overrides_array = llama_cpp.llama_model_kv_override * (n_overrides + 1)
+            self._kv_overrides_array_keys = []
 
-        for i, override in enumerate(overrides):
-            k, tv = override.split("=")
-            t, v = tv.split(":")
+            for k, v in kv_overrides.items():
+                key_buf = ctypes.create_string_buffer(k.encode("utf-8"))
+                self._kv_overrides_array_keys.append(key_buf)
+                self._kv_overrides_array[i].key = key_buf
+                if isinstance(v, int):
+                    self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_INT
+                    self._kv_overrides_array[i].value.int_value = v
+                elif isinstance(v, float):
+                    self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_FLOAT
+                    self._kv_overrides_array[i].value.float_value = v
+                elif isinstance(v, bool):
+                    self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_BOOL
+                    self._kv_overrides_array[i].value.bool_value = v
+                else:
+                    raise ValueError(f"Unknown value type for {k}: {v}")
 
-            kv_overrides_array[i].key = k.encode()  # to bytes
+            self._kv_overrides_array_sentinel_key = b'\0'
 
-            if t == "int":
-                kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_INT
-                kv_overrides_array[i].value.int_value = int(v)
-            elif t == "float":
-                kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_FLOAT
-                kv_overrides_array[i].value.float_value = float(v)
-            elif t == "bool":
-                kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_BOOL
-                kv_overrides_array[i].value.bool_value = v.lower() in ["true", "1"]
-            else:
-                raise ValueError(f"Unknown value type: {t}")
-
-        # null array sentinel
-        kv_overrides_array[len(overrides)].key = b'\0'
-        self.model_params.kv_overrides = ctypes.pointer(kv_overrides_array[0])
+            # null array sentinel
+            self._kv_overrides_array[n_overrides].key = self._kv_overrides_array_sentinel_key
+            self.model_params.kv_overrides = ctypes.pointer(self._kv_overrides_array[0])
 
         self.n_batch = min(n_ctx, n_batch)  # ???
         self.n_threads = n_threads or max(multiprocessing.cpu_count() // 2, 1)
@@ -2175,6 +2178,7 @@ class Llama:
             vocab_only=self.model_params.vocab_only,
             use_mmap=self.model_params.use_mmap,
             use_mlock=self.model_params.use_mlock,
+            kv_overrides=self.model_params.kv_overrides,
             # Context Params
             seed=self.context_params.seed,
             n_ctx=self.context_params.n_ctx,
@@ -2217,6 +2221,7 @@ class Llama:
             vocab_only=state["vocab_only"],
             use_mmap=state["use_mmap"],
             use_mlock=state["use_mlock"],
+            kv_overrides=state["kv_overrides"],
             # Context Params
             seed=state["seed"],
             n_ctx=state["n_ctx"],
