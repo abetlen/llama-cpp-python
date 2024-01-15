@@ -229,6 +229,7 @@ LLAMA_SPLIT_NONE = 0
 LLAMA_SPLIT_LAYER = 1
 LLAMA_SPLIT_ROW = 2
 
+
 # typedef struct llama_token_data {
 #     llama_token id; // token id
 #     float logit;    // log-odds of the token
@@ -395,6 +396,7 @@ class llama_model_kv_override(Structure):
 #     // override key-value pairs of the model meta data
 #     const struct llama_model_kv_override * kv_overrides;
 
+
 #     // Keep the booleans together to avoid misalignment during copy-by-value.
 #     bool vocab_only; // only load the vocabulary, no weights
 #     bool use_mmap;   // use mmap if possible
@@ -407,7 +409,7 @@ class llama_model_params(Structure):
         n_gpu_layers (int): number of layers to store in VRAM
         split_mode (int): how to split the model across multiple GPUs
         main_gpu (int): the GPU that is used for the entire model. main_gpu interpretation depends on split_mode: LLAMA_SPLIT_NONE: the GPU that is used for the entire model LLAMA_SPLIT_ROW: the GPU that is used for small tensors and intermediate results LLAMA_SPLIT_LAYER: ignored
-        tensor_split (ctypes.Array[ctypes.c_float]): proportion of the model (layers or rows) to offload to each GPU, size: LLAMA_MAX_DEVICES 
+        tensor_split (ctypes.Array[ctypes.c_float]): proportion of the model (layers or rows) to offload to each GPU, size: LLAMA_MAX_DEVICES
         progress_callback (llama_progress_callback): called with a progress value between 0.0 and 1.0. Pass NULL to disable. If the provided progress_callback returns true, model loading continues. If it returns false, model loading is immediately aborted.
         progress_callback_user_data (ctypes.c_void_p): context pointer passed to the progress callback
         kv_overrides (ctypes.Array[llama_model_kv_override]): override key-value pairs of the model meta data
@@ -1960,14 +1962,39 @@ _lib.llama_sample_repetition_penalties.restype = None
 
 
 # /// @details Apply classifier-free guidance to the logits as described in academic paper "Stay on topic with Classifier-Free Guidance" https://arxiv.org/abs/2306.17806
-# /// @param candidates A vector of `llama_token_data` containing the candidate tokens, the logits must be directly extracted from the original generation context without being sorted.
-# /// @params guidance_ctx A separate context from the same model. Other than a negative prompt at the beginning, it should have all generated and user input tokens copied from the main context.
-# /// @params scale Guidance strength. 1.0f means no guidance. Higher values mean stronger guidance.
-# LLAMA_API void llama_sample_classifier_free_guidance(
-#             struct llama_context * ctx,
+# /// @param logits Logits extracted from the original generation context.
+# /// @param logits_guidance Logits extracted from a separate context from the same model. Other than a negative prompt at the beginning, it should have all generated and user input tokens copied from the main context.
+# /// @param scale Guidance strength. 1.0f means no guidance. Higher values mean stronger guidance.
+# LLAMA_API void llama_sample_apply_guidance(
+#           struct llama_context * ctx,
+#                          float * logits,
+#                          float * logits_guidance,
+#                          float   scale);
+def llama_sample_apply_guidance(
+    ctx: llama_context_p,
+    logits,  # type: _Pointer[c_float]
+    logits_guidance,  # type: _Pointer[c_float]
+    scale: Union[c_float, float],
+):
+    """Apply classifier-free guidance to the logits as described in academic paper "Stay on topic with Classifier-Free Guidance" https://arxiv.org/abs/2306.17806"""
+    return _lib.llama_sample_apply_guidance(ctx, logits, logits_guidance, scale)
+
+
+_lib.llama_sample_apply_guidance.argtypes = [
+    llama_context_p,
+    c_float_p,
+    c_float_p,
+    c_float,
+]
+_lib.llama_sample_apply_guidance.restype = None
+
+
+# LLAMA_API DEPRECATED(void llama_sample_classifier_free_guidance(
+#           struct llama_context * ctx,
 #         llama_token_data_array * candidates,
-#             struct llama_context * guidance_ctx,
-#                             float   scale);
+#           struct llama_context * guidance_ctx,
+#                          float   scale),
+#           "use llama_sample_apply_guidance() instead");
 def llama_sample_classifier_free_guidance(
     ctx: llama_context_p,
     candidates,  # type: _Pointer[llama_token_data_array]
