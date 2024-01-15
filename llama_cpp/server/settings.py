@@ -28,6 +28,10 @@ class ModelSettings(BaseSettings):
         ge=-1,
         description="The number of layers to put on the GPU. The rest will be on the CPU. Set -1 to move all to GPU.",
     )
+    split_mode: int = Field(
+        default=llama_cpp.LLAMA_SPLIT_LAYER,
+        description="The split mode to use.",
+    )
     main_gpu: int = Field(
         default=0,
         ge=0,

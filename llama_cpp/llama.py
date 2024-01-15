@@ -730,6 +730,7 @@ class Llama:
         *,
         # Model Params
         n_gpu_layers: int = 0,
+        split_mode: int = llama_cpp.LLAMA_SPLIT_LAYER,
         main_gpu: int = 0,
         tensor_split: Optional[List[float]] = None,
         vocab_only: bool = False,
@@ -799,7 +800,8 @@ class Llama:
         Args:
             model_path: Path to the model.
             n_gpu_layers: Number of layers to offload to GPU (-ngl). If -1, all layers are offloaded.
-            main_gpu: The GPU that is used for scratch and small tensors.
+            split_mode: How to split the model across GPUs. See llama_cpp.LLAMA_SPLIT_* for options.
+            main_gpu: main_gpu interpretation depends on split_mode: LLAMA_SPLIT_NONE: the GPU that is used for the entire model. LLAMA_SPLIT_ROW: the GPU that is used for small tensors and intermediate results. LLAMA_SPLIT_LAYER: ignored
             tensor_split: How split tensors should be distributed across GPUs. If None, the model is not split.
             vocab_only: Only load the vocabulary no weights.
             use_mmap: Use mmap if possible.
@@ -850,6 +852,7 @@ class Llama:
         self.model_params.n_gpu_layers = (
             0x7FFFFFFF if n_gpu_layers == -1 else n_gpu_layers
         )  # 0x7FFFFFFF is INT32 max, will be auto set to all layers
+        self.model_params.split_mode = split_mode
         self.model_params.main_gpu = main_gpu
         self.tensor_split = tensor_split
         self._c_tensor_split = None
@@ -2173,6 +2176,7 @@ class Llama:
             model_path=self.model_path,
             # Model Params
             n_gpu_layers=self.model_params.n_gpu_layers,
+            split_mode=self.model_params.split_mode,
             main_gpu=self.model_params.main_gpu,
             tensor_split=self.tensor_split,
             vocab_only=self.model_params.vocab_only,
@@ -2216,6 +2220,7 @@ class Llama:
             model_path=state["model_path"],
             # Model Params
             n_gpu_layers=state["n_gpu_layers"],
+            split_mode=state["split_mode"],
             main_gpu=state["main_gpu"],
             tensor_split=state["tensor_split"],
             vocab_only=state["vocab_only"],
