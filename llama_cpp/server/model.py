@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional, Union, List
+from typing import Dict, Optional, Union, List
 
 import llama_cpp
 
@@ -71,6 +71,23 @@ class LlamaProxy:
             chat_handler = llama_cpp.llama_chat_format.Llava15ChatHandler(
                 clip_model_path=settings.clip_model_path, verbose=settings.verbose
             )
+        
+        kv_overrides: Optional[Dict[str, Union[bool, int, float]]] = None
+        if settings.kv_overrides is not None:
+            assert isinstance(settings.kv_overrides, list)
+            kv_overrides = {}
+            for kv in settings.kv_overrides:
+                key, value = kv.split("=")
+                if ":" in value:
+                    value_type, value = value.split(":")
+                    if value_type == "bool":
+                        kv_overrides[key] = value.lower() in ["true", "1"]
+                    elif value_type == "int":
+                        kv_overrides[key] = int(value)
+                    elif value_type == "float":
+                        kv_overrides[key] = float(value)
+                    else:
+                        raise ValueError(f"Unknown value type {value_type}")
 
         _model = llama_cpp.Llama(
             model_path=settings.model,
@@ -81,6 +98,7 @@ class LlamaProxy:
             vocab_only=settings.vocab_only,
             use_mmap=settings.use_mmap,
             use_mlock=settings.use_mlock,
+            kv_overrides=kv_overrides,
             # Context Params
             seed=settings.seed,
             n_ctx=settings.n_ctx,
