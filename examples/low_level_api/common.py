@@ -106,7 +106,7 @@ def gpt_params_parse(argv = None):
     parser.add_argument("--mirostat_lr", type=float, default=0.1, help="Mirostat learning rate, parameter eta",dest="mirostat_eta")
 
     parser.add_argument("-m", "--model", type=str, default="./models/llama-7B/ggml-model.bin", help="model path",dest="model")
-    parser.add_argument("-p", "--prompt", type=str, default="", help="initial prompt",dest="prompt")
+    parser.add_argument("-p", "--prompt", type=str, default=None, help="initial prompt",dest="prompt")
     parser.add_argument("-f", "--file", type=str, default=None, help="file containing initial prompt to load",dest="file")
     parser.add_argument("--session", type=str, default=None, help="file to cache model state in (may be large!)",dest="path_session")
     parser.add_argument("--in-prefix", type=str, default="", help="string to prefix user inputs with", dest="input_prefix")
