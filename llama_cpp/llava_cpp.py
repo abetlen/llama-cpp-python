@@ -21,7 +21,7 @@ from ctypes import (
 import pathlib
 from typing import List, Union
 
-import llama_cpp.llama_cpp as llama_cpp
+from . import llama_cpp
 
 # Load the library
 def _load_shared_library(lib_base_name: str):

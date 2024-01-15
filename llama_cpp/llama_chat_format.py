@@ -6,9 +6,9 @@ import ctypes
 import dataclasses
 from typing import Any, Dict, Iterator, List, Optional, Tuple, Union, Protocol
 
-import llama_cpp.llama as llama
-import llama_cpp.llama_types as llama_types
-import llama_cpp.llama_grammar as llama_grammar
+from . import llama
+from . import llama_types
+from . import llama_grammar
 
 from ._utils import suppress_stdout_stderr
 
@@ -1113,7 +1113,7 @@ class Llava15ChatHandler:
     _clip_free = None
 
     def __init__(self, clip_model_path: str, verbose: bool = False):
-        import llama_cpp.llava_cpp as llava_cpp
+        from . import llava_cpp
 
         self._llava_cpp = llava_cpp
         self.clip_model_path = clip_model_path
