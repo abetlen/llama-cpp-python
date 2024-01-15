@@ -28,6 +28,10 @@ class ModelSettings(BaseSettings):
         ge=-1,
         description="The number of layers to put on the GPU. The rest will be on the CPU. Set -1 to move all to GPU.",
     )
+    split_mode: int = Field(
+        default=llama_cpp.LLAMA_SPLIT_LAYER,
+        description="The split mode to use.",
+    )
     main_gpu: int = Field(
         default=0,
         ge=0,
@@ -47,6 +51,10 @@ class ModelSettings(BaseSettings):
     use_mlock: bool = Field(
         default=llama_cpp.llama_mlock_supported(),
         description="Use mlock.",
+    )
+    kv_overrides: Optional[List[str]] = Field(
+        default=None,
+        description="List of model kv overrides in the format key=type:value where type is one of (bool, int, float). Valid true values are (true, TRUE, 1), otherwise false.",
     )
     # Context Params
     seed: int = Field(
