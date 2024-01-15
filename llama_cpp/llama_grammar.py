@@ -1433,7 +1433,6 @@ class SchemaConverter:
 
     def visit(self, schema: Dict[str, Any], name: str) -> str:
         schema_type: Optional[str] = schema.get("type") # type: ignore
-        assert isinstance(schema_type, str), f"Unrecognized schema: {schema}"
         rule_name = name or "root"
 
         if "$defs" in schema:
