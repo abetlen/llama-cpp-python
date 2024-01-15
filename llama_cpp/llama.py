@@ -894,7 +894,7 @@ class Llama:
 
             # null array sentinel
             self._kv_overrides_array[n_overrides].key = self._kv_overrides_array_sentinel_key
-            self.model_params.kv_overrides = ctypes.pointer(self._kv_overrides_array[0])
+            self.model_params.kv_overrides = self._kv_overrides_array
 
         self.n_batch = min(n_ctx, n_batch)  # ???
         self.n_threads = n_threads or max(multiprocessing.cpu_count() // 2, 1)
@@ -2178,7 +2178,7 @@ class Llama:
             vocab_only=self.model_params.vocab_only,
             use_mmap=self.model_params.use_mmap,
             use_mlock=self.model_params.use_mlock,
-            kv_overrides=self.model_params.kv_overrides,
+            kv_overrides=self.kv_overrides,
             # Context Params
             seed=self.context_params.seed,
             n_ctx=self.context_params.n_ctx,
