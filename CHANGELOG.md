@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.29]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@4483396751c79dea540808b9cb9238245d06da2b
+- feat: Add split_mode option by @abetlen in 84615adbc6855c8384807c42f0130f9a1763f99d
+- feat: Implement GGUF metadata KV overrides by @phiharri in #1011
+- fix: Avoid "LookupError: unknown encoding: ascii" when open() called in a destructor by @yieldthought in #1012
+- fix: Fix low_level_api_chat_cpp example to match current API by @aniljava in #1086
+- fix: Fix Pydantic model parsing by @DeNeutoy in #1087
+
 ## [0.2.28]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@6efb8eb30e7025b168f3fda3ff83b9b386428ad6

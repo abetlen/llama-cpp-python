@@ -1,11 +1,15 @@
 import os
 import sys
 
+import sys, traceback
+
+# Avoid "LookupError: unknown encoding: ascii" when open() called in a destructor
+outnull_file = open(os.devnull, "w")
+errnull_file = open(os.devnull, "w")
 
 class suppress_stdout_stderr(object):
     # NOTE: these must be "saved" here to avoid exceptions when using
     #       this context manager inside of a __del__ method
-    open = open
     sys = sys
     os = os
 
@@ -21,9 +25,6 @@ class suppress_stdout_stderr(object):
         if not hasattr(self.sys.stdout, 'fileno') or not hasattr(self.sys.stderr, 'fileno'):
             return self  # Return the instance without making changes
 
-        self.outnull_file = self.open(self.os.devnull, "w")
-        self.errnull_file = self.open(self.os.devnull, "w")
-
         self.old_stdout_fileno_undup = self.sys.stdout.fileno()
         self.old_stderr_fileno_undup = self.sys.stderr.fileno()
 
@@ -33,11 +34,11 @@ class suppress_stdout_stderr(object):
         self.old_stdout = self.sys.stdout
         self.old_stderr = self.sys.stderr
 
-        self.os.dup2(self.outnull_file.fileno(), self.old_stdout_fileno_undup)
-        self.os.dup2(self.errnull_file.fileno(), self.old_stderr_fileno_undup)
+        self.os.dup2(outnull_file.fileno(), self.old_stdout_fileno_undup)
+        self.os.dup2(errnull_file.fileno(), self.old_stderr_fileno_undup)
 
-        self.sys.stdout = self.outnull_file
-        self.sys.stderr = self.errnull_file
+        self.sys.stdout = outnull_file
+        self.sys.stderr = errnull_file
         return self
 
     def __exit__(self, *_):
@@ -54,6 +55,3 @@ class suppress_stdout_stderr(object):
 
             self.os.close(self.old_stdout_fileno)
             self.os.close(self.old_stderr_fileno)
-
-            self.outnull_file.close()
-            self.errnull_file.close()

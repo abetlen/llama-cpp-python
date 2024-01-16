@@ -730,11 +730,13 @@ class Llama:
         *,
         # Model Params
         n_gpu_layers: int = 0,
+        split_mode: int = llama_cpp.LLAMA_SPLIT_LAYER,
         main_gpu: int = 0,
         tensor_split: Optional[List[float]] = None,
         vocab_only: bool = False,
         use_mmap: bool = True,
         use_mlock: bool = False,
+        kv_overrides: Optional[Dict[str, Union[bool, int, float]]] = None,
         # Context Params
         seed: int = llama_cpp.LLAMA_DEFAULT_SEED,
         n_ctx: int = 512,
@@ -798,11 +800,13 @@ class Llama:
         Args:
             model_path: Path to the model.
             n_gpu_layers: Number of layers to offload to GPU (-ngl). If -1, all layers are offloaded.
-            main_gpu: The GPU that is used for scratch and small tensors.
+            split_mode: How to split the model across GPUs. See llama_cpp.LLAMA_SPLIT_* for options.
+            main_gpu: main_gpu interpretation depends on split_mode: LLAMA_SPLIT_NONE: the GPU that is used for the entire model. LLAMA_SPLIT_ROW: the GPU that is used for small tensors and intermediate results. LLAMA_SPLIT_LAYER: ignored
             tensor_split: How split tensors should be distributed across GPUs. If None, the model is not split.
             vocab_only: Only load the vocabulary no weights.
             use_mmap: Use mmap if possible.
             use_mlock: Force the system to keep the model in RAM.
+            kv_overrides: Key-value overrides for the model.
             seed: RNG seed, -1 for random
             n_ctx: Text context, 0 = from model
             n_batch: Prompt processing maximum batch size
@@ -848,6 +852,7 @@ class Llama:
         self.model_params.n_gpu_layers = (
             0x7FFFFFFF if n_gpu_layers == -1 else n_gpu_layers
         )  # 0x7FFFFFFF is INT32 max, will be auto set to all layers
+        self.model_params.split_mode = split_mode
         self.model_params.main_gpu = main_gpu
         self.tensor_split = tensor_split
         self._c_tensor_split = None
@@ -865,6 +870,34 @@ class Llama:
         self.model_params.vocab_only = vocab_only
         self.model_params.use_mmap = use_mmap if lora_path is None else False
         self.model_params.use_mlock = use_mlock
+
+        self.kv_overrides = kv_overrides
+        if kv_overrides is not None:
+            n_overrides = len(kv_overrides)
+            self._kv_overrides_array = llama_cpp.llama_model_kv_override * (n_overrides + 1)
+            self._kv_overrides_array_keys = []
+
+            for k, v in kv_overrides.items():
+                key_buf = ctypes.create_string_buffer(k.encode("utf-8"))
+                self._kv_overrides_array_keys.append(key_buf)
+                self._kv_overrides_array[i].key = key_buf
+                if isinstance(v, int):
+                    self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_INT
+                    self._kv_overrides_array[i].value.int_value = v
+                elif isinstance(v, float):
+                    self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_FLOAT
+                    self._kv_overrides_array[i].value.float_value = v
+                elif isinstance(v, bool):
+                    self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_BOOL
+                    self._kv_overrides_array[i].value.bool_value = v
+                else:
+                    raise ValueError(f"Unknown value type for {k}: {v}")
+
+            self._kv_overrides_array_sentinel_key = b'\0'
+
+            # null array sentinel
+            self._kv_overrides_array[n_overrides].key = self._kv_overrides_array_sentinel_key
+            self.model_params.kv_overrides = self._kv_overrides_array
 
         self.n_batch = min(n_ctx, n_batch)  # ???
         self.n_threads = n_threads or max(multiprocessing.cpu_count() // 2, 1)
@@ -2143,11 +2176,13 @@ class Llama:
             model_path=self.model_path,
             # Model Params
             n_gpu_layers=self.model_params.n_gpu_layers,
+            split_mode=self.model_params.split_mode,
             main_gpu=self.model_params.main_gpu,
             tensor_split=self.tensor_split,
             vocab_only=self.model_params.vocab_only,
             use_mmap=self.model_params.use_mmap,
             use_mlock=self.model_params.use_mlock,
+            kv_overrides=self.kv_overrides,
             # Context Params
             seed=self.context_params.seed,
             n_ctx=self.context_params.n_ctx,
@@ -2185,11 +2220,13 @@ class Llama:
             model_path=state["model_path"],
             # Model Params
             n_gpu_layers=state["n_gpu_layers"],
+            split_mode=state["split_mode"],
             main_gpu=state["main_gpu"],
             tensor_split=state["tensor_split"],
             vocab_only=state["vocab_only"],
             use_mmap=state["use_mmap"],
             use_mlock=state["use_mlock"],
+            kv_overrides=state["kv_overrides"],
             # Context Params
             seed=state["seed"],
             n_ctx=state["n_ctx"],
