@@ -396,9 +396,6 @@ class llama_model_kv_override(Structure):
 #     // override key-value pairs of the model meta data
 #     const struct llama_model_kv_override * kv_overrides;
 
-# Ref https://github.com/ggerganov/llama.cpp/pull/4815
-    # 
-
 #     // Keep the booleans together to avoid misalignment during copy-by-value.
 #     bool vocab_only; // only load the vocabulary, no weights
 #     bool use_mmap;   // use mmap if possible
@@ -450,6 +447,7 @@ class llama_model_params(Structure):
 #     float    yarn_beta_slow;   // YaRN high correction dim
 #     uint32_t yarn_orig_ctx;    // YaRN original context size
 
+#     // ref: https://github.com/ggerganov/llama.cpp/pull/4815
 #     int32_t grp_attn_n                      = 1;     // group-attention factor
 #     int32_t grp_attn_w                      = 512;   // group-attention width
 
