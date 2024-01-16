@@ -84,6 +84,8 @@ class ModelSettings(BaseSettings):
     yarn_beta_fast: float = Field(default=32.0)
     yarn_beta_slow: float = Field(default=1.0)
     yarn_orig_ctx: int = Field(default=0)
+    grp_attn_n: int = Field(default=1)
+    grp_attn_w: int = Field(default=512)
     mul_mat_q: bool = Field(
         default=True, description="if true, use experimental mul_mat_q kernels"
     )
