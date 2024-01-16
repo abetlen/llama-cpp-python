@@ -751,6 +751,8 @@ class Llama:
         yarn_beta_fast: float = 32.0,
         yarn_beta_slow: float = 1.0,
         yarn_orig_ctx: int = 0,
+        grp_attn_n: int = 1,
+        grp_attn_w: int = 512,
         mul_mat_q: bool = True,
         logits_all: bool = False,
         embedding: bool = False,
@@ -820,6 +822,8 @@ class Llama:
             yarn_beta_fast: YaRN low correction dim
             yarn_beta_slow: YaRN high correction dim
             yarn_orig_ctx: YaRN original context size
+            grp_attn_n: group-attention factor
+            grp_attn_w: group-attention width
             logits_all: Return logits for all tokens, not just the last token. Must be True for completion to return logprobs.
             embedding: Embedding mode only.
             offload_kqv: Offload K, Q, V to GPU.
@@ -935,6 +939,8 @@ class Llama:
             yarn_beta_slow if yarn_beta_slow != 0.0 else 0
         )
         self.context_params.yarn_orig_ctx = yarn_orig_ctx if yarn_orig_ctx != 0 else 0
+        self.context_params.grp_attn_n = grp_attn_n
+        self.context_params.grp_attn_w = grp_attn_w
         self.context_params.mul_mat_q = mul_mat_q
         self.context_params.logits_all = logits_all
         self.context_params.embedding = embedding
@@ -2197,6 +2203,8 @@ class Llama:
             yarn_beta_fast=self.context_params.yarn_beta_fast,
             yarn_beta_slow=self.context_params.yarn_beta_slow,
             yarn_orig_ctx=self.context_params.yarn_orig_ctx,
+            grp_attn_n = self.context_params.grp_attn_n,
+            grp_attn_w = self.context_params.grp_attn_w,
             mul_mat_q=self.context_params.mul_mat_q,
             logits_all=self.context_params.logits_all,
             embedding=self.context_params.embedding,
@@ -2241,6 +2249,8 @@ class Llama:
             yarn_beta_fast=state["yarn_beta_fast"],
             yarn_beta_slow=state["yarn_beta_slow"],
             yarn_orig_ctx=state["yarn_orig_ctx"],
+            grp_attn_n=state["grp_attn_n"],
+            grp_attn_w=state["grp_attn_w"],
             mul_mat_q=state["mul_mat_q"],
             logits_all=state["logits_all"],
             embedding=state["embedding"],
