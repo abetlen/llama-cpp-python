@@ -60,7 +60,7 @@ class ModelSettings(BaseSettings):
     seed: int = Field(
         default=llama_cpp.LLAMA_DEFAULT_SEED, description="Random seed. -1 for random."
     )
-    n_ctx: int = Field(default=2048, ge=1, description="The context size.")
+    n_ctx: int = Field(default=2048, ge=0, description="The context size.")
     n_batch: int = Field(
         default=512, ge=1, description="The batch size to use per eval."
     )
