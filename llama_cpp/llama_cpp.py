@@ -396,6 +396,8 @@ class llama_model_kv_override(Structure):
 #     // override key-value pairs of the model meta data
 #     const struct llama_model_kv_override * kv_overrides;
 
+# Ref https://github.com/ggerganov/llama.cpp/pull/4815
+    # 
 
 #     // Keep the booleans together to avoid misalignment during copy-by-value.
 #     bool vocab_only; // only load the vocabulary, no weights
@@ -448,6 +450,9 @@ class llama_model_params(Structure):
 #     float    yarn_beta_slow;   // YaRN high correction dim
 #     uint32_t yarn_orig_ctx;    // YaRN original context size
 
+#     int32_t grp_attn_n                      = 1;     // group-attention factor
+#     int32_t grp_attn_w                      = 512;   // group-attention width
+
 #     enum ggml_type type_k; // data type for K cache
 #     enum ggml_type type_v; // data type for V cache
 
@@ -475,6 +480,8 @@ class llama_context_params(Structure):
         yarn_beta_fast (float): YaRN low correction dim
         yarn_beta_slow (float): YaRN high correction dim
         yarn_orig_ctx (int): YaRN original context size
+        grp_attn_n (int): group-attention factor
+        grp_attn_w (int): group-attention width
         type_k (int): data type for K cache
         type_v (int): data type for V cache
         mul_mat_q (bool): if true, use experimental mul_mat_q kernels (DEPRECATED - always true)
@@ -497,6 +504,8 @@ class llama_context_params(Structure):
         ("yarn_beta_fast", c_float),
         ("yarn_beta_slow", c_float),
         ("yarn_orig_ctx", c_uint32),
+        ("grp_attn_n", c_int32),
+        ("grp_attn_w", c_int32),
         ("type_k", c_int),
         ("type_v", c_int),
         ("mul_mat_q", c_bool),
