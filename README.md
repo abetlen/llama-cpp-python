@@ -14,6 +14,7 @@ This package provides:
 - High-level Python API for text completion
     - OpenAI-like API
     - [LangChain compatibility](https://python.langchain.com/docs/integrations/llms/llamacpp)
+    - [LlamaIndex compatibility](https://docs.llamaindex.ai/en/stable/examples/llm/llama_2_llama_cpp.html)
 - OpenAI compatible web server
     - [Local Copilot replacement](https://llama-cpp-python.readthedocs.io/en/latest/server/#code-completion)
     - [Function Calling support](https://llama-cpp-python.readthedocs.io/en/latest/server/#function-calling)
