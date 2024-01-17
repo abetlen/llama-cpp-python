@@ -1,3 +1,12 @@
+# -------------------------------------------------------
+# pyproject.toml
+# -------------------------------------------------------
+# This file contains configuration for both the scikit-build system and Poetry.
+# They are kept separate due to incompatibilities between the two.
+# Please refer to the README for more details on how to build and manage dependencies.
+# -------------------------------------------------------
+# Configuration for scikit-build
+# -------------------------------------------------------
 [build-system]
 requires = ["scikit-build-core[pyproject]>=0.5.1"]
 build-backend = "scikit_build_core.build"
@@ -53,6 +62,9 @@ all = [
     "llama_cpp_python[server,test,dev]",
 ]
 
+# -------------------------------------------------------
+# Configuration for Poetry starts here
+# -------------------------------------------------------
 [tool.scikit-build]
 wheel.packages = ["llama_cpp"]
 cmake.verbose = true
@@ -64,12 +76,46 @@ sdist.include = [".git", "vendor/llama.cpp/.git"]
 provider = "scikit_build_core.metadata.regex"
 input = "llama_cpp/__init__.py"
 
-[project.urls]
-Homepage = "https://github.com/abetlen/llama-cpp-python"
-Issues = "https://github.com/abetlen/llama-cpp-python/issues"
-Documentation = "https://llama-cpp-python.readthedocs.io/en/latest/"
-Changelog = "https://llama-cpp-python.readthedocs.io/en/latest/changelog/"
+[tool.poetry]
+name = "llama_cpp"
+version = "v0.2.7"
+description = "Python bindings for the llama.cpp library"
+readme = "README.md"
+license = "MIT"
+authors = ["Andrei Betlen <abetlen@gmail.com>"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
 
-[tool.pytest.ini_options]
-addopts = "--ignore=vendor"
+[tool.poetry.dependencies]
+python = ">=3.8,<4.0"
+typing-extensions = ">=4.5.0"
+numpy = ">=1.20.0"
+diskcache = ">=5.6.1"
 
+[tool.poetry.group.server.dependencies]
+uvicorn = ">=0.22.0"
+fastapi = ">=0.100.0"
+pydantic-settings = ">=2.0.1"
+sse-starlette = ">=1.6.1"
+starlette-context = ">=0.3.6,<0.4"
+
+[tool.poetry.group.dev.dependencies]
+black = ">=23.3.0"
+twine = ">=4.0.2"
+mkdocs = ">=1.4.3"
+mkdocstrings = {version = ">=0.22.0", extras = ["python"]}
+mkdocs-material = ">=9.1.18"
+pytest = ">=7.4.0"
+httpx = ">=0.24.1"
+
+[tool.poetry.group.test.dependencies]
+pytest = ">=7.4.0"
+httpx = ">=0.24.1"
+
+[tool.build]
+packages = { include = "llama-cpp-python", extras = ["server", "test", "dev"] }

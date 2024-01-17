@@ -1,0 +1,40 @@
+# Use Python 3.9 slim image as the base image
+FROM python:3.9-slim
+
+# Declare build argument for OpenBLAS
+ARG USE_OPENBLAS=false
+
+# Update and install system dependencies
+RUN apt update && \
+    apt upgrade -y && \
+    apt install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    build-essential \
+    ninja-build \
+    libopenblas-dev && \
+    apt clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy the current directory contents into the container at /app
+COPY . /app
+
+# Install Poetry
+RUN pip install poetry
+
+# Install project dependencies
+RUN poetry config virtualenvs.create false && \
+    poetry install --no-interaction --no-ansi --extras "server test dev"
+
+# Conditionally build with OpenBLAS
+RUN if [ "$USE_OPENBLAS" = "true" ] ; then \
+    CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS" pip install llama-cpp-python --verbose ; \
+    else \
+    pip install llama-cpp-python --verbose ; \
+    fi
+
+# Run the server
+CMD python3 -m llama_cpp.server
