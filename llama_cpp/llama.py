@@ -77,7 +77,7 @@ class Llama:
         mul_mat_q: bool = True,
         logits_all: bool = False,
         embedding: bool = False,
-        offload_kqv: bool = False,
+        offload_kqv: bool = True,
         # Sampling Params
         last_n_tokens_size: int = 64,
         # LoRA Params

@@ -90,7 +90,7 @@ class ModelSettings(BaseSettings):
     logits_all: bool = Field(default=True, description="Whether to return logits.")
     embedding: bool = Field(default=True, description="Whether to use embeddings.")
     offload_kqv: bool = Field(
-        default=False, description="Whether to offload kqv to the GPU."
+        default=True, description="Whether to offload kqv to the GPU."
     )
     # Sampling Params
     last_n_tokens_size: int = Field(
