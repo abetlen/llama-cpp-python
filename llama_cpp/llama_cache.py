@@ -1,5 +1,4 @@
 import sys
-
 from abc import ABC, abstractmethod
 from typing import (
     Optional,
@@ -8,7 +7,11 @@ from typing import (
 )
 from collections import OrderedDict
 
+import diskcache
+
 import llama_cpp.llama
+
+from .llama_types import *
 
 
 class BaseLlamaCache(ABC):
@@ -37,9 +40,7 @@ class BaseLlamaCache(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def __setitem__(
-        self, key: Sequence[int], value: "llama_cpp.llama.LlamaState"
-    ) -> None:
+    def __setitem__(self, key: Sequence[int], value: "llama_cpp.llama.LlamaState") -> None:
         raise NotImplementedError
 
 
@@ -49,9 +50,7 @@ class LlamaRAMCache(BaseLlamaCache):
     def __init__(self, capacity_bytes: int = (2 << 30)):
         super().__init__(capacity_bytes)
         self.capacity_bytes = capacity_bytes
-        self.cache_state: OrderedDict[
-            Tuple[int, ...], "llama_cpp.llama.LlamaState"
-        ] = OrderedDict()
+        self.cache_state: OrderedDict[Tuple[int, ...], "llama_cpp.llama.LlamaState"] = OrderedDict()
 
     @property
     def cache_size(self):
@@ -64,8 +63,7 @@ class LlamaRAMCache(BaseLlamaCache):
         min_len = 0
         min_key = None
         keys = (
-            (k, llama_cpp.llama.Llama.longest_token_prefix(k, key))
-            for k in self.cache_state.keys()
+            (k, llama_cpp.llama.Llama.longest_token_prefix(k, key)) for k in self.cache_state.keys()
         )
         for k, prefix_len in keys:
             if prefix_len > min_len:
@@ -104,8 +102,6 @@ class LlamaDiskCache(BaseLlamaCache):
     def __init__(
         self, cache_dir: str = ".cache/llama_cache", capacity_bytes: int = (2 << 30)
     ):
-        import diskcache
-
         super().__init__(capacity_bytes)
         self.cache = diskcache.Cache(cache_dir)
 
@@ -131,7 +127,7 @@ class LlamaDiskCache(BaseLlamaCache):
         _key = self._find_longest_prefix_key(key)
         if _key is None:
             raise KeyError("Key not found")
-        value: "LlamaState" = self.cache.pop(_key)  # type: ignore
+        value: "llama_cpp.llama.LlamaState" = self.cache.pop(_key)  # type: ignore
         # NOTE: This puts an integer as key in cache, which breaks,
         # Llama.longest_token_prefix(k, key) above since k is not a tuple of ints/tokens
         # self.cache.push(_key, side="front")  # type: ignore

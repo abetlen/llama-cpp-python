@@ -197,7 +197,36 @@ async def authenticate(
 
 
 @router.post(
-    "/v1/completions", summary="Completion", dependencies=[Depends(authenticate)]
+    "/v1/completions",
+    summary="Completion",
+    dependencies=[Depends(authenticate)],    
+    response_model= Union[
+        llama_cpp.CreateCompletionResponse,
+        str,
+    ],
+    responses={
+        "200": {
+            "description": "Successful Response",
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "anyOf": [
+                            {"$ref": "#/components/schemas/CreateCompletionResponse"}                            
+                        ],
+                        "title": "Completion response, when stream=False",
+                    }
+                },
+                "text/event-stream":{
+                    "schema": {                     
+                      "type": "string",
+                      "title": "Server Side Streaming response, when stream=True. " +
+                        "See SSE format: https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events#Event_stream_format",  # noqa: E501
+                      "example": """data: {... see CreateCompletionResponse ...} \\n\\n data: ... \\n\\n ... data: [DONE]"""
+                    }
+                }
+            },
+        }
+    },
 )
 @router.post(
     "/v1/engines/copilot-codex/completions",
@@ -280,7 +309,33 @@ async def create_embedding(
 
 
 @router.post(
-    "/v1/chat/completions", summary="Chat", dependencies=[Depends(authenticate)]
+    "/v1/chat/completions", summary="Chat", dependencies=[Depends(authenticate)],
+    response_model= Union[
+        llama_cpp.ChatCompletion, str
+    ],
+    responses={
+        "200": {
+            "description": "Successful Response",
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "anyOf": [
+                            {"$ref": "#/components/schemas/CreateChatCompletionResponse"}                            
+                        ],
+                        "title": "Completion response, when stream=False",
+                    }
+                },
+                "text/event-stream":{
+                    "schema": {                     
+                      "type": "string",
+                      "title": "Server Side Streaming response, when stream=True" +
+                        "See SSE format: https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events#Event_stream_format",  # noqa: E501
+                      "example": """data: {... see CreateChatCompletionResponse ...} \\n\\n data: ... \\n\\n ... data: [DONE]"""
+                    }
+                }
+            },
+        }
+    },
 )
 async def create_chat_completion(
     request: Request,

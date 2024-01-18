@@ -5,7 +5,6 @@ import sys
 import uuid
 import time
 import multiprocessing
-
 from typing import (
     List,
     Optional,
@@ -25,18 +24,23 @@ import numpy.typing as npt
 
 from .llama_types import *
 from .llama_grammar import LlamaGrammar
-from .llama_cache import BaseLlamaCache
-
+from .llama_cache import (
+    BaseLlamaCache,
+    LlamaCache,  # type: ignore
+    LlamaDiskCache,  # type: ignore
+    LlamaRAMCache,  # type: ignore
+)
 import llama_cpp.llama_cpp as llama_cpp
 import llama_cpp.llama_chat_format as llama_chat_format
 
 from ._internals import (
-    _LlamaModel,
-    _LlamaContext,
-    _LlamaBatch,
+    _LlamaModel,  # type: ignore
+    _LlamaContext,  # type: ignore
+    _LlamaBatch,  # type: ignore
     _LlamaTokenDataArray,  # type: ignore
-    _LlamaSamplingParams,
-    _LlamaSamplingContext,
+    _LlamaSamplingParams,  # type: ignore
+    _LlamaSamplingContext,  # type: ignore
+
 )
 from ._utils import suppress_stdout_stderr
 

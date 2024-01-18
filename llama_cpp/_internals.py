@@ -26,7 +26,6 @@ from ._utils import suppress_stdout_stderr
 
 class _LlamaModel:
     """Intermediate Python wrapper for a llama.cpp llama_model.
-
     NOTE: For stability it's recommended you use the Llama class instead."""
 
     _llama_free_model = None
@@ -213,7 +212,6 @@ class _LlamaModel:
 
 class _LlamaContext:
     """Intermediate Python wrapper for a llama.cpp llama_context.
-
     NOTE: For stability it's recommended you use the Llama class instead."""
 
     _llama_free = None
