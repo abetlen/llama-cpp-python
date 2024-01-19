@@ -55,7 +55,7 @@ def _parse_bool_arg(arg: str | bytes | bool) -> bool:
         raise ValueError(f"Invalid boolean argument: {arg}")
 
 
-def add_args_from_model(parser: argparse.ArgumentParser, model: type[BaseModel]):
+def add_args_from_model(parser: argparse.ArgumentParser, model: Type[BaseModel]):
     """Add arguments from a pydantic model to an argparse parser."""
 
     for name, field in model.model_fields.items():
@@ -83,7 +83,7 @@ def add_args_from_model(parser: argparse.ArgumentParser, model: type[BaseModel])
             )
 
 
-T = TypeVar("T", bound=type[BaseModel])
+T = TypeVar("T", bound=Type[BaseModel])
 
 
 def parse_model_from_args(model: T, args: argparse.Namespace) -> T:
