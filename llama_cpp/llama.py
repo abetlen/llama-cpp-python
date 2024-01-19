@@ -331,6 +331,16 @@ class Llama:
 
         self._mirostat_mu = ctypes.c_float(2.0 * 5.0) # TODO: Move this to sampling context
 
+        try:
+            self.metadata = self._model.metadata()
+        except Exception as e:
+            self.metadata = {}
+            if self.verbose:
+                print(f"Failed to load metadata: {e}", file=sys.stderr)
+        
+        if self.verbose:
+            print(f"Model metadata: {self.metadata}", file=sys.stderr)
+
     @property
     def ctx(self) -> llama_cpp.llama_context_p:
         assert self._ctx.ctx is not None
