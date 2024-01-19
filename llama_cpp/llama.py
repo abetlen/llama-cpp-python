@@ -87,7 +87,7 @@ class Llama:
         # Backend Params
         numa: bool = False,
         # Chat Format Params
-        chat_format: str = "llama-2",
+        chat_format: Optional[str] = None,
         chat_handler: Optional[llama_chat_format.LlamaChatCompletionHandler] = None,
         # Misc
         verbose: bool = True,
@@ -340,6 +340,25 @@ class Llama:
         
         if self.verbose:
             print(f"Model metadata: {self.metadata}", file=sys.stderr)
+
+        if self.chat_format is None and self.chat_handler is None and "tokenizer.chat_template" in self.metadata:
+            template = self.metadata["tokenizer.chat_template"]
+            eos_token = self.detokenize([self.token_eos()]).decode("utf-8")
+            bos_token = self.detokenize([self.token_bos()]).decode("utf-8")
+
+            if self.verbose:
+                print(f"Using chat template: {template}", file=sys.stderr)
+                print(f"Using chat eos_token: {eos_token}", file=sys.stderr)
+                print(f"Using chat bos_token: {bos_token}", file=sys.stderr)
+
+            self.chat_handler = llama_chat_format.Jinja2ChatFormatter(
+                template=template,
+                eos_token=eos_token,
+                bos_token=bos_token
+            ).to_chat_handler()
+        
+        if self.chat_format is None and self.chat_handler is None:
+            self.chat_format = "llama-2"
 
     @property
     def ctx(self) -> llama_cpp.llama_context_p:
