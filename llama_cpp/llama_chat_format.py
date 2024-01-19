@@ -319,13 +319,25 @@ def _convert_text_completion_chunks_to_chat(
                     "index": 0,
                     "delta": {
                         "content": chunk["choices"][0]["text"],
-                    }
-                    if chunk["choices"][0]["finish_reason"] is None
-                    else {},
-                    "finish_reason": chunk["choices"][0]["finish_reason"],
+                    },
+                    "finish_reason": None,
                 }
             ],
         }
+        if chunk["choices"][0]["finish_reason"] is not None:
+            yield {
+                "id": "chat" + chunk["id"],
+                "model": chunk["model"],
+                "created": chunk["created"],
+                "object": "chat.completion.chunk",
+                "choices": [
+                    {
+                        "index": 0,
+                        "delta": {},
+                        "finish_reason": chunk["choices"][0]["finish_reason"],
+                    }
+                ],
+            }
 
 
 def _convert_completion_to_chat(
