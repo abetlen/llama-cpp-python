@@ -91,6 +91,12 @@ c_float_p = POINTER(c_float)
 c_uint8_p = POINTER(c_uint8)
 c_size_t_p = POINTER(c_size_t)
 
+# from ggml-backend.h
+# typedef bool (*ggml_backend_sched_eval_callback)(struct ggml_tensor * t, bool ask, void * user_data);
+ggml_backend_sched_eval_callback = ctypes.CFUNCTYPE(
+    c_bool, c_void_p, c_bool, c_void_p
+)
+
 # llama.h bindings
 
 _lib.llama_max_devices.argtypes = []
@@ -448,6 +454,9 @@ class llama_model_params(Structure):
 #     float    yarn_beta_slow;   // YaRN high correction dim
 #     uint32_t yarn_orig_ctx;    // YaRN original context size
 
+#     ggml_backend_sched_eval_callback cb_eval;
+#     void * cb_eval_user_data;
+
 #     enum ggml_type type_k; // data type for K cache
 #     enum ggml_type type_v; // data type for V cache
 
@@ -475,6 +484,8 @@ class llama_context_params(Structure):
         yarn_beta_fast (float): YaRN low correction dim
         yarn_beta_slow (float): YaRN high correction dim
         yarn_orig_ctx (int): YaRN original context size
+        cb_eval (ggml_backend_sched_eval_callback): callback for scheduling eval
+        cb_eval_user_data (ctypes.c_void_p): user data for cb_eval
         type_k (int): data type for K cache
         type_v (int): data type for V cache
         mul_mat_q (bool): if true, use experimental mul_mat_q kernels (DEPRECATED - always true)
@@ -497,6 +508,8 @@ class llama_context_params(Structure):
         ("yarn_beta_fast", c_float),
         ("yarn_beta_slow", c_float),
         ("yarn_orig_ctx", c_uint32),
+        ("cb_eval", ggml_backend_sched_eval_callback),
+        ("cb_eval_user_data", c_void_p),
         ("type_k", c_int),
         ("type_v", c_int),
         ("mul_mat_q", c_bool),
