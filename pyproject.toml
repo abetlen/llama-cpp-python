@@ -11,8 +11,6 @@ license = { text = "MIT" }
 authors = [
     { name = "Andrei Betlen", email = "abetlen@gmail.com" },
 ]
-# mkdocs-martiral requires "jinja2~=3.0"
-# transformers requires "jinja2>=2.11.3"
 dependencies = [
     "typing-extensions>=4.5.0",
     "numpy>=1.20.0",
