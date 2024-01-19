@@ -1,50 +1,65 @@
-from typing import List
+import json
 
-import pytest
-
-from llama_cpp import ChatCompletionMessage
-from llama_cpp.llama_jinja_format import Llama2Formatter
-
-
-@pytest.fixture
-def sequence_of_messages() -> List[ChatCompletionMessage]:
-    return [
-        ChatCompletionMessage(role="system", content="Welcome to CodeHelp Bot!"),
-        ChatCompletionMessage(
-            role="user", content="Hi there! I need some help with Python."
-        ),
-        ChatCompletionMessage(
-            role="assistant", content="Of course! What do you need help with in Python?"
-        ),
-        ChatCompletionMessage(
-            role="user",
-            content="I'm trying to write a function to find the factorial of a number, but I'm stuck.",
-        ),
-        ChatCompletionMessage(
-            role="assistant",
-            content="I can help with that! Would you like a recursive or iterative solution?",
-        ),
-        ChatCompletionMessage(
-            role="user", content="Let's go with a recursive solution."
-        ),
-    ]
+from llama_cpp import (
+    ChatCompletionRequestUserMessage,
+)
+from llama_cpp.llama_chat_format import hf_tokenizer_config_to_chat_formatter
 
 
-def test_llama2_formatter(sequence_of_messages):
-    expected_prompt = (
-        "<<SYS>> Welcome to CodeHelp Bot! <</SYS>>\n"
-        "[INST] Hi there! I need some help with Python. [/INST]\n"
-        "Of course! What do you need help with in Python?\n"
-        "[INST] I'm trying to write a function to find the factorial of a number, but I'm stuck. [/INST]\n"
-        "I can help with that! Would you like a recursive or iterative solution?\n"
-        "[INST] Let's go with a recursive solution. [/INST]\n"
+mistral_7b_tokenizer_config = """{
+  "add_bos_token": true,
+  "add_eos_token": false,
+  "added_tokens_decoder": {
+    "0": {
+      "content": "<unk>",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
+    "1": {
+      "content": "<s>",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
+    "2": {
+      "content": "</s>",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    }
+  },
+  "additional_special_tokens": [],
+  "bos_token": "<s>",
+  "clean_up_tokenization_spaces": false,
+  "eos_token": "</s>",
+  "legacy": true,
+  "model_max_length": 1000000000000000019884624838656,
+  "pad_token": null,
+  "sp_model_kwargs": {},
+  "spaces_between_special_tokens": false,
+  "tokenizer_class": "LlamaTokenizer",
+  "unk_token": "<unk>",
+  "use_default_system_prompt": false,
+  "chat_template": "{{ bos_token }}{% for message in messages %}{% if (message['role'] == 'user') != (loop.index0 % 2 == 0) %}{{ raise_exception('Conversation roles must alternate user/assistant/user/assistant/...') }}{% endif %}{% if message['role'] == 'user' %}{{ '[INST] ' + message['content'] + ' [/INST]' }}{% elif message['role'] == 'assistant' %}{{ message['content'] + eos_token}}{% else %}{{ raise_exception('Only user and assistant roles are supported!') }}{% endif %}{% endfor %}"
+}"""
+
+
+def test_hf_tokenizer_config_str_to_chat_formatter():
+    tokenizer_config = json.loads(mistral_7b_tokenizer_config)
+    chat_formatter = hf_tokenizer_config_to_chat_formatter(
+        tokenizer_config
+    )
+    chat_formatter_respoonse = chat_formatter(
+        messages=[
+            ChatCompletionRequestUserMessage(role="user", content="Hello, world!"),
+        ]
     )
 
-    llama2_formatter_instance = Llama2Formatter()
-    formatter_response = llama2_formatter_instance(sequence_of_messages)
-    assert (
-        expected_prompt == formatter_response.prompt
-    ), "The formatted prompt does not match the expected output."
-
-
-# Optionally, include a test for the 'stop' if it's part of the functionality.
+    assert chat_formatter_respoonse.prompt == ("<s>[INST] Hello, world! [/INST]</s>" "")

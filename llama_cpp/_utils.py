@@ -1,7 +1,8 @@
 import os
 import sys
 
-import sys, traceback
+import sys
+from typing import Any, Dict
 
 # Avoid "LookupError: unknown encoding: ascii" when open() called in a destructor
 outnull_file = open(os.devnull, "w")
@@ -55,3 +56,25 @@ class suppress_stdout_stderr(object):
 
             self.os.close(self.old_stdout_fileno)
             self.os.close(self.old_stderr_fileno)
+
+
+class MetaSingleton(type):
+    """
+    Metaclass for implementing the Singleton pattern.
+    """
+
+    _instances: Dict[type, Any] = {}
+
+    def __call__(cls, *args: Any, **kwargs: Any) -> Any:
+        if cls not in cls._instances:
+            cls._instances[cls] = super(MetaSingleton, cls).__call__(*args, **kwargs)
+        return cls._instances[cls]
+
+
+class Singleton(object, metaclass=MetaSingleton):
+    """
+    Base class for implementing the Singleton pattern.
+    """
+
+    def __init__(self):
+        super(Singleton, self).__init__()
