@@ -41,6 +41,8 @@ from ._internals import (
     _LlamaContext,  # type: ignore
     _LlamaBatch,  # type: ignore
     _LlamaTokenDataArray,  # type: ignore
+    _LlamaSamplingParams, # type: ignore
+    _LlamaSamplingContext, # type: ignore
 )
 
 
@@ -491,78 +493,41 @@ class Llama:
         """
         assert self._ctx is not None
         assert self.n_tokens > 0
-        last_n_tokens_data = [llama_cpp.llama_token(0)] * max(
-            0, self.last_n_tokens_size - self.n_tokens
-        ) + self._input_ids[-self.last_n_tokens_size :].tolist()
-        last_n_tokens_size = len(last_n_tokens_data)
-        n_vocab = self._n_vocab
-        n_ctx = self._n_ctx
-        top_k = n_vocab if top_k <= 0 else top_k
-        last_n_tokens_size = n_ctx if last_n_tokens_size < 0 else last_n_tokens_size
-        last_n_tokens_data_c = (llama_cpp.llama_token * last_n_tokens_size)(
-            *last_n_tokens_data
-        )
+
         logits: npt.NDArray[np.single] = self._scores[-1, :]
 
         if logits_processor is not None:
             logits[:] = logits_processor(self._input_ids, logits)
 
-        nl_logit = logits[self._token_nl]
-        self._candidates.copy_logits(logits)
-        self._ctx.sample_repetition_penalties(
-            candidates=self._candidates,
-            last_tokens_data=last_n_tokens_data_c,
-            penalty_last_n=last_n_tokens_size,
+        sampling_params = _LlamaSamplingParams(
+            top_k=top_k,
+            top_p=top_p,
+            min_p=min_p,
+            tfs_z=tfs_z,
+            typical_p=typical_p,
+            temp=temp,
+            penalty_last_n=self.last_n_tokens_size,
             penalty_repeat=repeat_penalty,
             penalty_freq=frequency_penalty,
             penalty_present=presence_penalty,
+            mirostat=mirostat_mode,
+            mirostat_tau=mirostat_tau,
+            mirostat_eta=mirostat_eta,
+            penalize_nl=penalize_nl,
         )
-        if not penalize_nl:
-            self._candidates.candidates.data[self._token_nl].logit = llama_cpp.c_float(
-                nl_logit
-            )
-
-        if grammar is not None:
-            self._ctx.sample_grammar(
-                candidates=self._candidates,
-                grammar=grammar,
-            )
-
-        if temp < 0.0:
-            self._ctx.sample_softmax(candidates=self._candidates)
-            id = self._candidates.candidates.data[0].id
-        elif temp == 0.0:
-            id = self._ctx.sample_token_greedy(candidates=self._candidates)
-        elif mirostat_mode == 1:
-            self._ctx.sample_temp(candidates=self._candidates, temp=temp)
-            id = self._ctx.sample_token_mirostat(
-                candidates=self._candidates,
-                tau=mirostat_tau,
-                eta=mirostat_eta,
-                mu=ctypes.pointer(self._mirostat_mu),
-                m=100,
-            )
-        elif mirostat_mode == 2:
-            self._ctx.sample_temp(candidates=self._candidates, temp=temp)
-            id = self._ctx.sample_token_mirostat_v2(
-                candidates=self._candidates,
-                tau=mirostat_tau,
-                eta=mirostat_eta,
-                mu=ctypes.pointer(self._mirostat_mu)
-            )
-        else:
-            self._ctx.sample_top_k(candidates=self._candidates, k=top_k, min_keep=1)
-            self._ctx.sample_tail_free(candidates=self._candidates, z=tfs_z, min_keep=1)
-            self._ctx.sample_typical(
-                candidates=self._candidates, p=typical_p, min_keep=1
-            )
-            self._ctx.sample_top_p(candidates=self._candidates, p=top_p, min_keep=1)
-            self._ctx.sample_min_p(candidates=self._candidates, p=min_p, min_keep=1)
-            self._ctx.sample_temp(candidates=self._candidates, temp=temp)
-            id = self._ctx.sample_token(candidates=self._candidates)
-        if grammar is not None:
-            self._ctx.grammar_accept_token(grammar=grammar, token=id)
+        sampling_context = _LlamaSamplingContext(
+            params=sampling_params,
+            grammar=grammar,
+        )
+        sampling_context.prev = list(self.eval_tokens)
+        id = sampling_context.sample(ctx_main=self._ctx, logits_array=logits)
+        sampling_context.accept(
+            ctx_main=self._ctx,
+            id=id,
+            apply_grammar=grammar is not None,
+        )
         return id
+
 
     def generate(
         self,
