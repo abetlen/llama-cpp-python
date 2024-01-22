@@ -868,33 +868,31 @@ class Llama:
         self.model_params.use_mmap = use_mmap if lora_path is None else False
         self.model_params.use_mlock = use_mlock
 
+        # kv_overrides is the original python dict
+        # _kv_overrides_array is a list of llama_model_kv_override CStructs
         self.kv_overrides = kv_overrides
+        self._kv_overrides_array = []
         if kv_overrides is not None:
-            n_overrides = len(kv_overrides)
-            self._kv_overrides_array = llama_cpp.llama_model_kv_override * (n_overrides + 1)
-            self._kv_overrides_array_keys = []
 
             for k, v in kv_overrides.items():
-                key_buf = ctypes.create_string_buffer(k.encode("utf-8"))
-                self._kv_overrides_array_keys.append(key_buf)
-                self._kv_overrides_array[i].key = key_buf
+                kvo = llama_cpp.llama_model_kv_override()
+                kvo.key = k.encode('utf-8')
                 if isinstance(v, int):
-                    self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_INT
-                    self._kv_overrides_array[i].value.int_value = v
+                    kvo.tag = llama_cpp.LLAMA_KV_OVERRIDE_INT
+                    kvo.value.int_value = v
                 elif isinstance(v, float):
-                    self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_FLOAT
-                    self._kv_overrides_array[i].value.float_value = v
+                    kvo.tag = llama_cpp.LLAMA_KV_OVERRIDE_FLOAT
+                    kvo.value.float_value = v
                 elif isinstance(v, bool):
-                    self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_BOOL
-                    self._kv_overrides_array[i].value.bool_value = v
+                    kvo.tag = llama_cpp.LLAMA_KV_OVERRIDE_BOOL
+                    kvo.value.bool_value = v
                 else:
                     raise ValueError(f"Unknown value type for {k}: {v}")
+                self._kv_overrides_array.append(kvo)
 
-            self._kv_overrides_array_sentinel_key = b'\0'
-
-            # null array sentinel
-            self._kv_overrides_array[n_overrides].key = self._kv_overrides_array_sentinel_key
-            self.model_params.kv_overrides = self._kv_overrides_array
+            self.model_params.kv_overrides = (llama_cpp.llama_model_kv_override * len(self._kv_overrides_array))()
+            for i, struct in enumerate(self._kv_overrides_array):
+                self.model_params.kv_overrides[i] = struct
 
         self.n_batch = min(n_ctx, n_batch)  # ???
         self.n_threads = n_threads or max(multiprocessing.cpu_count() // 2, 1)
