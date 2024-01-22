@@ -10,22 +10,22 @@ deps:
 	python3 -m pip install -e ".[all]"
 
 build:
-	python3 -m pip install -e .
+	python3 -m pip install --verbose -e .
 
 build.cuda:
-	CMAKE_ARGS="-DLLAMA_CUBLAS=on" python3 -m pip install -e .
+	CMAKE_ARGS="-DLLAMA_CUBLAS=on" python3 -m pip install --verbose -e .
 
 build.opencl:
-	CMAKE_ARGS="-DLLAMA_CLBLAST=on" python3 -m pip install -e .
+	CMAKE_ARGS="-DLLAMA_CLBLAST=on" python3 -m pip install --verbose -e .
 
 build.openblas:
-	CMAKE_ARGS="-DLLAMA_CLBLAST=on" python3 -m pip install -e .
+	CMAKE_ARGS="-DLLAMA_CLBLAST=on" python3 -m pip install --verbose -e .
 
 build.blis:
-	CMAKE_ARGS="-DLLAMA_OPENBLAS=on -DLLAMA_OPENBLAS_VENDOR=blis" python3 -m pip install -e .
+	CMAKE_ARGS="-DLLAMA_OPENBLAS=on -DLLAMA_OPENBLAS_VENDOR=blis" python3 -m pip install --verbose -e .
 
 build.metal:
-	CMAKE_ARGS="-DLLAMA_METAL=on" python3 -m pip install -e .
+	CMAKE_ARGS="-DLLAMA_METAL=on" python3 -m pip install --verbose -e .
 
 build.sdist:
 	python3 -m build --sdist

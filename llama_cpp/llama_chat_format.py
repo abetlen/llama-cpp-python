@@ -6,18 +6,28 @@ import ctypes
 import dataclasses
 from typing import Any, Dict, Iterator, List, Optional, Tuple, Union, Protocol
 
+import jinja2
+
 import llama_cpp.llama as llama
 import llama_cpp.llama_types as llama_types
 import llama_cpp.llama_grammar as llama_grammar
 
-from ._utils import suppress_stdout_stderr
+from ._utils import suppress_stdout_stderr, Singleton
 
 
 class LlamaChatCompletionHandler(Protocol):
+    """Base Protocol for a llama chat completion handler.
+
+    Very generic protocol that can be used to implement any chat format.
+    The only hard requirement is that it must return a ChatCompletion when
+    stream=False and an iterator of ChatCompletionChunks when stream=True."""
+
     def __call__(
         self,
         *,
+        # llama.cpp instance
         llama: llama.Llama,
+        # openai api parameters
         messages: List[llama_types.ChatCompletionRequestMessage],
         functions: Optional[List[llama_types.ChatCompletionFunction]] = None,
         function_call: Optional[llama_types.ChatCompletionRequestFunctionCall] = None,
@@ -26,8 +36,6 @@ class LlamaChatCompletionHandler(Protocol):
         temperature: float = 0.2,
         top_p: float = 0.95,
         top_k: int = 40,
-        min_p: float = 0.05,
-        typical_p: float = 1.0,
         stream: bool = False,
         stop: Optional[Union[str, List[str]]] = [],
         seed: Optional[int] = None,
@@ -38,14 +46,17 @@ class LlamaChatCompletionHandler(Protocol):
         presence_penalty: float = 0.0,
         frequency_penalty: float = 0.0,
         repeat_penalty: float = 1.1,
+        model: Optional[str] = None,
+        logit_bias: Optional[Dict[str, float]] = None,
+        # llama.cpp parameters
+        min_p: float = 0.05,
+        typical_p: float = 1.0,
         tfs_z: float = 1.0,
         mirostat_mode: int = 0,
         mirostat_tau: float = 5.0,
         mirostat_eta: float = 0.1,
-        model: Optional[str] = None,
         logits_processor: Optional[llama.LogitsProcessorList] = None,
         grammar: Optional[llama.LlamaGrammar] = None,
-        logit_bias: Optional[Dict[str, float]] = None,
         **kwargs,  # type: ignore
     ) -> Union[
         llama_types.CreateChatCompletionResponse,
@@ -54,146 +65,78 @@ class LlamaChatCompletionHandler(Protocol):
         ...
 
 
-CHAT_HANDLERS: Dict[str, LlamaChatCompletionHandler] = {}
+class LlamaChatCompletionHandlerNotFoundException(Exception):
+    pass
+
+
+class LlamaChatCompletionHandlerRegistry(Singleton):
+    _chat_handlers: Dict[str, LlamaChatCompletionHandler] = {}
+
+    def register_chat_completion_handler(
+        self,
+        name: str,
+        chat_handler: LlamaChatCompletionHandler,
+        overwrite: bool = False,
+    ):
+        if not overwrite and name in self._chat_handlers:
+            raise ValueError(
+                f"Formatter with name '{name}' is already registered. Use `overwrite=True` to overwrite it."
+            )
+        self._chat_handlers[name] = chat_handler
+
+    def unregister_chat_handler(self, name: str):
+        if name in self._chat_handlers:
+            del self._chat_handlers[name]
+        else:
+            raise ValueError(f"No formatter registered under the name '{name}'.")
+
+    def get_chat_completion_handler_by_name(
+        self, name: str
+    ) -> LlamaChatCompletionHandler:
+        try:
+            chat_handler = self._chat_handlers[name]
+            return chat_handler
+        except KeyError:
+            raise LlamaChatCompletionHandlerNotFoundException(
+                f"Invalid chat handler: {name} (valid formats: {list(self._chat_handlers.keys())})"
+            )
 
 
 def get_chat_completion_handler(name: str) -> LlamaChatCompletionHandler:
-    return CHAT_HANDLERS[name]
+    return LlamaChatCompletionHandlerRegistry().get_chat_completion_handler_by_name(
+        name
+    )
 
 
 def register_chat_completion_handler(name: str):
     def decorator(f: LlamaChatCompletionHandler):
-        CHAT_HANDLERS[name] = f
+        LlamaChatCompletionHandlerRegistry().register_chat_completion_handler(name, f)
         return f
 
     return decorator
 
 
-def _get_system_message(
-    messages: List[llama_types.ChatCompletionRequestMessage],
-) -> str:
-    """Get the first system message."""
-    for message in messages:
-        if message["role"] == "system":
-            return message["content"] or ""
-    return ""
-
-
-def _map_roles(
-    messages: List[llama_types.ChatCompletionRequestMessage], role_map: Dict[str, str]
-) -> List[Tuple[str, Optional[str]]]:
-    """Map the message roles."""
-    output: List[Tuple[str, Optional[str]]] = []
-    for message in messages:
-        role = message["role"]
-        if role in role_map:
-            output.append((role_map[role], message["content"]))
-    return output
-
-
-def _format_llama2(
-    system_message: str, messages: List[Tuple[str, Optional[str]]], sep: str, sep2: str
-) -> str:
-    """Format the prompt with the llama2 style."""
-    seps = [sep, sep2]
-    ret = system_message + sep
-    for i, (role, message) in enumerate(messages):
-        if system_message and i == 0:
-            ret += message + seps[i % 2]
-        elif message:
-            ret += role + message + " " + seps[i % 2]
-        else:
-            ret += role + " "
-    return ret
-
-
-def _format_add_colon_single(
-    system_message: str, messages: List[Tuple[str, Optional[str]]], sep: str
-) -> str:
-    """Format the prompt with the add-colon-single style."""
-    ret = system_message + sep
-    for role, message in messages:
-        if message:
-            ret += role + ": " + message + sep
-        else:
-            ret += role + ":"
-    return ret
-
-
-def _format_add_colon_two(
-    system_message: str, messages: List[Tuple[str, Optional[str]]], sep: str, sep2: str
-) -> str:
-    """Format the prompt with the add-colon-two style."""
-    seps = [sep, sep2]
-    ret = system_message + seps[0]
-    for i, (role, message) in enumerate(messages):
-        if message:
-            ret += role + ": " + message + seps[i % 2]
-        else:
-            ret += role + ":"
-    return ret
-
-
-def _format_no_colon_single(
-    system_message: str, messages: List[Tuple[str, Optional[str]]], sep: str
-) -> str:
-    """Format the prompt with the no-colon-single style."""
-    ret = system_message
-    for role, message in messages:
-        if message:
-            ret += role + message + sep
-        else:
-            ret += role
-    return ret
-
-
-def _format_add_colon_space_single(
-    system_message: str, messages: List[Tuple[str, Optional[str]]], sep: str
-) -> str:
-    """Format the prompt with the add-colon-space-single style."""
-    ret = system_message + sep
-    for role, message in messages:
-        if message:
-            ret += role + ": " + message + sep
-        else:
-            ret += role + ": "  # must be end with a space
-    return ret
-
-
-def _format_chatml(
-    system_message: str, messages: List[Tuple[str, Optional[str]]], sep: str
-) -> str:
-    """Format the prompt with the chatml style."""
-    ret = "" if system_message == "" else system_message + sep + "\n"
-    for role, message in messages:
-        if message:
-            ret += role + "\n" + message + sep + "\n"
-        else:
-            ret += role + "\n"
-    return ret
-
-def _format_chatglm3(
-    system_message: str, messages: List[Tuple[str, Optional[str]]], sep: str
-) -> str:
-    """Format the prompt with the chatglm3 style."""
-    ret = ""
-    if system_message:
-        ret += system_message
-    for role, message in messages:
-        if message:
-            ret += role + "\n" + " " + message
-        else:
-            ret += role
-    return ret
+### Chat Formatter ###
 
 
 @dataclasses.dataclass
 class ChatFormatterResponse:
+    """Dataclass that stores completion parameters for a given chat format and
+    create_chat_completion request.
+
+    prompt contains the formatted prompt generated from the chat format and messages.
+    stop contains the stop token or list of stop tokens to use for the chat format."""
+
     prompt: str
     stop: Optional[Union[str, List[str]]] = None
 
 
 class ChatFormatter(Protocol):
+    """Base Protocol for a chat formatter. A chat formatter is a function that
+    takes a list of messages and returns a chat format response which can be used
+    to generate a completion. The response can also include a stop token or list
+    of stop tokens to use for the completion."""
+
     def __call__(
         self,
         *,
@@ -203,14 +146,52 @@ class ChatFormatter(Protocol):
         ...
 
 
-class BasicChatHandler:
-    def __init__(self, chat_format: str):
-        self.chat_format = chat_format
+class Jinja2ChatFormatter(ChatFormatter):
+    def __init__(
+        self,
+        template: str,
+        eos_token: str,
+        bos_token: str,
+        add_generation_prompt: bool = True,
+    ):
+        """A chat formatter that uses jinja2 templates to format the prompt."""
+        self.template = template
+        self.eos_token = eos_token
+        self.bos_token = bos_token
+        self.add_generation_prompt = add_generation_prompt
+
+        self._environment = jinja2.Environment(
+            loader=jinja2.BaseLoader(),
+            trim_blocks=True,
+            lstrip_blocks=True,
+        ).from_string(self.template)
+
+    def __call__(
+        self,
+        *,
+        messages: List[llama_types.ChatCompletionRequestMessage],
+        **kwargs: Any,
+    ) -> ChatFormatterResponse:
+        if self.add_generation_prompt:
+            messages = [
+                *messages,
+                llama_types.ChatCompletionRequestAssistantMessage(
+                    role="assistant", content=""
+                ),
+            ]
+        prompt = self._environment.render(
+            messages=messages, eos_token=self.eos_token, bos_token=self.bos_token
+        )
+        return ChatFormatterResponse(prompt=prompt, stop=[self.eos_token])
+
+    def to_chat_handler(self) -> LlamaChatCompletionHandler:
+        return chat_formatter_to_chat_completion_handler(self)
 
 
 def _convert_text_completion_to_chat(
     completion: llama_types.Completion,
 ) -> llama_types.ChatCompletion:
+    assert "usage" in completion
     return {
         "id": "chat" + completion["id"],
         "object": "chat.completion",
@@ -286,103 +267,85 @@ def _convert_completion_to_chat(
         return _convert_text_completion_to_chat(completion)
 
 
-_CHAT_FORMATS: Dict[str, ChatFormatter] = {}
-
-
-def register_chat_format(name: str):
-    def decorator(f: ChatFormatter):
-        def basic_create_chat_completion(
-            *,
-            llama: llama.Llama,
-            messages: List[llama_types.ChatCompletionRequestMessage],
-            functions: Optional[List[llama_types.ChatCompletionFunction]] = None,
-            function_call: Optional[
-                llama_types.ChatCompletionRequestFunctionCall
-            ] = None,
-            tools: Optional[List[llama_types.ChatCompletionTool]] = None,
-            tool_choice: Optional[llama_types.ChatCompletionToolChoiceOption] = None,
-            temperature: float = 0.2,
-            top_p: float = 0.95,
-            top_k: int = 40,
-            min_p: float = 0.05,
-            typical_p: float = 1.0,
-            stream: bool = False,
-            stop: Optional[Union[str, List[str]]] = [],
-            seed: Optional[int] = None,
-            response_format: Optional[
-                llama_types.ChatCompletionRequestResponseFormat
-            ] = None,
-            max_tokens: Optional[int] = None,
-            presence_penalty: float = 0.0,
-            frequency_penalty: float = 0.0,
-            repeat_penalty: float = 1.1,
-            tfs_z: float = 1.0,
-            mirostat_mode: int = 0,
-            mirostat_tau: float = 5.0,
-            mirostat_eta: float = 0.1,
-            model: Optional[str] = None,
-            logits_processor: Optional[llama.LogitsProcessorList] = None,
-            grammar: Optional[llama.LlamaGrammar] = None,
-            logit_bias: Optional[Dict[str, float]] = None,
-            **kwargs,  # type: ignore
-        ) -> Union[
-            llama_types.CreateChatCompletionResponse,
-            Iterator[llama_types.CreateChatCompletionStreamResponse],
-        ]:
-            result = f(
-                messages=messages,
-                functions=functions,
-                function_call=function_call,
-            )
-            prompt = result.prompt
-            if result.stop is not None:
-                stop = [] if stop is None else [stop] if isinstance(stop, str) else stop
-                rstop = result.stop if isinstance(result.stop, list) else [result.stop]
-                stop = stop + rstop
-
-            if response_format is not None and response_format["type"] == "json_object":
-                grammar = llama_grammar.LlamaGrammar.from_string(
-                    llama_grammar.JSON_GBNF
-                )
-
-            completion_or_chunks = llama.create_completion(
-                prompt=prompt,
-                temperature=temperature,
-                top_p=top_p,
-                top_k=top_k,
-                min_p=min_p,
-                typical_p=typical_p,
-                stream=stream,
-                stop=stop,
-                seed=seed,
-                max_tokens=max_tokens,
-                presence_penalty=presence_penalty,
-                frequency_penalty=frequency_penalty,
-                repeat_penalty=repeat_penalty,
-                tfs_z=tfs_z,
-                mirostat_mode=mirostat_mode,
-                mirostat_tau=mirostat_tau,
-                mirostat_eta=mirostat_eta,
-                model=model,
-                logits_processor=logits_processor,
-                grammar=grammar,
-                logit_bias=logit_bias,
-            )
-            return _convert_completion_to_chat(completion_or_chunks, stream=stream)
-
-        register_chat_completion_handler(name)(basic_create_chat_completion)
-        return f
-
-    return decorator
-
-
-def get_chat_format(name: str):
-    try:
-        return _CHAT_FORMATS[name]
-    except KeyError:
-        raise ValueError(
-            f"Invalid chat format: {name} (valid formats: {list(_CHAT_FORMATS.keys())})"
+def chat_formatter_to_chat_completion_handler(
+    chat_formatter: ChatFormatter,
+) -> LlamaChatCompletionHandler:
+    def chat_completion_handler(
+        *,
+        llama: llama.Llama,
+        messages: List[llama_types.ChatCompletionRequestMessage],
+        functions: Optional[List[llama_types.ChatCompletionFunction]] = None,
+        function_call: Optional[llama_types.ChatCompletionRequestFunctionCall] = None,
+        tools: Optional[List[llama_types.ChatCompletionTool]] = None,
+        tool_choice: Optional[llama_types.ChatCompletionToolChoiceOption] = None,
+        temperature: float = 0.2,
+        top_p: float = 0.95,
+        top_k: int = 40,
+        min_p: float = 0.05,
+        typical_p: float = 1.0,
+        stream: bool = False,
+        stop: Optional[Union[str, List[str]]] = [],
+        seed: Optional[int] = None,
+        response_format: Optional[
+            llama_types.ChatCompletionRequestResponseFormat
+        ] = None,
+        max_tokens: Optional[int] = None,
+        presence_penalty: float = 0.0,
+        frequency_penalty: float = 0.0,
+        repeat_penalty: float = 1.1,
+        tfs_z: float = 1.0,
+        mirostat_mode: int = 0,
+        mirostat_tau: float = 5.0,
+        mirostat_eta: float = 0.1,
+        model: Optional[str] = None,
+        logits_processor: Optional[llama.LogitsProcessorList] = None,
+        grammar: Optional[llama.LlamaGrammar] = None,
+        logit_bias: Optional[Dict[str, float]] = None,
+        **kwargs,  # type: ignore
+    ) -> Union[
+        llama_types.CreateChatCompletionResponse,
+        Iterator[llama_types.CreateChatCompletionStreamResponse],
+    ]:
+        result = chat_formatter(
+            messages=messages,
+            functions=functions,
+            function_call=function_call,
         )
+        prompt = result.prompt
+        if result.stop is not None:
+            stop = [] if stop is None else [stop] if isinstance(stop, str) else stop
+            rstop = result.stop if isinstance(result.stop, list) else [result.stop]
+            stop = stop + rstop
+
+        if response_format is not None and response_format["type"] == "json_object":
+            grammar = llama_grammar.LlamaGrammar.from_string(llama_grammar.JSON_GBNF)
+
+        completion_or_chunks = llama.create_completion(
+            prompt=prompt,
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            min_p=min_p,
+            typical_p=typical_p,
+            stream=stream,
+            stop=stop,
+            seed=seed,
+            max_tokens=max_tokens,
+            presence_penalty=presence_penalty,
+            frequency_penalty=frequency_penalty,
+            repeat_penalty=repeat_penalty,
+            tfs_z=tfs_z,
+            mirostat_mode=mirostat_mode,
+            mirostat_tau=mirostat_tau,
+            mirostat_eta=mirostat_eta,
+            model=model,
+            logits_processor=logits_processor,
+            grammar=grammar,
+            logit_bias=logit_bias,
+        )
+        return _convert_completion_to_chat(completion_or_chunks, stream=stream)
+
+    return chat_completion_handler
 
 
 def hf_autotokenizer_to_chat_formatter(
@@ -391,20 +354,224 @@ def hf_autotokenizer_to_chat_formatter(
     # https://huggingface.co/docs/transformers/main/chat_templating
     # https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.1#instruction-format
     # https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.1/blob/main/tokenizer_config.json
-    from transformers import AutoTokenizer
+    from transformers import AutoTokenizer  # type: ignore
 
-    tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name_or_path)
+    tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name_or_path)  # type: ignore
 
     def format_autotokenizer(
         messages: List[llama_types.ChatCompletionRequestMessage],
         **kwargs: Any,
     ) -> ChatFormatterResponse:
-        tokenizer.use_default_system_prompt = False
-        _prompt = tokenizer.apply_chat_template(messages, tokenize=False)
+        tokenizer.use_default_system_prompt = False  # type: ignore
+        prompt: str = tokenizer.apply_chat_template(messages, tokenize=False)  # type: ignore
+        assert isinstance(prompt, str)
         # Return formatted prompt and eos token by default
-        return ChatFormatterResponse(prompt=_prompt, stop=tokenizer.eos_token)
+        return ChatFormatterResponse(prompt=prompt, stop=tokenizer.eos_token)
 
     return format_autotokenizer
+
+
+def hf_autotokenizer_to_chat_completion_handler(
+    pretrained_model_name_or_path: Union[str, os.PathLike[str]]
+) -> LlamaChatCompletionHandler:
+    chat_formatter = hf_autotokenizer_to_chat_formatter(pretrained_model_name_or_path)
+    return chat_formatter_to_chat_completion_handler(chat_formatter)
+
+
+def hf_tokenizer_config_to_chat_formatter(
+    tokenizer_config: Dict[str, Any],
+    add_generation_prompt: bool = True,
+) -> ChatFormatter:
+    assert isinstance(tokenizer_config, dict)
+
+    assert "chat_template" in tokenizer_config
+    assert isinstance(tokenizer_config["chat_template"], str)
+    chat_template = tokenizer_config["chat_template"]
+
+    assert "bos_token" in tokenizer_config
+    assert isinstance(tokenizer_config["bos_token"], str)
+    bos_token = tokenizer_config["bos_token"]
+
+    assert "eos_token" in tokenizer_config
+    assert isinstance(tokenizer_config["eos_token"], str)
+    eos_token = tokenizer_config["eos_token"]
+
+    env = jinja2.Environment(
+        loader=jinja2.BaseLoader(),
+        trim_blocks=True,
+        lstrip_blocks=True,
+    ).from_string(chat_template)
+
+    def format_tokenizer_config(
+        messages: List[llama_types.ChatCompletionRequestMessage],
+        **kwargs: Any,
+    ) -> ChatFormatterResponse:
+        # TODO: veryify this is correct
+        # Add a blank assistant message to the end of the messages to prompt the model to generate a response
+        if add_generation_prompt:
+            messages = [
+                *messages,
+                llama_types.ChatCompletionRequestAssistantMessage(
+                    role="assistant", content=""
+                ),
+            ]
+        prompt = env.render(
+            messages=messages,
+            bos_token=bos_token,
+            eos_token=eos_token,
+        )
+        return ChatFormatterResponse(prompt=prompt, stop=[eos_token, bos_token])
+
+    return format_tokenizer_config
+
+
+def hf_tokenizer_config_to_chat_completion_handler(
+    tokenizer_config: Dict[str, Any],
+    add_generation_prompt: bool = True,
+) -> LlamaChatCompletionHandler:
+    chat_formatter = hf_tokenizer_config_to_chat_formatter(tokenizer_config, add_generation_prompt=add_generation_prompt)
+    return chat_formatter_to_chat_completion_handler(chat_formatter)
+
+
+### Utility functions for formatting chat prompts ###
+
+
+def _get_system_message(
+    messages: List[llama_types.ChatCompletionRequestMessage],
+) -> str:
+    """Get the first system message."""
+    for message in messages:
+        if message["role"] == "system":
+            return message["content"] or ""
+    return ""
+
+
+def _map_roles(
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    role_map: Dict[str, str],
+) -> List[Tuple[str, Optional[str]]]:
+    """Map the message roles."""
+    output: List[Tuple[str, Optional[str]]] = []
+    for message in messages:
+        role = message["role"]
+        if role in role_map:
+            content: str | None = (
+                message["content"] if isinstance(message["content"], str) else None
+            )
+            output.append((role_map[role], content))
+    return output
+
+
+def _format_llama2(
+    system_message: str, messages: List[Tuple[str, Optional[str]]], sep: str, sep2: str
+) -> str:
+    """Format the prompt with the llama2 style."""
+    seps = [sep, sep2]
+    ret = system_message + sep
+    for i, (role, message) in enumerate(messages):
+        if system_message and i == 0:
+            m = message or ""
+            ret += m + seps[i % 2]
+        elif message:
+            ret += role + message + " " + seps[i % 2]
+        else:
+            ret += role + " "
+    return ret
+
+
+def _format_add_colon_single(
+    system_message: str, messages: List[Tuple[str, Optional[str]]], sep: str
+) -> str:
+    """Format the prompt with the add-colon-single style."""
+    ret = system_message + sep
+    for role, message in messages:
+        if message:
+            ret += role + ": " + message + sep
+        else:
+            ret += role + ":"
+    return ret
+
+
+def _format_add_colon_two(
+    system_message: str, messages: List[Tuple[str, Optional[str]]], sep: str, sep2: str
+) -> str:
+    """Format the prompt with the add-colon-two style."""
+    seps = [sep, sep2]
+    ret = system_message + seps[0]
+    for i, (role, message) in enumerate(messages):
+        if message:
+            ret += role + ": " + message + seps[i % 2]
+        else:
+            ret += role + ":"
+    return ret
+
+
+def _format_no_colon_single(
+    system_message: str, messages: List[Tuple[str, Optional[str]]], sep: str
+) -> str:
+    """Format the prompt with the no-colon-single style."""
+    ret = system_message
+    for role, message in messages:
+        if message:
+            ret += role + message + sep
+        else:
+            ret += role
+    return ret
+
+
+def _format_add_colon_space_single(
+    system_message: str, messages: List[Tuple[str, Optional[str]]], sep: str
+) -> str:
+    """Format the prompt with the add-colon-space-single style."""
+    ret = system_message + sep
+    for role, message in messages:
+        if message:
+            ret += role + ": " + message + sep
+        else:
+            ret += role + ": "  # must be end with a space
+    return ret
+
+
+def _format_chatml(
+    system_message: str, messages: List[Tuple[str, Optional[str]]], sep: str
+) -> str:
+    """Format the prompt with the chatml style."""
+    ret = "" if system_message == "" else system_message + sep + "\n"
+    for role, message in messages:
+        if message:
+            ret += role + "\n" + message + sep + "\n"
+        else:
+            ret += role + "\n"
+    return ret
+
+
+def _format_chatglm3(
+    system_message: str, messages: List[Tuple[str, Optional[str]]], sep: str
+) -> str:
+    """Format the prompt with the chatglm3 style."""
+    ret = ""
+    if system_message:
+        ret += system_message
+    for role, message in messages:
+        if message:
+            ret += role + "\n" + " " + message
+        else:
+            ret += role
+    return ret
+
+
+### Chat Formats ###
+
+
+def register_chat_format(name: str):
+    def decorator(f: ChatFormatter):
+        chat_completion_handler = chat_formatter_to_chat_completion_handler(f)
+        LlamaChatCompletionHandlerRegistry().register_chat_completion_handler(
+            name, chat_completion_handler
+        )
+        return f
+
+    return decorator
 
 
 # see https://github.com/huggingface/transformers/blob/main/src/transformers/models/llama/tokenization_llama.py
@@ -437,21 +604,23 @@ def format_alpaca(
     _prompt = _format_add_colon_two(system_message, _messages, _sep, _sep2)
     return ChatFormatterResponse(prompt=_prompt)
 
+
 @register_chat_format("qwen")
 def format_qwen(
     messages: List[llama_types.ChatCompletionRequestMessage],
     **kwargs: Any,
 ) -> ChatFormatterResponse:
     _roles = dict(user="<|im_start|>user", assistant="<|im_start|>assistant")
-    system_message="You are a helpful assistant."
-    system_template="<|im_start|>system\n{system_message}"
-    system_message=system_template.format(system_message=system_message)
+    system_message = "You are a helpful assistant."
+    system_template = "<|im_start|>system\n{system_message}"
+    system_message = system_template.format(system_message=system_message)
     _messages = _map_roles(messages, _roles)
     _messages.append((_roles["assistant"], None))
     _sep = "<|im_end|>"
     _prompt = _format_chatml(system_message, _messages, _sep)
     _sep2 = "<|endoftext|>"
-    return ChatFormatterResponse(prompt=_prompt,stop=_sep2)
+    return ChatFormatterResponse(prompt=_prompt, stop=_sep2)
+
 
 @register_chat_format("vicuna")
 def format(
@@ -650,6 +819,7 @@ def format_mistrallite(
     _prompt = _format_no_colon_single(system_message, _messages, _sep)
     return ChatFormatterResponse(prompt=_prompt)
 
+
 @register_chat_format("zephyr")
 def format_zephyr(
     messages: List[llama_types.ChatCompletionRequestMessage],
@@ -699,6 +869,7 @@ def format_chatml(
     _prompt = _format_chatml(system_message, _messages, _sep)
     return ChatFormatterResponse(prompt=_prompt, stop=_sep)
 
+
 @register_chat_format("chatglm3")
 def format_chatglm3(
     messages: List[llama_types.ChatCompletionRequestMessage],
@@ -739,7 +910,7 @@ def format_openchat(
 @register_chat_format("saiga")
 def format_saiga(
     messages: list[llama_types.ChatCompletionRequestMessage],
-    **kwargs,
+    **kwargs: Any,
 ) -> ChatFormatterResponse:
     _message_template = "<s>{role}\n{content}</s>"
     _roles = dict(user="user", bot="bot", system="system")

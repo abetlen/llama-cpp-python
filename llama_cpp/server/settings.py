@@ -90,7 +90,7 @@ class ModelSettings(BaseSettings):
     logits_all: bool = Field(default=True, description="Whether to return logits.")
     embedding: bool = Field(default=True, description="Whether to use embeddings.")
     offload_kqv: bool = Field(
-        default=False, description="Whether to offload kqv to the GPU."
+        default=True, description="Whether to offload kqv to the GPU."
     )
     # Sampling Params
     last_n_tokens_size: int = Field(
@@ -133,6 +133,15 @@ class ModelSettings(BaseSettings):
     cache_size: int = Field(
         default=2 << 30,
         description="The size of the cache in bytes. Only used if cache is True.",
+    )
+    # Tokenizer Options
+    hf_tokenizer_config_path: Optional[str] = Field(
+        default=None,
+        description="The path to a HuggingFace tokenizer_config.json file.",
+    )
+    hf_pretrained_model_name_or_path: Optional[str] = Field(
+        default=None,
+        description="The model name or path to a pretrained HuggingFace tokenizer model. Same as you would pass to AutoTokenizer.from_pretrained().",
     )
     # Misc
     verbose: bool = Field(

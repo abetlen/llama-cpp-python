@@ -204,6 +204,31 @@ class _LlamaModel:
             output[1:] if len(tokens) > 0 and tokens[0] == self.token_bos() else output
         )
 
+    # Extra
+    def metadata(self) -> Dict[str, str]:
+        assert self.model is not None
+        metadata: Dict[str, str] = {}
+        buffer_size = 1024
+        buffer = ctypes.create_string_buffer(buffer_size)
+        # zero the buffer
+        buffer.value = b'\0' * buffer_size
+        # iterate over model keys
+        for i in range(llama_cpp.llama_model_meta_count(self.model)):
+            nbytes = llama_cpp.llama_model_meta_key_by_index(self.model, i, buffer, buffer_size)
+            if nbytes > buffer_size:
+                buffer_size = nbytes
+                buffer = ctypes.create_string_buffer(buffer_size)
+                nbytes = llama_cpp.llama_model_meta_key_by_index(self.model, i, buffer, buffer_size)
+            key = buffer.value.decode("utf-8")
+            nbytes = llama_cpp.llama_model_meta_val_str_by_index(self.model, i, buffer, buffer_size)
+            if nbytes > buffer_size:
+                buffer_size = nbytes
+                buffer = ctypes.create_string_buffer(buffer_size)
+                nbytes = llama_cpp.llama_model_meta_val_str_by_index(self.model, i, buffer, buffer_size)
+            value = buffer.value.decode("utf-8")
+            metadata[key] = value
+        return metadata
+
     @staticmethod
     def default_params():
         """Get the default llama_model_params."""

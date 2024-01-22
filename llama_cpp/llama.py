@@ -79,7 +79,7 @@ class Llama:
         mul_mat_q: bool = True,
         logits_all: bool = False,
         embedding: bool = False,
-        offload_kqv: bool = False,
+        offload_kqv: bool = True,
         # Sampling Params
         last_n_tokens_size: int = 64,
         # LoRA Params
@@ -340,6 +340,18 @@ class Llama:
             (n_ctx, self._n_vocab), dtype=np.single
         )
 
+        self._mirostat_mu = ctypes.c_float(2.0 * 5.0) # TODO: Move this to sampling context
+
+        try:
+            self.metadata = self._model.metadata()
+        except Exception as e:
+            self.metadata = {}
+            if self.verbose:
+                print(f"Failed to load metadata: {e}", file=sys.stderr)
+        
+        if self.verbose:
+            print(f"Model metadata: {self.metadata}", file=sys.stderr)
+
     @property
     def ctx(self) -> llama_cpp.llama_context_p:
         assert self._ctx.ctx is not None
@@ -527,7 +539,7 @@ class Llama:
                 candidates=self._candidates,
                 tau=mirostat_tau,
                 eta=mirostat_eta,
-                mu=2.0 * mirostat_tau,
+                mu=ctypes.pointer(self._mirostat_mu),
                 m=100,
             )
         elif mirostat_mode == 2:
@@ -536,7 +548,7 @@ class Llama:
                 candidates=self._candidates,
                 tau=mirostat_tau,
                 eta=mirostat_eta,
-                mu=2.0 * mirostat_tau,
+                mu=ctypes.pointer(self._mirostat_mu)
             )
         else:
             self._ctx.sample_top_k(candidates=self._candidates, k=top_k, min_keep=1)
@@ -592,6 +604,10 @@ class Llama:
         Yields:
             The generated tokens.
         """
+        # Reset mirostat sampling
+        self._mirostat_mu = ctypes.c_float(2.0 * mirostat_tau)
+
+        # Check for kv cache prefix match
         if reset and self.n_tokens > 0:
             longest_prefix = 0
             for a, b in zip(self._input_ids, tokens[:-1]):
@@ -606,12 +622,15 @@ class Llama:
                 tokens = tokens[longest_prefix:]
                 self.n_tokens = longest_prefix
 
+        # Reset the model state
         if reset:
             self.reset()
 
+        # Reset the grammar
         if grammar is not None:
             grammar.reset()
 
+        # Eval and sample
         while True:
             self.eval(tokens)
             token = self.sample(
