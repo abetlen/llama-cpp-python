@@ -30,6 +30,8 @@ from .llama_cache import (
 import llama_cpp.llama_cpp as llama_cpp
 import llama_cpp.llama_chat_format as llama_chat_format
 
+from llama_cpp.llama_speculative import LlamaDraftModel
+
 import numpy as np
 import numpy.typing as npt
 
@@ -89,6 +91,8 @@ class Llama:
         # Chat Format Params
         chat_format: str = "llama-2",
         chat_handler: Optional[llama_chat_format.LlamaChatCompletionHandler] = None,
+        # Speculative Decoding
+        draft_model: Optional[LlamaDraftModel] = None,
         # Misc
         verbose: bool = True,
         # Extra Params
@@ -152,6 +156,7 @@ class Llama:
             numa: Enable NUMA support. (NOTE: The initial value of this parameter is used for the remainder of the program as this value is set in llama_backend_init)
             chat_format: String specifying the chat format to use when calling create_chat_completion.
             chat_handler: Optional chat handler to use when calling create_chat_completion.
+            draft_model: Optional draft model to use for speculative decoding.
             verbose: Print verbose output to stderr.
 
         Raises:
@@ -197,7 +202,9 @@ class Llama:
         self.kv_overrides = kv_overrides
         if kv_overrides is not None:
             n_overrides = len(kv_overrides)
-            self._kv_overrides_array = llama_cpp.llama_model_kv_override * (n_overrides + 1)
+            self._kv_overrides_array = llama_cpp.llama_model_kv_override * (
+                n_overrides + 1
+            )
             self._kv_overrides_array_keys = []
 
             for k, v in kv_overrides.items():
@@ -216,10 +223,12 @@ class Llama:
                 else:
                     raise ValueError(f"Unknown value type for {k}: {v}")
 
-            self._kv_overrides_array_sentinel_key = b'\0'
+            self._kv_overrides_array_sentinel_key = b"\0"
 
             # null array sentinel
-            self._kv_overrides_array[n_overrides].key = self._kv_overrides_array_sentinel_key
+            self._kv_overrides_array[
+                n_overrides
+            ].key = self._kv_overrides_array_sentinel_key
             self.model_params.kv_overrides = self._kv_overrides_array
 
         self.n_batch = min(n_ctx, n_batch)  # ???
@@ -314,6 +323,8 @@ class Llama:
 
         self.chat_format = chat_format
         self.chat_handler = chat_handler
+
+        self.draft_model = draft_model
 
         self._n_vocab = self.n_vocab()
         self._n_ctx = self.n_ctx()
