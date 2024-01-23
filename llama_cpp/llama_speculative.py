@@ -23,25 +23,28 @@ class LlamaPromptLookupDecoding(LlamaDraftModel):
         max_ngram_size: int = 3,
         num_pred_tokens: int = 10,
     ):
-        input_length = input_ids.shape[1]
+        input_length = input_ids.shape[0]
+
+        if input_length < max_ngram_size:
+            return np.array([], dtype=np.intc)
 
         for ngram_size in range(max_ngram_size, 0, -1):
             # Extract the last n tokens as our search ngram
-            ngram = input_ids[0, -ngram_size:]
+            ngram = input_ids[-ngram_size:]
 
             # Create sliding windows of size ngram_size
             windows = np.lib.stride_tricks.sliding_window_view(
-                input_ids, (1, ngram_size)
+                input_ids, (ngram_size,)
             )
 
             # Convert ngram to an array for comparison
-            ngram_array = np.array(ngram).reshape(1, -1)
+            ngram_array = np.array(ngram)#.reshape(1, -1)
 
             # Find where the windows match the ngram
-            matches = np.all(windows == ngram_array, axis=2)
+            matches = np.all(windows == ngram_array, axis=1)
 
             # Get the indices of matches
-            match_indices = np.nonzero(matches)[1]
+            match_indices = np.nonzero(matches)[0]
 
             # Iterate through match indices to find a valid continuation
             for idx in match_indices:
@@ -49,7 +52,7 @@ class LlamaPromptLookupDecoding(LlamaDraftModel):
                 end_idx = start_idx + num_pred_tokens
                 # Ensure we don't go beyond the length of input_ids and avoid self-match
                 if end_idx <= input_length and start_idx < input_length - ngram_size:
-                    return input_ids[0, start_idx:end_idx]
+                    return input_ids[start_idx:end_idx]
 
         # If no match is found, return an empty array
         return np.array([], dtype=np.intc)
