@@ -41,8 +41,8 @@ from ._internals import (
     _LlamaContext,  # type: ignore
     _LlamaBatch,  # type: ignore
     _LlamaTokenDataArray,  # type: ignore
-    _LlamaSamplingParams, # type: ignore
-    _LlamaSamplingContext, # type: ignore
+    _LlamaSamplingParams,  # type: ignore
+    _LlamaSamplingContext,  # type: ignore
 )
 
 
@@ -342,7 +342,9 @@ class Llama:
             (n_ctx, self._n_vocab), dtype=np.single
         )
 
-        self._mirostat_mu = ctypes.c_float(2.0 * 5.0) # TODO: Move this to sampling context
+        self._mirostat_mu = ctypes.c_float(
+            2.0 * 5.0
+        )  # TODO: Move this to sampling context
 
         try:
             self.metadata = self._model.metadata()
@@ -350,7 +352,7 @@ class Llama:
             self.metadata = {}
             if self.verbose:
                 print(f"Failed to load metadata: {e}", file=sys.stderr)
-        
+
         if self.verbose:
             print(f"Model metadata: {self.metadata}", file=sys.stderr)
 
@@ -479,6 +481,7 @@ class Llama:
         penalize_nl: bool = True,
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
+        idx: Optional[int] = None,
     ):
         """Sample a token from the model.
 
@@ -494,10 +497,17 @@ class Llama:
         assert self._ctx is not None
         assert self.n_tokens > 0
 
-        logits: npt.NDArray[np.single] = self._scores[-1, :]
+        if idx is None:
+            logits: npt.NDArray[np.single] = self._scores[-1, :]
+        else:
+            logits = self._scores[idx, :]
 
         if logits_processor is not None:
-            logits[:] = logits_processor(self._input_ids, logits)
+            logits[:] = (
+                logits_processor(self._input_ids, logits)
+                if idx is None
+                else logits_processor(self._input_ids[:idx], logits)
+            )
 
         sampling_params = _LlamaSamplingParams(
             top_k=top_k,
@@ -527,7 +537,6 @@ class Llama:
             apply_grammar=grammar is not None,
         )
         return id
-
 
     def generate(
         self,
@@ -595,34 +604,61 @@ class Llama:
         if grammar is not None:
             grammar.reset()
 
+        sample_idx = self.n_tokens + len(tokens) - 1
+        draft_model = self.draft_model
+        candidates: List[int] = []
+        candidates_idx = 0
+        tokens = list(tokens)
+
         # Eval and sample
         while True:
             self.eval(tokens)
-            token = self.sample(
-                top_k=top_k,
-                top_p=top_p,
-                min_p=min_p,
-                typical_p=typical_p,
-                temp=temp,
-                repeat_penalty=repeat_penalty,
-                frequency_penalty=frequency_penalty,
-                presence_penalty=presence_penalty,
-                tfs_z=tfs_z,
-                mirostat_mode=mirostat_mode,
-                mirostat_tau=mirostat_tau,
-                mirostat_eta=mirostat_eta,
-                logits_processor=logits_processor,
-                grammar=grammar,
-                penalize_nl=penalize_nl,
-            )
-            if stopping_criteria is not None and stopping_criteria(
-                self._input_ids, self._scores[-1, :]
-            ):
-                return
-            tokens_or_none = yield token
-            tokens = [token]
-            if tokens_or_none is not None:
-                tokens.extend(tokens_or_none)
+            while sample_idx < self.n_tokens:
+                token = self.sample(
+                    top_k=top_k,
+                    top_p=top_p,
+                    min_p=min_p,
+                    typical_p=typical_p,
+                    temp=temp,
+                    repeat_penalty=repeat_penalty,
+                    frequency_penalty=frequency_penalty,
+                    presence_penalty=presence_penalty,
+                    tfs_z=tfs_z,
+                    mirostat_mode=mirostat_mode,
+                    mirostat_tau=mirostat_tau,
+                    mirostat_eta=mirostat_eta,
+                    logits_processor=logits_processor,
+                    grammar=grammar,
+                    penalize_nl=penalize_nl,
+                    idx=sample_idx,
+                )
+
+                sample_idx += 1
+                if stopping_criteria is not None and stopping_criteria(
+                    self._input_ids, self._scores[-1, :]
+                ):
+                    return
+                tokens_or_none = yield token
+                tokens = [token]
+                if tokens_or_none is not None:
+                    tokens.extend(tokens_or_none)
+                
+                if candidates and token != candidates[candidates_idx]:
+                    candidates = []
+                    candidates_idx = 0
+                    self.n_tokens = sample_idx
+                    self._ctx.kv_cache_seq_rm(-1, self.n_tokens, -1)
+                    break
+                else:
+                    candidates_idx += 1
+
+            if draft_model is not None and sample_idx >= self.n_tokens:
+                candidates = [int(i) for i in draft_model(self._input_ids[:sample_idx])[
+                    : self._n_ctx - self.n_tokens
+                ]]
+                candidates_idx = 0
+                tokens.extend(candidates)
+                print(candidates)
 
     def create_embedding(
         self, input: Union[str, List[str]], model: Optional[str] = None
