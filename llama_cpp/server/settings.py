@@ -56,6 +56,11 @@ class ModelSettings(BaseSettings):
         default=None,
         description="List of model kv overrides in the format key=type:value where type is one of (bool, int, float). Valid true values are (true, TRUE, 1), otherwise false.",
     )
+    # Tokenizer Params
+    hf_tokenizer_path: Optional[str] = Field(
+        default=None,
+        description="Override llama.cpp tokenizer with HF AutoTokenizer from this path if provided.",
+    )
     # Context Params
     seed: int = Field(
         default=llama_cpp.LLAMA_DEFAULT_SEED, description="Random seed. -1 for random."
