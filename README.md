@@ -293,15 +293,14 @@ To constrain the response to a specific JSON Schema, you can use the `schema` pr
 
 The high-level API also provides a simple interface for function calling.
 
-The only set of models that supports full function calling at this time is [functionary](https://github.com/MeetKai/functionary). The various gguf-converted files for this set of models can be found [here](https://huggingface.co/meetkai). Functionary is able to intelligently call functions and also analyze any provided function outputs to generate coherent responses. All v2 models of functionary supports **parallel function calling**.
+The only set of models that supports full function calling at this time is [functionary](https://github.com/MeetKai/functionary). The various gguf-converted files for this set of models can be found [here](https://huggingface.co/meetkai). Functionary is able to intelligently call functions and also analyze any provided function outputs to generate coherent responses. All v2 models of functionary supports **parallel function calling**. You can provide either `functionary-v1` or `functionary-v2` for the `chat_format` when initializing the Llama class.
 
 Note that due to discrepancies between llama.cpp and HuggingFace's tokenizers, it is required to provide the path to the HF tokenizer for functionary. They are already included in the respective HF repositories hosting the gguf files.
 
 ```python
 >>> from llama_cpp import Llama
->>> llm = Llama(model_path="path/to/functionary/llama-model.gguf", chat_format="functionary")
+>>> llm = Llama(model_path="path/to/functionary/llama-model.gguf", hf_tokenizer_path="path/to/functionary-gguf/", chat_format="functionary-v2")
 >>> llm.create_chat_completion(
-      hf_tokenizer_path="path/to/functionary-gguf/",
       messages = [
         {
           "role": "user",

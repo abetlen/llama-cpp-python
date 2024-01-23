@@ -233,12 +233,6 @@ class Llama:
             multiprocessing.cpu_count() // 2, 1
         )
         
-        # Tokenizer Params
-        if hf_tokenizer_path is not None:
-            self._tokenizer_to_use = HFTokenizer(hf_tokenizer_path)
-        else:
-            self._tokenizer_to_use = LlamaCppTokenizer(self._model)
-        
         # Context Params
         self.context_params = llama_cpp.llama_context_default_params()
         self.context_params.seed = seed
@@ -290,6 +284,13 @@ class Llama:
         self._model = _LlamaModel(
             path_model=self.model_path, params=self.model_params, verbose=self.verbose
         )
+        
+        # Tokenizer Params
+        if hf_tokenizer_path is not None:
+            self._tokenizer_to_use = HFTokenizer(hf_tokenizer_path)
+        else:
+            self._tokenizer_to_use = LlamaCppTokenizer(self._model)
+        
         # Set the default value for the context and correct the batch
         if n_ctx == 0:
             n_ctx = self._model.n_ctx_train()
@@ -1761,10 +1762,10 @@ class LlamaCppTokenizer:
         self.llama = llama
 
     def encode(self, text: bytes, add_bos: bool = True, special: bool = False) -> List[int]:
-        return self.llama._model.tokenize(text, add_bos, special)
+        return self.llama.tokenize(text, add_bos, special)
 
     def decode(self, tokens: List[int]) -> bytes:
-        return self.llama._model.detokenize(tokens)
+        return self.llama.detokenize(tokens)
 
     @classmethod
     def from_ggml_file(cls, path: str) -> "LlamaTokenizer":
