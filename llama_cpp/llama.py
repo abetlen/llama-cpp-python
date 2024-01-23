@@ -216,6 +216,7 @@ class Llama:
                 else:
                     raise ValueError(f"Unknown value type for {k}: {v}")
 
+            self._kv_overrides_array[-1].key = b'\0'  # ensure sentinel element is zeroed
             self.model_params.kv_overrides = self._kv_overrides_array
 
         self.n_batch = min(n_ctx, n_batch)  # ???
