@@ -318,7 +318,14 @@ def chat_formatter_to_chat_completion_handler(
             stop = stop + rstop
 
         if response_format is not None and response_format["type"] == "json_object":
-            grammar = llama_grammar.LlamaGrammar.from_string(llama_grammar.JSON_GBNF)
+            try:
+                # create grammar from json schema
+                if "schema" in response_format:
+                    grammar = llama_grammar.LlamaGrammar.from_json_schema(
+                        json.dumps(response_format["schema"])
+                    )
+            except Exception as e:
+                grammar = llama_grammar.LlamaGrammar.from_string(llama_grammar.JSON_GBNF)
 
         completion_or_chunks = llama.create_completion(
             prompt=prompt,
