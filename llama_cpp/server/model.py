@@ -119,6 +119,8 @@ class LlamaProxy:
             use_mmap=settings.use_mmap,
             use_mlock=settings.use_mlock,
             kv_overrides=kv_overrides,
+            # Tokenizer Params (optionally for Functionary function calling)
+            hf_tokenizer_path=settings.hf_tokenizer_path,
             # Context Params
             seed=settings.seed,
             n_ctx=settings.n_ctx,
