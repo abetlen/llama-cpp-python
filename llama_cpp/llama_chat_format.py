@@ -1007,17 +1007,15 @@ def functionary_chat_handler(
     model: Optional[str] = None,
     logits_processor: Optional[llama.LogitsProcessorList] = None,
     grammar: Optional[llama.LlamaGrammar] = None,
-    hf_tokenizer_path: Optional[str] = None,
     **kwargs,  # type: ignore
 ) -> Union[llama_types.ChatCompletion, Iterator[llama_types.ChatCompletionChunk]]:
     SYSTEM_MESSAGE = """A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. The assistant calls functions with appropriate input when necessary"""
     
-    assert hf_tokenizer_path is not None, "Please provide a valid hf tokenizer path from https://huggingface.co/meetkai"
+    tokenizer = llama.tokenizer()
+    assert hasattr(tokenizer, "hf_tokenizer"), "Please provide a valid hf_tokenizer_path from https://huggingface.co/meetkai when initializing the Llama class"
     from transformers import AutoTokenizer
     
-    tokenizer = AutoTokenizer.from_pretrained(hf_tokenizer_path)
-    
-    if "<|START_OF_FUNCTION_CALL|>" in tokenizer.additional_special_tokens:
+    if "<|START_OF_FUNCTION_CALL|>" in tokenizer.hf_tokenizer.additional_special_tokens:
         version = "v1"
         END_SYSTEM_TOKEN = "<|END_OF_SYSTEM|>"
         END_USER_TOKEN = "<|END_OF_USER|>"
@@ -1166,7 +1164,7 @@ def functionary_chat_handler(
         else:
             suffix = "<|from|>assistant\n<|recipient|>"
         
-        return tokenizer.apply_chat_template(all_messages, tokenize=False) + suffix
+        return tokenizer.hf_tokenizer.apply_chat_template(all_messages, tokenize=False) + suffix
 
     if tools is not None:
         functions = [tool["function"] for tool in tools if tool["type"] == "function"]
@@ -1206,7 +1204,6 @@ def functionary_chat_handler(
             model=model,
             logits_processor=logits_processor,
             grammar=grammar,
-            hf_tokenizer=tokenizer
         )
         return _convert_completion_to_chat(completion_or_completion_chunks, stream=stream)  # type: ignore
     
@@ -1266,7 +1263,6 @@ def functionary_chat_handler(
             model=model,
             logits_processor=logits_processor,
             grammar=grammar,
-            hf_tokenizer=tokenizer,
         )
         
         return completion
@@ -1293,7 +1289,7 @@ def functionary_chat_handler(
         else:
             prompt = prompt
             stops = ["\n", END_ASSISTANT_TOKEN]
-            
+
         completion = create_completion(stop=stops)
         completion_text = completion["choices"][0]["text"]
         

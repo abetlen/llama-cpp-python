@@ -15,6 +15,7 @@ from typing import (
     Deque,
     Callable,
     Any,
+    Protocol,
 )
 from collections import deque
 
@@ -61,6 +62,8 @@ class Llama:
         use_mmap: bool = True,
         use_mlock: bool = False,
         kv_overrides: Optional[Dict[str, Union[bool, int, float]]] = None,
+        # Tokenizer Params (Optionally for HF AutoTokenizers)
+        hf_tokenizer_path: Optional[str] = None,
         # Context Params
         seed: int = llama_cpp.LLAMA_DEFAULT_SEED,
         n_ctx: int = 512,
@@ -131,6 +134,7 @@ class Llama:
             use_mmap: Use mmap if possible.
             use_mlock: Force the system to keep the model in RAM.
             kv_overrides: Key-value overrides for the model.
+            hf_tokenizer_path: Override llama.cpp tokenizer with HF AutoTokenizer from this path if provided.
             seed: RNG seed, -1 for random
             n_ctx: Text context, 0 = from model
             n_batch: Prompt processing maximum batch size
@@ -228,6 +232,13 @@ class Llama:
         self.n_threads_batch = n_threads_batch or max(
             multiprocessing.cpu_count() // 2, 1
         )
+        
+        # Tokenizer Params
+        if hf_tokenizer_path is not None:
+            self._tokenizer_to_use = HFTokenizer(hf_tokenizer_path)
+        else:
+            self._tokenizer_to_use = LlamaCppTokenizer(self._model)
+        
         # Context Params
         self.context_params = llama_cpp.llama_context_default_params()
         self.context_params.seed = seed
@@ -422,7 +433,7 @@ class Llama:
         Returns:
             A list of tokens.
         """
-        return self._model.tokenize(text, add_bos, special)
+        return self._tokenizer_to_use.encode(text, add_bos, special)
 
     def detokenize(self, tokens: List[int]) -> bytes:
         """Detokenize a list of tokens.
@@ -433,7 +444,7 @@ class Llama:
         Returns:
             The detokenized string.
         """
-        return self._model.detokenize(tokens)
+        return self._tokenizer_to_use.decode(tokens)
 
     def set_cache(self, cache: Optional[BaseLlamaCache]):
         """Set the cache.
@@ -784,24 +795,11 @@ class Llama:
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
         logit_bias: Optional[Dict[str, float]] = None,
-        hf_tokenizer: Optional[Any] = None,
     ) -> Union[
         Iterator[CreateCompletionResponse], Iterator[CreateCompletionStreamResponse]
     ]:
         assert self._ctx is not None
         assert suffix is None or suffix.__class__ is str
-        
-        def tokenize(input, hf_tokenizer):
-            if hf_tokenizer is not None:
-                return hf_tokenizer.encode(input)
-            else:
-                return self.tokenize(input.encode("utf-8"), special=True)
-            
-        def detokenize(tokens, hf_tokenizer):
-            if hf_tokenizer is not None:
-                return hf_tokenizer.decode(tokens).encode("utf-8")
-            else:
-                return self.detokenize(tokens)
 
         completion_id: str = f"cmpl-{str(uuid.uuid4())}"
         created: int = int(time.time())
@@ -811,7 +809,7 @@ class Llama:
         # Add blank space to start of prompt to match OG llama tokenizer
         prompt_tokens: List[int] = (
             (
-                tokenize(prompt, hf_tokenizer)
+                self.tokenize(prompt.encode("utf-8"), special=True)
                 if prompt != ""
                 else [self.token_bos()]
             )
@@ -917,13 +915,13 @@ class Llama:
             grammar=grammar,
         ):
             if token == self._token_eos:
-                text = detokenize(completion_tokens, hf_tokenizer)
+                text = self.detokenize(completion_tokens)
                 finish_reason = "stop"
                 break
 
             completion_tokens.append(token)
 
-            all_text = detokenize(completion_tokens, hf_tokenizer)
+            all_text = self.detokenize(completion_tokens)
 
             # Contains multi-byte UTF8
             for k, char in enumerate(all_text[-3:]):
@@ -947,7 +945,7 @@ class Llama:
 
             if stream:
                 remaining_tokens = completion_tokens[returned_tokens:]
-                remaining_text = detokenize(remaining_tokens, hf_tokenizer)
+                remaining_text = self.detokenize(remaining_tokens)
                 remaining_length = len(remaining_text)
 
                 # We want to avoid yielding any characters from
@@ -969,17 +967,17 @@ class Llama:
                     for token in remaining_tokens:
                         if token == self.token_bos():
                             continue
-                        token_end_position += len(detokenize([token], hf_tokenizer))
+                        token_end_position += len(self.detokenize([token]))
                         # Check if stop sequence is in the token
                         if token_end_position > (
                             remaining_length - first_stop_position
                         ):
                             break
-                        token_str = detokenize([token], hf_tokenizer).decode(
+                        token_str = self.detokenize([token]).decode(
                             "utf-8", errors="ignore"
                         )
                         text_offset = len(prompt) + len(
-                            detokenize(completion_tokens[:returned_tokens], hf_tokenizer).decode(
+                            self.detokenize(completion_tokens[:returned_tokens]).decode(
                                 "utf-8", errors="ignore"
                             )
                         )
@@ -993,7 +991,7 @@ class Llama:
                             )
                         )
                         top_logprob = {
-                            detokenize([i], hf_tokenizer).decode(
+                            self.detokenize([i]).decode(
                                 "utf-8", errors="ignore"
                             ): logprob
                             for logprob, i in sorted_logprobs[:logprobs]
@@ -1001,7 +999,7 @@ class Llama:
                         top_logprob.update({token_str: current_logprobs[int(token)]})
                         logprobs_or_none = {
                             "tokens": [
-                                detokenize([token], hf_tokenizer).decode(
+                                self.detokenize([token]).decode(
                                     "utf-8", errors="ignore"
                                 )
                             ],
@@ -1017,7 +1015,7 @@ class Llama:
                             "model": model_name,
                             "choices": [
                                 {
-                                    "text": detokenize([token], hf_tokenizer).decode(
+                                    "text": self.detokenize([token]).decode(
                                         "utf-8", errors="ignore"
                                     ),
                                     "index": 0,
@@ -1031,7 +1029,7 @@ class Llama:
                         decode_success = False
                         for i in range(1, len(remaining_tokens) + 1):
                             try:
-                                bs = detokenize(remaining_tokens[:i], hf_tokenizer)
+                                bs = self.detokenize(remaining_tokens[:i])
                                 ts = bs.decode("utf-8")
                                 decode_success = True
                                 break
@@ -1066,14 +1064,15 @@ class Llama:
                         }
 
             if len(completion_tokens) >= max_tokens:
-                text = detokenize(completion_tokens, hf_tokenizer)
+                text = self.detokenize(completion_tokens)
+                
                 finish_reason = "length"
                 break
 
         if stopping_criteria is not None and stopping_criteria(
             self._input_ids, self._scores[-1, :]
         ):
-            text = detokenize(completion_tokens, hf_tokenizer)
+            text = self.detokenize(completion_tokens)
             finish_reason = "stop"
 
         if self.verbose:
@@ -1081,7 +1080,7 @@ class Llama:
 
         if stream:
             remaining_tokens = completion_tokens[returned_tokens:]
-            all_text = detokenize(remaining_tokens, hf_tokenizer)
+            all_text = self.detokenize(remaining_tokens)
             any_stop = [s for s in stop_sequences if s in all_text]
             if len(any_stop) > 0:
                 end = min(all_text.index(stop) for stop in any_stop)
@@ -1090,17 +1089,17 @@ class Llama:
 
             token_end_position = 0
             for token in remaining_tokens:
-                token_end_position += len(detokenize([token], hf_tokenizer))
+                token_end_position += len(self.detokenize([token]))
 
                 logprobs_or_none: Optional[CompletionLogprobs] = None
                 if logprobs is not None:
                     if token == self.token_bos():
                         continue
-                    token_str = detokenize([token], hf_tokenizer).decode(
+                    token_str = self.detokenize([token]).decode(
                         "utf-8", errors="ignore"
                     )
                     text_offset = len(prompt) + len(
-                        detokenize(completion_tokens[:returned_tokens], hf_tokenizer)
+                        self.detokenize(completion_tokens[:returned_tokens])
                     )
                     token_offset = len(prompt_tokens) + returned_tokens - 1
                     logits = self._scores[token_offset, :]
@@ -1112,13 +1111,13 @@ class Llama:
                         )
                     )
                     top_logprob = {
-                        detokenize([i], hf_tokenizer).decode("utf-8", errors="ignore"): logprob
+                        self.detokenize([i]).decode("utf-8", errors="ignore"): logprob
                         for logprob, i in sorted_logprobs[:logprobs]
                     }
                     top_logprob.update({token_str: current_logprobs[int(token)]})
                     logprobs_or_none = {
                         "tokens": [
-                            detokenize([token], hf_tokenizer).decode("utf-8", errors="ignore")
+                            self.detokenize([token]).decode("utf-8", errors="ignore")
                         ],
                         "text_offset": [text_offset],
                         "token_logprobs": [current_logprobs[int(token)]],
@@ -1126,7 +1125,7 @@ class Llama:
                     }
 
                 if token_end_position >= end:
-                    last_text = detokenize([token], hf_tokenizer)
+                    last_text = self.detokenize([token])
                     if token_end_position == end - 1:
                         break
                     returned_tokens += 1
@@ -1155,7 +1154,7 @@ class Llama:
                     "model": model_name,
                     "choices": [
                         {
-                            "text": detokenize([token], hf_tokenizer).decode(
+                            "text": self.detokenize([token]).decode(
                                 "utf-8", errors="ignore"
                             ),
                             "index": 0,
@@ -1214,7 +1213,7 @@ class Llama:
                 all_tokens = completion_tokens
 
             all_token_strs = [
-                detokenize([token], hf_tokenizer).decode("utf-8", errors="ignore")
+                self.detokenize([token]).decode("utf-8", errors="ignore")
                 for token in all_tokens
             ]
             all_logprobs = Llama.logits_to_logprobs(self._scores)[token_offset:]
@@ -1227,7 +1226,7 @@ class Llama:
                 text_offsets.append(
                     text_offset
                     + len(
-                        detokenize(all_tokens[:idx], hf_tokenizer).decode(
+                        self.detokenize(all_tokens[:idx]).decode(
                             "utf-8", errors="ignore"
                         )
                     )
@@ -1240,7 +1239,7 @@ class Llama:
                 )
                 token_logprobs.append(logprobs_token[int(token)])
                 top_logprob: Optional[Dict[str, float]] = {
-                    detokenize([i], hf_tokenizer).decode("utf-8", errors="ignore"): logprob
+                    self.detokenize([i]).decode("utf-8", errors="ignore"): logprob
                     for logprob, i in sorted_logprobs[:logprobs]
                 }
                 top_logprob.update({token_str: logprobs_token[int(token)]})
@@ -1305,7 +1304,6 @@ class Llama:
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
         logit_bias: Optional[Dict[str, float]] = None,
-        hf_tokenizer: Optional[Any] = None,
     ) -> Union[CreateCompletionResponse, Iterator[CreateCompletionStreamResponse]]:
         """Generate text from a prompt.
 
@@ -1335,7 +1333,6 @@ class Llama:
             logits_processor: A list of logits processors to use.
             grammar: A grammar to use for constrained sampling.
             logit_bias: A logit bias to use.
-            hf_tokenizer: A HuggingFace AutoTokenizer to use optionally.
 
         Raises:
             ValueError: If the requested tokens exceed the context window.
@@ -1370,7 +1367,6 @@ class Llama:
             logits_processor=logits_processor,
             grammar=grammar,
             logit_bias=logit_bias,
-            hf_tokenizer=hf_tokenizer,
         )
         if stream:
             chunks: Iterator[CreateCompletionStreamResponse] = completion_or_chunks
@@ -1498,7 +1494,6 @@ class Llama:
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
         logit_bias: Optional[Dict[str, float]] = None,
-        hf_tokenizer_path: Optional[str] = None,
     ) -> Union[
         CreateChatCompletionResponse, Iterator[CreateChatCompletionStreamResponse]
     ]:
@@ -1531,7 +1526,6 @@ class Llama:
             logits_processor: A list of logits processors to use.
             grammar: A grammar to use.
             logit_bias: A logit bias to use.
-            hf_tokenizer_path: A HuggingFace AutoTokenizer file path to use.
 
         Returns:
             Generated chat completion or a stream of chat completion chunks.
@@ -1567,7 +1561,6 @@ class Llama:
             logits_processor=logits_processor,
             grammar=grammar,
             logit_bias=logit_bias,
-            hf_tokenizer_path=hf_tokenizer_path,
         )
 
     def __getstate__(self):
@@ -1711,9 +1704,9 @@ class Llama:
         """Return the vocabulary size."""
         return self._model.n_vocab()
 
-    def tokenizer(self) -> "LlamaTokenizer":
+    def tokenizer(self) -> Union["LlamaCppTokenizer", "HFTokenizer"]:
         """Return the tokenizer for this model."""
-        return LlamaTokenizer(self)
+        return self._tokenizer_to_use
 
     def token_eos(self) -> int:
         """Return the end-of-sequence token."""
@@ -1756,21 +1749,40 @@ class Llama:
         return longest_prefix
 
 
-class LlamaTokenizer:
+class LlamaTokenizer(Protocol):
+    def encode(self, text: bytes, add_bos: bool = True, special: bool = False) -> List[int]:
+        ...
+    
+    def decode(self, tokens: List[int]) -> bytes:
+        ...
+
+class LlamaCppTokenizer:
     def __init__(self, llama: Llama):
         self.llama = llama
 
-    def encode(self, text: str, add_bos: bool = True) -> List[int]:
-        return self.llama.tokenize(
-            text.encode("utf-8", errors="ignore"), add_bos=add_bos, special=True
-        )
+    def encode(self, text: bytes, add_bos: bool = True, special: bool = False) -> List[int]:
+        return self.llama._model.tokenize(text, add_bos, special)
 
-    def decode(self, tokens: List[int]) -> str:
-        return self.llama.detokenize(tokens).decode("utf-8", errors="ignore")
+    def decode(self, tokens: List[int]) -> bytes:
+        return self.llama._model.detokenize(tokens)
 
     @classmethod
     def from_ggml_file(cls, path: str) -> "LlamaTokenizer":
         return cls(Llama(model_path=path, vocab_only=True))
+    
+
+class HFTokenizer:
+    def __init__(self, hf_tokenizer_path):
+        from transformers import AutoTokenizer
+        self.hf_tokenizer = AutoTokenizer.from_pretrained(hf_tokenizer_path)
+        
+    def encode(self, text: bytes, add_bos: bool = True, special: bool = False) -> List[int]:
+        return self.hf_tokenizer.encode(
+            text.decode("utf-8", errors="ignore"), add_special_tokens=special
+        )
+    
+    def decode(self, tokens: List[int]) -> bytes:
+        return self.hf_tokenizer.decode(tokens).encode("utf-8", errors="ignore")
 
 
 class LlamaState:
