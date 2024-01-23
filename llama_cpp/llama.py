@@ -606,8 +606,6 @@ class Llama:
 
         sample_idx = self.n_tokens + len(tokens) - 1
         draft_model = self.draft_model
-        candidates: List[int] = []
-        candidates_idx = 0
         tokens = list(tokens)
 
         # Eval and sample
@@ -643,22 +641,16 @@ class Llama:
                 if tokens_or_none is not None:
                     tokens.extend(tokens_or_none)
                 
-                if candidates and token != candidates[candidates_idx]:
-                    candidates = []
-                    candidates_idx = 0
-                    self.n_tokens = sample_idx
-                    self._ctx.kv_cache_seq_rm(-1, self.n_tokens, -1)
-                    break
-                else:
-                    candidates_idx += 1
+                if sample_idx < self.n_tokens:
+                    if token != self._input_ids[sample_idx]:
+                        self.n_tokens = sample_idx
+                        self._ctx.kv_cache_seq_rm(-1, self.n_tokens, -1)
+                        break
 
-            if draft_model is not None and sample_idx >= self.n_tokens:
-                candidates = [int(i) for i in draft_model(self._input_ids[:sample_idx])[
-                    : self._n_ctx - self.n_tokens
-                ]]
-                candidates_idx = 0
-                tokens.extend(candidates)
-                print(candidates)
+            if draft_model is not None:
+                input_ids = np.concatenate([self._input_ids[:self.n_tokens], np.array(tokens)])
+                tokens.extend([int(i) for i in draft_model(input_ids)])
+                tokens = tokens[: self._n_ctx - self.n_tokens]
 
     def create_embedding(
         self, input: Union[str, List[str]], model: Optional[str] = None
