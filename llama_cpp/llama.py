@@ -649,7 +649,7 @@ class Llama:
 
             if draft_model is not None:
                 if candidates_all_correct:
-                    candidates_to_predict = min(10, candidates_to_predict + 2)
+                    candidates_to_predict = candidates_to_predict + 2
                 else:
                     candidates_to_predict = max(1, candidates_to_predict - 1)
                 self._input_ids[self.n_tokens : len(tokens)] = tokens
