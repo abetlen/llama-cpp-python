@@ -104,6 +104,7 @@ CMAKE_ARGS="-DLLAMA_HIPBLAS=on" pip install llama-cpp-python
 ### Windows Notes
 
 If you run into issues where it complains it can't find `'nmake'` `'?'` or CMAKE_C_COMPILER, you can extract w64devkit as [mentioned in llama.cpp repo](https://github.com/ggerganov/llama.cpp#openblas) and add those manually to CMAKE_ARGS before running `pip` install:
+
 ```ps
 $env:CMAKE_GENERATOR = "MinGW Makefiles"
 $env:CMAKE_ARGS = "-DLLAMA_OPENBLAS=on -DCMAKE_C_COMPILER=C:/w64devkit/bin/gcc.exe -DCMAKE_CXX_COMPILER=C:/w64devkit/bin/g++.exe" 
@@ -118,17 +119,19 @@ Detailed MacOS Metal GPU install documentation is available at [docs/install/mac
 #### M1 Mac Performance Issue
 
 Note: If you are using Apple Silicon (M1) Mac, make sure you have installed a version of Python that supports arm64 architecture. For example:
-```
+
+```bash
 wget https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-arm64.sh
 bash Miniforge3-MacOSX-arm64.sh
 ```
+
 Otherwise, while installing it will build the llama.cpp x86 version which will be 10x slower on Apple Silicon (M1) Mac.
 
 #### M Series Mac Error: `(mach-o file, but is an incompatible architecture (have 'x86_64', need 'arm64'))`
 
 Try installing with
 
-```
+```bash
 CMAKE_ARGS="-DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_APPLE_SILICON_PROCESSOR=arm64 -DLLAMA_METAL=on" pip install --upgrade --verbose --force-reinstall --no-cache-dir llama-cpp-python
 ```
 
@@ -152,7 +155,12 @@ Below is a short example demonstrating how to use the high-level API to for basi
 
 ```python
 >>> from llama_cpp import Llama
->>> llm = Llama(model_path="./models/7B/llama-model.gguf")
+>>> llm = Llama(
+      model_path="./models/7B/llama-model.gguf",
+      # n_gpu_layers=-1, # Uncomment to use GPU acceleration 
+      # seed=1337, # Uncomment to set a specific seed
+      # n_ctx=2048, # Uncomment to increase the context window
+)
 >>> output = llm(
       "Q: Name the planets in the solar system? A: ", # Prompt
       max_tokens=32, # Generate up to 32 tokens
@@ -191,7 +199,10 @@ Note that `chat_format` option must be set for the particular model you are usin
 
 ```python
 >>> from llama_cpp import Llama
->>> llm = Llama(model_path="path/to/llama-2/llama-model.gguf", chat_format="llama-2")
+>>> llm = Llama(
+      model_path="path/to/llama-2/llama-model.gguf",
+      chat_format="llama-2"
+)
 >>> llm.create_chat_completion(
       messages = [
           {"role": "system", "content": "You are an assistant who perfectly describes images."},
