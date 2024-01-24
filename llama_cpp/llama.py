@@ -637,10 +637,11 @@ class Llama:
                 ):
                     return
                 tokens_or_none = yield token
-                tokens = [token]
+                tokens.clear()
+                tokens.append(token)
                 if tokens_or_none is not None:
                     tokens.extend(tokens_or_none)
-                
+
                 if sample_idx < self.n_tokens:
                     if token != self._input_ids[sample_idx]:
                         self.n_tokens = sample_idx
@@ -648,7 +649,9 @@ class Llama:
                         break
 
             if draft_model is not None:
-                input_ids = np.concatenate([self._input_ids[:self.n_tokens], np.array(tokens)])
+                input_ids = np.concatenate(
+                    [self._input_ids[: self.n_tokens], np.array(tokens)]
+                )
                 tokens.extend([int(i) for i in draft_model(input_ids)])
                 tokens = tokens[: self._n_ctx - self.n_tokens]
 
