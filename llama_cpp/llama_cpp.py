@@ -2528,7 +2528,7 @@ _lib.llama_print_system_info.restype = c_char_p
 # // If this is not called, or NULL is supplied, everything is output on stderr.
 # LLAMA_API void llama_log_set(ggml_log_callback log_callback, void * user_data);
 def llama_log_set(
-    log_callback: "ctypes._FuncPointer", user_data: c_void_p  # type: ignore
+    log_callback: Union["ctypes._FuncPointer", c_void_p], user_data: c_void_p  # type: ignore
 ):
     """Set callback for all future logging events.
 
@@ -2536,7 +2536,7 @@ def llama_log_set(
     return _lib.llama_log_set(log_callback, user_data)
 
 
-_lib.llama_log_set.argtypes = [llama_log_callback, c_void_p]
+_lib.llama_log_set.argtypes = [ctypes.c_void_p, c_void_p]
 _lib.llama_log_set.restype = None
 
 
