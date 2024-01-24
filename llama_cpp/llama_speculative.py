@@ -17,30 +17,24 @@ class LlamaDraftModel(abc.ABC):
 class LlamaPromptLookupDecoding(LlamaDraftModel):
     """Based on https://github.com/apoorvumang/prompt-lookup-decoding"""
 
-    def __init__(self, max_ngram_size: int = 3, num_pred_tokens: int = 10):
+    def __init__(self, max_ngram_size: int = 2, num_pred_tokens: int = 10):
         self.max_ngram_size = max_ngram_size
         self.num_pred_tokens = num_pred_tokens
 
     @staticmethod
     def find_candidate_pred_tokens(
         input_ids: npt.NDArray[np.intc],
-        max_ngram_size: int = 3,
-        num_pred_tokens: int = 10,
+        max_ngram_size: int,
+        num_pred_tokens: int,
     ):
         input_length = input_ids.shape[0]
 
-        if input_length < max_ngram_size:
-            return np.array([], dtype=np.intc)
-
-        for ngram_size in range(max_ngram_size, 0, -1):
-            # Extract the last n tokens as our search ngram
-            ngram = input_ids[-ngram_size:]
-
+        for ngram_size in range(min(max_ngram_size, input_length - 1), 0, -1):
             # Create sliding windows of size ngram_size
             windows = np.lib.stride_tricks.sliding_window_view(input_ids, (ngram_size,))
 
             # Convert ngram to an array for comparison
-            ngram_array = np.array(ngram)  # .reshape(1, -1)
+            ngram_array = input_ids[-ngram_size:]
 
             # Find where the windows match the ngram
             matches = np.all(windows == ngram_array, axis=1)
@@ -52,8 +46,9 @@ class LlamaPromptLookupDecoding(LlamaDraftModel):
             for idx in match_indices:
                 start_idx = idx + ngram_size
                 end_idx = start_idx + num_pred_tokens
-                # Ensure we don't go beyond the length of input_ids and avoid self-match
-                if end_idx <= input_length and start_idx < input_length - ngram_size:
+                end_idx = min(end_idx, input_length)
+
+                if start_idx < end_idx:
                     return input_ids[start_idx:end_idx]
 
         # If no match is found, return an empty array
