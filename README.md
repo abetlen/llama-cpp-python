@@ -163,7 +163,7 @@ Below is a short example demonstrating how to use the high-level API to for basi
 )
 >>> output = llm(
       "Q: Name the planets in the solar system? A: ", # Prompt
-      max_tokens=32, # Generate up to 32 tokens
+      max_tokens=32, # Generate up to 32 tokens, set to None to generate up to the end of the context window
       stop=["Q:", "\n"], # Stop generating just before the model would generate a new question
       echo=True # Echo the prompt back in the output
 ) # Generate a completion, can also call create_completion
@@ -424,6 +424,9 @@ pip install -e .[all]
 # to clear the local build cache
 make clean
 ```
+
+You can also test out specific commits of `lama.cpp` by checking out the desired commit in the `vendor/llama.cpp` submodule and then running `make clean` and `pip install -e .` again. Any changes in the `llama.h` API will require
+changes to the `llama_cpp/llama_cpp.py` file to match the new API (additional changes may be required elsewhere).
 
 ## FAQ
 
