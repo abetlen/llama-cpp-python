@@ -652,8 +652,8 @@ class Llama:
                     candidates_to_predict = candidates_to_predict + 2
                 else:
                     candidates_to_predict = max(1, candidates_to_predict - 1)
-                self._input_ids[self.n_tokens : len(tokens)] = tokens
-                draft_tokens = draft_model(self._input_ids)[:candidates_to_predict]
+                self.input_ids[self.n_tokens : self.n_tokens + len(tokens)] = tokens
+                draft_tokens = draft_model(self.input_ids[:self.n_tokens + len(tokens)])[:candidates_to_predict]
                 candidates_to_predict = len(draft_tokens)
                 candidates_all_correct = True
                 tokens.extend(
