@@ -93,9 +93,7 @@ c_size_t_p = POINTER(c_size_t)
 
 # from ggml-backend.h
 # typedef bool (*ggml_backend_sched_eval_callback)(struct ggml_tensor * t, bool ask, void * user_data);
-ggml_backend_sched_eval_callback = ctypes.CFUNCTYPE(
-    c_bool, c_void_p, c_bool, c_void_p
-)
+ggml_backend_sched_eval_callback = ctypes.CFUNCTYPE(c_bool, c_void_p, c_bool, c_void_p)
 
 # llama.h bindings
 
@@ -2172,6 +2170,34 @@ _lib.llama_sample_typical.argtypes = [
     c_size_t,
 ]
 _lib.llama_sample_typical.restype = None
+
+
+# /// @details Dynamic temperature implementation described in the paper https://arxiv.org/abs/2309.02772.
+# LLAMA_API void llama_sample_entropy(
+#         struct llama_context * ctx,
+#       llama_token_data_array * candidates_p,
+#                        float   min_temp,
+#                        float   max_temp,
+#                        float   exponent_val);
+def llama_sample_entropy(
+    ctx: llama_context_p,
+    candidates,  # type: _Pointer[llama_token_data_array]
+    min_temp: Union[c_float, float],
+    max_temp: Union[c_float, float],
+    exponent_val: Union[c_float, float],
+):
+    """Dynamic temperature implementation described in the paper https://arxiv.org/abs/2309.02772."""
+    return _lib.llama_sample_entropy(ctx, candidates, min_temp, max_temp, exponent_val)
+
+
+_lib.llama_sample_entropy.argtypes = [
+    llama_context_p,
+    llama_token_data_array_p,
+    c_float,
+    c_float,
+    c_float,
+]
+_lib.llama_sample_entropy.restype = None
 
 
 # LLAMA_API void llama_sample_temp(
