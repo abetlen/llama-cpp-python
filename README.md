@@ -221,12 +221,12 @@ Chat completion is available through the [`create_chat_completion`](https://llam
 The high-level API also provides a simple interface for function calling.
 
 Note that the only model that supports full function calling at this time is "functionary".
-The gguf-converted files for this model can be found here: [functionary-7b-v1](https://huggingface.co/abetlen/functionary-7b-v1-GGUF)
+The gguf-converted files for this model can be found here: [functionary-v2.2](https://huggingface.co/meetkai/functionary-medium-v2.2-GGUF)
 
 
 ```python
 >>> from llama_cpp import Llama
->>> llm = Llama(model_path="path/to/functionary/llama-model.gguf", chat_format="functionary")
+>>> llm = Llama(model_path="path/to/functionary/llama-model.gguf", chat_format="functionary2")
 >>> llm.create_chat_completion(
       messages = [
         {
@@ -260,12 +260,7 @@ The gguf-converted files for this model can be found here: [functionary-7b-v1](h
           }
         }
       }],
-      tool_choice=[{
-        "type": "function",
-        "function": {
-          "name": "UserDetail"
-        }
-      }]
+      tool_choice="auto"
 )
 ```
 
