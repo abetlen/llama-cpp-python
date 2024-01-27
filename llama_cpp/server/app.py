@@ -41,6 +41,8 @@ from llama_cpp.server.types import (
     CreateEmbeddingRequest,
     CreateChatCompletionRequest,
     ModelList,
+    QueryTokensUsageRequest,
+    QueryCountResponse,
 )
 from llama_cpp.server.errors import RouteErrorHandler
 
@@ -306,6 +308,20 @@ async def create_embedding(
         llama_proxy(request.model).create_embedding,
         **request.model_dump(exclude={"user"}),
     )
+
+
+@router.post(
+    "/query-count", summary="Query Count", dependencies=[Depends(authenticate)]
+)
+async def count_query_tokens(
+    body: QueryTokensUsageRequest,
+    llama_proxy: LlamaProxy = Depends(get_llama_proxy),
+) -> QueryCountResponse:
+    tokens = llama_proxy(body.model).tokenize(body.query.encode("utf-8"), special=True)
+
+    return {
+        "tokens": len(tokens)
+    }
 
 
 @router.post(

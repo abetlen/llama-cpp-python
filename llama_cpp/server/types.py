@@ -176,6 +176,21 @@ class CreateEmbeddingRequest(BaseModel):
     }
 
 
+class QueryTokensUsageRequest(BaseModel):
+    model: Optional[str] = model_field
+    query: Optional[str] = Field(description="The query to count tokens")
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "query": "How many tokens in this query?"
+                }
+            ]
+        }
+    }
+
+
 class ChatCompletionRequestMessage(BaseModel):
     role: Literal["system", "user", "assistant", "function"] = Field(
         default="user", description="The role of the message."
@@ -264,3 +279,7 @@ class ModelData(TypedDict):
 class ModelList(TypedDict):
     object: Literal["list"]
     data: List[ModelData]
+
+
+class QueryCountResponse(TypedDict):
+    tokens: int
