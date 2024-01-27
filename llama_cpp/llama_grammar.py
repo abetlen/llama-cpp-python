@@ -72,7 +72,7 @@ class LlamaGrammar:
             )
         if verbose:
             print(f"{cls.from_string.__name__} grammar:", file=sys.stderr)
-            print_grammar(sys.stdout, parsed_grammar)
+            print_grammar(sys.stderr, parsed_grammar)
             print(file=sys.stderr)
         return cls(parsed_grammar)
 
@@ -1432,8 +1432,6 @@ class SchemaConverter:
         return key
 
     def visit(self, schema: Dict[str, Any], name: str) -> str:
-        schema_type: Optional[str] = schema.get("type") # type: ignore
-        assert isinstance(schema_type, str), f"Unrecognized schema: {schema}"
         rule_name = name or "root"
 
         if "$defs" in schema:
@@ -1459,7 +1457,19 @@ class SchemaConverter:
             rule = " | ".join((self._format_literal(v) for v in schema["enum"]))
             return self._add_rule(rule_name, rule)
 
-        elif schema_type == "object" and "properties" in schema:
+        elif "$ref" in schema:
+            ref = schema["$ref"]
+            assert ref.startswith("#/$defs/"), f"Unrecognized schema: {schema}"
+            # inline $defs
+            def_name = ref[len("#/$defs/") :]
+            def_schema = self._defs[def_name]
+            return self.visit(def_schema, f'{name}{"-" if name else ""}{def_name}')
+
+
+        schema_type: Optional[str] = schema.get("type") # type: ignore
+        assert isinstance(schema_type, str), f"Unrecognized schema: {schema}"
+
+        if schema_type == "object" and "properties" in schema:
             # TODO: `required` keyword
             prop_order = self._prop_order
             prop_pairs = sorted(
@@ -1489,14 +1499,6 @@ class SchemaConverter:
                 f'"[" space ({item_rule_name} ("," space {item_rule_name})*)? "]" space'
             )
             return self._add_rule(rule_name, rule)
-
-        elif "$ref" in schema:
-            ref = schema["$ref"]
-            assert ref.startswith("#/$defs/"), f"Unrecognized schema: {schema}"
-            # inline $defs
-            def_name = ref[len("#/$defs/") :]
-            def_schema = self._defs[def_name]
-            return self.visit(def_schema, f'{name}{"-" if name else ""}{def_name}')
 
         else:
             assert schema_type in PRIMITIVE_RULES, f"Unrecognized schema: {schema}"

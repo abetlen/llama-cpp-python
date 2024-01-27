@@ -15,6 +15,7 @@ dependencies = [
     "typing-extensions>=4.5.0",
     "numpy>=1.20.0",
     "diskcache>=5.6.1",
+    "jinja2>=2.11.3",
 ]
 requires-python = ">=3.8"
 classifiers = [
@@ -33,11 +34,12 @@ server = [
     "fastapi>=0.100.0",
     "pydantic-settings>=2.0.1",
     "sse-starlette>=1.6.1",
-    "starlette-context>=0.3.6,<0.4"
+    "starlette-context>=0.3.6,<0.4",
 ]
 test = [
     "pytest>=7.4.0",
     "httpx>=0.24.1",
+    "scipy>=1.10",
 ]
 dev = [
     "black>=23.3.0",
@@ -71,4 +73,3 @@ Changelog = "https://llama-cpp-python.readthedocs.io/en/latest/changelog/"
 
 [tool.pytest.ini_options]
 addopts = "--ignore=vendor"
-

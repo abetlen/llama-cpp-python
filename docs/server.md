@@ -32,6 +32,12 @@ python3 -m llama_cpp.server --help
 
 NOTE: All server options are also available as environment variables. For example, `--model` can be set by setting the `MODEL` environment variable.
 
+Check out the server config reference below settings for more information on the available options.
+CLI arguments and environment variables are available for all of the fields defined in [`ServerSettings`](#llama_cpp.server.settings.ServerSettings) and [`ModelSettings`](#llama_cpp.server.settings.ModelSettings) 
+
+Additionally the server supports configuration check out the [configuration section](#configuration-and-multi-model-support) for more information and examples.
+
+
 ## Guides
 
 ### Code Completion
@@ -122,3 +128,91 @@ response = client.chat.completions.create(
 )
 print(response)
 ```
+
+## Configuration and Multi-Model Support
+
+The server supports configuration via a JSON config file that can be passed using the `--config_file` parameter or the `CONFIG_FILE` environment variable.
+
+```bash
+python3 -m llama_cpp.server --config_file <config_file>
+```
+
+Config files support all of the server and model options supported by the cli and environment variables however instead of only a single model the config file can specify multiple models.
+
+The server supports routing requests to multiple models based on the `model` parameter in the request which matches against the `model_alias` in the config file.
+
+At the moment only a single model is loaded into memory at, the server will automatically load and unload models as needed.
+
+```json
+{
+    "host": "0.0.0.0",
+    "port": 8080,
+    "models": [
+        {
+            "model": "models/OpenHermes-2.5-Mistral-7B-GGUF/openhermes-2.5-mistral-7b.Q4_K_M.gguf",
+            "model_alias": "gpt-3.5-turbo",
+            "chat_format": "chatml",
+            "n_gpu_layers": -1,
+            "offload_kqv": true,
+            "n_threads": 12,
+            "n_batch": 512,
+            "n_ctx": 2048
+        },
+        {
+            "model": "models/OpenHermes-2.5-Mistral-7B-GGUF/openhermes-2.5-mistral-7b.Q4_K_M.gguf",
+            "model_alias": "gpt-4",
+            "chat_format": "chatml",
+            "n_gpu_layers": -1,
+            "offload_kqv": true,
+            "n_threads": 12,
+            "n_batch": 512,
+            "n_ctx": 2048
+        },
+        {
+            "model": "models/ggml_llava-v1.5-7b/ggml-model-q4_k.gguf",
+            "model_alias": "gpt-4-vision-preview",
+            "chat_format": "llava-1-5",
+            "clip_model_path": "models/ggml_llava-v1.5-7b/mmproj-model-f16.gguf",
+            "n_gpu_layers": -1,
+            "offload_kqv": true,
+            "n_threads": 12,
+            "n_batch": 512,
+            "n_ctx": 2048
+        },
+        {
+            "model": "models/mistral-7b-v0.1-GGUF/ggml-model-Q4_K.gguf",
+            "model_alias": "text-davinci-003",
+            "n_gpu_layers": -1,
+            "offload_kqv": true,
+            "n_threads": 12,
+            "n_batch": 512,
+            "n_ctx": 2048
+        },
+        {
+            "model": "models/replit-code-v1_5-3b-GGUF/replit-code-v1_5-3b.Q4_0.gguf",
+            "model_alias": "copilot-codex",
+            "n_gpu_layers": -1,
+            "offload_kqv": true,
+            "n_threads": 12,
+            "n_batch": 1024,
+            "n_ctx": 9216
+        }
+    ]
+}
+```
+
+The config file format is defined by the [`ConfigFileSettings`](#llama_cpp.server.settings.ConfigFileSettings) class.
+
+## Server Options Reference
+
+::: llama_cpp.server.settings.ConfigFileSettings
+    options:
+        show_if_no_docstring: true
+
+::: llama_cpp.server.settings.ServerSettings
+    options:
+        show_if_no_docstring: true
+
+::: llama_cpp.server.settings.ModelSettings
+    options:
+        show_if_no_docstring: true

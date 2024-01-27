@@ -7,6 +7,100 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.33]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@faa3526a1eba458120987ed8269e5616385a76f4
+- feat(server): include llama-cpp-python version in openapi spec by @abetlen in cde7514c3d28e6d52f272614e9957208c344dde5
+- fix: use both eos and bos tokens as stop sequences for hf-tokenizer-config chat format. by @abetlen in 5b982d0f8c6f35242c8862ffdce00e17cea0b44f
+- fix: GGUF metadata KV overrides, re #1011 by @phiharri in #1116
+- fix: llama_log_set should be able to accept null pointer by @abetlen in c970d41a85381fd55235136f123422df0bf0c7e7
+
+## [0.2.32]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@504dc37be8446fb09b1ede70300250ad41be32a2
+- fix: from_json_schema oneof/anyof bug by @jndiogo in d3f5528ca8bcb9d69d4f27e21631e911f1fb9bfe
+- fix: pass chat handler not chat formatter for huggingface autotokenizer and tokenizer_config formats by @abetlen in 24f39454e91cf5dddbc4b6041aead4accc7c7a2d
+- feat: Add add_generation_prompt option for jinja2chatformatter by @abetlen in 7f3209b1eb4ad3260ba063801fab80a8c25a2f4c
+- feat: Add Jinja2ChatFormatter by @abetlen in be09318c26add8674ce494ae7cc480cce72a4146
+- feat: Expose gguf model metadata in metadata property by @abetlen in 5a34c57e5479e50c99aba9b38218cc48e6560b81
+
+## [0.2.31]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@a5cacb22b2114fd9adf61c00cbb237384d86bced
+- fix: Mirostat sampling now passes correct type to ctypes and tracks state during generation by @abetlen in 3babe3512cb95743108f2b595210c38ed6f1b904
+- fix: Python3.8 support in server by @abetlen in 141293a75b564a8699e0acba1da24d9aa1cf0ab1
+
+## [0.2.30]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@57e2a7a52a819883f40dada8a2edc24ecf48186b
+- feat(server): Add ability to load chat format from huggingface autotokenizer or tokenizer_config.json files by @abetlen in b8fc1c7d83ad4a9207c707ba1d954fe580286a01
+- feat: Integration of Jinja2 Templating for chat formats by @teleprint-me in #875
+- fix: Offload KQV by default by @abetlen in 48c3b77e6f558a9899de0e1155c7dc0c7958d8e8
+- fix: Support Accept text/event-stream in chat and completion endpoints, resolves #1083 by @aniljava in #1088
+- fix(cli): allow passing n_ctx=0 to openAI API server args to use model n_ctx_train field per #1015 by @K-Mistele in #1093
+
+## [0.2.29]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@4483396751c79dea540808b9cb9238245d06da2b
+- feat: Add split_mode option by @abetlen in 84615adbc6855c8384807c42f0130f9a1763f99d
+- feat: Implement GGUF metadata KV overrides by @phiharri in #1011
+- fix: Avoid "LookupError: unknown encoding: ascii" when open() called in a destructor by @yieldthought in #1012
+- fix: Fix low_level_api_chat_cpp example to match current API by @aniljava in #1086
+- fix: Fix Pydantic model parsing by @DeNeutoy in #1087
+
+## [0.2.28]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@6efb8eb30e7025b168f3fda3ff83b9b386428ad6
+- feat: Add ability to pass in penalize_nl param by @shankinson in #1068
+- fix: print_grammar to stderr by @turian in #1052
+
+## [0.2.27]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@b3a7c20b5c035250257d2b62851c379b159c899a
+- feat: Add `saiga` chat format by @femoiseev in #1050
+- feat: Added `chatglm3` chat format by @xaviviro in #1059
+- fix: Correct typo in README.md by @qeleb in (#1058) 
+
+## [0.2.26]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@f6793491b5af6da75edad34d6f503ef86d31b09f
+
+## [0.2.25]
+
+- feat(server): Multi model support by @D4ve-R in #931
+- feat(server): Support none defaulting to infinity for completions by @swg in #111
+- feat(server): Implement openai api compatible authentication by @docmeth2 in #1010
+- fix: text_offset of multi-token characters by @twaka in #1037
+- fix: ctypes bindings for kv override by @phiharri in #1011
+- fix: ctypes definitions of llama_kv_cache_view_update and llama_kv_cache_view_free. by @e-c-d in #1028
+
+## [0.2.24]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@0e18b2e7d0b5c0a509ea40098def234b8d4a938a
+- feat: Add offload_kqv option to llama and server by @abetlen in 095c65000642a3cf73055d7428232fb18b73c6f3
+- feat: n_ctx=0 now uses the n_ctx_train of the model by @DanieleMorotti in #1015
+- feat: logits_to_logprobs supports both 2-D and 3-D logits arrays by @kddubey in #1002
+- fix: Remove f16_kv, add offload_kqv fields in low level and llama apis by @brandonrobertz in #1019
+- perf: Don't convert logprobs arrays to lists by @kddubey in #1021
+- docs: Fix README.md functionary demo typo by @evelynmitchell in #996
+- examples: Update low_level_api_llama_cpp.py to match current API by @jsoma in #1023
+
+## [0.2.23]
+
+- Update llama.cpp to ggerganov/llama.cpp@948ff137ec37f1ec74c02905917fa0afc9b97514
+- Add qwen chat format by @yhfgyyf in #1005
+- Add support for running the server with SSL by @rgerganov in #994
+- Replace logits_to_logprobs implementation with numpy equivalent to llama.cpp by @player1537 in #991
+- Fix UnsupportedOperation: fileno in suppress_stdout_stderr by @zocainViken in #961
+- Add Pygmalion chat format by @chiensen in #986
+- README.md multimodal params fix by @zocainViken in #967
+- Fix minor typo in README by @aniketmaurya in #958
+
+## [0.2.22]
+
+- Update llama.cpp to ggerganov/llama.cpp@8a7b2fa528f130631a5f43648481596ab320ed5a
+- Fix conflict with transformers library by kddubey in #952
+
 ## [0.2.21]
 
 - Update llama.cpp to ggerganov/llama.cpp@64e64aa2557d97490b2fe1262b313e2f4a1607e3

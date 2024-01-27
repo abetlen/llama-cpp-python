@@ -14,12 +14,15 @@ This package provides:
 - High-level Python API for text completion
     - OpenAI-like API
     - [LangChain compatibility](https://python.langchain.com/docs/integrations/llms/llamacpp)
+    - [LlamaIndex compatibility](https://docs.llamaindex.ai/en/stable/examples/llm/llama_2_llama_cpp.html)
 - OpenAI compatible web server
     - [Local Copilot replacement](https://llama-cpp-python.readthedocs.io/en/latest/server/#code-completion)
     - [Function Calling support](https://llama-cpp-python.readthedocs.io/en/latest/server/#function-calling)
     - [Vision API support](https://llama-cpp-python.readthedocs.io/en/latest/server/#multimodal-models)
+    - [Multiple Models](https://llama-cpp-python.readthedocs.io/en/latest/server/#configuration-and-multi-model-support)
 
 Documentation is available at [https://llama-cpp-python.readthedocs.io/en/latest](https://llama-cpp-python.readthedocs.io/en/latest).
+
 
 
 
@@ -101,6 +104,7 @@ CMAKE_ARGS="-DLLAMA_HIPBLAS=on" pip install llama-cpp-python
 ### Windows Notes
 
 If you run into issues where it complains it can't find `'nmake'` `'?'` or CMAKE_C_COMPILER, you can extract w64devkit as [mentioned in llama.cpp repo](https://github.com/ggerganov/llama.cpp#openblas) and add those manually to CMAKE_ARGS before running `pip` install:
+
 ```ps
 $env:CMAKE_GENERATOR = "MinGW Makefiles"
 $env:CMAKE_ARGS = "-DLLAMA_OPENBLAS=on -DCMAKE_C_COMPILER=C:/w64devkit/bin/gcc.exe -DCMAKE_CXX_COMPILER=C:/w64devkit/bin/g++.exe" 
@@ -110,14 +114,26 @@ See the above instructions and set `CMAKE_ARGS` to the BLAS backend you want to 
 
 ### MacOS Notes
 
+Detailed MacOS Metal GPU install documentation is available at [docs/install/macos.md](https://llama-cpp-python.readthedocs.io/en/latest/install/macos/)
+
+#### M1 Mac Performance Issue
+
 Note: If you are using Apple Silicon (M1) Mac, make sure you have installed a version of Python that supports arm64 architecture. For example:
-```
+
+```bash
 wget https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-arm64.sh
 bash Miniforge3-MacOSX-arm64.sh
 ```
+
 Otherwise, while installing it will build the llama.cpp x86 version which will be 10x slower on Apple Silicon (M1) Mac.
 
-Detailed MacOS Metal GPU install documentation is available at [docs/install/macos.md](https://llama-cpp-python.readthedocs.io/en/latest/install/macos/)
+#### M Series Mac Error: `(mach-o file, but is an incompatible architecture (have 'x86_64', need 'arm64'))`
+
+Try installing with
+
+```bash
+CMAKE_ARGS="-DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_APPLE_SILICON_PROCESSOR=arm64 -DLLAMA_METAL=on" pip install --upgrade --verbose --force-reinstall --no-cache-dir llama-cpp-python
+```
 
 ### Upgrading and Reinstalling
 
@@ -139,10 +155,15 @@ Below is a short example demonstrating how to use the high-level API to for basi
 
 ```python
 >>> from llama_cpp import Llama
->>> llm = Llama(model_path="./models/7B/llama-model.gguf")
+>>> llm = Llama(
+      model_path="./models/7B/llama-model.gguf",
+      # n_gpu_layers=-1, # Uncomment to use GPU acceleration 
+      # seed=1337, # Uncomment to set a specific seed
+      # n_ctx=2048, # Uncomment to increase the context window
+)
 >>> output = llm(
       "Q: Name the planets in the solar system? A: ", # Prompt
-      max_tokens=32, # Generate up to 32 tokens
+      max_tokens=32, # Generate up to 32 tokens, set to None to generate up to the end of the context window
       stop=["Q:", "\n"], # Stop generating just before the model would generate a new question
       echo=True # Echo the prompt back in the output
 ) # Generate a completion, can also call create_completion
@@ -178,7 +199,10 @@ Note that `chat_format` option must be set for the particular model you are usin
 
 ```python
 >>> from llama_cpp import Llama
->>> llm = Llama(model_path="path/to/llama-2/llama-model.gguf", chat_format="llama-2")
+>>> llm = Llama(
+      model_path="path/to/llama-2/llama-model.gguf",
+      chat_format="llama-2"
+)
 >>> llm.create_chat_completion(
       messages = [
           {"role": "system", "content": "You are an assistant who perfectly describes images."},
@@ -207,7 +231,8 @@ The gguf-converted files for this model can be found here: [functionary-7b-v1](h
       messages = [
         {
           "role": "system",
-          "content": "A chat between a curious user and an artificial intelligence assitant. The assistant gives helpful, detailed, and polite answers to the user's questions. The assistant callse functions with appropriate input when necessary"
+          "content": "A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. The assistant calls functions with appropriate input when necessary"
+          
         },
         {
           "role": "user",
@@ -219,7 +244,7 @@ The gguf-converted files for this model can be found here: [functionary-7b-v1](h
         "function": {
           "name": "UserDetail",
           "parameters": {
-            "type": "object"
+            "type": "object",
             "title": "UserDetail",
             "properties": {
               "name": {
@@ -235,7 +260,7 @@ The gguf-converted files for this model can be found here: [functionary-7b-v1](h
           }
         }
       }],
-      tool_choices=[{
+      tool_choice=[{
         "type": "function",
         "function": {
           "name": "UserDetail"
@@ -265,7 +290,8 @@ Then you'll need to use a custom chat handler to load the clip model and process
 >>> llm = Llama(
   model_path="./path/to/llava/llama-model.gguf",
   chat_handler=chat_handler,
-  n_ctx=2048 # n_ctx should be increased to accomodate the image embedding
+  n_ctx=2048, # n_ctx should be increased to accomodate the image embedding
+  logits_all=True,# needed to make llava work
 )
 >>> llm.create_chat_completion(
     messages = [
@@ -330,6 +356,7 @@ For possible options, see [llama_cpp/llama_chat_format.py](llama_cpp/llama_chat_
 - [Local Copilot replacement](https://llama-cpp-python.readthedocs.io/en/latest/server/#code-completion)
 - [Function Calling support](https://llama-cpp-python.readthedocs.io/en/latest/server/#function-calling)
 - [Vision API support](https://llama-cpp-python.readthedocs.io/en/latest/server/#multimodal-models)
+- [Multiple Models](https://llama-cpp-python.readthedocs.io/en/latest/server/#configuration-and-multi-model-support)
 
 ## Docker image
 
@@ -397,6 +424,9 @@ pip install -e .[all]
 # to clear the local build cache
 make clean
 ```
+
+You can also test out specific commits of `lama.cpp` by checking out the desired commit in the `vendor/llama.cpp` submodule and then running `make clean` and `pip install -e .` again. Any changes in the `llama.h` API will require
+changes to the `llama_cpp/llama_cpp.py` file to match the new API (additional changes may be required elsewhere).
 
 ## FAQ
 
