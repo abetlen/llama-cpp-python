@@ -154,6 +154,7 @@ class ChatCompletionFunctionCallOption(TypedDict):
 
 class ChatCompletionRequestResponseFormat(TypedDict):
     type: Literal["text", "json_object"]
+    schema: NotRequired[JsonType] # https://docs.endpoints.anyscale.com/guides/json_mode/
 
 
 class ChatCompletionRequestMessageContentPartText(TypedDict):
