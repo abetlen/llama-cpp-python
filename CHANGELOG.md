@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.34]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@6db2b41a76ee78d5efdd5c3cddd5d7ad3f646855
+- feat: Add json schema mode by @abetlen in #1122
+
 ## [0.2.33]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@faa3526a1eba458120987ed8269e5616385a76f4
