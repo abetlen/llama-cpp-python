@@ -1474,3 +1474,161 @@ class Llava15ChatHandler:
             ),
             stream=stream,
         )
+
+@register_chat_completion_handler("openhermes-function-calling")
+def openhermes_function_calling(
+    llama: llama.Llama,
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    functions: Optional[List[llama_types.ChatCompletionFunction]] = None,
+    function_call: Optional[llama_types.ChatCompletionRequestFunctionCall] = None,
+    tools: Optional[List[llama_types.ChatCompletionTool]] = None,
+    tool_choice: Optional[llama_types.ChatCompletionToolChoiceOption] = None,
+    temperature: float = 0.2,
+    top_p: float = 0.95,
+    top_k: int = 40,
+    min_p: float = 0.05,
+    typical_p: float = 1.0,
+    stream: bool = False,
+    stop: Optional[Union[str, List[str]]] = [],
+    response_format: Optional[llama_types.ChatCompletionRequestResponseFormat] = None,
+    max_tokens: Optional[int] = None,
+    presence_penalty: float = 0.0,
+    frequency_penalty: float = 0.0,
+    repeat_penalty: float = 1.1,
+    tfs_z: float = 1.0,
+    mirostat_mode: int = 0,
+    mirostat_tau: float = 5.0,
+    mirostat_eta: float = 0.1,
+    model: Optional[str] = None,
+    logits_processor: Optional[llama.LogitsProcessorList] = None,
+    grammar: Optional[llama.LlamaGrammar] = None,
+    **kwargs,  # type: ignore
+) -> Union[llama_types.ChatCompletion, Iterator[llama_types.ChatCompletionChunk]]:
+    if stream:
+        raise ValueError("stream mode is not supported by this chat handler")
+
+    def generate_hermes_prompt(prompt, functions: List[Any]):
+        function_definitions = "\n\n".join(json.dumps(function) for function in functions)
+        prompt = (
+            "<|im_start|>system\n"
+            "You are a helpful assistant with access to the following functions:\n"
+            "\n"
+            f"{function_definitions}\n"
+            "\n"
+            "To use these functions respond with:\n"
+            "<multiplefunctions>\n"
+            '    <functioncall> {{"name": "function_name", "arguments": {{"arg_1": "value_1", "arg_2": value_2, ...}}}} </functioncall>\n'
+            '    <functioncall> {{"name": "function_name", "arguments": {{"arg_1": "value_1", "arg_2": value_2, ...}}}} </functioncall>\n'
+            "    ...\n"
+            "</multiplefunctions>\n"
+            "\n"
+            "Edge cases you must handle:\n"
+            "- If there are no functions that match the user request, you will respond politely that you cannot help.<|im_end|>\n"
+            "<|im_start|>user\n"
+            f"{prompt}<|im_end|>\n"
+        )
+        return prompt
+
+    import xml.etree.ElementTree as ET
+    import re
+
+    def extract_function_calls(completion):
+        completion = completion.strip()
+        pattern = r"(<multiplefunctions>(.*?)</multiplefunctions>)"
+        match = re.search(pattern, completion, re.DOTALL)
+        if not match:
+            return None
+        
+        multiplefn = match.group(1)
+        root = ET.fromstring(multiplefn)
+        functions = root.findall("functioncall")
+        return [json.loads(fn.text) for fn in functions]
+
+    stop = ["<|im_end|>", "</s>"]
+
+    prompt = messages[-1]["content"]
+
+    if tools is not None:
+        functions = [tool["function"] for tool in tools if tool["type"] == "function"]
+
+    prompt = generate_hermes_prompt(
+        prompt, functions=functions or []
+    )
+    completion: llama_types.CreateCompletionResponse = llama.create_completion(
+        prompt=prompt,
+        temperature=temperature,
+        top_p=top_p,
+        top_k=top_k,
+        min_p=min_p,
+        typical_p=typical_p,
+        stream=stream,
+        stop=stop,
+        max_tokens=max_tokens,
+        presence_penalty=presence_penalty,
+        frequency_penalty=frequency_penalty,
+        repeat_penalty=repeat_penalty,
+        tfs_z=tfs_z,
+        mirostat_mode=mirostat_mode,
+        mirostat_tau=mirostat_tau,
+        mirostat_eta=mirostat_eta,
+        model=model,
+        logits_processor=logits_processor,
+        grammar=grammar,
+    ) # type: ignore
+    function_calls = extract_function_calls(completion["choices"][0]["text"])
+
+    if function_calls is None:
+        return _convert_completion_to_chat(completion, stream=stream)
+    
+    if len(function_calls) == 1:
+        return {
+            "id": "chat" + completion["id"],
+            "object": "chat.completion",
+            "created": completion["created"],
+            "model": completion["model"],
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": None,
+                        "function_call": function_calls[0],
+                        "tool_calls": [
+                            {
+                                "id": function_calls[0]["name"],
+                                "type": "function",
+                                "function": function_calls[0],
+                            }
+                        ],
+                    },
+                    "finish_reason": "tool_calls" if tools is not None else "function_call",
+                }
+            ],
+            "usage": completion["usage"],
+        }
+    
+    return {
+        "id": "chat" + completion["id"],
+        "object": "chat.completion",
+        "created": completion["created"],
+        "model": completion["model"],
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": function_call["name"],
+                            "type": "function",
+                            "function": function_call,
+                        }
+                        for function_call in function_calls
+                    ],
+                },
+                "finish_reason": "tool_calls",
+            }
+        ],
+        "usage": completion["usage"],
+    }
