@@ -1441,10 +1441,14 @@ class Llava15ChatHandler:
         prompt = llama.input_ids[: llama.n_tokens].tolist()
 
         if response_format is not None and response_format["type"] == "json_object":
-            with suppress_stdout_stderr(disable=self.verbose):
-                grammar = llama_grammar.LlamaGrammar.from_string(
-                    llama_grammar.JSON_GBNF
-                )
+            try:
+                # create grammar from json schema
+                if "schema" in response_format:
+                    grammar = llama_grammar.LlamaGrammar.from_json_schema(
+                        json.dumps(response_format["schema"])
+                    )
+            except Exception as e:
+                grammar = llama_grammar.LlamaGrammar.from_string(llama_grammar.JSON_GBNF)
 
         return _convert_completion_to_chat(
             llama.create_completion(
