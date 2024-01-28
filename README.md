@@ -216,6 +216,59 @@ Note that `chat_format` option must be set for the particular model you are usin
 
 Chat completion is available through the [`create_chat_completion`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.create_chat_completion) method of the [`Llama`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama) class.
 
+### JSON and JSON Schema Mode
+
+If you want to constrain chat responses to only valid JSON or a specific JSON Schema you can use the `response_format` argument to the `create_chat_completion` method.
+
+#### Json Mode
+
+The following example will constrain the response to be valid JSON.
+
+```python
+>>> from llama_cpp import Llama
+>>> llm = Llama(model_path="path/to/model.gguf", chat_format="chatml")
+>>> llm.create_chat_completion(
+    messages=[
+        {
+            "role": "system",
+            "content": "You are a helpful assistant that outputs in JSON.",
+        },
+        {"role": "user", "content": "Who won the world series in 2020"},
+    ],
+    response_format={
+        "type": "json_object",
+    },
+    temperature=0.7,
+)
+```
+
+#### Json Mode
+
+To constrain the response to a specific JSON Schema, you can use the `schema` property of the `response_format` argument.
+
+```python
+>>> from llama_cpp import Llama
+>>> llm = Llama(model_path="path/to/model.gguf", chat_format="chatml")
+>>> llm.create_chat_completion(
+    messages=[
+        {
+            "role": "system",
+            "content": "You are a helpful assistant that outputs in JSON.",
+        },
+        {"role": "user", "content": "Who won the world series in 2020"},
+    ],
+    response_format={
+        "type": "json_object",
+        "schema": {
+            "type": "object",
+            "properties": {"team_name": {"type": "string"}},
+            "required": ["team_name"],
+        },
+    },
+    temperature=0.7,
+)
+```
+
 ### Function Calling
 
 The high-level API also provides a simple interface for function calling.
