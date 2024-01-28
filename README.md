@@ -220,7 +220,7 @@ Chat completion is available through the [`create_chat_completion`](https://llam
 
 If you want to constrain chat responses to only valid JSON or a specific JSON Schema you can use the `response_format` argument to the `create_chat_completion` method.
 
-#### Json Mode
+#### JSON Mode
 
 The following example will constrain the response to be valid JSON.
 
@@ -242,7 +242,7 @@ The following example will constrain the response to be valid JSON.
 )
 ```
 
-#### Json Mode
+#### JSON Schema Mode
 
 To constrain the response to a specific JSON Schema, you can use the `schema` property of the `response_format` argument.
 
