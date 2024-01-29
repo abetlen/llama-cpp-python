@@ -877,6 +877,22 @@ def format_chatml(
     return ChatFormatterResponse(prompt=_prompt, stop=_sep)
 
 
+@register_chat_format("mistral-instruct")
+def format_mistral(
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    **kwargs: Any,
+) -> ChatFormatterResponse:
+    _roles = dict(user="[INST] ", assistant="[/INST]")
+    _sep = " "
+    system_template = """<s>{system_message}"""
+    system_message = _get_system_message(messages)
+    system_message = system_template.format(system_message=system_message)
+    _messages = _map_roles(messages, _roles)
+    _messages.append((_roles["assistant"], None))
+    _prompt = _format_no_colon_single(system_message, _messages, _sep)
+    return ChatFormatterResponse(prompt=_prompt)
+
+
 @register_chat_format("chatglm3")
 def format_chatglm3(
     messages: List[llama_types.ChatCompletionRequestMessage],
