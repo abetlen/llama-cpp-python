@@ -877,7 +877,7 @@ def format_chatml(
     return ChatFormatterResponse(prompt=_prompt, stop=_sep)
 
 
-@register_chat_format("mistral")
+@register_chat_format("mistral-instruct")
 def format_mistral(
     messages: List[llama_types.ChatCompletionRequestMessage],
     **kwargs: Any,
