@@ -71,7 +71,7 @@ CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS" pip install llama-cpp-
 
 #### cuBLAS
 
-To install with cuBLAS, set the `LLAMA_CUBLAS=1` environment variable before installing:
+To install with cuBLAS, set the `LLAMA_CUBLAS=on` environment variable before installing:
 
 ```bash
 CMAKE_ARGS="-DLLAMA_CUBLAS=on" pip install llama-cpp-python
@@ -87,7 +87,7 @@ CMAKE_ARGS="-DLLAMA_METAL=on" pip install llama-cpp-python
 
 #### CLBlast
 
-To install with CLBlast, set the `LLAMA_CLBLAST=1` environment variable before installing:
+To install with CLBlast, set the `LLAMA_CLBLAST=on` environment variable before installing:
 
 ```bash
 CMAKE_ARGS="-DLLAMA_CLBLAST=on" pip install llama-cpp-python
