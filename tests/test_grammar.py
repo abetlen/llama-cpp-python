@@ -50,3 +50,29 @@ def test_composed_pydantic_grammar():
     grammar = llama_cpp.LlamaGrammar.from_json_schema(json.dumps(schema))
 
     assert grammar.grammar is not None
+
+
+def test_grammar_anyof():
+    sch = {
+        "properties": {
+            "temperature": {
+                "description": "The temperature mentioned",
+                "type": "number",
+            },
+            "unit": {
+                "anyOf": [
+                    {
+                        "description": "Unit for temperature",
+                        "enum": ["celsius", "fahrenheit"],
+                        "type": "string",
+                    },
+                    {"type": "null"},
+                ],
+            },
+        },
+        "type": "object",
+    }
+
+    grammar = llama_cpp.LlamaGrammar.from_json_schema(json.dumps(sch))
+
+    assert grammar.grammar is not None

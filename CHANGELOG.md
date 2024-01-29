@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.36]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@2aed77eb06a329f0d82bb1c467f4244904d4073f
+- feat: Add mistral instruct chat format as "mistral-instruct" by @Rafaelblsilva in #799
+
+## [0.2.35]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@d2f650cb5b04ee2726663e79b47da5efe196ce00
+
+## [0.2.34]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@6db2b41a76ee78d5efdd5c3cddd5d7ad3f646855
+- feat: Add json schema mode by @abetlen in #1122
+
+## [0.2.33]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@faa3526a1eba458120987ed8269e5616385a76f4
+- feat(server): include llama-cpp-python version in openapi spec by @abetlen in cde7514c3d28e6d52f272614e9957208c344dde5
+- fix: use both eos and bos tokens as stop sequences for hf-tokenizer-config chat format. by @abetlen in 5b982d0f8c6f35242c8862ffdce00e17cea0b44f
+- fix: GGUF metadata KV overrides, re #1011 by @phiharri in #1116
+- fix: llama_log_set should be able to accept null pointer by @abetlen in c970d41a85381fd55235136f123422df0bf0c7e7
+
+## [0.2.32]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@504dc37be8446fb09b1ede70300250ad41be32a2
+- fix: from_json_schema oneof/anyof bug by @jndiogo in d3f5528ca8bcb9d69d4f27e21631e911f1fb9bfe
+- fix: pass chat handler not chat formatter for huggingface autotokenizer and tokenizer_config formats by @abetlen in 24f39454e91cf5dddbc4b6041aead4accc7c7a2d
+- feat: Add add_generation_prompt option for jinja2chatformatter by @abetlen in 7f3209b1eb4ad3260ba063801fab80a8c25a2f4c
+- feat: Add Jinja2ChatFormatter by @abetlen in be09318c26add8674ce494ae7cc480cce72a4146
+- feat: Expose gguf model metadata in metadata property by @abetlen in 5a34c57e5479e50c99aba9b38218cc48e6560b81
+
 ## [0.2.31]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@a5cacb22b2114fd9adf61c00cbb237384d86bced

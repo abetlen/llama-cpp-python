@@ -93,9 +93,7 @@ c_size_t_p = POINTER(c_size_t)
 
 # from ggml-backend.h
 # typedef bool (*ggml_backend_sched_eval_callback)(struct ggml_tensor * t, bool ask, void * user_data);
-ggml_backend_sched_eval_callback = ctypes.CFUNCTYPE(
-    c_bool, c_void_p, c_bool, c_void_p
-)
+ggml_backend_sched_eval_callback = ctypes.CFUNCTYPE(c_bool, c_void_p, c_bool, c_void_p)
 
 # llama.h bindings
 
@@ -188,6 +186,7 @@ LLAMA_TOKEN_TYPE_BYTE = 6
 #     LLAMA_FTYPE_MOSTLY_IQ2_XXS       = 19, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_IQ2_XS        = 20, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_Q2_K_S        = 21, // except 1d tensors
+#     LLAMA_FTYPE_MOSTLY_Q3_K_XS       = 22, // except 1d tensors
 
 #     LLAMA_FTYPE_GUESSED = 1024, // not specified in the model file
 # };
@@ -211,6 +210,7 @@ LLAMA_FTYPE_MOSTLY_Q6_K = 18
 LLAMA_FTYPE_MOSTLY_IQ2_XXS = 19
 LLAMA_FTYPE_MOSTLY_IQ2_XS = 20
 LLAMA_FTYPE_MOSTLY_Q2_K_S = 21
+LLAMA_FTYPE_MOSTLY_Q3_K_XS = 22
 LLAMA_FTYPE_GUESSED = 1024
 
 # enum llama_rope_scaling_type {
@@ -2172,6 +2172,34 @@ _lib.llama_sample_typical.argtypes = [
 _lib.llama_sample_typical.restype = None
 
 
+# /// @details Dynamic temperature implementation described in the paper https://arxiv.org/abs/2309.02772.
+# LLAMA_API void llama_sample_entropy(
+#         struct llama_context * ctx,
+#       llama_token_data_array * candidates_p,
+#                        float   min_temp,
+#                        float   max_temp,
+#                        float   exponent_val);
+def llama_sample_entropy(
+    ctx: llama_context_p,
+    candidates,  # type: _Pointer[llama_token_data_array]
+    min_temp: Union[c_float, float],
+    max_temp: Union[c_float, float],
+    exponent_val: Union[c_float, float],
+):
+    """Dynamic temperature implementation described in the paper https://arxiv.org/abs/2309.02772."""
+    return _lib.llama_sample_entropy(ctx, candidates, min_temp, max_temp, exponent_val)
+
+
+_lib.llama_sample_entropy.argtypes = [
+    llama_context_p,
+    llama_token_data_array_p,
+    c_float,
+    c_float,
+    c_float,
+]
+_lib.llama_sample_entropy.restype = None
+
+
 # LLAMA_API void llama_sample_temp(
 #         struct llama_context * ctx,
 #       llama_token_data_array * candidates,
@@ -2526,7 +2554,7 @@ _lib.llama_print_system_info.restype = c_char_p
 # // If this is not called, or NULL is supplied, everything is output on stderr.
 # LLAMA_API void llama_log_set(ggml_log_callback log_callback, void * user_data);
 def llama_log_set(
-    log_callback: "ctypes._FuncPointer", user_data: c_void_p  # type: ignore
+    log_callback: Union["ctypes._FuncPointer", c_void_p], user_data: c_void_p  # type: ignore
 ):
     """Set callback for all future logging events.
 
@@ -2534,7 +2562,7 @@ def llama_log_set(
     return _lib.llama_log_set(log_callback, user_data)
 
 
-_lib.llama_log_set.argtypes = [llama_log_callback, c_void_p]
+_lib.llama_log_set.argtypes = [ctypes.c_void_p, c_void_p]
 _lib.llama_log_set.restype = None
 
 

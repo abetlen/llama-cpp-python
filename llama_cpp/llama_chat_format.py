@@ -152,11 +152,13 @@ class Jinja2ChatFormatter(ChatFormatter):
         template: str,
         eos_token: str,
         bos_token: str,
+        add_generation_prompt: bool = True,
     ):
         """A chat formatter that uses jinja2 templates to format the prompt."""
         self.template = template
         self.eos_token = eos_token
         self.bos_token = bos_token
+        self.add_generation_prompt = add_generation_prompt
 
         self._environment = jinja2.Environment(
             loader=jinja2.BaseLoader(),
@@ -170,12 +172,13 @@ class Jinja2ChatFormatter(ChatFormatter):
         messages: List[llama_types.ChatCompletionRequestMessage],
         **kwargs: Any,
     ) -> ChatFormatterResponse:
-        messages = [
-            *messages,
-            llama_types.ChatCompletionRequestAssistantMessage(
-                role="assistant", content=""
-            ),
-        ]
+        if self.add_generation_prompt:
+            messages = [
+                *messages,
+                llama_types.ChatCompletionRequestAssistantMessage(
+                    role="assistant", content=""
+                ),
+            ]
         prompt = self._environment.render(
             messages=messages, eos_token=self.eos_token, bos_token=self.bos_token
         )
@@ -315,7 +318,14 @@ def chat_formatter_to_chat_completion_handler(
             stop = stop + rstop
 
         if response_format is not None and response_format["type"] == "json_object":
-            grammar = llama_grammar.LlamaGrammar.from_string(llama_grammar.JSON_GBNF)
+            try:
+                # create grammar from json schema
+                if "schema" in response_format:
+                    grammar = llama_grammar.LlamaGrammar.from_json_schema(
+                        json.dumps(response_format["schema"])
+                    )
+            except Exception as e:
+                grammar = llama_grammar.LlamaGrammar.from_string(llama_grammar.JSON_GBNF)
 
         completion_or_chunks = llama.create_completion(
             prompt=prompt,
@@ -376,7 +386,8 @@ def hf_autotokenizer_to_chat_completion_handler(
 
 
 def hf_tokenizer_config_to_chat_formatter(
-    tokenizer_config: Dict[str, Any]
+    tokenizer_config: Dict[str, Any],
+    add_generation_prompt: bool = True,
 ) -> ChatFormatter:
     assert isinstance(tokenizer_config, dict)
 
@@ -398,31 +409,34 @@ def hf_tokenizer_config_to_chat_formatter(
         lstrip_blocks=True,
     ).from_string(chat_template)
 
-    def format_autotokenizer(
+    def format_tokenizer_config(
         messages: List[llama_types.ChatCompletionRequestMessage],
         **kwargs: Any,
     ) -> ChatFormatterResponse:
         # TODO: veryify this is correct
         # Add a blank assistant message to the end of the messages to prompt the model to generate a response
-        prompt = env.render(
-            messages=[
+        if add_generation_prompt:
+            messages = [
                 *messages,
                 llama_types.ChatCompletionRequestAssistantMessage(
                     role="assistant", content=""
                 ),
-            ],
+            ]
+        prompt = env.render(
+            messages=messages,
             bos_token=bos_token,
             eos_token=eos_token,
         )
-        return ChatFormatterResponse(prompt=prompt, stop=eos_token)
+        return ChatFormatterResponse(prompt=prompt, stop=[eos_token, bos_token])
 
-    return format_autotokenizer
+    return format_tokenizer_config
 
 
 def hf_tokenizer_config_to_chat_completion_handler(
     tokenizer_config: Dict[str, Any],
+    add_generation_prompt: bool = True,
 ) -> LlamaChatCompletionHandler:
-    chat_formatter = hf_tokenizer_config_to_chat_formatter(tokenizer_config)
+    chat_formatter = hf_tokenizer_config_to_chat_formatter(tokenizer_config, add_generation_prompt=add_generation_prompt)
     return chat_formatter_to_chat_completion_handler(chat_formatter)
 
 
@@ -861,6 +875,24 @@ def format_chatml(
     _messages.append((_roles["assistant"], None))
     _prompt = _format_chatml(system_message, _messages, _sep)
     return ChatFormatterResponse(prompt=_prompt, stop=_sep)
+
+
+@register_chat_format("mistral-instruct")
+def format_mistral_instruct(
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    **kwargs: Any,
+) -> ChatFormatterResponse:
+    bos = "<s>"
+    eos = "</s>"
+    stop = eos
+    prompt = bos
+    for message in messages:
+        if message["role"] == "user" and message["content"] is not None and isinstance(message["content"], str):
+            prompt += "[INST] " + message["content"]
+        elif message["role"] == "assistant" and message["content"] is not None and isinstance(message["content"], str):
+            prompt += " [/INST]" + message["content"] + eos
+    prompt += " [/INST]"
+    return ChatFormatterResponse(prompt=prompt, stop=stop)
 
 
 @register_chat_format("chatglm3")
@@ -1427,10 +1459,14 @@ class Llava15ChatHandler:
         prompt = llama.input_ids[: llama.n_tokens].tolist()
 
         if response_format is not None and response_format["type"] == "json_object":
-            with suppress_stdout_stderr(disable=self.verbose):
-                grammar = llama_grammar.LlamaGrammar.from_string(
-                    llama_grammar.JSON_GBNF
-                )
+            try:
+                # create grammar from json schema
+                if "schema" in response_format:
+                    grammar = llama_grammar.LlamaGrammar.from_json_schema(
+                        json.dumps(response_format["schema"])
+                    )
+            except Exception as e:
+                grammar = llama_grammar.LlamaGrammar.from_string(llama_grammar.JSON_GBNF)
 
         return _convert_completion_to_chat(
             llama.create_completion(

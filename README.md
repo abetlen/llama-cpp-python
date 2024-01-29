@@ -71,7 +71,7 @@ CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS" pip install llama-cpp-
 
 #### cuBLAS
 
-To install with cuBLAS, set the `LLAMA_CUBLAS=1` environment variable before installing:
+To install with cuBLAS, set the `LLAMA_CUBLAS=on` environment variable before installing:
 
 ```bash
 CMAKE_ARGS="-DLLAMA_CUBLAS=on" pip install llama-cpp-python
@@ -87,7 +87,7 @@ CMAKE_ARGS="-DLLAMA_METAL=on" pip install llama-cpp-python
 
 #### CLBlast
 
-To install with CLBlast, set the `LLAMA_CLBLAST=1` environment variable before installing:
+To install with CLBlast, set the `LLAMA_CLBLAST=on` environment variable before installing:
 
 ```bash
 CMAKE_ARGS="-DLLAMA_CLBLAST=on" pip install llama-cpp-python
@@ -101,9 +101,18 @@ To install with hipBLAS / ROCm support for AMD cards, set the `LLAMA_HIPBLAS=on`
 CMAKE_ARGS="-DLLAMA_HIPBLAS=on" pip install llama-cpp-python
 ```
 
+#### Vulkan
+
+To install with Vulkan support, set the `LLAMA_VULKAN=on` environment variable before installing:
+
+```bash
+CMAKE_ARGS="-DLLAMA_VULKAN=on" pip install llama-cpp-python
+```
+
 ### Windows Notes
 
 If you run into issues where it complains it can't find `'nmake'` `'?'` or CMAKE_C_COMPILER, you can extract w64devkit as [mentioned in llama.cpp repo](https://github.com/ggerganov/llama.cpp#openblas) and add those manually to CMAKE_ARGS before running `pip` install:
+
 ```ps
 $env:CMAKE_GENERATOR = "MinGW Makefiles"
 $env:CMAKE_ARGS = "-DLLAMA_OPENBLAS=on -DCMAKE_C_COMPILER=C:/w64devkit/bin/gcc.exe -DCMAKE_CXX_COMPILER=C:/w64devkit/bin/g++.exe" 
@@ -113,14 +122,26 @@ See the above instructions and set `CMAKE_ARGS` to the BLAS backend you want to 
 
 ### MacOS Notes
 
+Detailed MacOS Metal GPU install documentation is available at [docs/install/macos.md](https://llama-cpp-python.readthedocs.io/en/latest/install/macos/)
+
+#### M1 Mac Performance Issue
+
 Note: If you are using Apple Silicon (M1) Mac, make sure you have installed a version of Python that supports arm64 architecture. For example:
-```
+
+```bash
 wget https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-arm64.sh
 bash Miniforge3-MacOSX-arm64.sh
 ```
+
 Otherwise, while installing it will build the llama.cpp x86 version which will be 10x slower on Apple Silicon (M1) Mac.
 
-Detailed MacOS Metal GPU install documentation is available at [docs/install/macos.md](https://llama-cpp-python.readthedocs.io/en/latest/install/macos/)
+#### M Series Mac Error: `(mach-o file, but is an incompatible architecture (have 'x86_64', need 'arm64'))`
+
+Try installing with
+
+```bash
+CMAKE_ARGS="-DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_APPLE_SILICON_PROCESSOR=arm64 -DLLAMA_METAL=on" pip install --upgrade --verbose --force-reinstall --no-cache-dir llama-cpp-python
+```
 
 ### Upgrading and Reinstalling
 
@@ -142,10 +163,15 @@ Below is a short example demonstrating how to use the high-level API to for basi
 
 ```python
 >>> from llama_cpp import Llama
->>> llm = Llama(model_path="./models/7B/llama-model.gguf")
+>>> llm = Llama(
+      model_path="./models/7B/llama-model.gguf",
+      # n_gpu_layers=-1, # Uncomment to use GPU acceleration 
+      # seed=1337, # Uncomment to set a specific seed
+      # n_ctx=2048, # Uncomment to increase the context window
+)
 >>> output = llm(
       "Q: Name the planets in the solar system? A: ", # Prompt
-      max_tokens=32, # Generate up to 32 tokens
+      max_tokens=32, # Generate up to 32 tokens, set to None to generate up to the end of the context window
       stop=["Q:", "\n"], # Stop generating just before the model would generate a new question
       echo=True # Echo the prompt back in the output
 ) # Generate a completion, can also call create_completion
@@ -181,7 +207,10 @@ Note that `chat_format` option must be set for the particular model you are usin
 
 ```python
 >>> from llama_cpp import Llama
->>> llm = Llama(model_path="path/to/llama-2/llama-model.gguf", chat_format="llama-2")
+>>> llm = Llama(
+      model_path="path/to/llama-2/llama-model.gguf",
+      chat_format="llama-2"
+)
 >>> llm.create_chat_completion(
       messages = [
           {"role": "system", "content": "You are an assistant who perfectly describes images."},
@@ -194,6 +223,59 @@ Note that `chat_format` option must be set for the particular model you are usin
 ```
 
 Chat completion is available through the [`create_chat_completion`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.create_chat_completion) method of the [`Llama`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama) class.
+
+### JSON and JSON Schema Mode
+
+If you want to constrain chat responses to only valid JSON or a specific JSON Schema you can use the `response_format` argument to the `create_chat_completion` method.
+
+#### JSON Mode
+
+The following example will constrain the response to be valid JSON.
+
+```python
+>>> from llama_cpp import Llama
+>>> llm = Llama(model_path="path/to/model.gguf", chat_format="chatml")
+>>> llm.create_chat_completion(
+    messages=[
+        {
+            "role": "system",
+            "content": "You are a helpful assistant that outputs in JSON.",
+        },
+        {"role": "user", "content": "Who won the world series in 2020"},
+    ],
+    response_format={
+        "type": "json_object",
+    },
+    temperature=0.7,
+)
+```
+
+#### JSON Schema Mode
+
+To constrain the response to a specific JSON Schema, you can use the `schema` property of the `response_format` argument.
+
+```python
+>>> from llama_cpp import Llama
+>>> llm = Llama(model_path="path/to/model.gguf", chat_format="chatml")
+>>> llm.create_chat_completion(
+    messages=[
+        {
+            "role": "system",
+            "content": "You are a helpful assistant that outputs in JSON.",
+        },
+        {"role": "user", "content": "Who won the world series in 2020"},
+    ],
+    response_format={
+        "type": "json_object",
+        "schema": {
+            "type": "object",
+            "properties": {"team_name": {"type": "string"}},
+            "required": ["team_name"],
+        },
+    },
+    temperature=0.7,
+)
+```
 
 ### Function Calling
 
@@ -403,6 +485,9 @@ pip install -e .[all]
 # to clear the local build cache
 make clean
 ```
+
+You can also test out specific commits of `lama.cpp` by checking out the desired commit in the `vendor/llama.cpp` submodule and then running `make clean` and `pip install -e .` again. Any changes in the `llama.h` API will require
+changes to the `llama_cpp/llama_cpp.py` file to match the new API (additional changes may be required elsewhere).
 
 ## FAQ
 
