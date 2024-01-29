@@ -1,4 +1,5 @@
-"""C++ implementation of the llama grammar parser."""
+"""Python implementation of llama grammar parser directly translated from C++ source file in vendor/llama.cpp/common/grammar-parser.cpp."""
+
 # flake8: noqa
 from pathlib import Path
 import sys
@@ -6,7 +7,9 @@ from ctypes import *  # type: ignore
 from enum import Enum
 from itertools import islice
 from typing import (
+    Any,
     Callable,
+    Dict,
     Generic,
     List,
     Optional,
@@ -18,7 +21,7 @@ from typing import (
     overload,
 )
 
-from . import llama_cpp
+import llama_cpp.llama_cpp as llama_cpp
 
 # Type aliases
 llama_grammar_element = llama_cpp.llama_grammar_element
@@ -57,10 +60,11 @@ class LlamaGrammar:
         )  # type: std.vector[std.vector[LlamaGrammarElement]]
         self._n_rules = self._grammar_rules.size()  # type: int
         self._start_rule_index = parsed_grammar.symbol_ids.at("root")  # type: int
-        self.grammar = self.init()
+        self.init()
 
     @classmethod
     def from_string(cls, grammar: str, verbose: bool = True) -> "LlamaGrammar":
+        """Convert a GBNF grammar to a Llama grammar."""
         parsed_grammar = parse(const_char_p(grammar))  # type: parse_state
         if parsed_grammar.rules.empty():
             raise ValueError(
@@ -68,9 +72,18 @@ class LlamaGrammar:
             )
         if verbose:
             print(f"{cls.from_string.__name__} grammar:", file=sys.stderr)
-            print_grammar(sys.stdout, parsed_grammar)
+            print_grammar(sys.stderr, parsed_grammar)
             print(file=sys.stderr)
         return cls(parsed_grammar)
+
+    @classmethod
+    def from_json_schema(
+        cls,
+        json_schema: str,
+        verbose: bool = True,
+    ) -> "LlamaGrammar":
+        """Convert a JSON schema to a Llama grammar."""
+        return cls.from_string(json_schema_to_gbnf(json_schema), verbose=verbose)
 
     @classmethod
     def from_file(cls, file: Union[str, Path], verbose: bool = True) -> "LlamaGrammar":
@@ -1056,8 +1069,7 @@ def print_rule(
     #     fprintf(file, "%s ::= ", symbol_id_names.at(rule_id).c_str());
     if rule.empty() or rule.back().type != llama_gretype.LLAMA_GRETYPE_END:
         raise RuntimeError(
-            "malformed rule, does not end with LLAMA_GRETYPE_END: "
-            + str(rule_id)
+            "malformed rule, does not end with LLAMA_GRETYPE_END: " + str(rule_id)
         )
     print(f"{symbol_id_names.at(rule_id)} ::=", file=file, end=" ")
     #     for (size_t i = 0, end = rule.size() - 1; i < end; i++) {
@@ -1102,9 +1114,7 @@ def print_rule(
     for i, elem in enumerate(rule[:-1]):
         case = elem.type  # type: llama_gretype
         if case is llama_gretype.LLAMA_GRETYPE_END:
-            raise RuntimeError(
-                "unexpected end of rule: " + str(rule_id) + "," + str(i)
-            )
+            raise RuntimeError("unexpected end of rule: " + str(rule_id) + "," + str(i))
         elif case is llama_gretype.LLAMA_GRETYPE_ALT:
             print("| ", file=file, end="")
         elif case is llama_gretype.LLAMA_GRETYPE_RULE_REF:
@@ -1186,3 +1196,325 @@ def print_grammar(file: TextIO, state: parse_state) -> None:
             f"{print_grammar.__name__}: error printing grammar: {err}",
             file=sys.stderr,
         )
+
+
+"""llama.cpp gbnf rules from vendor/llama.cpp/grammars"""
+
+ARITHMETIC_GBNF = r"""
+root  ::= (expr "=" ws term "\n")+
+expr  ::= term ([-+*/] term)*
+term  ::= ident | num | "(" ws expr ")" ws
+ident ::= [a-z] [a-z0-9_]* ws
+num   ::= [0-9]+ ws
+ws    ::= [ \t\n]*
+"""
+
+C_GBNF = r"""
+root ::= (declaration)*
+
+declaration ::= dataType identifier "(" parameter? ")" "{" statement* "}"
+
+dataType  ::= "int" ws | "float" ws | "char" ws
+identifier ::= [a-zA-Z_] [a-zA-Z_0-9]*
+
+parameter ::= dataType identifier
+
+statement ::=
+    ( dataType identifier ws "=" ws expression ";" ) |
+    ( identifier ws "=" ws expression ";" ) |
+    ( identifier ws "(" argList? ")" ";" ) |
+    ( "return" ws expression ";" ) |
+    ( "while" "(" condition ")" "{" statement* "}" ) |
+    ( "for" "(" forInit ";" ws condition ";" ws forUpdate ")" "{" statement* "}" ) |
+    ( "if" "(" condition ")" "{" statement* "}" ("else" "{" statement* "}")? ) |
+    ( singleLineComment ) |
+    ( multiLineComment )
+
+forInit ::= dataType identifier ws "=" ws expression | identifier ws "=" ws expression
+forUpdate ::= identifier ws "=" ws expression
+
+condition ::= expression relationOperator expression
+relationOperator ::= ("<=" | "<" | "==" | "!=" | ">=" | ">")
+
+expression ::= term (("+" | "-") term)*
+term ::= factor(("*" | "/") factor)*
+
+factor ::= identifier | number | unaryTerm | funcCall | parenExpression
+unaryTerm ::= "-" factor
+funcCall ::= identifier "(" argList? ")"
+parenExpression ::= "(" ws expression ws ")"
+
+argList ::= expression ("," ws expression)*
+
+number ::= [0-9]+
+
+singleLineComment ::= "//" [^\n]* "\n"
+multiLineComment ::= "/*" ( [^*] | ("*" [^/]) )* "*/"
+
+ws ::= ([ \t\n]+)
+"""
+
+CHESS_GBNF = r"""
+root   ::= object
+value  ::= object | array | string | number | ("true" | "false" | "null") ws
+
+object ::=
+  "{" ws (
+            string ":" ws value
+    ("," ws string ":" ws value)*
+  )? "}" ws
+
+array  ::=
+  "[" ws (
+            value
+    ("," ws value)*
+  )? "]" ws
+
+string ::=
+  "\"" (
+    [^"\\] |
+    "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F]) # escapes
+  )* "\"" ws
+
+number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? ws
+
+# Optional space: by convention, applied in this grammar after literal chars when allowed
+ws ::= ([ \t\n] ws)?
+"""
+
+JAPANESE_GBNF = r"""
+root   ::= object
+value  ::= object | array | string | number | ("true" | "false" | "null") ws
+
+object ::=
+  "{" ws (
+            string ":" ws value
+    ("," ws string ":" ws value)*
+  )? "}" ws
+
+array  ::=
+  "[" ws (
+            value
+    ("," ws value)*
+  )? "]" ws
+
+string ::=
+  "\"" (
+    [^"\\] |
+    "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F]) # escapes
+  )* "\"" ws
+
+number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? ws
+
+# Optional space: by convention, applied in this grammar after literal chars when allowed
+ws ::= ([ \t\n] ws)?
+"""
+
+JSON_ARR_GBNF = r"""
+# This is the same as json.gbnf but we restrict whitespaces at the end of the root array
+# Useful for generating JSON arrays
+
+root   ::= arr
+value  ::= object | array | string | number | ("true" | "false" | "null") ws
+
+arr  ::=
+  "[\n" ws (
+            value
+    (",\n" ws value)*
+  )? "]"
+
+object ::=
+  "{" ws (
+            string ":" ws value
+    ("," ws string ":" ws value)*
+  )? "}" ws
+
+array  ::=
+  "[" ws (
+            value
+    ("," ws value)*
+  )? "]" ws
+
+string ::=
+  "\"" (
+    [^"\\] |
+    "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F]) # escapes
+  )* "\"" ws
+
+number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? ws
+
+# Optional space: by convention, applied in this grammar after literal chars when allowed
+ws ::= ([ \t\n] ws)?
+"""
+
+
+JSON_GBNF = r"""
+root   ::= object
+value  ::= object | array | string | number | ("true" | "false" | "null") ws
+
+object ::=
+  "{" ws (
+            string ":" ws value
+    ("," ws string ":" ws value)*
+  )? "}" ws
+
+array  ::=
+  "[" ws (
+            value
+    ("," ws value)*
+  )? "]" ws
+
+string ::=
+  "\"" (
+    [^"\\] |
+    "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F]) # escapes
+  )* "\"" ws
+
+number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? ws
+
+ws ::= ([ \t\n] ws)?
+"""
+
+LIST_GBNF = r"""
+root ::= item+
+
+# Excludes various line break characters
+item ::= "- " [^\r\n\x0b\x0c\x85\u2028\u2029]+ "\n"
+"""
+
+"""llama.cpp json-schema to grammar converter from vendor/llama.cpp/examples/json-schema-to-grammar.py"""
+import json
+import re
+from typing import List, Optional
+
+# whitespace is constrained to a single space char to prevent model "running away" in
+# whitespace. Also maybe improves generation quality?
+SPACE_RULE = '" "?'
+
+PRIMITIVE_RULES = {
+    "boolean": '("true" | "false") space',
+    "number": '("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? space',
+    "integer": '("-"? ([0-9] | [1-9] [0-9]*)) space',
+    "string": r""" "\"" (
+        [^"\\] |
+        "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
+      )* "\"" space """,
+    "null": '"null" space',
+}
+
+INVALID_RULE_CHARS_RE = re.compile(r"[^a-zA-Z0-9-]+")
+GRAMMAR_LITERAL_ESCAPE_RE = re.compile(r'[\r\n"]')
+GRAMMAR_LITERAL_ESCAPES = {"\r": "\\r", "\n": "\\n", '"': '\\"'}
+
+
+class SchemaConverter:
+    def __init__(self, prop_order):
+        self._prop_order = prop_order
+        self._rules = {"space": SPACE_RULE}
+        self._defs: Dict[str, Any] = {}
+
+    def _format_literal(self, literal: str):
+        escaped: str = GRAMMAR_LITERAL_ESCAPE_RE.sub(
+            lambda m: GRAMMAR_LITERAL_ESCAPES.get(m.group(0)), json.dumps(literal)
+        )
+        return f'"{escaped}"'
+
+    def _add_rule(self, name: str, rule: str):
+        esc_name = INVALID_RULE_CHARS_RE.sub("-", name)
+        if esc_name not in self._rules or self._rules[esc_name] == rule:
+            key = esc_name
+        else:
+            i = 0
+            while f"{esc_name}{i}" in self._rules:
+                i += 1
+            key = f"{esc_name}{i}"
+        self._rules[key] = rule
+        return key
+
+    def visit(self, schema: Dict[str, Any], name: str) -> str:
+        rule_name = name or "root"
+
+        if "$defs" in schema:
+            # add defs to self._defs for later inlining
+            for def_name, def_schema in schema["$defs"].items():
+                self._defs[def_name] = def_schema
+
+        if "oneOf" in schema or "anyOf" in schema:
+            rule = " | ".join(
+                (
+                    self.visit(alt_schema, f'{name}{"-" if name else ""}{i}')
+                    for i, alt_schema in enumerate(
+                        schema.get("oneOf") or schema["anyOf"]
+                    )
+                )
+            )
+            return self._add_rule(rule_name, rule)
+
+        elif "const" in schema:
+            return self._add_rule(rule_name, self._format_literal(schema["const"]))
+
+        elif "enum" in schema:
+            rule = " | ".join((self._format_literal(v) for v in schema["enum"]))
+            return self._add_rule(rule_name, rule)
+
+        elif "$ref" in schema:
+            ref = schema["$ref"]
+            assert ref.startswith("#/$defs/"), f"Unrecognized schema: {schema}"
+            # inline $defs
+            def_name = ref[len("#/$defs/") :]
+            def_schema = self._defs[def_name]
+            return self.visit(def_schema, f'{name}{"-" if name else ""}{def_name}')
+
+
+        schema_type: Optional[str] = schema.get("type") # type: ignore
+        assert isinstance(schema_type, str), f"Unrecognized schema: {schema}"
+
+        if schema_type == "object" and "properties" in schema:
+            # TODO: `required` keyword
+            prop_order = self._prop_order
+            prop_pairs = sorted(
+                schema["properties"].items(),
+                # sort by position in prop_order (if specified) then by key
+                key=lambda kv: (prop_order.get(kv[0], len(prop_order)), kv[0]),
+            )
+
+            rule = '"{" space'
+            for i, (prop_name, prop_schema) in enumerate(prop_pairs):
+                prop_rule_name = self.visit(
+                    prop_schema, f'{name}{"-" if name else ""}{prop_name}'
+                )
+                if i > 0:
+                    rule += ' "," space'
+                rule += rf' {self._format_literal(prop_name)} space ":" space {prop_rule_name}'
+            rule += ' "}" space'
+
+            return self._add_rule(rule_name, rule)
+
+        elif schema_type == "array" and "items" in schema:
+            # TODO `prefixItems` keyword
+            item_rule_name = self.visit(
+                schema["items"], f'{name}{"-" if name else ""}item'
+            )
+            rule = (
+                f'"[" space ({item_rule_name} ("," space {item_rule_name})*)? "]" space'
+            )
+            return self._add_rule(rule_name, rule)
+
+        else:
+            assert schema_type in PRIMITIVE_RULES, f"Unrecognized schema: {schema}"
+            return self._add_rule(
+                "root" if rule_name == "root" else schema_type,
+                PRIMITIVE_RULES[schema_type],
+            )
+
+    def format_grammar(self):
+        return "\n".join((f"{name} ::= {rule}" for name, rule in self._rules.items()))
+
+
+def json_schema_to_gbnf(schema: str, prop_order: Optional[List[str]] = None):
+    prop_order = prop_order or []
+    schema = json.loads(schema)
+    prop_order = {name: idx for idx, name in enumerate(prop_order)}
+    converter = SchemaConverter(prop_order)
+    converter.visit(schema, "")
+    return converter.format_grammar()
