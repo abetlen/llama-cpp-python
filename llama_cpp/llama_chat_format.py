@@ -890,7 +890,7 @@ def format_mistral(
     _messages = _map_roles(messages, _roles)
     _messages.append((_roles["assistant"], None))
     _prompt = _format_no_colon_single(system_message, _messages, _sep)
-    return ChatFormatterResponse(prompt=_prompt, stop=_sep)
+    return ChatFormatterResponse(prompt=_prompt)
 
 
 @register_chat_format("chatglm3")
