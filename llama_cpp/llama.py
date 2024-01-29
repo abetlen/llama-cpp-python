@@ -344,21 +344,37 @@ class Llama:
             print(f"Model metadata: {self.metadata}", file=sys.stderr)
 
         if self.chat_format is None and self.chat_handler is None and "tokenizer.chat_template" in self.metadata:
-            template = self.metadata["tokenizer.chat_template"]
-            eos_token = self.detokenize([self.token_eos()]).decode("utf-8")
-            bos_token = self.detokenize([self.token_bos()]).decode("utf-8")
+            chat_format = llama_chat_format.guess_chat_format_from_gguf_metadata(self.metadata)
 
-            if self.verbose:
-                print(f"Using chat template: {template}", file=sys.stderr)
-                print(f"Using chat eos_token: {eos_token}", file=sys.stderr)
-                print(f"Using chat bos_token: {bos_token}", file=sys.stderr)
+            if chat_format is not None:
+                self.chat_format = chat_format
+                if self.verbose:
+                    print(f"Guessed chat format: {chat_format}", file=sys.stderr)
+            else:
+                template = self.metadata["tokenizer.chat_template"]
+                try:
+                    eos_token_id = int(self.metadata["tokenizer.ggml.eos_token_id"])
+                except:
+                    eos_token_id = self.token_eos()
+                try:
+                    bos_token_id = int(self.metadata["tokenizer.ggml.bos_token_id"])
+                except:
+                    bos_token_id = self.token_bos()
 
-            self.chat_handler = llama_chat_format.Jinja2ChatFormatter(
-                template=template,
-                eos_token=eos_token,
-                bos_token=bos_token
-            ).to_chat_handler()
-        
+                eos_token = self.detokenize([eos_token_id]).decode("utf-8")
+                bos_token = self.detokenize([bos_token_id]).decode("utf-8")
+
+                if self.verbose:
+                    print(f"Using chat template: {template}", file=sys.stderr)
+                    print(f"Using chat eos_token: {eos_token}", file=sys.stderr)
+                    print(f"Using chat bos_token: {bos_token}", file=sys.stderr)
+
+                self.chat_handler = llama_chat_format.Jinja2ChatFormatter(
+                    template=template,
+                    eos_token=eos_token,
+                    bos_token=bos_token
+                ).to_chat_handler()
+
         if self.chat_format is None and self.chat_handler is None:
             self.chat_format = "llama-2"
 
