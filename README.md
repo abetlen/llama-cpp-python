@@ -101,6 +101,14 @@ To install with hipBLAS / ROCm support for AMD cards, set the `LLAMA_HIPBLAS=on`
 CMAKE_ARGS="-DLLAMA_HIPBLAS=on" pip install llama-cpp-python
 ```
 
+#### Vulkan
+
+To install with Vulkan support, set the `LLAMA_VULKAN=on` environment variable before installing:
+
+```bash
+CMAKE_ARGS="-DLLAMA_VULKAN=on" pip install llama-cpp-python
+```
+
 ### Windows Notes
 
 If you run into issues where it complains it can't find `'nmake'` `'?'` or CMAKE_C_COMPILER, you can extract w64devkit as [mentioned in llama.cpp repo](https://github.com/ggerganov/llama.cpp#openblas) and add those manually to CMAKE_ARGS before running `pip` install:
