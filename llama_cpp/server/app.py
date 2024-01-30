@@ -118,7 +118,7 @@ def create_app(
     app = FastAPI(
         middleware=middleware,
         title="🦙 llama.cpp Python API",
-        version="0.0.1",
+        version=llama_cpp.__version__,
     )
     app.add_middleware(
         CORSMiddleware,

@@ -118,8 +118,8 @@ class ModelSettings(BaseSettings):
         description="Enable NUMA support.",
     )
     # Chat Format Params
-    chat_format: str = Field(
-        default="llama-2",
+    chat_format: Optional[str] = Field(
+        default=None,
         description="Chat format to use.",
     )
     clip_model_path: Optional[str] = Field(

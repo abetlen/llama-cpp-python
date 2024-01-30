@@ -16,6 +16,20 @@ import llama_cpp.llama_grammar as llama_grammar
 
 from ._utils import suppress_stdout_stderr, Singleton
 
+### Common Chat Templates and Special Tokens ###
+
+# Source: https://huggingface.co/teknium/OpenHermes-2.5-Mistral-7B/blob/main/tokenizer_config.json
+CHATML_CHAT_TEMPLATE = "{% for message in messages %}{{'<|im_start|>' + message['role'] + '\n' + message['content'] + '<|im_end|>' + '\n'}}{% endfor %}{% if add_generation_prompt %}{{ '<|im_start|>assistant\n' }}{% endif %}"
+CHATML_BOS_TOKEN = "<s>"
+CHATML_EOS_TOKEN = "<|im_end|>"
+
+# Source: https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.1/blob/main/tokenizer_config.json
+MISTRAL_INSTRUCT_CHAT_TEMPLATE = "{{ bos_token }}{% for message in messages %}{% if (message['role'] == 'user') != (loop.index0 % 2 == 0) %}{{ raise_exception('Conversation roles must alternate user/assistant/user/assistant/...') }}{% endif %}{% if message['role'] == 'user' %}{{ '[INST] ' + message['content'] + ' [/INST]' }}{% elif message['role'] == 'assistant' %}{{ message['content'] + eos_token + ' ' }}{% else %}{{ raise_exception('Only user and assistant roles are supported!') }}{% endif %}{% endfor %}"
+MISTRAL_INSTRUCT_BOS_TOKEN = "<s>"
+MISTRAL_INSTRUCT_EOS_TOKEN = "</s>"
+
+
+### Chat Completion Handler ###
 
 class LlamaChatCompletionHandler(Protocol):
     """Base Protocol for a llama chat completion handler.
@@ -119,7 +133,6 @@ def register_chat_completion_handler(name: str):
 
 
 ### Chat Formatter ###
-
 
 @dataclasses.dataclass
 class ChatFormatterResponse:
@@ -320,7 +333,14 @@ def chat_formatter_to_chat_completion_handler(
             stop = stop + rstop
 
         if response_format is not None and response_format["type"] == "json_object":
-            grammar = llama_grammar.LlamaGrammar.from_string(llama_grammar.JSON_GBNF)
+            try:
+                # create grammar from json schema
+                if "schema" in response_format:
+                    grammar = llama_grammar.LlamaGrammar.from_json_schema(
+                        json.dumps(response_format["schema"])
+                    )
+            except Exception as e:
+                grammar = llama_grammar.LlamaGrammar.from_string(llama_grammar.JSON_GBNF)
 
         completion_or_chunks = llama.create_completion(
             prompt=prompt,
@@ -435,7 +455,20 @@ def hf_tokenizer_config_to_chat_completion_handler(
     return chat_formatter_to_chat_completion_handler(chat_formatter)
 
 
+def guess_chat_format_from_gguf_metadata(metadata: Dict[str, str]) -> Optional[str]:
+    if "tokenizer.chat_template" not in metadata:
+        return None
+
+    if metadata["tokenizer.chat_template"] == CHATML_CHAT_TEMPLATE:
+        return "chatml"
+
+    if metadata["tokenizer.chat_template"] == MISTRAL_INSTRUCT_CHAT_TEMPLATE: 
+        return "mistral-instruct"
+
+    return None
+
 ### Utility functions for formatting chat prompts ###
+# TODO: Replace these with jinja2 templates
 
 
 def _get_system_message(
@@ -872,6 +905,24 @@ def format_chatml(
     return ChatFormatterResponse(prompt=_prompt, stop=_sep)
 
 
+@register_chat_format("mistral-instruct")
+def format_mistral_instruct(
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    **kwargs: Any,
+) -> ChatFormatterResponse:
+    bos = "<s>"
+    eos = "</s>"
+    stop = eos
+    prompt = bos
+    for message in messages:
+        if message["role"] == "user" and message["content"] is not None and isinstance(message["content"], str):
+            prompt += "[INST] " + message["content"]
+        elif message["role"] == "assistant" and message["content"] is not None and isinstance(message["content"], str):
+            prompt += " [/INST]" + message["content"] + eos
+    prompt += " [/INST]"
+    return ChatFormatterResponse(prompt=prompt, stop=stop)
+
+
 @register_chat_format("chatglm3")
 def format_chatglm3(
     messages: List[llama_types.ChatCompletionRequestMessage],
@@ -906,7 +957,6 @@ def format_openchat(
     _prompt = _format_chatml(system_message, _messages, _sep)
     return ChatFormatterResponse(prompt=_prompt, stop=_sep)
 
-
 # Chat format for Saiga models, see more details and available models:
 # https://huggingface.co/collections/IlyaGusev/saiga2-saigamistral-6505d4ccc3d1e53166b636cd
 @register_chat_format("saiga")
@@ -928,6 +978,7 @@ def format_saiga(
     _prompt += "<s>bot"
     return ChatFormatterResponse(prompt=_prompt.strip())
 
+# Tricky chat formats that require custom chat handlers
 
 @register_chat_completion_handler("functionary")
 def functionary_chat_handler(
@@ -1865,10 +1916,14 @@ class Llava15ChatHandler:
         prompt = llama.input_ids[: llama.n_tokens].tolist()
 
         if response_format is not None and response_format["type"] == "json_object":
-            with suppress_stdout_stderr(disable=self.verbose):
-                grammar = llama_grammar.LlamaGrammar.from_string(
-                    llama_grammar.JSON_GBNF
-                )
+            try:
+                # create grammar from json schema
+                if "schema" in response_format:
+                    grammar = llama_grammar.LlamaGrammar.from_json_schema(
+                        json.dumps(response_format["schema"])
+                    )
+            except Exception as e:
+                grammar = llama_grammar.LlamaGrammar.from_string(llama_grammar.JSON_GBNF)
 
         return _convert_completion_to_chat(
             llama.create_completion(

@@ -91,7 +91,7 @@ class Llama:
         # Backend Params
         numa: bool = False,
         # Chat Format Params
-        chat_format: str = "llama-2",
+        chat_format: Optional[str] = None,
         chat_handler: Optional[llama_chat_format.LlamaChatCompletionHandler] = None,
         # Misc
         verbose: bool = True,
@@ -199,32 +199,32 @@ class Llama:
         self.model_params.use_mmap = use_mmap if lora_path is None else False
         self.model_params.use_mlock = use_mlock
 
+        # kv_overrides is the original python dict
         self.kv_overrides = kv_overrides
         if kv_overrides is not None:
-            n_overrides = len(kv_overrides)
-            self._kv_overrides_array = llama_cpp.llama_model_kv_override * (n_overrides + 1)
-            self._kv_overrides_array_keys = []
+            # _kv_overrides_array is a ctypes.Array of llama_model_kv_override Structs
+            kvo_array_len = len(kv_overrides) + 1  # for sentinel element
+            self._kv_overrides_array = (
+                llama_cpp.llama_model_kv_override * kvo_array_len
+            )()
 
-            for k, v in kv_overrides.items():
-                key_buf = ctypes.create_string_buffer(k.encode("utf-8"))
-                self._kv_overrides_array_keys.append(key_buf)
-                self._kv_overrides_array[i].key = key_buf
-                if isinstance(v, int):
+            for i, (k, v) in enumerate(kv_overrides.items()):
+                self._kv_overrides_array[i].key = k.encode("utf-8")
+                if isinstance(v, bool):
+                    self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_BOOL
+                    self._kv_overrides_array[i].value.bool_value = v
+                elif isinstance(v, int):
                     self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_INT
                     self._kv_overrides_array[i].value.int_value = v
                 elif isinstance(v, float):
                     self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_FLOAT
                     self._kv_overrides_array[i].value.float_value = v
-                elif isinstance(v, bool):
-                    self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_BOOL
-                    self._kv_overrides_array[i].value.bool_value = v
                 else:
                     raise ValueError(f"Unknown value type for {k}: {v}")
 
-            self._kv_overrides_array_sentinel_key = b'\0'
-
-            # null array sentinel
-            self._kv_overrides_array[n_overrides].key = self._kv_overrides_array_sentinel_key
+            self._kv_overrides_array[
+                -1
+            ].key = b"\0"  # ensure sentinel element is zeroed
             self.model_params.kv_overrides = self._kv_overrides_array
 
         self.n_batch = min(n_ctx, n_batch)  # ???
@@ -342,7 +342,9 @@ class Llama:
             (n_ctx, self._n_vocab), dtype=np.single
         )
 
-        self._mirostat_mu = ctypes.c_float(2.0 * 5.0) # TODO: Move this to sampling context
+        self._mirostat_mu = ctypes.c_float(
+            2.0 * 5.0
+        )  # TODO: Move this to sampling context
 
         try:
             self.metadata = self._model.metadata()
@@ -350,9 +352,44 @@ class Llama:
             self.metadata = {}
             if self.verbose:
                 print(f"Failed to load metadata: {e}", file=sys.stderr)
-        
+
         if self.verbose:
             print(f"Model metadata: {self.metadata}", file=sys.stderr)
+
+        if self.chat_format is None and self.chat_handler is None and "tokenizer.chat_template" in self.metadata:
+            chat_format = llama_chat_format.guess_chat_format_from_gguf_metadata(self.metadata)
+
+            if chat_format is not None:
+                self.chat_format = chat_format
+                if self.verbose:
+                    print(f"Guessed chat format: {chat_format}", file=sys.stderr)
+            else:
+                template = self.metadata["tokenizer.chat_template"]
+                try:
+                    eos_token_id = int(self.metadata["tokenizer.ggml.eos_token_id"])
+                except:
+                    eos_token_id = self.token_eos()
+                try:
+                    bos_token_id = int(self.metadata["tokenizer.ggml.bos_token_id"])
+                except:
+                    bos_token_id = self.token_bos()
+
+                eos_token = self.detokenize([eos_token_id]).decode("utf-8")
+                bos_token = self.detokenize([bos_token_id]).decode("utf-8")
+
+                if self.verbose:
+                    print(f"Using chat template: {template}", file=sys.stderr)
+                    print(f"Using chat eos_token: {eos_token}", file=sys.stderr)
+                    print(f"Using chat bos_token: {bos_token}", file=sys.stderr)
+
+                self.chat_handler = llama_chat_format.Jinja2ChatFormatter(
+                    template=template,
+                    eos_token=eos_token,
+                    bos_token=bos_token
+                ).to_chat_handler()
+
+        if self.chat_format is None and self.chat_handler is None:
+            self.chat_format = "llama-2"
 
     @property
     def ctx(self) -> llama_cpp.llama_context_p:
@@ -550,7 +587,7 @@ class Llama:
                 candidates=self._candidates,
                 tau=mirostat_tau,
                 eta=mirostat_eta,
-                mu=ctypes.pointer(self._mirostat_mu)
+                mu=ctypes.pointer(self._mirostat_mu),
             )
         else:
             self._ctx.sample_top_k(candidates=self._candidates, k=top_k, min_keep=1)
