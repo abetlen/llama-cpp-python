@@ -12,19 +12,16 @@ This package provides:
 
 - Low-level access to C API via `ctypes` interface.
 - High-level Python API for text completion
-    - OpenAI-like API
-    - [LangChain compatibility](https://python.langchain.com/docs/integrations/llms/llamacpp)
-    - [LlamaIndex compatibility](https://docs.llamaindex.ai/en/stable/examples/llm/llama_2_llama_cpp.html)
+  - OpenAI-like API
+  - [LangChain compatibility](https://python.langchain.com/docs/integrations/llms/llamacpp)
+  - [LlamaIndex compatibility](https://docs.llamaindex.ai/en/stable/examples/llm/llama_2_llama_cpp.html)
 - OpenAI compatible web server
-    - [Local Copilot replacement](https://llama-cpp-python.readthedocs.io/en/latest/server/#code-completion)
-    - [Function Calling support](https://llama-cpp-python.readthedocs.io/en/latest/server/#function-calling)
-    - [Vision API support](https://llama-cpp-python.readthedocs.io/en/latest/server/#multimodal-models)
-    - [Multiple Models](https://llama-cpp-python.readthedocs.io/en/latest/server/#configuration-and-multi-model-support)
+  - [Local Copilot replacement](https://llama-cpp-python.readthedocs.io/en/latest/server/#code-completion)
+  - [Function Calling support](https://llama-cpp-python.readthedocs.io/en/latest/server/#function-calling)
+  - [Vision API support](https://llama-cpp-python.readthedocs.io/en/latest/server/#multimodal-models)
+  - [Multiple Models](https://llama-cpp-python.readthedocs.io/en/latest/server/#configuration-and-multi-model-support)
 
 Documentation is available at [https://llama-cpp-python.readthedocs.io/en/latest](https://llama-cpp-python.readthedocs.io/en/latest).
-
-
-
 
 ## Installation
 
@@ -37,7 +34,6 @@ pip install llama-cpp-python
 This will build `llama.cpp` from source using cmake and your system's c compiler (required) and install the library alongside this python package.
 
 If you run into issues during installation add the `--verbose` flag to the `pip install` command to see the full cmake build log.
-
 
 ### Installation with Specific Hardware Acceleration (BLAS, CUDA, Metal, etc)
 
@@ -109,13 +105,29 @@ To install with Vulkan support, set the `LLAMA_VULKAN=on` environment variable b
 CMAKE_ARGS="-DLLAMA_VULKAN=on" pip install llama-cpp-python
 ```
 
+#### Kompute
+
+To install with Kompute support, set the `LLAMA_KOMPUTE=on` environment variable before installing:
+
+```bash
+CMAKE_ARGS="-DLLAMA_KOMPUTE=on" pip install llama-cpp-python
+```
+
+#### SYCL
+
+To install with SYCL support, set the `LLAMA_SYCL=on` environment variable before installing:
+
+```bash
+CMAKE_ARGS="-DLLAMA_SYCL=on" pip install llama-cpp-python
+```
+
 ### Windows Notes
 
 If you run into issues where it complains it can't find `'nmake'` `'?'` or CMAKE_C_COMPILER, you can extract w64devkit as [mentioned in llama.cpp repo](https://github.com/ggerganov/llama.cpp#openblas) and add those manually to CMAKE_ARGS before running `pip` install:
 
 ```ps
 $env:CMAKE_GENERATOR = "MinGW Makefiles"
-$env:CMAKE_ARGS = "-DLLAMA_OPENBLAS=on -DCMAKE_C_COMPILER=C:/w64devkit/bin/gcc.exe -DCMAKE_CXX_COMPILER=C:/w64devkit/bin/g++.exe" 
+$env:CMAKE_ARGS = "-DLLAMA_OPENBLAS=on -DCMAKE_C_COMPILER=C:/w64devkit/bin/gcc.exe -DCMAKE_CXX_COMPILER=C:/w64devkit/bin/g++.exe"
 ```
 
 See the above instructions and set `CMAKE_ARGS` to the BLAS backend you want to use.
@@ -165,7 +177,7 @@ Below is a short example demonstrating how to use the high-level API to for basi
 >>> from llama_cpp import Llama
 >>> llm = Llama(
       model_path="./models/7B/llama-model.gguf",
-      # n_gpu_layers=-1, # Uncomment to use GPU acceleration 
+      # n_gpu_layers=-1, # Uncomment to use GPU acceleration
       # seed=1337, # Uncomment to set a specific seed
       # n_ctx=2048, # Uncomment to increase the context window
 )
@@ -284,7 +296,6 @@ The high-level API also provides a simple interface for function calling.
 Note that the only model that supports full function calling at this time is "functionary".
 The gguf-converted files for this model can be found here: [functionary-7b-v1](https://huggingface.co/abetlen/functionary-7b-v1-GGUF)
 
-
 ```python
 >>> from llama_cpp import Llama
 >>> llm = Llama(model_path="path/to/functionary/llama-model.gguf", chat_format="functionary")
@@ -293,7 +304,7 @@ The gguf-converted files for this model can be found here: [functionary-7b-v1](h
         {
           "role": "system",
           "content": "A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. The assistant calls functions with appropriate input when necessary"
-          
+
         },
         {
           "role": "user",
@@ -331,7 +342,6 @@ The gguf-converted files for this model can be found here: [functionary-7b-v1](h
 ```
 
 ### Multi-modal Models
-
 
 `llama-cpp-python` supports the llava1.5 family of multi-modal models which allow the language model to
 read information from both text and images.
@@ -377,7 +387,6 @@ For instance, if you want to work with larger contexts, you can expand the conte
 ```python
 llm = Llama(model_path="./models/7B/llama-model.gguf", n_ctx=2048)
 ```
-
 
 ## OpenAI Compatible Web Server
 
@@ -426,7 +435,8 @@ A Docker image is available on [GHCR](https://ghcr.io/abetlen/llama-cpp-python).
 ```bash
 docker run --rm -it -p 8000:8000 -v /path/to/models:/models -e MODEL=/models/llama-model.gguf ghcr.io/abetlen/llama-cpp-python:latest
 ```
-[Docker on termux (requires root)](https://gist.github.com/FreddieOliveira/efe850df7ff3951cb62d74bd770dce27) is currently the only known way to run this on phones, see [termux support issue](https://github.com/abetlen/llama-cpp-python/issues/389) 
+
+[Docker on termux (requires root)](https://gist.github.com/FreddieOliveira/efe850df7ff3951cb62d74bd770dce27) is currently the only known way to run this on phones, see [termux support issue](https://github.com/abetlen/llama-cpp-python/issues/389)
 
 ## Low-level API
 
@@ -453,7 +463,6 @@ Below is a short example demonstrating how to use the low-level API to tokenize 
 ```
 
 Check out the [examples folder](examples/low_level_api) for more examples of using the low-level API.
-
 
 ## Documentation
 
