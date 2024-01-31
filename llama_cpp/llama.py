@@ -638,7 +638,6 @@ class Llama:
         sample_idx = self.n_tokens + len(tokens) - 1
         draft_model = self.draft_model
         tokens = list(tokens)
-        candidates_to_predict = 10
 
         # Eval and sample
         while True:
@@ -682,8 +681,7 @@ class Llama:
 
             if draft_model is not None:
                 self.input_ids[self.n_tokens : self.n_tokens + len(tokens)] = tokens
-                draft_tokens = draft_model(self.input_ids[:self.n_tokens + len(tokens)])[:candidates_to_predict]
-                candidates_to_predict = len(draft_tokens)
+                draft_tokens = draft_model(self.input_ids[:self.n_tokens + len(tokens)])
                 tokens.extend(
                     draft_tokens.astype(int)[
                         : self._n_ctx - self.n_tokens - len(tokens)
