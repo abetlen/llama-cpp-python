@@ -92,6 +92,10 @@ class LlamaProxy:
                     json.load(open(settings.hf_tokenizer_config_path))
                 )
             )
+        
+        tokenizer: Optional[llama_cpp.BaseLlamaTokenizer] = None
+        if settings.hf_pretrained_model_name_or_path is not None:
+            tokenizer = llama_cpp.LlamaHFTokenizer.from_pretrained(settings.hf_pretrained_model_name_or_path)
 
         draft_model = None
         if settings.draft_model is not None:
@@ -158,6 +162,8 @@ class LlamaProxy:
             chat_handler=chat_handler,
             # Speculative Decoding
             draft_model=draft_model,
+            # Tokenizer
+            tokenizer=tokenizer,
             # Misc
             verbose=settings.verbose,
         )

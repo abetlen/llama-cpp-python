@@ -1366,7 +1366,7 @@ def functionary_v1_v2_chat_handler(
 ) -> Union[llama_types.ChatCompletion, Iterator[llama_types.ChatCompletionChunk]]:
     SYSTEM_MESSAGE = """A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. The assistant calls functions with appropriate input when necessary"""
     
-    tokenizer = llama.tokenizer()
+    tokenizer = llama.tokenizer_
     assert hasattr(tokenizer, "hf_tokenizer"), "Please provide a valid hf_tokenizer_path from https://huggingface.co/meetkai when initializing the Llama class"
     from transformers import AutoTokenizer
     

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
+import abc
 import uuid
 import time
 import multiprocessing
@@ -15,11 +16,12 @@ from typing import (
     Deque,
     Callable,
     Any,
-    Protocol,
 )
 from collections import deque
 
 import ctypes
+
+from llama_cpp.llama_types import List
 
 from .llama_types import *
 from .llama_grammar import LlamaGrammar
@@ -66,8 +68,6 @@ class Llama:
         use_mmap: bool = True,
         use_mlock: bool = False,
         kv_overrides: Optional[Dict[str, Union[bool, int, float]]] = None,
-        # Tokenizer Params (Optionally for HF AutoTokenizers)
-        hf_tokenizer_path: Optional[str] = None,
         # Context Params
         seed: int = llama_cpp.LLAMA_DEFAULT_SEED,
         n_ctx: int = 512,
@@ -99,6 +99,8 @@ class Llama:
         chat_handler: Optional[llama_chat_format.LlamaChatCompletionHandler] = None,
         # Speculative Decoding
         draft_model: Optional[LlamaDraftModel] = None,
+        # Tokenizer Override
+        tokenizer: Optional[BaseLlamaTokenizer] = None,
         # Misc
         verbose: bool = True,
         # Extra Params
@@ -140,7 +142,6 @@ class Llama:
             use_mmap: Use mmap if possible.
             use_mlock: Force the system to keep the model in RAM.
             kv_overrides: Key-value overrides for the model.
-            hf_tokenizer_path: Override llama.cpp tokenizer with HF AutoTokenizer from this path if provided.
             seed: RNG seed, -1 for random
             n_ctx: Text context, 0 = from model
             n_batch: Prompt processing maximum batch size
@@ -164,6 +165,7 @@ class Llama:
             chat_format: String specifying the chat format to use when calling create_chat_completion.
             chat_handler: Optional chat handler to use when calling create_chat_completion.
             draft_model: Optional draft model to use for speculative decoding.
+            tokenizer: Optional tokenizer to override the default tokenizer from llama.cpp.
             verbose: Print verbose output to stderr.
 
         Raises:
@@ -291,13 +293,10 @@ class Llama:
         self._model = _LlamaModel(
             path_model=self.model_path, params=self.model_params, verbose=self.verbose
         )
-        
-        # Tokenizer Params
-        if hf_tokenizer_path is not None:
-            self._tokenizer_to_use = HFTokenizer(hf_tokenizer_path)
-        else:
-            self._tokenizer_to_use = LlamaCppTokenizer(self._model)
-        
+
+        # Override tokenizer
+        self.tokenizer_ = tokenizer or LlamaTokenizer(self)
+
         # Set the default value for the context and correct the batch
         if n_ctx == 0:
             n_ctx = self._model.n_ctx_train()
@@ -443,7 +442,7 @@ class Llama:
         Returns:
             A list of tokens.
         """
-        return self._tokenizer_to_use.encode(text, add_bos, special)
+        return self.tokenizer_.tokenize(text, add_bos, special)
 
     def detokenize(self, tokens: List[int]) -> bytes:
         """Detokenize a list of tokens.
@@ -454,7 +453,7 @@ class Llama:
         Returns:
             The detokenized string.
         """
-        return self._tokenizer_to_use.decode(tokens)
+        return self.tokenizer_.detokenize(tokens)
 
     def set_cache(self, cache: Optional[BaseLlamaCache]):
         """Set the cache.
@@ -1706,9 +1705,9 @@ class Llama:
         """Return the vocabulary size."""
         return self._model.n_vocab()
 
-    def tokenizer(self) -> Union["LlamaCppTokenizer", "HFTokenizer"]:
-        """Return the tokenizer for this model."""
-        return self._tokenizer_to_use
+    def tokenizer(self) -> LlamaTokenizer:
+        """Return the llama tokenizer for this model."""
+        return LlamaTokenizer(self)
 
     def token_eos(self) -> int:
         """Return the end-of-sequence token."""
@@ -1751,40 +1750,61 @@ class Llama:
         return longest_prefix
 
 
-class LlamaTokenizer(Protocol):
-    def encode(self, text: bytes, add_bos: bool = True, special: bool = False) -> List[int]:
-        ...
-    
-    def decode(self, tokens: List[int]) -> bytes:
-        ...
+class BaseLlamaTokenizer(abc.ABC):
+    @abc.abstractmethod
+    def tokenize(self, text: bytes, add_bos: bool = True, special: bool = True) -> List[int]:
+        raise NotImplementedError
 
-class LlamaCppTokenizer:
+    @abc.abstractmethod
+    def detokenize(self, tokens: List[int]) -> bytes:
+        raise NotImplementedError
+
+
+class LlamaTokenizer(BaseLlamaTokenizer):
     def __init__(self, llama: Llama):
         self.llama = llama
+        self._model = llama._model # type: ignore
 
-    def encode(self, text: bytes, add_bos: bool = True, special: bool = False) -> List[int]:
-        return self.llama.tokenize(text, add_bos, special)
+    def tokenize(self, text: bytes, add_bos: bool = True, special: bool = True) -> List[int]:
+        return self._model.tokenize(text, add_bos=add_bos, special=special)
 
-    def decode(self, tokens: List[int]) -> bytes:
-        return self.llama.detokenize(tokens)
+    def detokenize(self, tokens: List[int]) -> bytes:
+        return self._model.detokenize(tokens)
+
+    def encode(self, text: str, add_bos: bool = True, special: bool = True) -> List[int]:
+        return self.tokenize(
+            text.encode("utf-8", errors="ignore"), add_bos=add_bos, special=special
+        )
+
+    def decode(self, tokens: List[int]) -> str:
+        return self.detokenize(tokens).decode("utf-8", errors="ignore")
 
     @classmethod
     def from_ggml_file(cls, path: str) -> "LlamaTokenizer":
         return cls(Llama(model_path=path, vocab_only=True))
-    
 
-class HFTokenizer:
-    def __init__(self, hf_tokenizer_path):
-        from transformers import AutoTokenizer
-        self.hf_tokenizer = AutoTokenizer.from_pretrained(hf_tokenizer_path)
-        
-    def encode(self, text: bytes, add_bos: bool = True, special: bool = False) -> List[int]:
-        return self.hf_tokenizer.encode(
-            text.decode("utf-8", errors="ignore"), add_special_tokens=special
-        )
+
+class LlamaHFTokenizer(BaseLlamaTokenizer):
+    def __init__(self, hf_tokenizer: Any):
+        self.hf_tokenizer = hf_tokenizer
+
+    def tokenize(self, text: bytes, add_bos: bool = True, special: bool = True) -> List[int]:
+        return self.hf_tokenizer.encode(text.decode("utf-8", errors="ignore"), add_special_tokens=special)
     
-    def decode(self, tokens: List[int]) -> bytes:
+    def detokenize(self, tokens: List[int]) -> bytes:
         return self.hf_tokenizer.decode(tokens).encode("utf-8", errors="ignore")
+
+    @classmethod
+    def from_pretrained(cls, pretrained_model_name_or_path: str) -> "LlamaHFTokenizer":
+        try:
+            from transformers import AutoTokenizer
+        except ImportError:
+            raise ImportError(
+                "The `transformers` library is required to use the `HFTokenizer`."
+                "You can install it with `pip install transformers`."
+            )
+        hf_tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name_or_path=pretrained_model_name_or_path)
+        return cls(hf_tokenizer)
 
 
 class LlamaState:
