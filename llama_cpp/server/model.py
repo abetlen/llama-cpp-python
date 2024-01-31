@@ -92,7 +92,7 @@ class LlamaProxy:
                     json.load(open(settings.hf_tokenizer_config_path))
                 )
             )
-        
+
         tokenizer: Optional[llama_cpp.BaseLlamaTokenizer] = None
         if settings.hf_pretrained_model_name_or_path is not None:
             tokenizer = llama_cpp.LlamaHFTokenizer.from_pretrained(settings.hf_pretrained_model_name_or_path)
@@ -130,8 +130,6 @@ class LlamaProxy:
             use_mmap=settings.use_mmap,
             use_mlock=settings.use_mlock,
             kv_overrides=kv_overrides,
-            # Tokenizer Params (optionally for Functionary function calling)
-            hf_tokenizer_path=settings.hf_tokenizer_path,
             # Context Params
             seed=settings.seed,
             n_ctx=settings.n_ctx,
