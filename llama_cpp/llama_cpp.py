@@ -93,14 +93,12 @@ c_size_t_p = POINTER(c_size_t)
 
 # from ggml-backend.h
 # typedef bool (*ggml_backend_sched_eval_callback)(struct ggml_tensor * t, bool ask, void * user_data);
-ggml_backend_sched_eval_callback = ctypes.CFUNCTYPE(
-    c_bool, c_void_p, c_bool, c_void_p
-)
+ggml_backend_sched_eval_callback = ctypes.CFUNCTYPE(c_bool, c_void_p, c_bool, c_void_p)
 
 # llama.h bindings
 
 _lib.llama_max_devices.argtypes = []
-_lib.llama_max_devices.restype = ctypes.c_int32
+_lib.llama_max_devices.restype = ctypes.c_size_t
 
 LLAMA_MAX_DEVICES = _lib.llama_max_devices()
 
@@ -189,6 +187,7 @@ LLAMA_TOKEN_TYPE_BYTE = 6
 #     LLAMA_FTYPE_MOSTLY_IQ2_XS        = 20, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_Q2_K_S        = 21, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_Q3_K_XS       = 22, // except 1d tensors
+#     LLAMA_FTYPE_MOSTLY_IQ3_XXS       = 23, // except 1d tensors
 
 #     LLAMA_FTYPE_GUESSED = 1024, // not specified in the model file
 # };
@@ -213,6 +212,7 @@ LLAMA_FTYPE_MOSTLY_IQ2_XXS = 19
 LLAMA_FTYPE_MOSTLY_IQ2_XS = 20
 LLAMA_FTYPE_MOSTLY_Q2_K_S = 21
 LLAMA_FTYPE_MOSTLY_Q3_K_XS = 22
+LLAMA_FTYPE_MOSTLY_IQ3_XXS = 23
 LLAMA_FTYPE_GUESSED = 1024
 
 # enum llama_rope_scaling_type {
@@ -390,7 +390,7 @@ class llama_model_kv_override(Structure):
 #     // LLAMA_SPLIT_LAYER: ignored
 #     int32_t main_gpu;
 
-#     // proportion of the model (layers or rows) to offload to each GPU, size: LLAMA_MAX_DEVICES
+#     // proportion of the model (layers or rows) to offload to each GPU, size: llama_max_devices()
 #     const float * tensor_split;
 
 #     // Called with a progress value between 0.0 and 1.0. Pass NULL to disable.
@@ -417,7 +417,7 @@ class llama_model_params(Structure):
         n_gpu_layers (int): number of layers to store in VRAM
         split_mode (int): how to split the model across multiple GPUs
         main_gpu (int): the GPU that is used for the entire model. main_gpu interpretation depends on split_mode: LLAMA_SPLIT_NONE: the GPU that is used for the entire model LLAMA_SPLIT_ROW: the GPU that is used for small tensors and intermediate results LLAMA_SPLIT_LAYER: ignored
-        tensor_split (ctypes.Array[ctypes.c_float]): proportion of the model (layers or rows) to offload to each GPU, size: LLAMA_MAX_DEVICES
+        tensor_split (ctypes.Array[ctypes.c_float]): proportion of the model (layers or rows) to offload to each GPU, size: llama_max_devices()
         progress_callback (llama_progress_callback): called with a progress value between 0.0 and 1.0. Pass NULL to disable. If the provided progress_callback returns true, model loading continues. If it returns false, model loading is immediately aborted.
         progress_callback_user_data (ctypes.c_void_p): context pointer passed to the progress callback
         kv_overrides (ctypes.Array[llama_model_kv_override]): override key-value pairs of the model meta data
@@ -760,16 +760,43 @@ _lib.llama_time_us.argtypes = []
 _lib.llama_time_us.restype = ctypes.c_int64
 
 
-# LLAMA_API int32_t  llama_max_devices(void);
+# LLAMA_API size_t llama_max_devices(void);
 def llama_max_devices() -> int:
     return _lib.llama_max_devices()
 
 
 _lib.llama_max_devices.argtypes = []
-_lib.llama_max_devices.restype = ctypes.c_int32
+_lib.llama_max_devices.restype = ctypes.c_size_t
 
 
-# LLAMA_API bool llama_mmap_supported (void);
+# LLAMA_API bool llama_supports_mmap       (void);
+def llama_supports_mmap() -> bool:
+    return _lib.llama_supports_mmap()
+
+
+_lib.llama_supports_mmap.argtypes = []
+_lib.llama_supports_mmap.restype = c_bool
+
+
+# LLAMA_API bool llama_supports_mlock      (void);
+def llama_supports_mlock() -> bool:
+    return _lib.llama_supports_mlock()
+
+
+_lib.llama_supports_mlock.argtypes = []
+_lib.llama_supports_mlock.restype = c_bool
+
+
+# LLAMA_API bool llama_supports_gpu_offload(void);
+def llama_supports_gpu_offload() -> bool:
+    return _lib.llama_supports_gpu_offload()
+
+
+_lib.llama_supports_gpu_offload.argtypes = []
+_lib.llama_supports_gpu_offload.restype = c_bool
+
+
+# LLAMA_API DEPRECATED(bool llama_mmap_supported (void), "use llama_supports_mmap() instead");
 def llama_mmap_supported() -> bool:
     return _lib.llama_mmap_supported()
 
@@ -778,7 +805,7 @@ _lib.llama_mmap_supported.argtypes = []
 _lib.llama_mmap_supported.restype = c_bool
 
 
-# LLAMA_API bool llama_mlock_supported(void);
+# LLAMA_API DEPRECATED(bool llama_mlock_supported(void), "use llama_supports_mlock() instead");
 def llama_mlock_supported() -> bool:
     return _lib.llama_mlock_supported()
 
@@ -2172,6 +2199,34 @@ _lib.llama_sample_typical.argtypes = [
     c_size_t,
 ]
 _lib.llama_sample_typical.restype = None
+
+
+# /// @details Dynamic temperature implementation described in the paper https://arxiv.org/abs/2309.02772.
+# LLAMA_API void llama_sample_entropy(
+#         struct llama_context * ctx,
+#       llama_token_data_array * candidates_p,
+#                        float   min_temp,
+#                        float   max_temp,
+#                        float   exponent_val);
+def llama_sample_entropy(
+    ctx: llama_context_p,
+    candidates,  # type: _Pointer[llama_token_data_array]
+    min_temp: Union[c_float, float],
+    max_temp: Union[c_float, float],
+    exponent_val: Union[c_float, float],
+):
+    """Dynamic temperature implementation described in the paper https://arxiv.org/abs/2309.02772."""
+    return _lib.llama_sample_entropy(ctx, candidates, min_temp, max_temp, exponent_val)
+
+
+_lib.llama_sample_entropy.argtypes = [
+    llama_context_p,
+    llama_token_data_array_p,
+    c_float,
+    c_float,
+    c_float,
+]
+_lib.llama_sample_entropy.restype = None
 
 
 # LLAMA_API void llama_sample_temp(
