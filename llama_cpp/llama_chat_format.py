@@ -325,7 +325,9 @@ def chat_formatter_to_chat_completion_handler(
                         json.dumps(response_format["schema"])
                     )
             except Exception as e:
-                grammar = llama_grammar.LlamaGrammar.from_string(llama_grammar.JSON_GBNF)
+                grammar = llama_grammar.LlamaGrammar.from_string(
+                    llama_grammar.JSON_GBNF
+                )
 
         completion_or_chunks = llama.create_completion(
             prompt=prompt,
@@ -436,7 +438,9 @@ def hf_tokenizer_config_to_chat_completion_handler(
     tokenizer_config: Dict[str, Any],
     add_generation_prompt: bool = True,
 ) -> LlamaChatCompletionHandler:
-    chat_formatter = hf_tokenizer_config_to_chat_formatter(tokenizer_config, add_generation_prompt=add_generation_prompt)
+    chat_formatter = hf_tokenizer_config_to_chat_formatter(
+        tokenizer_config, add_generation_prompt=add_generation_prompt
+    )
     return chat_formatter_to_chat_completion_handler(chat_formatter)
 
 
@@ -1448,7 +1452,9 @@ class Llava15ChatHandler:
                         json.dumps(response_format["schema"])
                     )
             except Exception as e:
-                grammar = llama_grammar.LlamaGrammar.from_string(llama_grammar.JSON_GBNF)
+                grammar = llama_grammar.LlamaGrammar.from_string(
+                    llama_grammar.JSON_GBNF
+                )
 
         return _convert_completion_to_chat(
             llama.create_completion(
@@ -1475,7 +1481,8 @@ class Llava15ChatHandler:
             stream=stream,
         )
 
-@register_chat_completion_handler("openhermes-function-calling")
+
+@register_chat_completion_handler("chatml-function-calling")
 def openhermes_function_calling(
     llama: llama.Llama,
     messages: List[llama_types.ChatCompletionRequestMessage],
@@ -1503,67 +1510,380 @@ def openhermes_function_calling(
     logits_processor: Optional[llama.LogitsProcessorList] = None,
     grammar: Optional[llama.LlamaGrammar] = None,
     **kwargs,  # type: ignore
-) -> Union[llama_types.ChatCompletion, Iterator[llama_types.ChatCompletionChunk]]:
-    if stream:
-        raise ValueError("stream mode is not supported by this chat handler")
-
-    def generate_hermes_prompt(prompt, functions: List[Any]):
-        function_definitions = "\n\n".join(json.dumps(function) for function in functions)
-        prompt = (
-            "<|im_start|>system\n"
-            "You are a helpful assistant with access to the following functions:\n"
-            "\n"
-            f"{function_definitions}\n"
-            "\n"
-            "To use these functions respond with:\n"
-            "<multiplefunctions>\n"
-            '    <functioncall> {{"name": "function_name", "arguments": {{"arg_1": "value_1", "arg_2": value_2, ...}}}} </functioncall>\n'
-            '    <functioncall> {{"name": "function_name", "arguments": {{"arg_1": "value_1", "arg_2": value_2, ...}}}} </functioncall>\n'
-            "    ...\n"
-            "</multiplefunctions>\n"
-            "\n"
-            "Edge cases you must handle:\n"
-            "- If there are no functions that match the user request, you will respond politely that you cannot help.<|im_end|>\n"
-            "<|im_start|>user\n"
-            f"{prompt}<|im_end|>\n"
-        )
-        return prompt
-
-    import xml.etree.ElementTree as ET
-    import re
-
-    def extract_function_calls(completion):
-        completion = completion.strip()
-        pattern = r"(<multiplefunctions>(.*?)</multiplefunctions>)"
-        match = re.search(pattern, completion, re.DOTALL)
-        if not match:
-            return None
-        
-        multiplefn = match.group(1)
-        root = ET.fromstring(multiplefn)
-        functions = root.findall("functioncall")
-        return [json.loads(fn.text) for fn in functions]
-
-    stop = ["<|im_end|>", "</s>"]
-
-    prompt = messages[-1]["content"]
-
-    if tools is not None:
-        functions = [tool["function"] for tool in tools if tool["type"] == "function"]
-
-    prompt = generate_hermes_prompt(
-        prompt, functions=functions or []
+) -> Union[
+    llama_types.CreateChatCompletionResponse,
+    Iterator[llama_types.CreateChatCompletionStreamResponse],
+]:
+    function_calling_template = (
+        "{% for message in messages %}"
+        "<|im_start|>{{ message.role }}\n"
+        # System message
+        "{% if message.role == 'system' %}"
+        "{{ message.content }}"
+        "{% if tool_calls %}"
+        "\n\nYou have access to the following functions:\n"
+        "{% for tool in tools %}"
+        "\nfunctions.{{ tool.name }}:\n"
+        "{{ tool.parameters | tojson }}"
+        "\n{% endfor %}"
+        "\n\nYou can respond to users messages with either a single message or one or more function calls."
+        "\n\nTo respond with a message begin the message with 'message:', use the following format:"
+        "\n\nmessage:"
+        "\n<message>"
+        "\n\nTo respond with one or more function calls begin the message with 'functions.<function_name>:', use the following format:"
+        "\n\nfunctions.<function_name>:"
+        '\n{ "arg1": "value1", "arg2": "value2" }'
+        "\nfunctions.<function_name>:"
+        '\n{ "arg1": "value1", "arg2": "value2" }'
+        "{% endif %}"
+        "\n<|im_end|>\n"
+        "{% endif %}"
+        # User message
+        "{% if message.role == 'user' %}"
+        "{{ message.content }}"
+        "\n<|im_end|>\n"
+        "{% endif %}"
+        # Assistant message
+        "{% if message.role == 'assistant' %}"
+        ## Reglar message
+        "{% if message.content and message.content | length > 0 %}"
+        "message:\n"
+        "{{ message.content }}"
+        "\n<|im_end|>\n"
+        "{% endif %}"
+        ## Function calls
+        "{% if message.tool_calls %}"
+        "{% for tool_call in message.tool_calls %}"
+        "functions.{{ tool_call.function.name }}:\n"
+        "{{ tool_call.function.arguments }}"
+        "{% endfor %}"
+        "\n<|im_end|>\n"
+        "{% endif %}"
+        "{% endif %}"
+        "{% endfor %}"
     )
-    completion: llama_types.CreateCompletionResponse = llama.create_completion(
+    template_renderer = jinja2.Environment(
+        loader=jinja2.BaseLoader(),
+        autoescape=jinja2.select_autoescape(["html", "xml"]),
+        undefined=jinja2.StrictUndefined,
+    ).from_string(function_calling_template)
+
+    # Convert legacy functions to tools
+    if functions is not None:
+        tools = [
+            {
+                "type": "function",
+                "function": function,
+            }
+            for function in functions
+        ]
+
+    # Convert legacy function_call to tool_choice
+    if function_call is not None and isinstance(function_call, str):
+        if function_call == "none" or function_call == "auto":
+            tool_choice = function_call
+        else:
+            tool_choice = {
+                "type": "function",
+                "function": {
+                    "name": function_call,
+                },
+            }
+
+    # Case 1: No tool choice by user
+    if (
+        tool_choice is None
+        or (isinstance(tool_choice, str) and tool_choice == "none")
+        or tools is None
+        or len(tools) == 0
+    ):
+        prompt = template_renderer.render(
+            messages=messages,
+            tools=[],
+            tool_calls=None,
+        )
+        if response_format is not None and response_format["type"] == "json_object":
+            try:
+                grammar = (
+                    llama_grammar.LlamaGrammar.from_json_schema(
+                        json.dumps(response_format["schema"])
+                    )
+                    if "schema" in response_format
+                    else None
+                )
+            except Exception as e:
+                if llama.verbose:
+                    print(
+                        "Failed to parse response format as JSON schema, falling back to default grammar"
+                    )
+                    print(e)
+            grammar = (
+                llama_grammar.LlamaGrammar.from_string(llama_grammar.JSON_GBNF)
+                if grammar is None
+                else grammar
+            )
+        return _convert_completion_to_chat(
+            llama.create_completion(
+                prompt=prompt,
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
+                min_p=min_p,
+                typical_p=typical_p,
+                stream=stream,
+                stop=stop,
+                max_tokens=max_tokens,
+                presence_penalty=presence_penalty,
+                frequency_penalty=frequency_penalty,
+                repeat_penalty=repeat_penalty,
+                tfs_z=tfs_z,
+                mirostat_mode=mirostat_mode,
+                mirostat_tau=mirostat_tau,
+                mirostat_eta=mirostat_eta,
+                model=model,
+                logits_processor=logits_processor,
+                grammar=grammar,
+            ),
+            stream=stream,
+        )
+
+    def _convert_completion_to_chat_function(completion_or_chunks: Union[llama_types.CreateCompletionResponse, Iterator[llama_types.CreateCompletionStreamResponse]], stream: bool):
+        if not stream:
+            completion: llama_types.CreateCompletionResponse = completion_or_chunks  # type: ignore
+            assert "usage" in completion
+            tool_id = "call_" + "_0_" + tool_name + "_" + completion["id"]
+            # TODO: Fix for legacy function calls
+            chat_completion: llama_types.CreateChatCompletionResponse = {
+                "id": "chat" + completion["id"],
+                "object": "chat.completion",
+                "created": completion["created"],
+                "model": completion["model"],
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {
+                            "role": "assistant",
+                            "content": None,
+                            "function_call": {
+                                "name": tool_name,
+                                "arguments": completion["choices"][0]["text"],
+                            },
+                            "tool_calls": [
+                                {
+                                    "id": tool_id,
+                                    "type": "function",
+                                    "function": {
+                                        "name": tool_name,
+                                        "arguments": completion["choices"][0]["text"],
+                                    },
+                                }
+                            ],
+                        },
+                        "finish_reason": "tool_calls",
+                    }
+                ],
+                "usage": completion["usage"],
+            }
+            return chat_completion
+        else:
+            chunks: Iterator[llama_types.CreateCompletionStreamResponse] = completion_or_chunks  # type: ignore
+            def _stream_response_to_function_stream(
+                chunks: Iterator[llama_types.CreateCompletionStreamResponse],
+            ) -> Iterator[llama_types.CreateChatCompletionStreamResponse]:
+                # blank first message
+                first = True
+                id_ = None
+                created = None
+                model = None
+                tool_id = None
+                for chunk in chunks:
+                    if first:
+                        id_ = "chat" + chunk["id"]
+                        created = chunk["created"]
+                        model = chunk["model"]
+                        tool_id = "call_" + "_0_" + tool_name + "_" + chunk["id"]
+                        yield {
+                            "id": id_,
+                            "object": "chat.completion.chunk",
+                            "created": created,
+                            "model": model,
+                            "choices": [
+                                {
+                                    "index": 0,
+                                    "finish_reason": None,
+                                    "logprobs": None,
+                                    "delta": {
+                                        "role": "assistant",
+                                        "content": None,
+                                        "function_call": None,
+                                        "tool_calls": None,
+                                    },
+                                }
+                            ],
+                        }
+                        yield {
+                            "id": "chat" + chunk["id"],
+                            "object": "chat.completion.chunk",
+                            "created": chunk["created"],
+                            "model": chunk["model"],
+                            "choices": [
+                                {
+                                    "index": 0,
+                                    "finish_reason": None,
+                                    "logprobs": None,
+                                    "delta": {
+                                        "role": None,
+                                        "content": None,
+                                        "function_call": None,
+                                        "tool_calls": [
+                                            {
+                                                "index": 0,
+                                                "id": tool_id,
+                                                "type": "function",
+                                                "function": {
+                                                    "name": tool_name,
+                                                    "arguments": "",
+                                                },
+                                            }
+                                        ],
+                                    },
+                                }
+                            ],
+                        }
+                        first = False
+                    yield {
+                        "id": "chat" + chunk["id"],
+                        "object": "chat.completion.chunk",
+                        "created": chunk["created"],
+                        "model": chunk["model"],
+                        "choices": [
+                            {
+                                "index": 0,
+                                "finish_reason": None,
+                                "logprobs": None,
+                                "delta": {
+                                    "role": None,
+                                    "content": None,
+                                    "function_call": None,
+                                    "tool_calls": [
+                                        {
+                                            "index": 0,
+                                            "id": tool_id,
+                                            "type": "function",
+                                            "function": {
+                                                "name": None,
+                                                "arguments": chunk["choices"][0][
+                                                    "text"
+                                                ],
+                                            },
+                                        }
+                                    ],
+                                },
+                            }
+                        ],
+                    }
+
+                if id_ is not None and created is not None and model is not None:
+                    yield {
+                        "id": id_,
+                        "object": "chat.completion.chunk",
+                        "created": created,
+                        "model": model,
+                        "choices": [
+                            {
+                                "index": 0,
+                                "finish_reason": "tool_calls",
+                                "logprobs": None,
+                                "delta": {
+                                    "role": None,
+                                    "content": None,
+                                    "function_call": None,
+                                    "tool_calls": None,
+                                },
+                            }
+                        ],
+                    }
+
+            return _stream_response_to_function_stream(chunks)
+
+    # Case 2: Tool choice by user
+    if isinstance(tool_choice, dict):
+        tool_name = tool_choice["function"]["name"]
+        tool = next(
+            (tool for tool in tools if tool["function"]["name"] == tool_name), None
+        )
+        if tool is None:
+            raise ValueError(f"Tool with name '{tool_name}' not found in tools")
+        prompt = template_renderer.render(
+            messages=messages,
+            tools=tools,
+            tool_calls=True,
+        )
+        prompt += f"functions.{tool_name}:\n"
+        try:
+            grammar = llama_grammar.LlamaGrammar.from_json_schema(
+                json.dumps(tool["function"]["parameters"])
+            )
+        except Exception as e:
+            grammar = llama_grammar.LlamaGrammar.from_string(llama_grammar.JSON_GBNF)
+            if llama.verbose:
+                print(
+                    "Failed to parse function body as JSON schema, falling back to default grammar"
+                )
+                print(e)
+        completion_or_chunks = llama.create_completion(
+            prompt=prompt,
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            min_p=min_p,
+            typical_p=typical_p,
+            stream=stream,
+            stop=stop,
+            max_tokens=max_tokens,
+            presence_penalty=presence_penalty,
+            frequency_penalty=frequency_penalty,
+            repeat_penalty=repeat_penalty,
+            tfs_z=tfs_z,
+            mirostat_mode=mirostat_mode,
+            mirostat_tau=mirostat_tau,
+            mirostat_eta=mirostat_eta,
+            model=model,
+            logits_processor=logits_processor,
+            grammar=grammar,
+        )
+        return _convert_completion_to_chat_function(completion_or_chunks, stream)
+
+    # Case 3: Automatic tool choice
+    assert isinstance(tool_choice, str) and tool_choice == "auto"
+    function_names = " | ".join(
+        [f'''"{tool['function']['name']}"''' for tool in tools]
+    )
+    initial_gbnf_tool_grammar = (
+        """root   ::= function_call | "message:\n" """
+        """function_call ::= "functions." function_name ":"\n"""
+        f"""function_name ::= {function_names}\n"""
+    )
+    follow_up_gbnf_tool_grammar = (
+        """root   ::= function_call | "<|im_end|>" """
+        """function_call ::= "functions." function_name ":"\n"""
+        f"""function_name ::= {function_names}\n"""
+    )
+    prompt = template_renderer.render(
+        messages=messages,
+        tools=tools,
+        tool_calls=True,
+    )
+    completion_or_chunks = llama.create_completion(
         prompt=prompt,
         temperature=temperature,
         top_p=top_p,
         top_k=top_k,
         min_p=min_p,
         typical_p=typical_p,
-        stream=stream,
-        stop=stop,
-        max_tokens=max_tokens,
+        stream=False,
+        stop=[":"],
+        max_tokens=None,
         presence_penalty=presence_penalty,
         frequency_penalty=frequency_penalty,
         repeat_penalty=repeat_penalty,
@@ -1573,62 +1893,35 @@ def openhermes_function_calling(
         mirostat_eta=mirostat_eta,
         model=model,
         logits_processor=logits_processor,
-        grammar=grammar,
-    ) # type: ignore
-    function_calls = extract_function_calls(completion["choices"][0]["text"])
+        grammar=llama_grammar.LlamaGrammar.from_string(initial_gbnf_tool_grammar),
+    )
+    completion: llama_types.CreateCompletionResponse = completion_or_chunks  # type: ignore
+    text = completion["choices"][0]["text"]
+    if "message" in text:
+        return _convert_completion_to_chat(llama.create_completion(
+            prompt=prompt + "message:\n",
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            min_p=min_p,
+            typical_p=typical_p,
+            stream=stream,
+            stop=["<|im_end|>"],
+            max_tokens=None,
+            presence_penalty=presence_penalty,
+            frequency_penalty=frequency_penalty,
+            repeat_penalty=repeat_penalty,
+            tfs_z=tfs_z,
+            mirostat_mode=mirostat_mode,
+            mirostat_tau=mirostat_tau,
+            mirostat_eta=mirostat_eta,
+            model=model,
+            logits_processor=logits_processor,
+            grammar=llama_grammar.LlamaGrammar.from_string(follow_up_gbnf_tool_grammar),
+        ), stream=stream)
 
-    if function_calls is None:
-        return _convert_completion_to_chat(completion, stream=stream)
-    
-    if len(function_calls) == 1:
-        return {
-            "id": "chat" + completion["id"],
-            "object": "chat.completion",
-            "created": completion["created"],
-            "model": completion["model"],
-            "choices": [
-                {
-                    "index": 0,
-                    "message": {
-                        "role": "assistant",
-                        "content": None,
-                        "function_call": function_calls[0],
-                        "tool_calls": [
-                            {
-                                "id": function_calls[0]["name"],
-                                "type": "function",
-                                "function": function_calls[0],
-                            }
-                        ],
-                    },
-                    "finish_reason": "tool_calls" if tools is not None else "function_call",
-                }
-            ],
-            "usage": completion["usage"],
-        }
-    
-    return {
-        "id": "chat" + completion["id"],
-        "object": "chat.completion",
-        "created": completion["created"],
-        "model": completion["model"],
-        "choices": [
-            {
-                "index": 0,
-                "message": {
-                    "role": "assistant",
-                    "content": None,
-                    "tool_calls": [
-                        {
-                            "id": function_call["name"],
-                            "type": "function",
-                            "function": function_call,
-                        }
-                        for function_call in function_calls
-                    ],
-                },
-                "finish_reason": "tool_calls",
-            }
-        ],
-        "usage": completion["usage"],
-    }
+    # One or more function calls
+    tool_name = text[len("functions.")]
+    tool = next(
+        (tool for tool in tools if tool["function"]["name"] == tool_name), None
+    )
