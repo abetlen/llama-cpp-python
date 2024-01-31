@@ -187,16 +187,17 @@ class Jinja2ChatFormatter(ChatFormatter):
         messages: List[llama_types.ChatCompletionRequestMessage],
         **kwargs: Any,
     ) -> ChatFormatterResponse:
-        if self.add_generation_prompt:
-            messages = [
-                *messages,
-                llama_types.ChatCompletionRequestAssistantMessage(
-                    role="assistant", content=""
-                ),
-            ]
+        def raise_exception(message: str):
+            raise ValueError(message)
+
         prompt = self._environment.render(
-            messages=messages, eos_token=self.eos_token, bos_token=self.bos_token
+            messages=messages,
+            eos_token=self.eos_token,
+            bos_token=self.bos_token,
+            raise_exception=raise_exception,
+            add_generation_prompt=self.add_generation_prompt
         )
+
         return ChatFormatterResponse(prompt=prompt, stop=[self.eos_token])
 
     def to_chat_handler(self) -> LlamaChatCompletionHandler:
