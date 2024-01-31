@@ -378,6 +378,24 @@ Then you'll need to use a custom chat handler to load the clip model and process
 )
 ```
 
+### Speculative Decoding
+
+`llama-cpp-python` supports speculative decoding which allows the model to generate completions based on a draft model.
+
+The fastest way to use speculative decoding is through the `LlamaPromptLookupDecoding` class.
+
+Just pass this as a draft model to the `Llama` class during initialization.
+
+```python
+from llama_cpp import Llama
+from llama_cpp.llama_speculative import LlamaPromptLookupDecoding
+
+llama = Llama(
+    model_path="path/to/model.gguf",
+    draft_model=LlamaPromptLookupDecoding(num_pred_tokens=10) # num_pred_tokens is the number of tokens to predict 10 is the default and generally good for gpu, 2 performs better for cpu-only machines.
+)
+```
+
 ### Adjusting the Context Window
 
 The context window of the Llama models determines the maximum number of tokens that can be processed at once. By default, this is set to 512 tokens, but can be adjusted based on your requirements.
