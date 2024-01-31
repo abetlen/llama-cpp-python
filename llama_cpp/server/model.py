@@ -95,7 +95,9 @@ class LlamaProxy:
 
         draft_model = None
         if settings.draft_model is not None:
-            draft_model = llama_speculative.LlamaPromptLookupDecoding()
+            draft_model = llama_speculative.LlamaPromptLookupDecoding(
+                num_pred_tokens=settings.draft_model_num_pred_tokens
+            )
 
         kv_overrides: Optional[Dict[str, Union[bool, int, float]]] = None
         if settings.kv_overrides is not None:

@@ -148,6 +148,10 @@ class ModelSettings(BaseSettings):
         default=None,
         description="Method to use for speculative decoding. One of (prompt-lookup-decoding).",
     )
+    draft_model_num_pred_tokens: int = Field(
+        default=10,
+        description="Number of tokens to predict using the draft model.",
+    )
     # Misc
     verbose: bool = Field(
         default=True, description="Whether to print debug information."
