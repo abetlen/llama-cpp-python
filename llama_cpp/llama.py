@@ -946,7 +946,11 @@ class Llama:
 
             if stream:
                 remaining_tokens = completion_tokens[returned_tokens:]
-                remaining_text = self.detokenize(remaining_tokens)
+                if isinstance(self.tokenizer_, LlamaHFTokenizer):
+                    prev_text = self.detokenize(completion_tokens[:returned_tokens])
+                    remaining_text = all_text[len(prev_text):]
+                else:
+                    remaining_text = self.detokenize(remaining_tokens)
                 remaining_length = len(remaining_text)
 
                 # We want to avoid yielding any characters from
@@ -968,13 +972,17 @@ class Llama:
                     for token in remaining_tokens:
                         if token == self.token_bos():
                             continue
-                        token_end_position += len(self.detokenize([token]))
+                        if isinstance(self.tokenizer_, LlamaHFTokenizer):
+                            detokenized_token = remaining_text
+                        else:
+                            detokenized_token = self.detokenize([token])
+                        token_end_position += len(detokenized_token)
                         # Check if stop sequence is in the token
                         if token_end_position > (
                             remaining_length - first_stop_position
                         ):
                             break
-                        token_str = self.detokenize([token]).decode(
+                        token_str = detokenized_token.decode(
                             "utf-8", errors="ignore"
                         )
                         text_offset = len(prompt) + len(
@@ -999,11 +1007,7 @@ class Llama:
                         }
                         top_logprob.update({token_str: current_logprobs[int(token)]})
                         logprobs_or_none = {
-                            "tokens": [
-                                self.detokenize([token]).decode(
-                                    "utf-8", errors="ignore"
-                                )
-                            ],
+                            "tokens": [token_str],
                             "text_offset": [text_offset],
                             "token_logprobs": [current_logprobs[int(token)]],
                             "top_logprobs": [top_logprob],
@@ -1016,9 +1020,7 @@ class Llama:
                             "model": model_name,
                             "choices": [
                                 {
-                                    "text": self.detokenize([token]).decode(
-                                        "utf-8", errors="ignore"
-                                    ),
+                                    "text": token_str,
                                     "index": 0,
                                     "logprobs": logprobs_or_none,
                                     "finish_reason": None,
@@ -1030,7 +1032,10 @@ class Llama:
                         decode_success = False
                         for i in range(1, len(remaining_tokens) + 1):
                             try:
-                                bs = self.detokenize(remaining_tokens[:i])
+                                if isinstance(self.tokenizer_, LlamaHFTokenizer):
+                                    bs = remaining_text
+                                else:
+                                    bs = self.detokenize(remaining_tokens[:i])
                                 ts = bs.decode("utf-8")
                                 decode_success = True
                                 break
