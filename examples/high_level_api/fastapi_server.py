@@ -9,7 +9,7 @@ export MODEL=../models/7B/...
 
 Then run:
 ```
-uvicorn llama_cpp.server.app:app --reload
+uvicorn --factory llama_cpp.server.app:create_app --reload
 ```
 
 or
