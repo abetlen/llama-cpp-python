@@ -1528,7 +1528,7 @@ class Llava15ChatHandler:
 
 
 @register_chat_completion_handler("chatml-function-calling")
-def openhermes_function_calling(
+def chatml_function_calling(
     llama: llama.Llama,
     messages: List[llama_types.ChatCompletionRequestMessage],
     functions: Optional[List[llama_types.ChatCompletionFunction]] = None,
@@ -1568,8 +1568,8 @@ def openhermes_function_calling(
         "{% if tool_calls %}"
         "\n\nYou have access to the following functions:\n"
         "{% for tool in tools %}"
-        "\nfunctions.{{ tool.name }}:\n"
-        "{{ tool.parameters | tojson }}"
+        "\nfunctions.{{ tool.function.name }}:\n"
+        "{{ tool.function.parameters | tojson }}"
         "\n{% endfor %}"
         "\n\nYou can respond to users messages with either a single message or one or more function calls."
         "\n\nTo respond with a message begin the message with 'message:', use the following format:"
@@ -1624,16 +1624,22 @@ def openhermes_function_calling(
         ]
 
     # Convert legacy function_call to tool_choice
-    if function_call is not None and isinstance(function_call, str):
-        if function_call == "none" or function_call == "auto":
+    if function_call is not None:
+        if isinstance(function_call, str) and (function_call == "none" or function_call == "auto"):
             tool_choice = function_call
-        else:
+        if isinstance(function_call, dict) and "name" in function_call:
             tool_choice = {
                 "type": "function",
                 "function": {
-                    "name": function_call,
+                    "name": function_call["name"],
                 },
             }
+
+    print("foo")
+    print("function_call", function_call)
+    print("functions", functions)
+    print("tool_choice", tool_choice)
+    print("tools", tools)
 
     # Case 1: No tool choice by user
     if (
@@ -1692,7 +1698,7 @@ def openhermes_function_calling(
             stream=stream,
         )
 
-    def _convert_completion_to_chat_function(completion_or_chunks: Union[llama_types.CreateCompletionResponse, Iterator[llama_types.CreateCompletionStreamResponse]], stream: bool):
+    def _convert_completion_to_chat_function(tool_name: str, completion_or_chunks: Union[llama_types.CreateCompletionResponse, Iterator[llama_types.CreateCompletionStreamResponse]], stream: bool):
         if not stream:
             completion: llama_types.CreateCompletionResponse = completion_or_chunks  # type: ignore
             assert "usage" in completion
@@ -1779,7 +1785,10 @@ def openhermes_function_calling(
                                     "delta": {
                                         "role": None,
                                         "content": None,
-                                        "function_call": None,
+                                        "function_call": {
+                                            "name": tool_name,
+                                            "arguments": chunk["choices"][0]["text"],
+                                        },
                                         "tool_calls": [
                                             {
                                                 "index": 0,
@@ -1796,6 +1805,7 @@ def openhermes_function_calling(
                             ],
                         }
                         first = False
+                    assert tool_id is not None
                     yield {
                         "id": "chat" + chunk["id"],
                         "object": "chat.completion.chunk",
@@ -1809,14 +1819,17 @@ def openhermes_function_calling(
                                 "delta": {
                                     "role": None,
                                     "content": None,
-                                    "function_call": None,
+                                    "function_call": {
+                                        "name": tool_name,
+                                        "arguments": chunk["choices"][0]["text"],
+                                    },
                                     "tool_calls": [
                                         {
                                             "index": 0,
                                             "id": tool_id,
                                             "type": "function",
                                             "function": {
-                                                "name": None,
+                                                "name": tool_name,
                                                 "arguments": chunk["choices"][0][
                                                     "text"
                                                 ],
@@ -1854,6 +1867,7 @@ def openhermes_function_calling(
     # Case 2: Tool choice by user
     if isinstance(tool_choice, dict):
         tool_name = tool_choice["function"]["name"]
+        print("Tool Name:", tool_name)
         tool = next(
             (tool for tool in tools if tool["function"]["name"] == tool_name), None
         )
@@ -1897,9 +1911,11 @@ def openhermes_function_calling(
             logits_processor=logits_processor,
             grammar=grammar,
         )
-        return _convert_completion_to_chat_function(completion_or_chunks, stream)
+        return _convert_completion_to_chat_function(tool_name, completion_or_chunks, stream)
 
     # Case 3: Automatic tool choice
+    raise ValueError("Automatic tool choice is not supported")
+
     assert isinstance(tool_choice, str) and tool_choice == "auto"
     function_names = " | ".join(
         [f'''"{tool['function']['name']}"''' for tool in tools]
