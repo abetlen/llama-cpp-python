@@ -4,9 +4,9 @@ import sys
 import sys
 from typing import Any, Dict
 
-class NullDevice():
-    def write(self, s):
-        pass
+# Avoid "LookupError: unknown encoding: ascii" when open() called in a destructor
+outnull_file = open(os.devnull, "w")
+errnull_file = open(os.devnull, "w")
 
 class suppress_stdout_stderr(object):
     # NOTE: these must be "saved" here to avoid exceptions when using
@@ -21,19 +21,41 @@ class suppress_stdout_stderr(object):
     def __enter__(self):
         if self.disable:
             return self
+
+        # Check if sys.stdout and sys.stderr have fileno method
+        if not hasattr(self.sys.stdout, 'fileno') or not hasattr(self.sys.stderr, 'fileno'):
+            return self  # Return the instance without making changes
+
+        self.old_stdout_fileno_undup = self.sys.stdout.fileno()
+        self.old_stderr_fileno_undup = self.sys.stderr.fileno()
+
+        self.old_stdout_fileno = self.os.dup(self.old_stdout_fileno_undup)
+        self.old_stderr_fileno = self.os.dup(self.old_stderr_fileno_undup)
+
         self.old_stdout = self.sys.stdout
         self.old_stderr = self.sys.stderr
 
-        self.sys.stdout = NullDevice()
-        self.sys.stderr = NullDevice()
+        self.os.dup2(outnull_file.fileno(), self.old_stdout_fileno_undup)
+        self.os.dup2(errnull_file.fileno(), self.old_stderr_fileno_undup)
+
+        self.sys.stdout = outnull_file
+        self.sys.stderr = errnull_file
         return self
 
     def __exit__(self, *_):
         if self.disable:
             return
-        
-        self.sys.stdout = self.old_stdout
-        self.sys.stderr = self.old_stderr
+
+        # Check if sys.stdout and sys.stderr have fileno method
+        if hasattr(self.sys.stdout, 'fileno') and hasattr(self.sys.stderr, 'fileno'):
+            self.sys.stdout = self.old_stdout
+            self.sys.stderr = self.old_stderr
+
+            self.os.dup2(self.old_stdout_fileno, self.old_stdout_fileno_undup)
+            self.os.dup2(self.old_stderr_fileno, self.old_stderr_fileno_undup)
+
+            self.os.close(self.old_stdout_fileno)
+            self.os.close(self.old_stderr_fileno)
 
 
 class MetaSingleton(type):
