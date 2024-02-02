@@ -444,16 +444,17 @@ class Llama:
         """
         return self.tokenizer_.tokenize(text, add_bos, special)
 
-    def detokenize(self, tokens: List[int]) -> bytes:
+    def detokenize(self, tokens: List[int], prev_tokens: Optional[List[int]] = None) -> bytes:
         """Detokenize a list of tokens.
 
         Args:
             tokens: The list of tokens to detokenize.
+            prev_tokens: The list of previous tokens. Offset mapping will be performed if provided
 
         Returns:
             The detokenized string.
         """
-        return self.tokenizer_.detokenize(tokens)
+        return self.tokenizer_.detokenize(tokens, prev_tokens)
 
     def set_cache(self, cache: Optional[BaseLlamaCache]):
         """Set the cache.
@@ -946,11 +947,8 @@ class Llama:
 
             if stream:
                 remaining_tokens = completion_tokens[returned_tokens:]
-                if isinstance(self.tokenizer_, LlamaHFTokenizer):
-                    prev_text = self.detokenize(completion_tokens[:returned_tokens])
-                    remaining_text = all_text[len(prev_text):]
-                else:
-                    remaining_text = self.detokenize(remaining_tokens)
+                prev_tokens = completion_tokens[:returned_tokens]
+                remaining_text = self.detokenize(completion_tokens, prev_tokens)
                 remaining_length = len(remaining_text)
 
                 # We want to avoid yielding any characters from
@@ -972,17 +970,13 @@ class Llama:
                     for token in remaining_tokens:
                         if token == self.token_bos():
                             continue
-                        if isinstance(self.tokenizer_, LlamaHFTokenizer):
-                            detokenized_token = remaining_text
-                        else:
-                            detokenized_token = self.detokenize([token])
-                        token_end_position += len(detokenized_token)
+                        token_end_position += len(remaining_text)
                         # Check if stop sequence is in the token
                         if token_end_position > (
                             remaining_length - first_stop_position
                         ):
                             break
-                        token_str = detokenized_token.decode(
+                        token_str = remaining_text.decode(
                             "utf-8", errors="ignore"
                         )
                         text_offset = len(prompt) + len(
@@ -1032,10 +1026,7 @@ class Llama:
                         decode_success = False
                         for i in range(1, len(remaining_tokens) + 1):
                             try:
-                                if isinstance(self.tokenizer_, LlamaHFTokenizer):
-                                    bs = remaining_text
-                                else:
-                                    bs = self.detokenize(remaining_tokens[:i])
+                                bs = remaining_text
                                 ts = bs.decode("utf-8")
                                 decode_success = True
                                 break
@@ -1761,7 +1752,7 @@ class BaseLlamaTokenizer(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def detokenize(self, tokens: List[int]) -> bytes:
+    def detokenize(self, tokens: List[int], prev_tokens: Optional[List[int]] = None) -> bytes:
         raise NotImplementedError
 
 
@@ -1773,8 +1764,11 @@ class LlamaTokenizer(BaseLlamaTokenizer):
     def tokenize(self, text: bytes, add_bos: bool = True, special: bool = True) -> List[int]:
         return self._model.tokenize(text, add_bos=add_bos, special=special)
 
-    def detokenize(self, tokens: List[int]) -> bytes:
-        return self._model.detokenize(tokens)
+    def detokenize(self, tokens: List[int], prev_tokens: Optional[List[int]] = None) -> bytes:
+        if prev_tokens is not None:
+            return self._model.detokenize(tokens[len(prev_tokens):])
+        else:
+            return self._model.detokenize(tokens)
 
     def encode(self, text: str, add_bos: bool = True, special: bool = True) -> List[int]:
         return self.tokenize(
@@ -1796,8 +1790,13 @@ class LlamaHFTokenizer(BaseLlamaTokenizer):
     def tokenize(self, text: bytes, add_bos: bool = True, special: bool = True) -> List[int]:
         return self.hf_tokenizer.encode(text.decode("utf-8", errors="ignore"), add_special_tokens=special)
     
-    def detokenize(self, tokens: List[int]) -> bytes:
-        return self.hf_tokenizer.decode(tokens).encode("utf-8", errors="ignore")
+    def detokenize(self, tokens: List[int], prev_tokens: Optional[List[int]] = None) -> bytes:
+        if prev_tokens is not None:
+            text = self.hf_tokenizer.decode(tokens).encode("utf-8", errors="ignore")
+            prev_text = self.hf_tokenizer.decode(prev_tokens).encode("utf-8", errors="ignore")
+            return text[len(prev_text):]
+        else:
+            return self.hf_tokenizer.decode(tokens).encode("utf-8", errors="ignore")
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path: str) -> "LlamaHFTokenizer":
