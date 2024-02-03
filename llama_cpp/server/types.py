@@ -176,15 +176,30 @@ class CreateEmbeddingRequest(BaseModel):
     }
 
 
-class QueryTokensUsageRequest(BaseModel):
+class DetokenizeInputRequest(BaseModel):
     model: Optional[str] = model_field
-    query: Optional[str] = Field(description="The query to count tokens")
+    tokens: List[int] = Field(description="A list of toekns to detokenize.")
+
+    model_config = {
+        "json_schema_extra": {
+            "example": [
+                {
+                    "tokens": [123,321,222]
+                }
+            ]
+        }
+    }
+
+
+class TokenizeInputRequest(BaseModel):
+    model: Optional[str] = model_field
+    input: Optional[str] = Field(description="The input to tokenize.")
 
     model_config = {
         "json_schema_extra": {
             "examples": [
                 {
-                    "query": "How many tokens in this query?"
+                    "input": "How many tokens in this query?"
                 }
             ]
         }
@@ -282,4 +297,4 @@ class ModelList(TypedDict):
 
 
 class QueryCountResponse(TypedDict):
-    tokens: int
+    data: List[int]
