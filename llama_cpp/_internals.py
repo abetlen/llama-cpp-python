@@ -216,13 +216,13 @@ class _LlamaModel:
         for i in range(llama_cpp.llama_model_meta_count(self.model)):
             nbytes = llama_cpp.llama_model_meta_key_by_index(self.model, i, buffer, buffer_size)
             if nbytes > buffer_size:
-                buffer_size = nbytes
+                buffer_size = nbytes + 1
                 buffer = ctypes.create_string_buffer(buffer_size)
                 nbytes = llama_cpp.llama_model_meta_key_by_index(self.model, i, buffer, buffer_size)
             key = buffer.value.decode("utf-8")
             nbytes = llama_cpp.llama_model_meta_val_str_by_index(self.model, i, buffer, buffer_size)
             if nbytes > buffer_size:
-                buffer_size = nbytes
+                buffer_size = nbytes + 1
                 buffer = ctypes.create_string_buffer(buffer_size)
                 nbytes = llama_cpp.llama_model_meta_val_str_by_index(self.model, i, buffer, buffer_size)
             value = buffer.value.decode("utf-8")

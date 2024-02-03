@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.38]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@1cfb5372cf5707c8ec6dde7c874f4a44a6c4c915
+- feat: Add speculative decoding by @abetlen in #1120
+- fix: Pass raise_exception and add_generation_prompt to jinja2 chat template 078cca0361bf5a94d2cf52ed04980d20e32d6f95
+
+## [0.2.37]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@fea4fd4ba7f6b754ac795387b275e1a014a77bde
+- feat: Automatically set chat format from gguf by @abetlen in #1110
+
+## [0.2.36]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@2aed77eb06a329f0d82bb1c467f4244904d4073f
+- feat: Add mistral instruct chat format as "mistral-instruct" by @Rafaelblsilva in #799
+
+## [0.2.35]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@d2f650cb5b04ee2726663e79b47da5efe196ce00
+
+## [0.2.34]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@6db2b41a76ee78d5efdd5c3cddd5d7ad3f646855
+- feat: Add json schema mode by @abetlen in #1122
+
 ## [0.2.33]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@faa3526a1eba458120987ed8269e5616385a76f4

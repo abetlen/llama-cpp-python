@@ -5,6 +5,7 @@ import json
 from typing import Dict, Optional, Union, List
 
 import llama_cpp
+import llama_cpp.llama_speculative as llama_speculative
 
 from llama_cpp.server.settings import ModelSettings
 
@@ -92,6 +93,12 @@ class LlamaProxy:
                 )
             )
 
+        draft_model = None
+        if settings.draft_model is not None:
+            draft_model = llama_speculative.LlamaPromptLookupDecoding(
+                num_pred_tokens=settings.draft_model_num_pred_tokens
+            )
+
         kv_overrides: Optional[Dict[str, Union[bool, int, float]]] = None
         if settings.kv_overrides is not None:
             assert isinstance(settings.kv_overrides, list)
@@ -147,6 +154,8 @@ class LlamaProxy:
             # Chat Format Params
             chat_format=settings.chat_format,
             chat_handler=chat_handler,
+            # Speculative Decoding
+            draft_model=draft_model,
             # Misc
             verbose=settings.verbose,
         )

@@ -27,6 +27,15 @@ build.blis:
 build.metal:
 	CMAKE_ARGS="-DLLAMA_METAL=on" python3 -m pip install --verbose -e .
 
+build.vulkan:
+	CMAKE_ARGS="-DLLAMA_VULKAN=on" python3 -m pip install --verbose -e .
+
+build.kompute:
+	CMAKE_ARGS="-DLLAMA_KOMPUTE=on" python3 -m pip install --verbose -e .
+
+build.sycl:
+	CMAKE_ARGS="-DLLAMA_SYCL=on" python3 -m pip install --verbose -e .
+
 build.sdist:
 	python3 -m build --sdist
 

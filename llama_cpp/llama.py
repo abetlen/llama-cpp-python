@@ -30,6 +30,8 @@ from .llama_cache import (
 import llama_cpp.llama_cpp as llama_cpp
 import llama_cpp.llama_chat_format as llama_chat_format
 
+from llama_cpp.llama_speculative import LlamaDraftModel
+
 import numpy as np
 import numpy.typing as npt
 
@@ -39,6 +41,8 @@ from ._internals import (
     _LlamaContext,  # type: ignore
     _LlamaBatch,  # type: ignore
     _LlamaTokenDataArray,  # type: ignore
+    _LlamaSamplingParams,  # type: ignore
+    _LlamaSamplingContext,  # type: ignore
 )
 
 
@@ -87,8 +91,10 @@ class Llama:
         # Backend Params
         numa: bool = False,
         # Chat Format Params
-        chat_format: str = "llama-2",
+        chat_format: Optional[str] = None,
         chat_handler: Optional[llama_chat_format.LlamaChatCompletionHandler] = None,
+        # Speculative Decoding
+        draft_model: Optional[LlamaDraftModel] = None,
         # Misc
         verbose: bool = True,
         # Extra Params
@@ -152,6 +158,7 @@ class Llama:
             numa: Enable NUMA support. (NOTE: The initial value of this parameter is used for the remainder of the program as this value is set in llama_backend_init)
             chat_format: String specifying the chat format to use when calling create_chat_completion.
             chat_handler: Optional chat handler to use when calling create_chat_completion.
+            draft_model: Optional draft model to use for speculative decoding.
             verbose: Print verbose output to stderr.
 
         Raises:
@@ -315,6 +322,8 @@ class Llama:
         self.chat_format = chat_format
         self.chat_handler = chat_handler
 
+        self.draft_model = draft_model
+
         self._n_vocab = self.n_vocab()
         self._n_ctx = self.n_ctx()
 
@@ -342,6 +351,41 @@ class Llama:
 
         if self.verbose:
             print(f"Model metadata: {self.metadata}", file=sys.stderr)
+
+        if self.chat_format is None and self.chat_handler is None and "tokenizer.chat_template" in self.metadata:
+            chat_format = llama_chat_format.guess_chat_format_from_gguf_metadata(self.metadata)
+
+            if chat_format is not None:
+                self.chat_format = chat_format
+                if self.verbose:
+                    print(f"Guessed chat format: {chat_format}", file=sys.stderr)
+            else:
+                template = self.metadata["tokenizer.chat_template"]
+                try:
+                    eos_token_id = int(self.metadata["tokenizer.ggml.eos_token_id"])
+                except:
+                    eos_token_id = self.token_eos()
+                try:
+                    bos_token_id = int(self.metadata["tokenizer.ggml.bos_token_id"])
+                except:
+                    bos_token_id = self.token_bos()
+
+                eos_token = self.detokenize([eos_token_id]).decode("utf-8")
+                bos_token = self.detokenize([bos_token_id]).decode("utf-8")
+
+                if self.verbose:
+                    print(f"Using chat template: {template}", file=sys.stderr)
+                    print(f"Using chat eos_token: {eos_token}", file=sys.stderr)
+                    print(f"Using chat bos_token: {bos_token}", file=sys.stderr)
+
+                self.chat_handler = llama_chat_format.Jinja2ChatFormatter(
+                    template=template,
+                    eos_token=eos_token,
+                    bos_token=bos_token
+                ).to_chat_handler()
+
+        if self.chat_format is None and self.chat_handler is None:
+            self.chat_format = "llama-2"
 
     @property
     def ctx(self) -> llama_cpp.llama_context_p:
@@ -468,6 +512,7 @@ class Llama:
         penalize_nl: bool = True,
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
+        idx: Optional[int] = None,
     ):
         """Sample a token from the model.
 
@@ -482,77 +527,46 @@ class Llama:
         """
         assert self._ctx is not None
         assert self.n_tokens > 0
-        last_n_tokens_data = [llama_cpp.llama_token(0)] * max(
-            0, self.last_n_tokens_size - self.n_tokens
-        ) + self._input_ids[-self.last_n_tokens_size :].tolist()
-        last_n_tokens_size = len(last_n_tokens_data)
-        n_vocab = self._n_vocab
-        n_ctx = self._n_ctx
-        top_k = n_vocab if top_k <= 0 else top_k
-        last_n_tokens_size = n_ctx if last_n_tokens_size < 0 else last_n_tokens_size
-        last_n_tokens_data_c = (llama_cpp.llama_token * last_n_tokens_size)(
-            *last_n_tokens_data
-        )
-        logits: npt.NDArray[np.single] = self._scores[-1, :]
+
+        if idx is None:
+            logits: npt.NDArray[np.single] = self._scores[-1, :]
+        else:
+            logits = self._scores[idx, :]
 
         if logits_processor is not None:
-            logits[:] = logits_processor(self._input_ids, logits)
+            logits[:] = (
+                logits_processor(self._input_ids, logits)
+                if idx is None
+                else logits_processor(self._input_ids[:idx], logits)
+            )
 
-        nl_logit = logits[self._token_nl]
-        self._candidates.copy_logits(logits)
-        self._ctx.sample_repetition_penalties(
-            candidates=self._candidates,
-            last_tokens_data=last_n_tokens_data_c,
-            penalty_last_n=last_n_tokens_size,
+        sampling_params = _LlamaSamplingParams(
+            top_k=top_k,
+            top_p=top_p,
+            min_p=min_p,
+            tfs_z=tfs_z,
+            typical_p=typical_p,
+            temp=temp,
+            penalty_last_n=self.last_n_tokens_size,
             penalty_repeat=repeat_penalty,
             penalty_freq=frequency_penalty,
             penalty_present=presence_penalty,
+            mirostat=mirostat_mode,
+            mirostat_tau=mirostat_tau,
+            mirostat_eta=mirostat_eta,
+            penalize_nl=penalize_nl,
         )
-        if not penalize_nl:
-            self._candidates.candidates.data[self._token_nl].logit = llama_cpp.c_float(
-                nl_logit
-            )
-
-        if grammar is not None:
-            self._ctx.sample_grammar(
-                candidates=self._candidates,
-                grammar=grammar,
-            )
-
-        if temp < 0.0:
-            self._ctx.sample_softmax(candidates=self._candidates)
-            id = self._candidates.candidates.data[0].id
-        elif temp == 0.0:
-            id = self._ctx.sample_token_greedy(candidates=self._candidates)
-        elif mirostat_mode == 1:
-            self._ctx.sample_temp(candidates=self._candidates, temp=temp)
-            id = self._ctx.sample_token_mirostat(
-                candidates=self._candidates,
-                tau=mirostat_tau,
-                eta=mirostat_eta,
-                mu=ctypes.pointer(self._mirostat_mu),
-                m=100,
-            )
-        elif mirostat_mode == 2:
-            self._ctx.sample_temp(candidates=self._candidates, temp=temp)
-            id = self._ctx.sample_token_mirostat_v2(
-                candidates=self._candidates,
-                tau=mirostat_tau,
-                eta=mirostat_eta,
-                mu=ctypes.pointer(self._mirostat_mu),
-            )
-        else:
-            self._ctx.sample_top_k(candidates=self._candidates, k=top_k, min_keep=1)
-            self._ctx.sample_tail_free(candidates=self._candidates, z=tfs_z, min_keep=1)
-            self._ctx.sample_typical(
-                candidates=self._candidates, p=typical_p, min_keep=1
-            )
-            self._ctx.sample_top_p(candidates=self._candidates, p=top_p, min_keep=1)
-            self._ctx.sample_min_p(candidates=self._candidates, p=min_p, min_keep=1)
-            self._ctx.sample_temp(candidates=self._candidates, temp=temp)
-            id = self._ctx.sample_token(candidates=self._candidates)
-        if grammar is not None:
-            self._ctx.grammar_accept_token(grammar=grammar, token=id)
+        sampling_context = _LlamaSamplingContext(
+            params=sampling_params,
+            grammar=grammar,
+        )
+        sampling_context.prev = list(self.eval_tokens)
+        id = sampling_context.sample(ctx_main=self._ctx, logits_array=logits)
+        sampling_context.accept(
+            ctx_main=self._ctx,
+            id=id,
+            apply_grammar=grammar is not None,
+        )
         return id
 
     def generate(
@@ -621,34 +635,56 @@ class Llama:
         if grammar is not None:
             grammar.reset()
 
+        sample_idx = self.n_tokens + len(tokens) - 1
+        tokens = list(tokens)
+
         # Eval and sample
         while True:
             self.eval(tokens)
-            token = self.sample(
-                top_k=top_k,
-                top_p=top_p,
-                min_p=min_p,
-                typical_p=typical_p,
-                temp=temp,
-                repeat_penalty=repeat_penalty,
-                frequency_penalty=frequency_penalty,
-                presence_penalty=presence_penalty,
-                tfs_z=tfs_z,
-                mirostat_mode=mirostat_mode,
-                mirostat_tau=mirostat_tau,
-                mirostat_eta=mirostat_eta,
-                logits_processor=logits_processor,
-                grammar=grammar,
-                penalize_nl=penalize_nl,
-            )
-            if stopping_criteria is not None and stopping_criteria(
-                self._input_ids, self._scores[-1, :]
-            ):
-                return
-            tokens_or_none = yield token
-            tokens = [token]
-            if tokens_or_none is not None:
-                tokens.extend(tokens_or_none)
+            while sample_idx < self.n_tokens:
+                token = self.sample(
+                    top_k=top_k,
+                    top_p=top_p,
+                    min_p=min_p,
+                    typical_p=typical_p,
+                    temp=temp,
+                    repeat_penalty=repeat_penalty,
+                    frequency_penalty=frequency_penalty,
+                    presence_penalty=presence_penalty,
+                    tfs_z=tfs_z,
+                    mirostat_mode=mirostat_mode,
+                    mirostat_tau=mirostat_tau,
+                    mirostat_eta=mirostat_eta,
+                    logits_processor=logits_processor,
+                    grammar=grammar,
+                    penalize_nl=penalize_nl,
+                    idx=sample_idx,
+                )
+
+                sample_idx += 1
+                if stopping_criteria is not None and stopping_criteria(
+                    self._input_ids, self._scores[-1, :]
+                ):
+                    return
+                tokens_or_none = yield token
+                tokens.clear()
+                tokens.append(token)
+                if tokens_or_none is not None:
+                    tokens.extend(tokens_or_none)
+
+                if sample_idx < self.n_tokens and token != self._input_ids[sample_idx]:
+                    self.n_tokens = sample_idx
+                    self._ctx.kv_cache_seq_rm(-1, self.n_tokens, -1)
+                    break
+
+            if self.draft_model is not None:
+                self.input_ids[self.n_tokens : self.n_tokens + len(tokens)] = tokens
+                draft_tokens = self.draft_model(self.input_ids[:self.n_tokens + len(tokens)])
+                tokens.extend(
+                    draft_tokens.astype(int)[
+                        : self._n_ctx - self.n_tokens - len(tokens)
+                    ]
+                )
 
     def create_embedding(
         self, input: Union[str, List[str]], model: Optional[str] = None

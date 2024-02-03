@@ -113,8 +113,8 @@ class ModelSettings(BaseSettings):
         description="Enable NUMA support.",
     )
     # Chat Format Params
-    chat_format: str = Field(
-        default="llama-2",
+    chat_format: Optional[str] = Field(
+        default=None,
         description="Chat format to use.",
     )
     clip_model_path: Optional[str] = Field(
@@ -142,6 +142,15 @@ class ModelSettings(BaseSettings):
     hf_pretrained_model_name_or_path: Optional[str] = Field(
         default=None,
         description="The model name or path to a pretrained HuggingFace tokenizer model. Same as you would pass to AutoTokenizer.from_pretrained().",
+    )
+    # Speculative Decoding
+    draft_model: Optional[str] = Field(
+        default=None,
+        description="Method to use for speculative decoding. One of (prompt-lookup-decoding).",
+    )
+    draft_model_num_pred_tokens: int = Field(
+        default=10,
+        description="Number of tokens to predict using the draft model.",
     )
     # Misc
     verbose: bool = Field(
