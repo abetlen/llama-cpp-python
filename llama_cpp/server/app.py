@@ -5,7 +5,7 @@ import json
 
 from threading import Lock
 from functools import partial
-from typing import Iterator, List, Optional, Union, Dict
+from typing import Iterator, List, Optional, Union, Dict, Iterable
 
 import llama_cpp
 
@@ -93,6 +93,7 @@ def create_app(
     settings: Settings | None = None,
     server_settings: ServerSettings | None = None,
     model_settings: List[ModelSettings] | None = None,
+    custom_routers: Union[APIRouter, Iterable[APIRouter], None] = None,
 ):
     config_file = os.environ.get("CONFIG_FILE", None)
     if config_file is not None:
@@ -128,6 +129,12 @@ def create_app(
         allow_headers=["*"],
     )
     app.include_router(router)
+    
+    if custom_routers is not None:
+        if isinstance(custom_routers, APIRouter):
+            custom_routers = (custom_routers,)
+        for _router in custom_routers:
+            app.include_router(_router)
 
     assert model_settings is not None
     set_llama_proxy(model_settings=model_settings)
