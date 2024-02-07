@@ -7,11 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.39]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@b08f22c882a1443e6b97081f3ce718a4d1a741f8
+- fix: Fix destructor logging bugs by using llama_log_callback to avoid suppress_stdout_stderr by @abetlen in 59760c85eddc72dfcc1839f43760ef72c23d6874
+
 ## [0.2.38]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@1cfb5372cf5707c8ec6dde7c874f4a44a6c4c915
 - feat: Add speculative decoding by @abetlen in #1120
-- fix: Pass raise_exception and add_generation_prompt to jinja2 chat template 078cca0361bf5a94d2cf52ed04980d20e32d6f95
+- fix: Pass raise_exception and add_generation_prompt to jinja2 chat template by @abetlen in 078cca0361bf5a94d2cf52ed04980d20e32d6f95
 
 ## [0.2.37]
 
