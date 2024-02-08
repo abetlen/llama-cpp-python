@@ -39,7 +39,6 @@ from llama_cpp.llama_speculative import LlamaDraftModel
 import numpy as np
 import numpy.typing as npt
 
-from ._utils import suppress_stdout_stderr
 from ._internals import (
     _LlamaModel,  # type: ignore
     _LlamaContext,  # type: ignore
@@ -48,6 +47,7 @@ from ._internals import (
     _LlamaSamplingParams,  # type: ignore
     _LlamaSamplingContext,  # type: ignore
 )
+from ._logger import set_verbose
 
 
 class Llama:
@@ -176,10 +176,11 @@ class Llama:
         """
         self.verbose = verbose
 
+        set_verbose(verbose)
+
         self.numa = numa
         if not Llama.__backend_initialized:
-            with suppress_stdout_stderr(disable=self.verbose):
-                llama_cpp.llama_backend_init(self.numa)
+            llama_cpp.llama_backend_init(self.numa)
             Llama.__backend_initialized = True
 
         self.model_path = model_path
