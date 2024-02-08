@@ -1914,21 +1914,17 @@ def chatml_function_calling(
         return _convert_completion_to_chat_function(tool_name, completion_or_chunks, stream)
 
     # Case 3: Automatic tool choice
-    raise ValueError("Automatic tool choice is not supported")
-
     assert isinstance(tool_choice, str) and tool_choice == "auto"
     function_names = " | ".join(
-        [f'''"{tool['function']['name']}"''' for tool in tools]
+        [f'''"functions.{tool['function']['name']}:"''' for tool in tools]
     )
     initial_gbnf_tool_grammar = (
-        """root   ::= function_call | "message:\n" """
-        """function_call ::= "functions." function_name ":"\n"""
-        f"""function_name ::= {function_names}\n"""
+        """root   ::= functions | "message:"\n"""
+        f"""functions ::= {function_names}\n"""
     )
     follow_up_gbnf_tool_grammar = (
-        """root   ::= function_call | "<|im_end|>" """
-        """function_call ::= "functions." function_name ":"\n"""
-        f"""function_name ::= {function_names}\n"""
+        """root   ::= functions | "<|im_end|>"\n"""
+        f"""functions ::= {function_names}\n"""
     )
     prompt = template_renderer.render(
         messages=messages,
@@ -1937,7 +1933,7 @@ def chatml_function_calling(
     )
     completion_or_chunks = llama.create_completion(
         prompt=prompt,
-        temperature=temperature,
+        temperature=0,
         top_p=top_p,
         top_k=top_k,
         min_p=min_p,
@@ -1982,7 +1978,8 @@ def chatml_function_calling(
         ), stream=stream)
 
     # One or more function calls
-    tool_name = text[len("functions.")]
+    tool_name = text[len("functions."):]
     tool = next(
         (tool for tool in tools if tool["function"]["name"] == tool_name), None
     )
+    raise ValueError("Automatic tool choice is not supported")
