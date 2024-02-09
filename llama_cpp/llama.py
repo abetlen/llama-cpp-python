@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
+import abc
 import uuid
 import time
 import multiprocessing
@@ -14,10 +15,13 @@ from typing import (
     Iterator,
     Deque,
     Callable,
+    Any,
 )
 from collections import deque
 
 import ctypes
+
+from llama_cpp.llama_types import List
 
 from .llama_types import *
 from .llama_grammar import LlamaGrammar
@@ -95,6 +99,8 @@ class Llama:
         chat_handler: Optional[llama_chat_format.LlamaChatCompletionHandler] = None,
         # Speculative Decoding
         draft_model: Optional[LlamaDraftModel] = None,
+        # Tokenizer Override
+        tokenizer: Optional[BaseLlamaTokenizer] = None,
         # Misc
         verbose: bool = True,
         # Extra Params
@@ -159,6 +165,7 @@ class Llama:
             chat_format: String specifying the chat format to use when calling create_chat_completion.
             chat_handler: Optional chat handler to use when calling create_chat_completion.
             draft_model: Optional draft model to use for speculative decoding.
+            tokenizer: Optional tokenizer to override the default tokenizer from llama.cpp.
             verbose: Print verbose output to stderr.
 
         Raises:
@@ -235,6 +242,7 @@ class Llama:
         self.n_threads_batch = n_threads_batch or max(
             multiprocessing.cpu_count() // 2, 1
         )
+        
         # Context Params
         self.context_params = llama_cpp.llama_context_default_params()
         self.context_params.seed = seed
@@ -286,6 +294,10 @@ class Llama:
         self._model = _LlamaModel(
             path_model=self.model_path, params=self.model_params, verbose=self.verbose
         )
+
+        # Override tokenizer
+        self.tokenizer_ = tokenizer or LlamaTokenizer(self)
+
         # Set the default value for the context and correct the batch
         if n_ctx == 0:
             n_ctx = self._model.n_ctx_train()
@@ -431,18 +443,19 @@ class Llama:
         Returns:
             A list of tokens.
         """
-        return self._model.tokenize(text, add_bos, special)
+        return self.tokenizer_.tokenize(text, add_bos, special)
 
-    def detokenize(self, tokens: List[int]) -> bytes:
+    def detokenize(self, tokens: List[int], prev_tokens: Optional[List[int]] = None) -> bytes:
         """Detokenize a list of tokens.
 
         Args:
             tokens: The list of tokens to detokenize.
+            prev_tokens: The list of previous tokens. Offset mapping will be performed if provided
 
         Returns:
             The detokenized string.
         """
-        return self._model.detokenize(tokens)
+        return self.tokenizer_.detokenize(tokens, prev_tokens)
 
     def set_cache(self, cache: Optional[BaseLlamaCache]):
         """Set the cache.
@@ -935,7 +948,8 @@ class Llama:
 
             if stream:
                 remaining_tokens = completion_tokens[returned_tokens:]
-                remaining_text = self.detokenize(remaining_tokens)
+                prev_tokens = completion_tokens[:returned_tokens]
+                remaining_text = self.detokenize(completion_tokens, prev_tokens)
                 remaining_length = len(remaining_text)
 
                 # We want to avoid yielding any characters from
@@ -957,13 +971,13 @@ class Llama:
                     for token in remaining_tokens:
                         if token == self.token_bos():
                             continue
-                        token_end_position += len(self.detokenize([token]))
+                        token_end_position += len(remaining_text)
                         # Check if stop sequence is in the token
                         if token_end_position > (
                             remaining_length - first_stop_position
                         ):
                             break
-                        token_str = self.detokenize([token]).decode(
+                        token_str = remaining_text.decode(
                             "utf-8", errors="ignore"
                         )
                         text_offset = len(prompt) + len(
@@ -988,11 +1002,7 @@ class Llama:
                         }
                         top_logprob.update({token_str: current_logprobs[int(token)]})
                         logprobs_or_none = {
-                            "tokens": [
-                                self.detokenize([token]).decode(
-                                    "utf-8", errors="ignore"
-                                )
-                            ],
+                            "tokens": [token_str],
                             "text_offset": [text_offset],
                             "token_logprobs": [current_logprobs[int(token)]],
                             "top_logprobs": [top_logprob],
@@ -1005,9 +1015,7 @@ class Llama:
                             "model": model_name,
                             "choices": [
                                 {
-                                    "text": self.detokenize([token]).decode(
-                                        "utf-8", errors="ignore"
-                                    ),
+                                    "text": token_str,
                                     "index": 0,
                                     "logprobs": logprobs_or_none,
                                     "finish_reason": None,
@@ -1019,7 +1027,7 @@ class Llama:
                         decode_success = False
                         for i in range(1, len(remaining_tokens) + 1):
                             try:
-                                bs = self.detokenize(remaining_tokens[:i])
+                                bs = remaining_text
                                 ts = bs.decode("utf-8")
                                 decode_success = True
                                 break
@@ -1055,6 +1063,7 @@ class Llama:
 
             if len(completion_tokens) >= max_tokens:
                 text = self.detokenize(completion_tokens)
+                
                 finish_reason = "length"
                 break
 
@@ -1693,8 +1702,8 @@ class Llama:
         """Return the vocabulary size."""
         return self._model.n_vocab()
 
-    def tokenizer(self) -> "LlamaTokenizer":
-        """Return the tokenizer for this model."""
+    def tokenizer(self) -> LlamaTokenizer:
+        """Return the llama tokenizer for this model."""
         return LlamaTokenizer(self)
 
     def token_eos(self) -> int:
@@ -1738,21 +1747,69 @@ class Llama:
         return longest_prefix
 
 
-class LlamaTokenizer:
+class BaseLlamaTokenizer(abc.ABC):
+    @abc.abstractmethod
+    def tokenize(self, text: bytes, add_bos: bool = True, special: bool = True) -> List[int]:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def detokenize(self, tokens: List[int], prev_tokens: Optional[List[int]] = None) -> bytes:
+        raise NotImplementedError
+
+
+class LlamaTokenizer(BaseLlamaTokenizer):
     def __init__(self, llama: Llama):
         self.llama = llama
+        self._model = llama._model # type: ignore
 
-    def encode(self, text: str, add_bos: bool = True) -> List[int]:
-        return self.llama.tokenize(
-            text.encode("utf-8", errors="ignore"), add_bos=add_bos, special=True
+    def tokenize(self, text: bytes, add_bos: bool = True, special: bool = True) -> List[int]:
+        return self._model.tokenize(text, add_bos=add_bos, special=special)
+
+    def detokenize(self, tokens: List[int], prev_tokens: Optional[List[int]] = None) -> bytes:
+        if prev_tokens is not None:
+            return self._model.detokenize(tokens[len(prev_tokens):])
+        else:
+            return self._model.detokenize(tokens)
+
+    def encode(self, text: str, add_bos: bool = True, special: bool = True) -> List[int]:
+        return self.tokenize(
+            text.encode("utf-8", errors="ignore"), add_bos=add_bos, special=special
         )
 
     def decode(self, tokens: List[int]) -> str:
-        return self.llama.detokenize(tokens).decode("utf-8", errors="ignore")
+        return self.detokenize(tokens).decode("utf-8", errors="ignore")
 
     @classmethod
     def from_ggml_file(cls, path: str) -> "LlamaTokenizer":
         return cls(Llama(model_path=path, vocab_only=True))
+
+
+class LlamaHFTokenizer(BaseLlamaTokenizer):
+    def __init__(self, hf_tokenizer: Any):
+        self.hf_tokenizer = hf_tokenizer
+
+    def tokenize(self, text: bytes, add_bos: bool = True, special: bool = True) -> List[int]:
+        return self.hf_tokenizer.encode(text.decode("utf-8", errors="ignore"), add_special_tokens=special)
+    
+    def detokenize(self, tokens: List[int], prev_tokens: Optional[List[int]] = None) -> bytes:
+        if prev_tokens is not None:
+            text = self.hf_tokenizer.decode(tokens).encode("utf-8", errors="ignore")
+            prev_text = self.hf_tokenizer.decode(prev_tokens).encode("utf-8", errors="ignore")
+            return text[len(prev_text):]
+        else:
+            return self.hf_tokenizer.decode(tokens).encode("utf-8", errors="ignore")
+
+    @classmethod
+    def from_pretrained(cls, pretrained_model_name_or_path: str) -> "LlamaHFTokenizer":
+        try:
+            from transformers import AutoTokenizer
+        except ImportError:
+            raise ImportError(
+                "The `transformers` library is required to use the `HFTokenizer`."
+                "You can install it with `pip install transformers`."
+            )
+        hf_tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name_or_path=pretrained_model_name_or_path)
+        return cls(hf_tokenizer)
 
 
 class LlamaState:
