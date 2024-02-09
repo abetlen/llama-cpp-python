@@ -1392,14 +1392,14 @@ from typing import List, Optional
 SPACE_RULE = '" "?'
 
 PRIMITIVE_RULES = {
-    "boolean": '("true" | "false") space',
-    "number": '("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? space',
-    "integer": '("-"? ([0-9] | [1-9] [0-9]*)) space',
+    "boolean": '("true" | "false")',
+    "number": '("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)?',
+    "integer": '("-"? ([0-9] | [1-9] [0-9]*))',
     "string": r""" "\"" (
         [^"\\] |
         "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
-      )* "\"" space """,
-    "null": '"null" space',
+      )* "\"" """,
+    "null": '"null"',
 }
 
 INVALID_RULE_CHARS_RE = re.compile(r"[^a-zA-Z0-9-]+")
@@ -1419,19 +1419,29 @@ class SchemaConverter:
         )
         return f'"{escaped}"'
 
-    def _add_rule(self, name: str, rule: str):
+    def _add_rule(
+        self, name: str, rule: str, is_required: bool = True, with_space: bool = False
+    ):
         esc_name = INVALID_RULE_CHARS_RE.sub("-", name)
-        if esc_name not in self._rules or self._rules[esc_name] == rule:
+        if not is_required:
+            esc_name += "-or-null"
+
+        complete_rule = rule if is_required else f"({rule} | {PRIMITIVE_RULES['null']})"
+        if with_space:
+            complete_rule += " space"
+
+        if esc_name not in self._rules or self._rules[esc_name] == complete_rule:
             key = esc_name
         else:
             i = 0
             while f"{esc_name}{i}" in self._rules:
                 i += 1
             key = f"{esc_name}{i}"
-        self._rules[key] = rule
+
+        self._rules[key] = complete_rule
         return key
 
-    def visit(self, schema: Dict[str, Any], name: str) -> str:
+    def visit(self, schema: Dict[str, Any], name: str, is_required: bool = True) -> str:
         rule_name = name or "root"
 
         if "$defs" in schema:
@@ -1448,14 +1458,16 @@ class SchemaConverter:
                     )
                 )
             )
-            return self._add_rule(rule_name, rule)
+            return self._add_rule(rule_name, rule, is_required, False)
 
         elif "const" in schema:
-            return self._add_rule(rule_name, self._format_literal(schema["const"]))
+            return self._add_rule(
+                rule_name, self._format_literal(schema["const"]), is_required, False
+            )
 
         elif "enum" in schema:
             rule = " | ".join((self._format_literal(v) for v in schema["enum"]))
-            return self._add_rule(rule_name, rule)
+            return self._add_rule(rule_name, rule, is_required, False)
 
         elif "$ref" in schema:
             ref = schema["$ref"]
@@ -1465,12 +1477,10 @@ class SchemaConverter:
             def_schema = self._defs[def_name]
             return self.visit(def_schema, f'{name}{"-" if name else ""}{def_name}')
 
-
-        schema_type: Optional[str] = schema.get("type") # type: ignore
+        schema_type: Optional[str] = schema.get("type")  # type: ignore
         assert isinstance(schema_type, str), f"Unrecognized schema: {schema}"
 
         if schema_type == "object" and "properties" in schema:
-            # TODO: `required` keyword
             prop_order = self._prop_order
             prop_pairs = sorted(
                 schema["properties"].items(),
@@ -1481,30 +1491,32 @@ class SchemaConverter:
             rule = '"{" space'
             for i, (prop_name, prop_schema) in enumerate(prop_pairs):
                 prop_rule_name = self.visit(
-                    prop_schema, f'{name}{"-" if name else ""}{prop_name}'
+                    prop_schema,
+                    f'{name}{"-" if name else ""}{prop_name}',
+                    "required" not in schema or prop_name in schema["required"],
                 )
                 if i > 0:
                     rule += ' "," space'
                 rule += rf' {self._format_literal(prop_name)} space ":" space {prop_rule_name}'
-            rule += ' "}" space'
+            rule += ' "}"'
 
-            return self._add_rule(rule_name, rule)
+            return self._add_rule(rule_name, rule, is_required, True)
 
         elif schema_type == "array" and "items" in schema:
             # TODO `prefixItems` keyword
             item_rule_name = self.visit(
                 schema["items"], f'{name}{"-" if name else ""}item'
             )
-            rule = (
-                f'"[" space ({item_rule_name} ("," space {item_rule_name})*)? "]" space'
-            )
-            return self._add_rule(rule_name, rule)
+            rule = f'"[" space ({item_rule_name} ("," space {item_rule_name})*)? "]"'
+            return self._add_rule(rule_name, rule, is_required, True)
 
         else:
             assert schema_type in PRIMITIVE_RULES, f"Unrecognized schema: {schema}"
             return self._add_rule(
                 "root" if rule_name == "root" else schema_type,
                 PRIMITIVE_RULES[schema_type],
+                is_required,
+                True,
             )
 
     def format_grammar(self):
