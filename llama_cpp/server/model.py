@@ -6,6 +6,7 @@ from typing import Dict, Optional, Union, List
 
 import llama_cpp
 import llama_cpp.llama_speculative as llama_speculative
+import llama_cpp.llama_tokenizer as llama_tokenizer
 
 from llama_cpp.server.settings import ModelSettings
 
@@ -93,6 +94,10 @@ class LlamaProxy:
                 )
             )
 
+        tokenizer: Optional[llama_cpp.BaseLlamaTokenizer] = None
+        if settings.hf_pretrained_model_name_or_path is not None:
+            tokenizer = llama_tokenizer.LlamaHFTokenizer.from_pretrained(settings.hf_pretrained_model_name_or_path)
+
         draft_model = None
         if settings.draft_model is not None:
             draft_model = llama_speculative.LlamaPromptLookupDecoding(
@@ -156,6 +161,8 @@ class LlamaProxy:
             chat_handler=chat_handler,
             # Speculative Decoding
             draft_model=draft_model,
+            # Tokenizer
+            tokenizer=tokenizer,
             # Misc
             verbose=settings.verbose,
         )

@@ -19,6 +19,8 @@ from collections import deque
 
 import ctypes
 
+from llama_cpp.llama_types import List
+
 from .llama_types import *
 from .llama_grammar import LlamaGrammar
 from .llama_cache import (
@@ -26,6 +28,10 @@ from .llama_cache import (
     LlamaCache,  # type: ignore
     LlamaDiskCache,  # type: ignore
     LlamaRAMCache,  # type: ignore
+)
+from .llama_tokenizer import (
+    BaseLlamaTokenizer,
+    LlamaTokenizer
 )
 import llama_cpp.llama_cpp as llama_cpp
 import llama_cpp.llama_chat_format as llama_chat_format
@@ -35,7 +41,6 @@ from llama_cpp.llama_speculative import LlamaDraftModel
 import numpy as np
 import numpy.typing as npt
 
-from ._utils import suppress_stdout_stderr
 from ._internals import (
     _LlamaModel,  # type: ignore
     _LlamaContext,  # type: ignore
@@ -44,6 +49,7 @@ from ._internals import (
     _LlamaSamplingParams,  # type: ignore
     _LlamaSamplingContext,  # type: ignore
 )
+from ._logger import set_verbose
 
 
 class Llama:
@@ -95,6 +101,8 @@ class Llama:
         chat_handler: Optional[llama_chat_format.LlamaChatCompletionHandler] = None,
         # Speculative Decoding
         draft_model: Optional[LlamaDraftModel] = None,
+        # Tokenizer Override
+        tokenizer: Optional[BaseLlamaTokenizer] = None,
         # Misc
         verbose: bool = True,
         # Extra Params
@@ -159,6 +167,7 @@ class Llama:
             chat_format: String specifying the chat format to use when calling create_chat_completion.
             chat_handler: Optional chat handler to use when calling create_chat_completion.
             draft_model: Optional draft model to use for speculative decoding.
+            tokenizer: Optional tokenizer to override the default tokenizer from llama.cpp.
             verbose: Print verbose output to stderr.
 
         Raises:
@@ -169,10 +178,11 @@ class Llama:
         """
         self.verbose = verbose
 
+        set_verbose(verbose)
+
         self.numa = numa
         if not Llama.__backend_initialized:
-            with suppress_stdout_stderr(disable=self.verbose):
-                llama_cpp.llama_backend_init(self.numa)
+            llama_cpp.llama_backend_init(self.numa)
             Llama.__backend_initialized = True
 
         self.model_path = model_path
@@ -234,6 +244,7 @@ class Llama:
         self.n_threads_batch = n_threads_batch or max(
             multiprocessing.cpu_count() // 2, 1
         )
+        
         # Context Params
         self.context_params = llama_cpp.llama_context_default_params()
         self.context_params.seed = seed
@@ -285,6 +296,10 @@ class Llama:
         self._model = _LlamaModel(
             path_model=self.model_path, params=self.model_params, verbose=self.verbose
         )
+
+        # Override tokenizer
+        self.tokenizer_ = tokenizer or LlamaTokenizer(self)
+
         # Set the default value for the context and correct the batch
         if n_ctx == 0:
             n_ctx = self._model.n_ctx_train()
@@ -430,18 +445,19 @@ class Llama:
         Returns:
             A list of tokens.
         """
-        return self._model.tokenize(text, add_bos, special)
+        return self.tokenizer_.tokenize(text, add_bos, special)
 
-    def detokenize(self, tokens: List[int]) -> bytes:
+    def detokenize(self, tokens: List[int], prev_tokens: Optional[List[int]] = None) -> bytes:
         """Detokenize a list of tokens.
 
         Args:
             tokens: The list of tokens to detokenize.
+            prev_tokens: The list of previous tokens. Offset mapping will be performed if provided
 
         Returns:
             The detokenized string.
         """
-        return self._model.detokenize(tokens)
+        return self.tokenizer_.detokenize(tokens, prev_tokens)
 
     def set_cache(self, cache: Optional[BaseLlamaCache]):
         """Set the cache.
@@ -1692,8 +1708,8 @@ class Llama:
         """Return the vocabulary size."""
         return self._model.n_vocab()
 
-    def tokenizer(self) -> "LlamaTokenizer":
-        """Return the tokenizer for this model."""
+    def tokenizer(self) -> LlamaTokenizer:
+        """Return the llama tokenizer for this model."""
         return LlamaTokenizer(self)
 
     def token_eos(self) -> int:
@@ -1737,21 +1753,6 @@ class Llama:
         return longest_prefix
 
 
-class LlamaTokenizer:
-    def __init__(self, llama: Llama):
-        self.llama = llama
-
-    def encode(self, text: str, add_bos: bool = True) -> List[int]:
-        return self.llama.tokenize(
-            text.encode("utf-8", errors="ignore"), add_bos=add_bos, special=True
-        )
-
-    def decode(self, tokens: List[int]) -> str:
-        return self.llama.detokenize(tokens).decode("utf-8", errors="ignore")
-
-    @classmethod
-    def from_ggml_file(cls, path: str) -> "LlamaTokenizer":
-        return cls(Llama(model_path=path, vocab_only=True))
 
 
 class LlamaState:
