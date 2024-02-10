@@ -118,7 +118,8 @@ CMAKE_ARGS="-DLLAMA_KOMPUTE=on" pip install llama-cpp-python
 To install with SYCL support, set the `LLAMA_SYCL=on` environment variable before installing:
 
 ```bash
-CMAKE_ARGS="-DLLAMA_SYCL=on" pip install llama-cpp-python
+source /opt/intel/oneapi/setvars.sh   
+CMAKE_ARGS="-DLLAMA_SYCL=on -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx" pip install llama-cpp-python
 ```
 
 ### Windows Notes
