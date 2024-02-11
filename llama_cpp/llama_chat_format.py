@@ -2236,6 +2236,7 @@ def chatml_function_calling(
                             ],
                         }
                         first = False
+                        continue
                     assert tool_id is not None
                     yield {
                         "id": "chat" + chunk["id"],
