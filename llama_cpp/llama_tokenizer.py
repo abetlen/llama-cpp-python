@@ -27,7 +27,6 @@ class BaseLlamaTokenizer(abc.ABC):
 
 class LlamaTokenizer(BaseLlamaTokenizer):
     def __init__(self, llama: llama_cpp.Llama):
-        self.llama = llama
         self._model = llama._model  # type: ignore
 
     def tokenize(
