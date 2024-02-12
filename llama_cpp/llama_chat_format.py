@@ -2549,6 +2549,12 @@ def chatml_function_calling(
             )
 
         # Merge completions
+        function_call = { 
+            "function_call": {
+                "name": tool_name,
+                "arguments": completions[0]["choices"][0]["text"],
+            }
+        } if len(completions) == 1 else {}
         return {
             "id": "chat" + completion["id"],
             "object": "chat.completion",
@@ -2561,14 +2567,6 @@ def chatml_function_calling(
                     "message": {
                         "role": "assistant",
                         "content": None,
-                        # "function_call": (
-                        #     {
-                        #         "name": tool_name,
-                        #         "arguments": completions[0]["choices"][0]["text"],
-                        #     }
-                        #     if len(completions) == 1
-                        #     else None
-                        # ),
                         "tool_calls": [
                             {
                                 "id": "call_"
@@ -2582,22 +2580,26 @@ def chatml_function_calling(
                                     "arguments": completion["choices"][0]["text"],
                                 },
                             }
-                            for i, (tool_name, completion) in enumerate(zip(completions_tool_name, completions))
+                            for i, (tool_name, completion) in enumerate(
+                                zip(completions_tool_name, completions)
+                            )
                         ],
+                        **function_call
                     },
                 }
             ],
             "usage": {
                 "completion_tokens": sum(
-                    completion["usage"]["completion_tokens"] for completion in completions
+                    completion["usage"]["completion_tokens"]
+                    for completion in completions
                 ),
                 "prompt_tokens": sum(
                     completion["usage"]["prompt_tokens"] for completion in completions
                 ),
                 "total_tokens": sum(
                     completion["usage"]["total_tokens"] for completion in completions
-                )
-            }
+                ),
+            },
         }
 
     raise ValueError("Automatic streaming tool choice is not supported")
