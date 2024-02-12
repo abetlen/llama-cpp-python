@@ -1498,7 +1498,7 @@ class SchemaConverter:
             )
 
             rule = ""
-            previous_is_prop_required = None
+            previous_is_prop_required = False
             for i, (prop_name, prop_schema) in enumerate(prop_pairs):
                 is_prop_required = (
                     "required" not in schema or prop_name in schema["required"]
@@ -1511,22 +1511,19 @@ class SchemaConverter:
                 prop_rule = rf'{self._format_literal(prop_name)} space ":" space {prop_rule_name}'
                 if i == 0:
                     rule += prop_rule
-                    previous_is_prop_required = is_prop_required
                 else:
                     if self._treat_optional_as_nullable or (
                         previous_is_prop_required and is_prop_required
                     ):
                         rule = f'{rule} "," space {prop_rule}'
-                        previous_is_prop_required = True
                     elif previous_is_prop_required and not is_prop_required:
                         rule = f'{rule} ("," space {prop_rule})?'
-                        previous_is_prop_required = True
                     elif not previous_is_prop_required and is_prop_required:
                         rule = f'({rule} "," space)? {prop_rule}'
-                        previous_is_prop_required = True
                     elif not previous_is_prop_required and not is_prop_required:
                         rule = f'({rule} | {prop_rule} | {rule} "," space {prop_rule})'
-                        previous_is_prop_required = False
+
+                previous_is_prop_required |= is_prop_required
 
             rule = '"{" space ' + rule + ' space "}"'
 

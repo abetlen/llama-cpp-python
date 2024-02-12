@@ -52,7 +52,9 @@ def test_composed_pydantic_grammar():
     assert grammar.grammar is not None
 
     assert (
-        llama_cpp.llama_grammar.json_schema_to_gbnf(json.dumps(schema), None, False)
+        llama_cpp.llama_grammar.json_schema_to_gbnf(
+            json.dumps(schema), treat_optional_as_nullable=False
+        )
         == r"""space ::= " "?
 integer ::= ("-"? ([0-9] | [1-9] [0-9]*)) space
 a-A ::= "{" space "\"a\"" space ":" space integer space "}" space
@@ -60,7 +62,9 @@ root ::= "{" space "\"a\"" space ":" space a-A ("," space "\"b\"" space ":" spac
     )
 
     assert (
-        llama_cpp.llama_grammar.json_schema_to_gbnf(json.dumps(schema), None, True)
+        llama_cpp.llama_grammar.json_schema_to_gbnf(
+            json.dumps(schema), treat_optional_as_nullable=True
+        )
         == r"""space ::= " "?
 integer ::= ("-"? ([0-9] | [1-9] [0-9]*)) space
 a-A ::= "{" space "\"a\"" space ":" space integer space "}" space
@@ -124,7 +128,9 @@ def test_grammar_nested_object():
     assert grammar.grammar is not None
 
     assert (
-        llama_cpp.llama_grammar.json_schema_to_gbnf(json.dumps(schema), None, False)
+        llama_cpp.llama_grammar.json_schema_to_gbnf(
+            json.dumps(schema), treat_optional_as_nullable=False
+        )
         == r"""space ::= " "?
 string ::=  "\"" (
         [^"\\] |
@@ -135,7 +141,9 @@ root ::= "{" space ("\"nested\"" space ":" space nested "," space)? "\"test\"" s
     )
 
     assert (
-        llama_cpp.llama_grammar.json_schema_to_gbnf(json.dumps(schema), None, True)
+        llama_cpp.llama_grammar.json_schema_to_gbnf(
+            json.dumps(schema), treat_optional_as_nullable=True
+        )
         == r"""space ::= " "?
 string-or-null ::= ( "\"" (
         [^"\\] |
