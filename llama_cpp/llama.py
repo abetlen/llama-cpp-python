@@ -1571,6 +1571,38 @@ class Llama:
             logit_bias=logit_bias,
         )
 
+    def create_chat_completion_openai_v1(
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ):
+        """Generate a chat completion with return type based on the the OpenAI v1 API.
+
+        OpenAI python package is required to use this method.
+
+        You can install it with `pip install openai`.
+
+        Args:
+            *args: Positional arguments to pass to create_chat_completion.
+            **kwargs: Keyword arguments to pass to create_chat_completion.
+
+        Returns:
+            Generated chat completion or a stream of chat completion chunks.
+        """
+        try:
+            from openai.types.chat import ChatCompletion, ChatCompletionChunk
+            stream = kwargs.get("stream", False) # type: ignore
+            assert isinstance(stream, bool)
+            if stream:
+                return (ChatCompletionChunk(**chunk) for chunk in self.create_chat_completion(*args, **kwargs)) # type: ignore
+            else:
+                return ChatCompletion(**self.create_chat_completion(*args, **kwargs)) # type: ignore
+        except ImportError:
+            raise ImportError(
+                "To use create_chat_completion_openai_v1, you must install the openai package."
+                "You can install it with `pip install openai`."
+            )
+
     def __getstate__(self):
         return dict(
             model_path=self.model_path,
