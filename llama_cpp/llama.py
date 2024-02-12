@@ -658,6 +658,7 @@ class Llama:
         while True:
             self.eval(tokens)
             while sample_idx < self.n_tokens:
+                next_sample_idx = sample_idx + 1
                 token = self.sample(
                     top_k=top_k,
                     top_p=top_p,
@@ -674,7 +675,7 @@ class Llama:
                     logits_processor=logits_processor,
                     grammar=grammar,
                     penalize_nl=penalize_nl,
-                    idx=sample_idx,
+                    idx=next_sample_idx,
                 )
 
                 sample_idx += 1
