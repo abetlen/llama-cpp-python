@@ -56,7 +56,7 @@ def test_composed_pydantic_grammar():
         == r"""space ::= " "?
 integer ::= ("-"? ([0-9] | [1-9] [0-9]*)) space
 a-A ::= "{" space "\"a\"" space ":" space integer "}" space
-root ::= "{" space "\"a\"" space ":" space a-A "," space "\"b\"" space ":" space integer "}" space"""
+root ::= "{" space "\"a\"" space ":" space a-A ("," space "\"b\"" space ":" space integer)? "}" space"""
     )
 
     assert (
@@ -131,7 +131,7 @@ string ::=  "\"" (
         "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
       )* "\""  space
 nested ::= "{" space "\"other\"" space ":" space string "}" space
-root ::= "{" space "\"nested\"" space ":" space nested "," space "\"test\"" space ":" space string "}" space"""
+root ::= "{" space ("\"nested\"" space ":" space nested "," space)? "\"test\"" space ":" space string "}" space"""
     )
 
     assert (
