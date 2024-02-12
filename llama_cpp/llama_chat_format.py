@@ -31,6 +31,7 @@ MISTRAL_INSTRUCT_EOS_TOKEN = "</s>"
 
 ### Chat Completion Handler ###
 
+
 class LlamaChatCompletionHandler(Protocol):
     """Base Protocol for a llama chat completion handler.
 
@@ -77,8 +78,7 @@ class LlamaChatCompletionHandler(Protocol):
     ) -> Union[
         llama_types.CreateChatCompletionResponse,
         Iterator[llama_types.CreateChatCompletionStreamResponse],
-    ]:
-        ...
+    ]: ...
 
 
 class LlamaChatCompletionHandlerNotFoundException(Exception):
@@ -134,6 +134,7 @@ def register_chat_completion_handler(name: str):
 
 ### Chat Formatter ###
 
+
 @dataclasses.dataclass
 class ChatFormatterResponse:
     """Dataclass that stores completion parameters for a given chat format and
@@ -157,8 +158,7 @@ class ChatFormatter(Protocol):
         *,
         messages: List[llama_types.ChatCompletionRequestMessage],
         **kwargs: Any,
-    ) -> ChatFormatterResponse:
-        ...
+    ) -> ChatFormatterResponse: ...
 
 
 class Jinja2ChatFormatter(ChatFormatter):
@@ -195,7 +195,7 @@ class Jinja2ChatFormatter(ChatFormatter):
             eos_token=self.eos_token,
             bos_token=self.bos_token,
             raise_exception=raise_exception,
-            add_generation_prompt=self.add_generation_prompt
+            add_generation_prompt=self.add_generation_prompt,
         )
 
         return ChatFormatterResponse(prompt=prompt, stop=[self.eos_token])
@@ -255,11 +255,13 @@ def _convert_text_completion_chunks_to_chat(
             "choices": [
                 {
                     "index": 0,
-                    "delta": {
-                        "content": chunk["choices"][0]["text"],
-                    }
-                    if chunk["choices"][0]["finish_reason"] is None
-                    else {},
+                    "delta": (
+                        {
+                            "content": chunk["choices"][0]["text"],
+                        }
+                        if chunk["choices"][0]["finish_reason"] is None
+                        else {}
+                    ),
                     "finish_reason": chunk["choices"][0]["finish_reason"],
                 }
             ],
@@ -467,10 +469,11 @@ def guess_chat_format_from_gguf_metadata(metadata: Dict[str, str]) -> Optional[s
     if metadata["tokenizer.chat_template"] == CHATML_CHAT_TEMPLATE:
         return "chatml"
 
-    if metadata["tokenizer.chat_template"] == MISTRAL_INSTRUCT_CHAT_TEMPLATE: 
+    if metadata["tokenizer.chat_template"] == MISTRAL_INSTRUCT_CHAT_TEMPLATE:
         return "mistral-instruct"
 
     return None
+
 
 ### Utility functions for formatting chat prompts ###
 # TODO: Replace these with jinja2 templates
@@ -920,9 +923,17 @@ def format_mistral_instruct(
     stop = eos
     prompt = bos
     for message in messages:
-        if message["role"] == "user" and message["content"] is not None and isinstance(message["content"], str):
+        if (
+            message["role"] == "user"
+            and message["content"] is not None
+            and isinstance(message["content"], str)
+        ):
             prompt += "[INST] " + message["content"]
-        elif message["role"] == "assistant" and message["content"] is not None and isinstance(message["content"], str):
+        elif (
+            message["role"] == "assistant"
+            and message["content"] is not None
+            and isinstance(message["content"], str)
+        ):
             prompt += " [/INST]" + message["content"] + eos
     prompt += " [/INST]"
     return ChatFormatterResponse(prompt=prompt, stop=stop)
@@ -962,6 +973,7 @@ def format_openchat(
     _prompt = _format_chatml(system_message, _messages, _sep)
     return ChatFormatterResponse(prompt=_prompt, stop=_sep)
 
+
 # Chat format for Saiga models, see more details and available models:
 # https://huggingface.co/collections/IlyaGusev/saiga2-saigamistral-6505d4ccc3d1e53166b636cd
 @register_chat_format("saiga")
@@ -983,7 +995,9 @@ def format_saiga(
     _prompt += "<s>bot"
     return ChatFormatterResponse(prompt=_prompt.strip())
 
+
 # Tricky chat formats that require custom chat handlers
+
 
 @register_chat_completion_handler("functionary")
 def functionary_chat_handler(
@@ -1274,7 +1288,9 @@ def functionary_chat_handler(
                 )
     else:
         with suppress_stdout_stderr(disable=llama.verbose):
-            grammar = llama_grammar.LlamaGrammar.from_string(llama_grammar.JSON_GBNF, verbose=llama.verbose)
+            grammar = llama_grammar.LlamaGrammar.from_string(
+                llama_grammar.JSON_GBNF, verbose=llama.verbose
+            )
 
     completion: llama_types.Completion = llama.create_completion(
         prompt=new_prompt,
@@ -1371,11 +1387,13 @@ def functionary_v1_v2_chat_handler(
     **kwargs,  # type: ignore
 ) -> Union[llama_types.ChatCompletion, Iterator[llama_types.ChatCompletionChunk]]:
     SYSTEM_MESSAGE = """A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. The assistant calls functions with appropriate input when necessary"""
-    
+
     tokenizer = llama.tokenizer_
-    assert hasattr(tokenizer, "hf_tokenizer"), "Please provide a valid hf_tokenizer_path from https://huggingface.co/meetkai when initializing the Llama class"
+    assert hasattr(
+        tokenizer, "hf_tokenizer"
+    ), "Please provide a valid hf_tokenizer_path from https://huggingface.co/meetkai when initializing the Llama class"
     from transformers import AutoTokenizer
-    
+
     if "<|START_OF_FUNCTION_CALL|>" in tokenizer.hf_tokenizer.additional_special_tokens:
         version = "v1"
         END_SYSTEM_TOKEN = "<|END_OF_SYSTEM|>"
@@ -1519,13 +1537,16 @@ def functionary_v1_v2_chat_handler(
                     "name"
                 ] = f"functions.{message['function_call']['name']}"
             all_messages.append(message)
-            
+
         if version == "v1":
             suffix = "assistant:\n"
         else:
             suffix = "<|from|>assistant\n<|recipient|>"
-        
-        return tokenizer.hf_tokenizer.apply_chat_template(all_messages, tokenize=False) + suffix
+
+        return (
+            tokenizer.hf_tokenizer.apply_chat_template(all_messages, tokenize=False)
+            + suffix
+        )
 
     if tools is not None:
         functions = [tool["function"] for tool in tools if tool["type"] == "function"]
@@ -1535,8 +1556,10 @@ def functionary_v1_v2_chat_handler(
             tool_choice if isinstance(tool_choice, str) else tool_choice["function"]
         )
 
-    prompt = prepare_messages_for_inference(messages, tokenizer, version, functions, tools)
-    
+    prompt = prepare_messages_for_inference(
+        messages, tokenizer, version, functions, tools
+    )
+
     # If no tools/functions are provided
     if function_call is None and (functions is None or len(functions) == 0):
         if version == "v1":
@@ -1544,7 +1567,7 @@ def functionary_v1_v2_chat_handler(
         else:
             stop = STOP_TOKEN
             prompt += "all\n<|content|>"
-        
+
         completion_or_completion_chunks = llama.create_completion(
             prompt=prompt,
             temperature=temperature,
@@ -1567,9 +1590,9 @@ def functionary_v1_v2_chat_handler(
             grammar=grammar,
         )
         return _convert_completion_to_chat(completion_or_completion_chunks, stream=stream)  # type: ignore
-    
+
     assert stream is False  # TODO: support stream mode
-    
+
     def get_grammar(function_call):
         function_body = None
         for function in functions or []:
@@ -1580,7 +1603,7 @@ def functionary_v1_v2_chat_handler(
             if tool["type"] == "function" and tool["function"]["name"] == function_call:
                 function_body = tool["function"]["parameters"]
                 break
-            
+
         try:
             with suppress_stdout_stderr(disable=llama.verbose):
                 grammar_text = llama_grammar.json_schema_to_gbnf(
@@ -1600,9 +1623,9 @@ def functionary_v1_v2_chat_handler(
                 grammar = llama_grammar.LlamaGrammar.from_string(
                     llama_grammar.JSON_GBNF, verbose=llama.verbose
                 )
-        
+
         return grammar
-    
+
     def create_completion(stop):
         completion: llama_types.Completion = llama.create_completion(
             prompt=prompt,
@@ -1625,11 +1648,11 @@ def functionary_v1_v2_chat_handler(
             logits_processor=logits_processor,
             grammar=grammar,
         )
-        
+
         return completion
-    
+
     function_calls, function_bodies = [], []
-    
+
     if version == "v1":
         # If no or "auto" tool_choice/function_call
         if function_call is None or (
@@ -1638,7 +1661,9 @@ def functionary_v1_v2_chat_handler(
             stops = ["\n", END_ASSISTANT_TOKEN]
         # If tool_choice/function_call is "none"
         elif isinstance(function_call, str) and function_call == "none":
-            prompt = prepare_messages_for_inference(messages, tokenizer, version, [], [])
+            prompt = prepare_messages_for_inference(
+                messages, tokenizer, version, [], []
+            )
             stops = END_ASSISTANT_TOKEN
         # If tool_choice/function_call is provided
         elif isinstance(function_call, dict):
@@ -1653,14 +1678,27 @@ def functionary_v1_v2_chat_handler(
 
         completion = create_completion(stop=stops)
         completion_text = completion["choices"][0]["text"]
-        
+
         # If the generation does not involve a function call
-        if START_FUNCTION_CALL_TOKEN not in prompt and START_FUNCTION_CALL_TOKEN not in completion_text:
+        if (
+            START_FUNCTION_CALL_TOKEN not in prompt
+            and START_FUNCTION_CALL_TOKEN not in completion_text
+        ):
             return _convert_completion_to_chat(completion, stream=stream)  # type: ignore
         # If the generation involves a function call in completion, generate the parameters
-        elif START_FUNCTION_CALL_TOKEN not in prompt and START_FUNCTION_CALL_TOKEN in completion_text:
-            prompt += completion_text.replace(f"{START_FUNCTION_CALL_TOKEN} ", START_FUNCTION_CALL_TOKEN) + "\n"
-            function_calls.append(completion_text.split(START_FUNCTION_CALL_TOKEN)[-1][:-1].strip())
+        elif (
+            START_FUNCTION_CALL_TOKEN not in prompt
+            and START_FUNCTION_CALL_TOKEN in completion_text
+        ):
+            prompt += (
+                completion_text.replace(
+                    f"{START_FUNCTION_CALL_TOKEN} ", START_FUNCTION_CALL_TOKEN
+                )
+                + "\n"
+            )
+            function_calls.append(
+                completion_text.split(START_FUNCTION_CALL_TOKEN)[-1][:-1].strip()
+            )
             grammar = get_grammar(function_calls[-1])
             completion = create_completion(stop=END_FUNCTION_CALL_TOKEN)
             function_bodies.append(completion["choices"][0]["text"].strip())
@@ -1678,7 +1716,10 @@ def functionary_v1_v2_chat_handler(
                 stops = CONTENT_TOKEN
             # If tool_choice/function_call is "none"
             elif isinstance(function_call, str) and function_call == "none":
-                prompt = prepare_messages_for_inference(messages, tokenizer, version, [], []) + "all\n<|content|>"
+                prompt = (
+                    prepare_messages_for_inference(messages, tokenizer, version, [], [])
+                    + "all\n<|content|>"
+                )
                 stops = STOP_TOKEN
             # If tool_choice/function_call is provided
             elif isinstance(function_call, dict):
@@ -1690,15 +1731,17 @@ def functionary_v1_v2_chat_handler(
             else:
                 prompt = prompt
                 stops = STOP_TOKEN
-                
+
             completion = create_completion(stop=stops)
             completion_text = completion["choices"][0]["text"]
-            
+
             # If the generation does not involve a function call
-            if prompt.endswith("all\n<|content|>") and not completion_text.startswith("all"):
+            if prompt.endswith("all\n<|content|>") and not completion_text.startswith(
+                "all"
+            ):
                 return _convert_completion_to_chat(completion, stream=stream)  # type: ignore
             # Generate model response if the model decides not to call any function
-            elif (prompt.endswith(RECIPIENT_TOKEN) and completion_text.startswith("all")):
+            elif prompt.endswith(RECIPIENT_TOKEN) and completion_text.startswith("all"):
                 prompt += completion_text + CONTENT_TOKEN
                 completion = create_completion(stop=STOP_TOKEN)
                 return _convert_completion_to_chat(completion, stream=stream)  # type: ignore
@@ -1710,7 +1753,7 @@ def functionary_v1_v2_chat_handler(
                 function_bodies.append(completion["choices"][0]["text"].strip())
                 prompt += f"{function_calls[-1]}\n{CONTENT_TOKEN}{function_bodies[-1]}"
                 grammar = None
-                
+
                 # Try to generate the beginning of next turn
                 # If empty completion, break from loop
                 next_turn_completion_text = create_completion(
@@ -1724,17 +1767,21 @@ def functionary_v1_v2_chat_handler(
             else:
                 function_bodies.append(completion_text.strip())
                 break
-            
+
     assert "usage" in completion
     assert len(function_calls) > 0
     assert len(function_calls) == len(function_bodies)
-    
+
     tool_calls = []
     for function_call, function_body in zip(function_calls, function_bodies):
         tool_calls.append(
             {
-                "id": "call_" + "".join(
-                    [random.choice(string.ascii_letters + string.digits) for _ in range(24)]
+                "id": "call_"
+                + "".join(
+                    [
+                        random.choice(string.ascii_letters + string.digits)
+                        for _ in range(24)
+                    ]
                 ),
                 "type": "function",
                 "function": {
@@ -2058,7 +2105,9 @@ def chatml_function_calling(
 
     # Convert legacy function_call to tool_choice
     if function_call is not None:
-        if isinstance(function_call, str) and (function_call == "none" or function_call == "auto"):
+        if isinstance(function_call, str) and (
+            function_call == "none" or function_call == "auto"
+        ):
             tool_choice = function_call
         if isinstance(function_call, dict) and "name" in function_call:
             tool_choice = {
@@ -2125,7 +2174,14 @@ def chatml_function_calling(
             stream=stream,
         )
 
-    def _convert_completion_to_chat_function(tool_name: str, completion_or_chunks: Union[llama_types.CreateCompletionResponse, Iterator[llama_types.CreateCompletionStreamResponse]], stream: bool):
+    def _convert_completion_to_chat_function(
+        tool_name: str,
+        completion_or_chunks: Union[
+            llama_types.CreateCompletionResponse,
+            Iterator[llama_types.CreateCompletionStreamResponse],
+        ],
+        stream: bool,
+    ):
         if not stream:
             completion: llama_types.CreateCompletionResponse = completion_or_chunks  # type: ignore
             assert "usage" in completion
@@ -2165,6 +2221,7 @@ def chatml_function_calling(
             return chat_completion
         else:
             chunks: Iterator[llama_types.CreateCompletionStreamResponse] = completion_or_chunks  # type: ignore
+
             def _stream_response_to_function_stream(
                 chunks: Iterator[llama_types.CreateCompletionStreamResponse],
             ) -> Iterator[llama_types.CreateChatCompletionStreamResponse]:
@@ -2311,7 +2368,9 @@ def chatml_function_calling(
                 json.dumps(tool["function"]["parameters"]), verbose=llama.verbose
             )
         except Exception as e:
-            grammar = llama_grammar.LlamaGrammar.from_string(llama_grammar.JSON_GBNF, verbose=llama.verbose)
+            grammar = llama_grammar.LlamaGrammar.from_string(
+                llama_grammar.JSON_GBNF, verbose=llama.verbose
+            )
             if llama.verbose:
                 print(
                     "Failed to parse function body as JSON schema, falling back to default grammar"
