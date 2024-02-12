@@ -2338,7 +2338,9 @@ def chatml_function_calling(
             logits_processor=logits_processor,
             grammar=grammar,
         )
-        return _convert_completion_to_chat_function(tool_name, completion_or_chunks, stream)
+        return _convert_completion_to_chat_function(
+            tool_name, completion_or_chunks, stream
+        )
 
     # Case 3: Automatic tool choice
     assert isinstance(tool_choice, str) and tool_choice == "auto"
@@ -2377,36 +2379,166 @@ def chatml_function_calling(
         mirostat_eta=mirostat_eta,
         model=model,
         logits_processor=logits_processor,
-        grammar=llama_grammar.LlamaGrammar.from_string(initial_gbnf_tool_grammar, verbose=llama.verbose),
+        grammar=llama_grammar.LlamaGrammar.from_string(
+            initial_gbnf_tool_grammar, verbose=llama.verbose
+        ),
     )
     completion: llama_types.CreateCompletionResponse = completion_or_chunks  # type: ignore
     text = completion["choices"][0]["text"]
     if "message" in text:
-        return _convert_completion_to_chat(llama.create_completion(
-            prompt=prompt + "message:\n",
-            temperature=temperature,
-            top_p=top_p,
-            top_k=top_k,
-            min_p=min_p,
-            typical_p=typical_p,
+        return _convert_completion_to_chat(
+            llama.create_completion(
+                prompt=prompt + "message:\n",
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
+                min_p=min_p,
+                typical_p=typical_p,
+                stream=stream,
+                stop=["<|im_end|>"],
+                max_tokens=None,
+                presence_penalty=presence_penalty,
+                frequency_penalty=frequency_penalty,
+                repeat_penalty=repeat_penalty,
+                tfs_z=tfs_z,
+                mirostat_mode=mirostat_mode,
+                mirostat_tau=mirostat_tau,
+                mirostat_eta=mirostat_eta,
+                model=model,
+                logits_processor=logits_processor,
+                grammar=llama_grammar.LlamaGrammar.from_string(
+                    follow_up_gbnf_tool_grammar, verbose=llama.verbose
+                ),
+            ),
             stream=stream,
-            stop=["<|im_end|>"],
-            max_tokens=None,
-            presence_penalty=presence_penalty,
-            frequency_penalty=frequency_penalty,
-            repeat_penalty=repeat_penalty,
-            tfs_z=tfs_z,
-            mirostat_mode=mirostat_mode,
-            mirostat_tau=mirostat_tau,
-            mirostat_eta=mirostat_eta,
-            model=model,
-            logits_processor=logits_processor,
-            grammar=llama_grammar.LlamaGrammar.from_string(follow_up_gbnf_tool_grammar, verbose=llama.verbose),
-        ), stream=stream)
+        )
 
     # One or more function calls
-    tool_name = text[len("functions."):]
-    tool = next(
-        (tool for tool in tools if tool["function"]["name"] == tool_name), None
-    )
-    raise ValueError("Automatic tool choice is not supported")
+    tool_name = text[len("functions.") :]
+    tool = next((tool for tool in tools if tool["function"]["name"] == tool_name), None)
+    if not stream:
+        completions = []
+        completions_tool_name = []
+        while tool is not None:
+            prompt += f"functions.{tool_name}:\n"
+            try:
+                grammar = llama_grammar.LlamaGrammar.from_json_schema(
+                    json.dumps(tool["function"]["parameters"]), verbose=llama.verbose
+                )
+            except Exception as e:
+                grammar = llama_grammar.LlamaGrammar.from_string(
+                    llama_grammar.JSON_GBNF, verbose=llama.verbose
+                )
+                if llama.verbose:
+                    print(
+                        "Failed to parse function body as JSON schema, falling back to default grammar"
+                    )
+                    print(e)
+            completion_or_chunks = llama.create_completion(
+                prompt=prompt,
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
+                min_p=min_p,
+                typical_p=typical_p,
+                stream=False,
+                stop=stop,
+                max_tokens=None,
+                presence_penalty=presence_penalty,
+                frequency_penalty=frequency_penalty,
+                repeat_penalty=repeat_penalty,
+                tfs_z=tfs_z,
+                mirostat_mode=mirostat_mode,
+                mirostat_tau=mirostat_tau,
+                mirostat_eta=mirostat_eta,
+                model=model,
+                logits_processor=logits_processor,
+                grammar=grammar,
+            )
+            completions.append(completion_or_chunks)
+            completions_tool_name.append(tool_name)
+            prompt += completion_or_chunks["choices"][0]["text"]
+            prompt += "\n"
+
+            response = llama.create_completion(
+                prompt=prompt,
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
+                min_p=min_p,
+                typical_p=typical_p,
+                stream=False,
+                stop=stop,
+                max_tokens=None,
+                presence_penalty=presence_penalty,
+                frequency_penalty=frequency_penalty,
+                repeat_penalty=repeat_penalty,
+                tfs_z=tfs_z,
+                mirostat_mode=mirostat_mode,
+                mirostat_tau=mirostat_tau,
+                mirostat_eta=mirostat_eta,
+                model=model,
+                logits_processor=logits_processor,
+                grammar=llama_grammar.LlamaGrammar.from_string(
+                    follow_up_gbnf_tool_grammar, verbose=llama.verbose
+                ),
+            )
+
+            tool_name = response["choices"][0]["text"][len("functions.") :]
+            tool = next(
+                (tool for tool in tools if tool["function"]["name"] == tool_name), None
+            )
+
+        # Merge completions
+        return {
+            "id": "chat" + completion["id"],
+            "object": "chat.completion",
+            "created": completion["created"],
+            "model": completion["model"],
+            "choices": [
+                {
+                    "finish_reason": "tool_calls",
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": None,
+                        # "function_call": (
+                        #     {
+                        #         "name": tool_name,
+                        #         "arguments": completions[0]["choices"][0]["text"],
+                        #     }
+                        #     if len(completions) == 1
+                        #     else None
+                        # ),
+                        "tool_calls": [
+                            {
+                                "id": "call_"
+                                + f"_{i}_"
+                                + tool_name
+                                + "_"
+                                + completion["id"],
+                                "type": "function",
+                                "function": {
+                                    "name": tool_name,
+                                    "arguments": completion["choices"][0]["text"],
+                                },
+                            }
+                            for i, (tool_name, completion) in enumerate(zip(completions_tool_name, completions))
+                        ],
+                    },
+                }
+            ],
+            "usage": {
+                "completion_tokens": sum(
+                    completion["usage"]["completion_tokens"] for completion in completions
+                ),
+                "prompt_tokens": sum(
+                    completion["usage"]["prompt_tokens"] for completion in completions
+                ),
+                "total_tokens": sum(
+                    completion["usage"]["total_tokens"] for completion in completions
+                )
+            }
+        }
+
+    raise ValueError("Automatic streaming tool choice is not supported")
