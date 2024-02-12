@@ -42,7 +42,7 @@ def test_composed_pydantic_grammar():
             "a": {"$ref": "#/$defs/A"},
             "b": {"title": "B", "type": "integer"},
         },
-        "required": ["a", "b"],
+        "required": ["a"],
         "title": "B",
         "type": "object",
     }
@@ -51,9 +51,30 @@ def test_composed_pydantic_grammar():
 
     assert grammar.grammar is not None
 
+    assert (
+        llama_cpp.llama_grammar.json_schema_to_gbnf(
+            json.dumps(schema), treat_optional_as_nullable=False
+        )
+        == r"""space ::= " "?
+integer ::= ("-"? ([0-9] | [1-9] [0-9]*)) space
+a-A ::= "{" space "\"a\"" space ":" space integer space "}" space
+root ::= "{" space "\"a\"" space ":" space a-A ("," space "\"b\"" space ":" space integer)? space "}" space"""
+    )
+
+    assert (
+        llama_cpp.llama_grammar.json_schema_to_gbnf(
+            json.dumps(schema), treat_optional_as_nullable=True
+        )
+        == r"""space ::= " "?
+integer ::= ("-"? ([0-9] | [1-9] [0-9]*)) space
+a-A ::= "{" space "\"a\"" space ":" space integer space "}" space
+integer-or-null ::= (("-"? ([0-9] | [1-9] [0-9]*)) | "null") space
+root ::= "{" space "\"a\"" space ":" space a-A "," space "\"b\"" space ":" space integer-or-null space "}" space"""
+    )
+
 
 def test_grammar_anyof():
-    sch = {
+    schema = {
         "properties": {
             "temperature": {
                 "description": "The temperature mentioned",
@@ -73,6 +94,65 @@ def test_grammar_anyof():
         "type": "object",
     }
 
-    grammar = llama_cpp.LlamaGrammar.from_json_schema(json.dumps(sch))
+    grammar = llama_cpp.LlamaGrammar.from_json_schema(json.dumps(schema))
 
     assert grammar.grammar is not None
+
+    assert (
+        llama_cpp.llama_grammar.json_schema_to_gbnf(json.dumps(schema), None)
+        == r"""space ::= " "?
+number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? space
+unit-0 ::= "\"celsius\"" | "\"fahrenheit\""
+null ::= "null" space
+unit ::= unit-0 | null
+root ::= "{" space "\"temperature\"" space ":" space number "," space "\"unit\"" space ":" space unit space "}" space"""
+    )
+
+
+def test_grammar_nested_object():
+    schema = {
+        "type": "object",
+        "properties": {
+            "test": {"type": "string"},
+            "nested": {
+                "type": "object",
+                "properties": {"other": {"type": "string"}},
+                "required": [],
+            },
+        },
+        "required": ["test"],
+    }
+
+    grammar = llama_cpp.LlamaGrammar.from_json_schema(json.dumps(schema))
+
+    assert grammar.grammar is not None
+
+    assert (
+        llama_cpp.llama_grammar.json_schema_to_gbnf(
+            json.dumps(schema), treat_optional_as_nullable=False
+        )
+        == r"""space ::= " "?
+string ::=  "\"" (
+        [^"\\] |
+        "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
+      )* "\""  space
+nested ::= "{" space "\"other\"" space ":" space string space "}" space
+root ::= "{" space ("\"nested\"" space ":" space nested "," space)? "\"test\"" space ":" space string space "}" space"""
+    )
+
+    assert (
+        llama_cpp.llama_grammar.json_schema_to_gbnf(
+            json.dumps(schema), treat_optional_as_nullable=True
+        )
+        == r"""space ::= " "?
+string-or-null ::= ( "\"" (
+        [^"\\] |
+        "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
+      )* "\""  | "null") space
+nested-or-null ::= ("{" space "\"other\"" space ":" space string-or-null space "}" | "null") space
+string ::=  "\"" (
+        [^"\\] |
+        "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
+      )* "\""  space
+root ::= "{" space "\"nested\"" space ":" space nested-or-null "," space "\"test\"" space ":" space string space "}" space"""
+    )
