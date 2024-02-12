@@ -1408,10 +1408,11 @@ GRAMMAR_LITERAL_ESCAPES = {"\r": "\\r", "\n": "\\n", '"': '\\"'}
 
 
 class SchemaConverter:
-    def __init__(self, prop_order):
+    def __init__(self, prop_order, treat_optional_as_nullable: bool = False):
         self._prop_order = prop_order
         self._rules = {"space": SPACE_RULE}
         self._defs: Dict[str, Any] = {}
+        self._treat_optional_as_nullable = treat_optional_as_nullable
 
     def _format_literal(self, literal: str):
         escaped: str = GRAMMAR_LITERAL_ESCAPE_RE.sub(
@@ -1423,10 +1424,12 @@ class SchemaConverter:
         self, name: str, rule: str, is_required: bool = True, with_space: bool = False
     ):
         esc_name = INVALID_RULE_CHARS_RE.sub("-", name)
-        if not is_required:
-            esc_name += "-or-null"
+        complete_rule = rule
 
-        complete_rule = rule if is_required else f"({rule} | {PRIMITIVE_RULES['null']})"
+        if self._treat_optional_as_nullable and not is_required:
+            esc_name += "-or-null"
+            complete_rule = f"({complete_rule} | {PRIMITIVE_RULES['null']})"
+
         if with_space:
             complete_rule += " space"
 
@@ -1481,6 +1484,7 @@ class SchemaConverter:
         assert isinstance(schema_type, str), f"Unrecognized schema: {schema}"
 
         if schema_type == "object" and "properties" in schema:
+            # TODO: `required` keyword when treat_optional_as_nullable=False
             prop_order = self._prop_order
             prop_pairs = sorted(
                 schema["properties"].items(),
@@ -1490,10 +1494,13 @@ class SchemaConverter:
 
             rule = '"{" space'
             for i, (prop_name, prop_schema) in enumerate(prop_pairs):
+                is_prop_required = (
+                    "required" not in schema or prop_name in schema["required"]
+                )
                 prop_rule_name = self.visit(
                     prop_schema,
                     f'{name}{"-" if name else ""}{prop_name}',
-                    "required" not in schema or prop_name in schema["required"],
+                    is_prop_required,
                 )
                 if i > 0:
                     rule += ' "," space'
@@ -1523,10 +1530,14 @@ class SchemaConverter:
         return "\n".join((f"{name} ::= {rule}" for name, rule in self._rules.items()))
 
 
-def json_schema_to_gbnf(schema: str, prop_order: Optional[List[str]] = None):
+def json_schema_to_gbnf(
+    schema: str,
+    prop_order: Optional[List[str]] = None,
+    treat_optional_as_nullable: bool = False,
+):
     prop_order = prop_order or []
     schema = json.loads(schema)
     prop_order = {name: idx for idx, name in enumerate(prop_order)}
-    converter = SchemaConverter(prop_order)
+    converter = SchemaConverter(prop_order, treat_optional_as_nullable)
     converter.visit(schema, "")
     return converter.format_grammar()
