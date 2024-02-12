@@ -2066,12 +2066,6 @@ def chatml_function_calling(
                 },
             }
 
-    print("foo")
-    print("function_call", function_call)
-    print("functions", functions)
-    print("tool_choice", tool_choice)
-    print("tools", tools)
-
     # Case 1: No tool choice by user
     if (
         tool_choice is None
@@ -2299,7 +2293,6 @@ def chatml_function_calling(
     # Case 2: Tool choice by user
     if isinstance(tool_choice, dict):
         tool_name = tool_choice["function"]["name"]
-        print("Tool Name:", tool_name)
         tool = next(
             (tool for tool in tools if tool["function"]["name"] == tool_name), None
         )
