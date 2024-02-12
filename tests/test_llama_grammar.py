@@ -55,17 +55,17 @@ def test_composed_pydantic_grammar():
         llama_cpp.llama_grammar.json_schema_to_gbnf(json.dumps(schema), None, False)
         == r"""space ::= " "?
 integer ::= ("-"? ([0-9] | [1-9] [0-9]*)) space
-a-A ::= "{" space "\"a\"" space ":" space integer "}" space
-root ::= "{" space "\"a\"" space ":" space a-A ("," space "\"b\"" space ":" space integer)? "}" space"""
+a-A ::= "{" space "\"a\"" space ":" space integer space "}" space
+root ::= "{" space "\"a\"" space ":" space a-A ("," space "\"b\"" space ":" space integer)? space "}" space"""
     )
 
     assert (
         llama_cpp.llama_grammar.json_schema_to_gbnf(json.dumps(schema), None, True)
         == r"""space ::= " "?
 integer ::= ("-"? ([0-9] | [1-9] [0-9]*)) space
-a-A ::= "{" space "\"a\"" space ":" space integer "}" space
+a-A ::= "{" space "\"a\"" space ":" space integer space "}" space
 integer-or-null ::= (("-"? ([0-9] | [1-9] [0-9]*)) | "null") space
-root ::= "{" space "\"a\"" space ":" space a-A "," space "\"b\"" space ":" space integer-or-null "}" space"""
+root ::= "{" space "\"a\"" space ":" space a-A "," space "\"b\"" space ":" space integer-or-null space "}" space"""
     )
 
 
@@ -101,7 +101,7 @@ number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? spac
 unit-0 ::= "\"celsius\"" | "\"fahrenheit\""
 null ::= "null" space
 unit ::= unit-0 | null
-root ::= "{" space "\"temperature\"" space ":" space number "," space "\"unit\"" space ":" space unit "}" space"""
+root ::= "{" space "\"temperature\"" space ":" space number "," space "\"unit\"" space ":" space unit space "}" space"""
     )
 
 
@@ -130,8 +130,8 @@ string ::=  "\"" (
         [^"\\] |
         "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
       )* "\""  space
-nested ::= "{" space "\"other\"" space ":" space string "}" space
-root ::= "{" space ("\"nested\"" space ":" space nested "," space)? "\"test\"" space ":" space string "}" space"""
+nested ::= "{" space "\"other\"" space ":" space string space "}" space
+root ::= "{" space ("\"nested\"" space ":" space nested "," space)? "\"test\"" space ":" space string space "}" space"""
     )
 
     assert (
@@ -141,10 +141,10 @@ string-or-null ::= ( "\"" (
         [^"\\] |
         "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
       )* "\""  | "null") space
-nested-or-null ::= ("{" space "\"other\"" space ":" space string-or-null "}" | "null") space
+nested-or-null ::= ("{" space "\"other\"" space ":" space string-or-null space "}" | "null") space
 string ::=  "\"" (
         [^"\\] |
         "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
       )* "\""  space
-root ::= "{" space "\"nested\"" space ":" space nested-or-null "," space "\"test\"" space ":" space string "}" space"""
+root ::= "{" space "\"nested\"" space ":" space nested-or-null "," space "\"test\"" space ":" space string space "}" space"""
     )

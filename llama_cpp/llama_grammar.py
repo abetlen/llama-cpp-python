@@ -1522,7 +1522,7 @@ class SchemaConverter:
                         rule = f'({rule} | {prop_rule} | {rule} "," space {prop_rule})'
                         previous_is_prop_required = False
 
-            rule = '"{" space ' + rule + ' "}"'
+            rule = '"{" space ' + rule + ' space "}"'
 
             return self._add_rule(rule_name, rule, is_required, True)
 
