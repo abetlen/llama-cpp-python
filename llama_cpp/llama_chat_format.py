@@ -338,11 +338,11 @@ def chat_formatter_to_chat_completion_handler(
                 # create grammar from json schema
                 if "schema" in response_format:
                     grammar = llama_grammar.LlamaGrammar.from_json_schema(
-                        json.dumps(response_format["schema"])
+                        json.dumps(response_format["schema"]), verbose=llama.verbose
                     )
             except Exception as e:
                 grammar = llama_grammar.LlamaGrammar.from_string(
-                    llama_grammar.JSON_GBNF
+                    llama_grammar.JSON_GBNF, verbose=llama.verbose
                 )
 
         completion_or_chunks = llama.create_completion(
@@ -1257,7 +1257,8 @@ def functionary_chat_handler(
                     json.dumps(function_body)
                 )
                 grammar = llama_grammar.LlamaGrammar.from_string(
-                    llama_grammar.json_schema_to_gbnf(json.dumps(function_body))
+                    llama_grammar.json_schema_to_gbnf(json.dumps(function_body)),
+                    verbose=llama.verbose,
                 )
                 print(grammar_text)
         except Exception as e:
@@ -1268,11 +1269,12 @@ def functionary_chat_handler(
                 print(e)
             with suppress_stdout_stderr(disable=llama.verbose):
                 grammar = llama_grammar.LlamaGrammar.from_string(
-                    llama_grammar.JSON_GBNF
+                    llama_grammar.JSON_GBNF,
+                    verbose=llama.verbose,
                 )
     else:
         with suppress_stdout_stderr(disable=llama.verbose):
-            grammar = llama_grammar.LlamaGrammar.from_string(llama_grammar.JSON_GBNF)
+            grammar = llama_grammar.LlamaGrammar.from_string(llama_grammar.JSON_GBNF, verbose=llama.verbose)
 
     completion: llama_types.Completion = llama.create_completion(
         prompt=new_prompt,
@@ -1596,7 +1598,7 @@ def functionary_v1_v2_chat_handler(
                 print(e)
             with suppress_stdout_stderr(disable=llama.verbose):
                 grammar = llama_grammar.LlamaGrammar.from_string(
-                    llama_grammar.JSON_GBNF
+                    llama_grammar.JSON_GBNF, verbose=llama.verbose
                 )
         
         return grammar
@@ -2306,10 +2308,10 @@ def chatml_function_calling(
         prompt += f"functions.{tool_name}:\n"
         try:
             grammar = llama_grammar.LlamaGrammar.from_json_schema(
-                json.dumps(tool["function"]["parameters"])
+                json.dumps(tool["function"]["parameters"]), verbose=llama.verbose
             )
         except Exception as e:
-            grammar = llama_grammar.LlamaGrammar.from_string(llama_grammar.JSON_GBNF)
+            grammar = llama_grammar.LlamaGrammar.from_string(llama_grammar.JSON_GBNF, verbose=llama.verbose)
             if llama.verbose:
                 print(
                     "Failed to parse function body as JSON schema, falling back to default grammar"
@@ -2375,7 +2377,7 @@ def chatml_function_calling(
         mirostat_eta=mirostat_eta,
         model=model,
         logits_processor=logits_processor,
-        grammar=llama_grammar.LlamaGrammar.from_string(initial_gbnf_tool_grammar),
+        grammar=llama_grammar.LlamaGrammar.from_string(initial_gbnf_tool_grammar, verbose=llama.verbose),
     )
     completion: llama_types.CreateCompletionResponse = completion_or_chunks  # type: ignore
     text = completion["choices"][0]["text"]
@@ -2399,7 +2401,7 @@ def chatml_function_calling(
             mirostat_eta=mirostat_eta,
             model=model,
             logits_processor=logits_processor,
-            grammar=llama_grammar.LlamaGrammar.from_string(follow_up_gbnf_tool_grammar),
+            grammar=llama_grammar.LlamaGrammar.from_string(follow_up_gbnf_tool_grammar, verbose=llama.verbose),
         ), stream=stream)
 
     # One or more function calls

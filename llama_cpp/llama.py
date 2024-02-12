@@ -50,6 +50,9 @@ from ._internals import (
     _LlamaSamplingContext,  # type: ignore
 )
 from ._logger import set_verbose
+from ._utils import (
+    suppress_stdout_stderr
+)
 
 
 class Llama:
@@ -182,7 +185,8 @@ class Llama:
 
         self.numa = numa
         if not Llama.__backend_initialized:
-            llama_cpp.llama_backend_init(self.numa)
+            with suppress_stdout_stderr(disable=verbose):
+                llama_cpp.llama_backend_init(self.numa)
             Llama.__backend_initialized = True
 
         self.model_path = model_path
