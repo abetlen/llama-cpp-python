@@ -670,7 +670,9 @@ def format(
     messages: List[llama_types.ChatCompletionRequestMessage],
     **kwargs: Any,
 ) -> ChatFormatterResponse:
-    _system_message = "A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions."
+    _system_message = _get_system_message(messages)
+    if len(_system_message) == 0:
+      _system_message = "A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions."
     _roles = dict(user="USER", assistant="ASSISTANT")
     _sep = " "
     _sep2 = "</s>"
@@ -734,7 +736,9 @@ def format_openbuddy(
     messages: List[llama_types.ChatCompletionRequestMessage],
     **kwargs: Any,
 ) -> ChatFormatterResponse:
-    _system_message = """Consider a conversation between User (a human) and Assistant (named Buddy).
+    _system_message = _get_system_message(messages)
+    if len(_system_message) == 0:
+      _system_message = """Consider a conversation between User (a human) and Assistant (named Buddy).
 Buddy is an INTP-T, a friendly, intelligent and multilingual AI assistant, by OpenBuddy team. GitHub: https://github.com/OpenBuddy/OpenBuddy
 Buddy cannot access the Internet.
 Buddy can fluently speak the user's language (e.g. English, Chinese).
@@ -826,7 +830,9 @@ def format_open_orca(
     **kwargs: Any,
 ) -> ChatFormatterResponse:
     system_template = "{system_message}"
-    system_message = (
+    system_message = _get_system_message(messages)
+    if len(system_message) == 0:
+      system_message = (
         "You are a helpful assistant. Please answer truthfully and write out your "
         "thinking step by step to be sure you get the right answer. If you make a mistake or encounter "
         "an error in your thinking, say so out loud and attempt to correct it. If you don't know or "
