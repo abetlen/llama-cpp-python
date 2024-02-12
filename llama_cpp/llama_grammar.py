@@ -81,9 +81,15 @@ class LlamaGrammar:
         cls,
         json_schema: str,
         verbose: bool = True,
+        treat_optional_as_nullable: bool = False,
     ) -> "LlamaGrammar":
         """Convert a JSON schema to a Llama grammar."""
-        return cls.from_string(json_schema_to_gbnf(json_schema), verbose=verbose)
+        return cls.from_string(
+            json_schema_to_gbnf(
+                json_schema, treat_optional_as_nullable=treat_optional_as_nullable
+            ),
+            verbose=verbose,
+        )
 
     @classmethod
     def from_file(cls, file: Union[str, Path], verbose: bool = True) -> "LlamaGrammar":
