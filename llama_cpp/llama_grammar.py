@@ -1472,11 +1472,14 @@ class SchemaConverter:
         if schema_type == "object" and "properties" in schema:
             # TODO: `required` keyword
             prop_order = self._prop_order
-            prop_pairs = sorted(
-                schema["properties"].items(),
-                # sort by position in prop_order (if specified) then by key
-                key=lambda kv: (prop_order.get(kv[0], len(prop_order)), kv[0]),
-            )
+            if prop_order:
+                prop_pairs = sorted(
+                    schema["properties"].items(),
+                    # sort by position in prop_order (if specified) then by key
+                    key=lambda kv: (prop_order.get(kv[0], len(prop_order)), kv[0]),
+                )
+            else:
+                prop_pairs = schema['properties'].items()
 
             rule = '"{" space'
             for i, (prop_name, prop_schema) in enumerate(prop_pairs):
