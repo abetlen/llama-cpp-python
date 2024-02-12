@@ -139,9 +139,11 @@ llama_seq_id = c_int32
 # enum llama_vocab_type {
 #     LLAMA_VOCAB_TYPE_SPM = 0, // SentencePiece
 #     LLAMA_VOCAB_TYPE_BPE = 1, // Byte Pair Encoding
+#     LLAMA_VOCAB_TYPE_WPM = 2, // WordPiece
 # };
 LLAMA_VOCAB_TYPE_SPM = 0
 LLAMA_VOCAB_TYPE_BPE = 1
+LLAMA_VOCAB_TYPE_WPM = 2
 
 
 # enum llama_token_type {
