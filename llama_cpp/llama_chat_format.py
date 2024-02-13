@@ -2072,12 +2072,14 @@ def chatml_function_calling(
         "{% if message.role == 'assistant' %}"
         ## Reglar message
         "{% if message.content and message.content | length > 0 %}"
+        "{% if tool_calls %}"
         "message:\n"
+        "{% endif %}"
         "{{ message.content }}"
         "\n<|im_end|>\n"
         "{% endif %}"
         ## Function calls
-        "{% if message.tool_calls %}"
+        "{% if 'tool_calls' in message %}"
         "{% for tool_call in message.tool_calls %}"
         "functions.{{ tool_call.function.name }}:\n"
         "{{ tool_call.function.arguments }}"
