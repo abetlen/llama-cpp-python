@@ -292,7 +292,7 @@ To constrain the response to a specific JSON Schema, you can use the `schema` pr
 
 ### Function Calling
 
-The high-level API also provides a simple interface for function calling. This is possible through the `functionary` pre-trained models chat format or through the generic `chatml-function-calling` chat forma.
+The high-level API also provides a simple interface for function calling. This is possible through the `functionary` pre-trained models chat format or through the generic `chatml-function-calling` chat format.
 
 The gguf-converted files for functionary can be found here: [functionary-7b-v1](https://huggingface.co/abetlen/functionary-7b-v1-GGUF)
 
