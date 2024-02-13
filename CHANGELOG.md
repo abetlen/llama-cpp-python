@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.42]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@ea9c8e11436ad50719987fa23a289c74b7b40d40
+- fix: sample idx off-by-one error for logit_processors by @lapp0 in #1179
+- fix: chat formatting bugs in `chatml-function-calling` by @abetlen in 4b0e3320bd8c2c209e29978d0b21e2e471cc9ee3 and 68fb71b6a26a1e57331868f959b47ab4b87851e1
+
 ## [0.2.41]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@895407f31b358e3d9335e847d13f033491ec8a5b
