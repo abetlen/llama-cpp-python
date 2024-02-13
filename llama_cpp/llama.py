@@ -553,7 +553,7 @@ class Llama:
             logits[:] = (
                 logits_processor(self._input_ids, logits)
                 if idx is None
-                else logits_processor(self._input_ids[:idx], logits)
+                else logits_processor(self._input_ids[:idx + 1], logits)
             )
 
         sampling_params = _LlamaSamplingParams(
@@ -658,7 +658,6 @@ class Llama:
         while True:
             self.eval(tokens)
             while sample_idx < self.n_tokens:
-                next_sample_idx = sample_idx + 1
                 token = self.sample(
                     top_k=top_k,
                     top_p=top_p,
@@ -675,7 +674,7 @@ class Llama:
                     logits_processor=logits_processor,
                     grammar=grammar,
                     penalize_nl=penalize_nl,
-                    idx=next_sample_idx,
+                    idx=sample_idx,
                 )
 
                 sample_idx += 1
