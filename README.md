@@ -292,18 +292,22 @@ To constrain the response to a specific JSON Schema, you can use the `schema` pr
 
 ### Function Calling
 
-The high-level API also provides a simple interface for function calling.
+The high-level API also provides a simple interface for function calling. This is possible through the `functionary` pre-trained models chat format or through the generic `chatml-function-calling` chat format.
 
-The only set of models that supports full function calling at this time is [functionary](https://github.com/MeetKai/functionary). The various gguf-converted files for this set of models can be found [here](https://huggingface.co/meetkai). Functionary is able to intelligently call functions and also analyze any provided function outputs to generate coherent responses. All v2 models of functionary supports **parallel function calling**. You can provide either `functionary-v1` or `functionary-v2` for the `chat_format` when initializing the Llama class.
-
-Note that due to discrepancies between llama.cpp and HuggingFace's tokenizers, it is required to provide HF Tokenizer for functionary. The `LlamaHFTokenizer` class can be initialized and passed into the Llama class. This will override the default llama.cpp tokenizer used in Llama class. The tokenizer files are already included in the respective HF repositories hosting the gguf files.
+The gguf-converted files for functionary can be found here: [functionary-7b-v1](https://huggingface.co/abetlen/functionary-7b-v1-GGUF)
 
 ```python
->>> from llama_cpp import Llama, LlamaHFTokenizer
->>> tokenizer = LlamaHFTokenizer.from_pretrained("path/to/functionary/")
->>> llm = Llama(model_path="path/to/functionary/llama-model.gguf", tokenizer=tokenizer, chat_format="functionary-v2")
+>>> from llama_cpp import Llama
+>>> llm = Llama(model_path="path/to/functionary/llama-model.gguf", chat_format="functionary")
+>>> # or 
+>>> llm = Llama(model_path="path/to/chatml/llama-model.gguf", chat_format="chatml-function-calling")
 >>> llm.create_chat_completion(
       messages = [
+        {
+          "role": "system",
+          "content": "A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. The assistant calls functions with appropriate input when necessary"
+
+        },
         {
           "role": "user",
           "content": "Extract Jason is 25 years old"
@@ -330,12 +334,12 @@ Note that due to discrepancies between llama.cpp and HuggingFace's tokenizers, i
           }
         }
       }],
-      tool_choice={
+      tool_choice=[{
         "type": "function",
         "function": {
           "name": "UserDetail"
         }
-      },
+      }]
 )
 ```
 

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.41]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@895407f31b358e3d9335e847d13f033491ec8a5b
+- fix: Don't change order of json schema object properties in generated grammar unless prop_order is passed by @abetlen in d1822fed6b706f38bd1ff0de4dec5baaa3cf84fa
+
+## [0.2.40]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@3bdc4cd0f595a6096cca4a64aa75ffa8a3503465
+- feat: Generic chatml Function Calling using chat_format="chatml-function-calling"` by @abetlen in #957
+- fix: Circular dependancy preventing early Llama object free by @notwa in #1176
+- docs: Set the correct command for compiling with syscl support by @akarshanbiswas in #1172
+- feat: use gpu backend for clip if available by @iamlemec in #1175
+
 ## [0.2.39]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@b08f22c882a1443e6b97081f3ce718a4d1a741f8
