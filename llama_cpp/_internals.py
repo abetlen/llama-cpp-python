@@ -506,6 +506,14 @@ class _LlamaBatch:
             self._llama_batch_free(self.batch)
             self.batch = None
 
+    def n_tokens(self) -> int:
+        assert self.batch is not None
+        return self.batch.n_tokens
+
+    def reset(self):
+        assert self.batch is not None
+        self.batch.n_tokens = 0
+
     def set_batch(self, batch: Sequence[int], n_past: int, logits_all: bool):
         assert self.batch is not None
         n_tokens = len(batch)
@@ -516,6 +524,20 @@ class _LlamaBatch:
             self.batch.seq_id[i][0] = 0
             self.batch.n_seq_id[i] = 1
             self.batch.logits[i] = logits_all
+        self.batch.logits[n_tokens - 1] = True
+
+    def add_sequence(self, batch: Sequence[int], seq_id: int, logits_all: bool):
+        assert self.batch is not None
+        n_tokens = len(batch)
+        n_tokens0 = self.batch.n_tokens
+        self.batch.n_tokens += n_tokens
+        for i in range(n_tokens):
+            j = n_tokens0 + i
+            self.batch.token[j] = batch[i]
+            self.batch.pos[j] = i
+            self.batch.seq_id[j][0] = seq_id
+            self.batch.n_seq_id[j] = 1
+            self.batch.logits[j] = logits_all
         self.batch.logits[n_tokens - 1] = True
 
 

@@ -717,9 +717,43 @@ class Llama:
         Returns:
             An embedding object.
         """
-        assert self._ctx.ctx is not None
         assert self._model.model is not None
         model_name: str = model if model is not None else self.model_path
+
+        # get numeric embeddings
+        embeds, total_tokens = self.embed(input, return_count=True)
+
+        # convert to CreateEmbeddingResponse
+        data = [
+            {
+                "object": "embedding",
+                "embedding": emb,
+                "index": idx,
+            } for idx, emb in enumerate(embeds)
+        ]
+
+        return {
+            "object": "list",
+            "data": data,
+            "model": model_name,
+            "usage": {
+                "prompt_tokens": total_tokens,
+                "total_tokens": total_tokens,
+            },
+        }
+
+    def embed(self, input: str, normalize: bool = True, truncate: bool = True, return_count: bool = False) -> List[float]:
+        """Embed a string.
+
+        Args:
+            input: The utf-8 encoded string to embed.
+
+        Returns:
+            A list of embeddings
+        """
+        assert self._ctx.ctx is not None
+        n_embd = self.n_embd()
+        n_ctx = self.n_ctx()
 
         if self.context_params.embedding == False:
             raise RuntimeError(
@@ -734,48 +768,68 @@ class Llama:
         else:
             inputs = input
 
-        data: List[Embedding] = []
-        total_tokens = 0
-        for index, input in enumerate(inputs):
-            tokens = self.tokenize(input.encode("utf-8"), special=True)
-            self.reset()
-            self.eval(tokens)
-            n_tokens = len(tokens)
-            total_tokens += n_tokens
-            embedding = llama_cpp.llama_get_embeddings(self._ctx.ctx)[
-                : llama_cpp.llama_n_embd(self._model.model)
-            ]
+        def normalize(x):
+            norm = np.linalg.norm(x)
+            return [v/norm for v in x]
 
-            data.append(
-                {
-                    "object": "embedding",
-                    "embedding": embedding,
-                    "index": index,
-                }
-            )
+        # reset batch
+        self._batch.reset()
+
+        # decode and fetch embeddings
+        data: List[Embedding] = []
+        def decode_batch(n_seq):
+            llama_cpp.llama_kv_cache_clear(self._ctx.ctx)
+            self._ctx.decode(self._batch)
+            self._batch.reset()
+
+            # store embeddings
+            for i in range(n_seq):
+                embedding = llama_cpp.llama_get_embeddings_ith(self._ctx.ctx, i)[:n_embd]
+                if normalize:
+                    embedding = normalize(embedding)
+                data.append(embedding)
+
+        # init state
+        total_tokens = 0
+        p_batch = 0
+        t_batch = 0
+
+        # accumulate batches and encode
+        for text in inputs:
+            tokens = self.tokenize(text.encode("utf-8"))
+            if truncate:
+                tokens = tokens[:n_ctx]
+            n_tokens = len(tokens)
+
+            # check for overrun
+            if n_tokens > n_ctx:
+                raise ValueError(
+                    f"Requested tokens ({n_tokens}) exceed context window of {n_ctx}"
+                )
+
+            # time to eval batch
+            if n_tokens + t_batch > self._n_ctx:
+                decode_batch(p_batch)
+                total_tokens += t_batch
+                p_batch = 0
+                t_batch = 0
+
+            # add to batch
+            self._batch.add_sequence(tokens, p_batch, False)
+            p_batch += 1
+            t_batch += n_tokens
+
+        # hanlde last batch
+        decode_batch(p_batch)
+        total_tokens += t_batch
+
         if self.verbose:
             llama_cpp.llama_print_timings(self._ctx.ctx)
 
-        return {
-            "object": "list",
-            "data": data,
-            "model": model_name,
-            "usage": {
-                "prompt_tokens": total_tokens,
-                "total_tokens": total_tokens,
-            },
-        }
-
-    def embed(self, input: str) -> List[float]:
-        """Embed a string.
-
-        Args:
-            input: The utf-8 encoded string to embed.
-
-        Returns:
-            A list of embeddings
-        """
-        return list(map(float, self.create_embedding(input)["data"][0]["embedding"]))
+        if return_count:
+            return data, total_tokens
+        else:
+            return data
 
     def _create_completion(
         self,
