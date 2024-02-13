@@ -557,7 +557,7 @@ class Llama:
             logits[:] = (
                 logits_processor(self._input_ids, logits)
                 if idx is None
-                else logits_processor(self._input_ids[:idx], logits)
+                else logits_processor(self._input_ids[:idx + 1], logits)
             )
 
         sampling_params = _LlamaSamplingParams(
