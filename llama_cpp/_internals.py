@@ -42,6 +42,8 @@ class _LlamaModel:
 
         self._llama_free_model = llama_cpp._lib.llama_free_model  # type: ignore
 
+        self.model = None
+
         if not os.path.exists(path_model):
             raise ValueError(f"Model path does not exist: {path_model}")
 
@@ -248,6 +250,7 @@ class _LlamaContext:
         self.verbose = verbose
 
         self._llama_free = llama_cpp._lib.llama_free  # type: ignore
+        self.ctx = None
 
         assert self.model.model is not None
 
@@ -497,6 +500,7 @@ class _LlamaBatch:
 
         self._llama_batch_free = llama_cpp._lib.llama_batch_free  # type: ignore
 
+        self.batch = None
         self.batch = llama_cpp.llama_batch_init(
             self.n_tokens, self.embd, self.n_seq_max
         )
