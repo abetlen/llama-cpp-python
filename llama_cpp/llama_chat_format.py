@@ -2061,12 +2061,12 @@ def chatml_function_calling(
         "\nfunctions.<function_name>:"
         '\n{ "arg1": "value1", "arg2": "value2" }'
         "{% endif %}"
-        "\n<|im_end|>\n"
+        "<|im_end|>\n"
         "{% endif %}"
         # User message
         "{% if message.role == 'user' %}"
         "{{ message.content }}"
-        "\n<|im_end|>\n"
+        "<|im_end|>\n"
         "{% endif %}"
         # Assistant message
         "{% if message.role == 'assistant' %}"
@@ -2076,7 +2076,7 @@ def chatml_function_calling(
         "message:\n"
         "{% endif %}"
         "{{ message.content }}"
-        "\n<|im_end|>\n"
+        "<|im_end|>\n"
         "{% endif %}"
         ## Function calls
         "{% if 'tool_calls' in message %}"
@@ -2084,11 +2084,11 @@ def chatml_function_calling(
         "functions.{{ tool_call.function.name }}:\n"
         "{{ tool_call.function.arguments }}"
         "{% endfor %}"
-        "\n<|im_end|>\n"
+        "<|im_end|>\n"
         "{% endif %}"
         "{% endif %}"
         "{% endfor %}"
-        "{% if add_generation_prompt %}{{ '<|im_start|>assistant\n' }}{% endif %}"
+        "{% if add_generation_prompt %}<|im_start|>assistant\n{% endif %}"
     )
     template_renderer = jinja2.Environment(
         loader=jinja2.BaseLoader(),
@@ -2119,6 +2119,8 @@ def chatml_function_calling(
                     "name": function_call["name"],
                 },
             }
+
+    stop = [stop, "<|im_end|>"] if isinstance(stop, str) else stop + ["<|im_end|>"] if stop else ["<|im_end|>"]
 
     # Case 1: No tool choice by user
     if (
