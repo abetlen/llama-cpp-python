@@ -836,6 +836,9 @@ class Llama:
 
         output = data[0] if isinstance(input, str) else data
 
+        llama_cpp.llama_kv_cache_clear(self._ctx.ctx)
+        self.reset()
+
         if return_count:
             return output, total_tokens
         else:
