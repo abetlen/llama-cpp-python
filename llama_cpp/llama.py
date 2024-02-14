@@ -721,15 +721,18 @@ class Llama:
         model_name: str = model if model is not None else self.model_path
 
         # get numeric embeddings
-        embeds, total_tokens = self.embed(input, return_count=True)
+        embeds: List[List[float]]
+        total_tokens: int
+        embeds, total_tokens = self.embed(input, return_count=True)  # type: ignore
 
         # convert to CreateEmbeddingResponse
-        data = [
+        data: List[Embedding] = [
             {
                 "object": "embedding",
                 "embedding": emb,
                 "index": idx,
-            } for idx, emb in enumerate(embeds)
+            }
+            for idx, emb in enumerate(embeds)
         ]
 
         return {
@@ -742,7 +745,13 @@ class Llama:
             },
         }
 
-    def embed(self, input: str, normalize: bool = True, truncate: bool = True, return_count: bool = False) -> List[float]:
+    def embed(
+        self,
+        input: Union[str, List[str]],
+        normalize: bool = True,
+        truncate: bool = True,
+        return_count: bool = False,
+    ):
         """Embed a string.
 
         Args:
@@ -772,23 +781,26 @@ class Llama:
         self._batch.reset()
 
         # decode and fetch embeddings
-        data: List[Embedding] = []
-        def decode_batch(sizes):
+        data: List[List[float]] = []
+        def decode_batch(sizes: List[int]):
+            assert self._ctx.ctx is not None
             llama_cpp.llama_kv_cache_clear(self._ctx.ctx)
             self._ctx.decode(self._batch)
             self._batch.reset()
 
             # store embeddings
             for i, s in enumerate(sizes):
-                embedding = llama_cpp.llama_get_embeddings_ith(self._ctx.ctx, i)[:n_embd]
+                embedding = llama_cpp.llama_get_embeddings_ith(self._ctx.ctx, i)[
+                    :n_embd
+                ]
                 norm = np.linalg.norm(embedding) if normalize else s
-                embedding = [v/norm for v in embedding]
+                embedding: List[float] = [v / float(norm) for v in embedding]
                 data.append(embedding)
 
         # init state
         total_tokens = 0
         t_batch = 0
-        s_sizes = []
+        s_sizes: List[int] = []
 
         # accumulate batches and encode
         for text in inputs:
@@ -822,10 +834,12 @@ class Llama:
         if self.verbose:
             llama_cpp.llama_print_timings(self._ctx.ctx)
 
+        output = data[0] if isinstance(input, str) else data
+
         if return_count:
-            return data, total_tokens
+            return output, total_tokens
         else:
-            return data
+            return output
 
     def _create_completion(
         self,
