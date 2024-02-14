@@ -768,38 +768,36 @@ class Llama:
         else:
             inputs = input
 
-        def normalize(x):
-            norm = np.linalg.norm(x)
-            return [v/norm for v in x]
-
         # reset batch
         self._batch.reset()
 
         # decode and fetch embeddings
         data: List[Embedding] = []
-        def decode_batch(n_seq):
+        def decode_batch(sizes):
             llama_cpp.llama_kv_cache_clear(self._ctx.ctx)
             self._ctx.decode(self._batch)
             self._batch.reset()
 
             # store embeddings
-            for i in range(n_seq):
+            for i, s in enumerate(sizes):
                 embedding = llama_cpp.llama_get_embeddings_ith(self._ctx.ctx, i)[:n_embd]
-                if normalize:
-                    embedding = normalize(embedding)
+                norm = np.linalg.norm(embedding) if normalize else s
+                embedding = [v/norm for v in embedding]
                 data.append(embedding)
 
         # init state
         total_tokens = 0
-        p_batch = 0
         t_batch = 0
+        s_sizes = []
 
         # accumulate batches and encode
         for text in inputs:
             tokens = self.tokenize(text.encode("utf-8"))
             if truncate:
                 tokens = tokens[:n_ctx]
+
             n_tokens = len(tokens)
+            total_tokens += n_tokens
 
             # check for overrun
             if n_tokens > n_ctx:
@@ -808,20 +806,18 @@ class Llama:
                 )
 
             # time to eval batch
-            if n_tokens + t_batch > self._n_ctx:
-                decode_batch(p_batch)
-                total_tokens += t_batch
-                p_batch = 0
+            if t_batch + n_tokens > self._n_ctx:
+                decode_batch(s_sizes)
                 t_batch = 0
+                s_sizes = []
 
             # add to batch
-            self._batch.add_sequence(tokens, p_batch, False)
-            p_batch += 1
+            self._batch.add_sequence(tokens, len(s_sizes), False)
             t_batch += n_tokens
+            s_sizes.append(n_tokens)
 
         # hanlde last batch
-        decode_batch(p_batch)
-        total_tokens += t_batch
+        decode_batch(s_sizes)
 
         if self.verbose:
             llama_cpp.llama_print_timings(self._ctx.ctx)
