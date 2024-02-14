@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.43]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@8084d554406b767d36b3250b3b787462d5dd626f
+- feat: Support batch embeddings by @iamlemec in #1186
+- fix: submodule kompute is not included in sdist by @abetlen in 7dbbfdecadebe7750be650d9409959640ff9a460
+- fix: fix: Update openbuddy prompt format by @abetlen in 07a783779a62a4aac0b11161c7e0eb983ff215f8
+
 ## [0.2.42]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@ea9c8e11436ad50719987fa23a289c74b7b40d40
