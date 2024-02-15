@@ -76,12 +76,12 @@ Function calling is completely compatible with the OpenAI function calling API a
 
 You'll first need to download one of the available function calling models in GGUF format:
 
-- [functionary-7b-v1](https://huggingface.co/abetlen/functionary-7b-v1-GGUF)
+- [functionary](https://huggingface.co/meetkai)
 
-Then when you run the server you'll need to also specify the `functionary` chat_format
+Then when you run the server you'll need to also specify either `functionary-v1` or `functionary-v2` chat_format
 
 ```bash
-python3 -m llama_cpp.server --model <model_path> --chat_format functionary
+python3 -m llama_cpp.server --model <model_path_to_functionary_v2> --chat_format functionary-v2
 ```
 
 Check out this [example notebook](https://github.com/abetlen/llama-cpp-python/blob/main/examples/notebooks/Functions.ipynb) for a walkthrough of some interesting use cases for function calling.
