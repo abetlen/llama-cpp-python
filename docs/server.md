@@ -78,10 +78,12 @@ You'll first need to download one of the available function calling models in GG
 
 - [functionary](https://huggingface.co/meetkai)
 
-Then when you run the server you'll need to also specify either `functionary-v1` or `functionary-v2` chat_format
+Then when you run the server you'll need to also specify either `functionary-v1` or `functionary-v2` chat_format.
+
+Note that since functionary requires a HF Tokenizer due to discrepancies between llama.cpp and HuggingFace's tokenizers as mentioned [here](https://github.com/abetlen/llama-cpp-python/blob/main?tab=readme-ov-file#function-calling), you will need to pass in the path to the tokenizer too. The tokenizer files are already included in the respective HF repositories hosting the gguf files.
 
 ```bash
-python3 -m llama_cpp.server --model <model_path_to_functionary_v2> --chat_format functionary-v2
+python3 -m llama_cpp.server --model <model_path_to_functionary_v2_model> --chat_format functionary-v2 --hf_pretrained_model_name_or_path <model_path_to_functionary_v2_tokenizer>
 ```
 
 Check out this [example notebook](https://github.com/abetlen/llama-cpp-python/blob/main/examples/notebooks/Functions.ipynb) for a walkthrough of some interesting use cases for function calling.
