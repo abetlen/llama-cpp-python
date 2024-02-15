@@ -762,7 +762,7 @@ class Llama:
         """
         assert self._ctx.ctx is not None
         n_embd = self.n_embd()
-        n_ctx = self.n_ctx()
+        n_batch = self.n_batch
 
         if self.context_params.embedding == False:
             raise RuntimeError(
@@ -807,19 +807,19 @@ class Llama:
         for text in inputs:
             tokens = self.tokenize(text.encode("utf-8"))
             if truncate:
-                tokens = tokens[:n_ctx]
+                tokens = tokens[:n_batch]
 
             n_tokens = len(tokens)
             total_tokens += n_tokens
 
             # check for overrun
-            if n_tokens > n_ctx:
+            if n_tokens > n_batch:
                 raise ValueError(
-                    f"Requested tokens ({n_tokens}) exceed context window of {n_ctx}"
+                    f"Requested tokens ({n_tokens}) exceed batch size of {n_batch}"
                 )
 
             # time to eval batch
-            if t_batch + n_tokens > self._n_ctx:
+            if t_batch + n_tokens > n_batch:
                 decode_batch(p_batch)
                 t_batch = 0
                 p_batch = 0
