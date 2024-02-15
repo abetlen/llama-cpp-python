@@ -720,6 +720,8 @@ class Llama:
         assert self._model.model is not None
         model_name: str = model if model is not None else self.model_path
 
+        input = input if isinstance(input, list) else [input]
+
         # get numeric embeddings
         embeds: List[List[float]]
         total_tokens: int
