@@ -398,6 +398,22 @@ llama = Llama(
 )
 ```
 
+### Embeddings
+
+`llama-cpp-python` supports generating embeddings from the text.
+
+```python
+import llama_cpp
+
+llm = llama_cpp.Llama(model_path="path/to/model.gguf", embeddings=True)
+
+embeddings = llm.create_embedding("Hello, world!")
+
+# or batched
+
+embeddings = llm.create_embedding(["Hello, world!", "Goodbye, world!"])
+```
+
 ### Adjusting the Context Window
 
 The context window of the Llama models determines the maximum number of tokens that can be processed at once. By default, this is set to 512 tokens, but can be adjusted based on your requirements.
