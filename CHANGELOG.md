@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.44]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@4524290e87b8e107cc2b56e1251751546f4b9051
+- fix: create_embedding broken response for input type str by @abetlen in 0ce66bc080fe537590b05b24bf442480bf2dd045
+- fix: Use '\n' seperator for EventSourceResponse by @khimaros in #1188
+- fix: Incorporate embedding pooling layer fixes by @iamlemec in #1194
+
 ## [0.2.43]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@8084d554406b767d36b3250b3b787462d5dd626f
