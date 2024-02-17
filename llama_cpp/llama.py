@@ -190,7 +190,9 @@ class Llama:
 
         if isinstance(numa, bool):
             self.numa = llama_cpp.GGML_NUMA_STRATEGY_DISTRIBUTE if numa else llama_cpp.GGML_NUMA_STRATEGY_DISABLED
-        
+        else:
+            self.numa = numa
+
         if self.numa != llama_cpp.GGML_NUMA_STRATEGY_DISABLED:
             with suppress_stdout_stderr(disable=verbose):
                 llama_cpp.llama_numa_init(self.numa)
