@@ -98,7 +98,7 @@ class Llama:
         lora_scale: float = 1.0,
         lora_path: Optional[str] = None,
         # Backend Params
-        numa: bool = False,
+        numa: Union[bool, int] = False,
         # Chat Format Params
         chat_format: Optional[str] = None,
         chat_handler: Optional[llama_chat_format.LlamaChatCompletionHandler] = None,
@@ -166,7 +166,7 @@ class Llama:
             last_n_tokens_size: Maximum number of tokens to keep in the last_n_tokens deque.
             lora_base: Optional path to base model, useful if using a quantized base model and you want to apply LoRA to an f16 model.
             lora_path: Path to a LoRA file to apply to the model.
-            numa: Enable NUMA support. (NOTE: The initial value of this parameter is used for the remainder of the program as this value is set in llama_backend_init)
+            numa: numa policy
             chat_format: String specifying the chat format to use when calling create_chat_completion.
             chat_handler: Optional chat handler to use when calling create_chat_completion.
             draft_model: Optional draft model to use for speculative decoding.
@@ -183,11 +183,17 @@ class Llama:
 
         set_verbose(verbose)
 
-        self.numa = numa
         if not Llama.__backend_initialized:
             with suppress_stdout_stderr(disable=verbose):
-                llama_cpp.llama_backend_init(self.numa)
+                llama_cpp.llama_backend_init()
             Llama.__backend_initialized = True
+
+        if isinstance(numa, bool):
+            self.numa = llama_cpp.GGML_NUMA_STRATEGY_DISTRIBUTE if numa else llama_cpp.GGML_NUMA_STRATEGY_DISABLED
+        
+        if self.numa != llama_cpp.GGML_NUMA_STRATEGY_DISABLED:
+            with suppress_stdout_stderr(disable=verbose):
+                llama_cpp.llama_numa_init(self.numa)
 
         self.model_path = model_path
 

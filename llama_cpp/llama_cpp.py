@@ -697,15 +697,43 @@ _lib.llama_model_quantize_default_params.restype = llama_model_quantize_params
 # // If numa is true, use NUMA optimizations
 # // Call once at the start of the program
 # LLAMA_API void llama_backend_init(bool numa);
-def llama_backend_init(numa: Union[c_bool, bool]):
+# LLAMA_API void llama_backend_init(void);
+def llama_backend_init():
     """Initialize the llama + ggml backend
     If numa is true, use NUMA optimizations
     Call once at the start of the program"""
-    return _lib.llama_backend_init(numa)
+    return _lib.llama_backend_init()
 
 
-_lib.llama_backend_init.argtypes = [c_bool]
+_lib.llama_backend_init.argtypes = []
 _lib.llama_backend_init.restype = None
+
+
+# // numa strategies
+# enum ggml_numa_strategy {
+#     GGML_NUMA_STRATEGY_DISABLED   = 0,
+#     GGML_NUMA_STRATEGY_DISTRIBUTE = 1,
+#     GGML_NUMA_STRATEGY_ISOLATE    = 2,
+#     GGML_NUMA_STRATEGY_NUMACTL    = 3,
+#     GGML_NUMA_STRATEGY_MIRROR     = 4,
+#     GGML_NUMA_STRATEGY_COUNT
+# };
+GGML_NUMA_STRATEGY_DISABLED = 0
+GGML_NUMA_STRATEGY_DISTRIBUTE = 1
+GGML_NUMA_STRATEGY_ISOLATE = 2
+GGML_NUMA_STRATEGY_NUMACTL = 3
+GGML_NUMA_STRATEGY_MIRROR = 4
+GGML_NUMA_STRATEGY_COUNT = 5
+
+
+# //optional:
+# LLAMA_API void llama_numa_init(enum ggml_numa_strategy numa);
+def llama_numa_init(numa: int):
+    return _lib.llama_numa_init(numa)
+
+
+_lib.llama_numa_init.argtypes = [c_int]
+_lib.llama_numa_init.restype = None
 
 
 # // Call once at the end of the program - currently only used for MPI

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import multiprocessing
 
-from typing import Optional, List, Literal
+from typing import Optional, List, Literal, Union
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
@@ -108,7 +108,7 @@ class ModelSettings(BaseSettings):
         description="Path to a LoRA file to apply to the model.",
     )
     # Backend Params
-    numa: bool = Field(
+    numa: Union[bool, int] = Field(
         default=False,
         description="Enable NUMA support.",
     )
