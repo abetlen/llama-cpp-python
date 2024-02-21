@@ -530,6 +530,17 @@ class _LlamaBatch:
             self.batch.logits[i] = logits_all
         self.batch.logits[n_tokens - 1] = True
 
+    def set_batch_parallel(self, batch: Sequence[int], position: int, logits_all: bool):
+        assert self.batch is not None
+        n_tokens = len(batch)
+        self.batch.n_tokens = n_tokens
+        for i in range(n_tokens):
+            self.batch.token[i] = batch[i]
+            self.batch.pos[i] = position
+            self.batch.seq_id[i][0] = i
+            self.batch.n_seq_id[i] = 1
+            self.batch.logits[i] = logits_all
+
     def add_sequence(self, batch: Sequence[int], seq_id: int, logits_all: bool):
         assert self.batch is not None
         n_tokens = len(batch)
