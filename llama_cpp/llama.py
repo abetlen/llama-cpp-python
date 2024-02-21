@@ -4,6 +4,8 @@ import os
 import sys
 import uuid
 import time
+import json
+import fnmatch
 import multiprocessing
 from typing import (
     List,
@@ -16,6 +18,7 @@ from typing import (
     Callable,
 )
 from collections import deque
+from pathlib import Path
 
 import ctypes
 
@@ -1866,7 +1869,104 @@ class Llama:
                 break
         return longest_prefix
 
+    @classmethod
+    def from_pretrained(
+        cls,
+        repo_id: str,
+        filename: Optional[str] = None,
+        pattern: Optional[str] = None,
+        local_dir: Optional[Union[str, os.PathLike[str]]] = ".",
+        local_dir_use_symlinks: Union[bool, Literal["auto"]] = "auto",
+        **kwargs: Any,
+    ) -> "Llama":
+        """Create a Llama model from a pretrained model name or path.
+        This method requires the huggingface-hub package.
+        You can install it with `pip install huggingface-hub`.
 
+        Args:
+            repo_id: The model repo id.
+            filename: The filename / path of the model in the repo.
+            pattern: A pattern to match the filename of the model in the repo.
+            local_dir: The local directory to save the model to.
+            local_dir_use_symlinks: Whether to use symlinks when downloading the model.
+            **kwargs: Additional keyword arguments to pass to the Llama constructor.
+
+        Returns:
+            A Llama model."""
+        try:
+            from huggingface_hub import hf_hub_download, HfFileSystem
+            from huggingface_hub.utils import validate_repo_id
+        except ImportError:
+            raise ImportError(
+                "Llama.from_pretrained requires the huggingface-hub package. "
+                "You can install it with `pip install huggingface-hub`."
+            )
+
+        validate_repo_id(repo_id)
+
+        hffs = HfFileSystem()
+
+        files = [
+            file["name"] if isinstance(file, dict) else file
+            for file in hffs.ls(repo_id)
+        ]
+
+        # split each file into repo_id, subfolder, filename
+        file_list: List[str] = []
+        for file in files:
+            rel_path = Path(file).relative_to(repo_id)
+            file_list.append(str(rel_path))
+
+        if filename and pattern:
+            raise ValueError(
+                "Only one of filename or pattern can be specified, not both."
+            )
+
+        if not filename and not pattern:
+            raise ValueError("One of filename or pattern must be specified.")
+
+        matching_files = [file for file in file_list if fnmatch.fnmatch(file, filename or pattern)]  # type: ignore
+
+        if len(matching_files) == 0:
+            if pattern:
+                raise ValueError(
+                    f"No files found in {repo_id} matching pattern {pattern}\n\n"
+                    f"Available Files:\n{json.dumps(file_list)}"
+                )
+            else:
+                raise ValueError(
+                    f"No file found in {repo_id} with filename {filename}\n\n"
+                    f"Available Files:\n{json.dumps(file_list)}"
+                )
+
+        if len(matching_files) > 1:
+            raise ValueError(
+                f"Multiple files found in {repo_id} matching {filename or pattern}\n\n"
+                f"Available Files:\n{json.dumps(files)}"
+            )
+
+        (matching_file,) = matching_files
+
+        subfolder = str(Path(matching_file).parent)
+        filename = Path(matching_file).name
+
+        local_dir = "."
+
+        # download the file
+        hf_hub_download(
+            repo_id=repo_id,
+            local_dir=local_dir,
+            filename=filename,
+            subfolder=subfolder,
+            local_dir_use_symlinks=local_dir_use_symlinks,
+        )
+
+        model_path = os.path.join(local_dir, filename)
+
+        return cls(
+            model_path=model_path,
+            **kwargs,
+        )
 
 
 class LlamaState:
