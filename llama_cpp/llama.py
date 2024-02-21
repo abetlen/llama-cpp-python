@@ -1804,7 +1804,7 @@ class Llama:
         self.input_ids = state.input_ids.copy()
         self.n_tokens = state.n_tokens
         state_size = state.llama_state_size
-        LLamaStateArrayType = llama_cpp.c_uint8 * state_size
+        LLamaStateArrayType = ctypes.c_uint8 * state_size
         llama_state = LLamaStateArrayType.from_buffer_copy(state.llama_state)
 
         if llama_cpp.llama_set_state_data(self._ctx.ctx, llama_state) != state_size:

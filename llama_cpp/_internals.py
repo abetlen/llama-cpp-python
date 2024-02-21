@@ -108,7 +108,7 @@ class _LlamaModel:
             scale,
             path_base_model.encode("utf-8")
             if path_base_model is not None
-            else llama_cpp.c_char_p(0),
+            else ctypes.c_char_p(0),
             n_threads,
         )
 
@@ -303,8 +303,8 @@ class _LlamaContext:
         assert self.ctx is not None
         assert batch.batch is not None
         return_code = llama_cpp.llama_decode(
-            ctx=self.ctx,
-            batch=batch.batch,
+            self.ctx,
+            batch.batch,
         )
         if return_code != 0:
             raise RuntimeError(f"llama_decode returned {return_code}")
@@ -493,7 +493,7 @@ class _LlamaBatch:
     def __init__(
         self, *, n_tokens: int, embd: int, n_seq_max: int, verbose: bool = True
     ):
-        self.n_tokens = n_tokens
+        self._n_tokens = n_tokens
         self.embd = embd
         self.n_seq_max = n_seq_max
         self.verbose = verbose
@@ -502,7 +502,7 @@ class _LlamaBatch:
 
         self.batch = None
         self.batch = llama_cpp.llama_batch_init(
-            self.n_tokens, self.embd, self.n_seq_max
+            self._n_tokens, self.embd, self.n_seq_max
         )
 
     def __del__(self):
@@ -570,12 +570,13 @@ class _LlamaTokenDataArray:
         self.candidates.data = self.candidates_data.ctypes.data_as(
             llama_cpp.llama_token_data_p
         )
-        self.candidates.sorted = llama_cpp.c_bool(False)
-        self.candidates.size = llama_cpp.c_size_t(self.n_vocab)
+        self.candidates.sorted = ctypes.c_bool(False)
+        self.candidates.size = ctypes.c_size_t(self.n_vocab)
 
 
 # Python wrappers over common/common
 def _tokenize(model: _LlamaModel, text: str, add_bos: bool, special: bool) -> list[int]:
+    assert model.model is not None
     n_tokens = len(text) + 1 if add_bos else len(text)
     result = (llama_cpp.llama_token * n_tokens)()
     n_tokens = llama_cpp.llama_tokenize(

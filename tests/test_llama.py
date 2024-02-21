@@ -54,7 +54,7 @@ def mock_llama(monkeypatch):
         output_tokens = llama.tokenize(
             output_text.encode("utf-8"), add_bos=True, special=True
         )
-        logits = (llama_cpp.c_float * (n_vocab * n_ctx))(-100.0)
+        logits = (ctypes.c_float * (n_vocab * n_ctx))(-100.0)
         for i in range(n_ctx):
             output_idx = i + 1  # logits for first tokens predict second token
             if output_idx < len(output_tokens):
@@ -90,9 +90,9 @@ def mock_llama(monkeypatch):
             assert n > 0, "mock_llama_decode not called"
             assert last_n_tokens > 0, "mock_llama_decode not called"
             # Return view of logits for last_n_tokens
-            return (llama_cpp.c_float * (last_n_tokens * n_vocab)).from_address(
+            return (ctypes.c_float * (last_n_tokens * n_vocab)).from_address(
                 ctypes.addressof(logits)
-                + (n - last_n_tokens) * n_vocab * ctypes.sizeof(llama_cpp.c_float)
+                + (n - last_n_tokens) * n_vocab * ctypes.sizeof(ctypes.c_float)
             )
 
         monkeypatch.setattr("llama_cpp.llama_cpp.llama_decode", mock_decode)
