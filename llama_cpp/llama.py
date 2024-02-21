@@ -32,10 +32,7 @@ from .llama_cache import (
     LlamaDiskCache,  # type: ignore
     LlamaRAMCache,  # type: ignore
 )
-from .llama_tokenizer import (
-    BaseLlamaTokenizer,
-    LlamaTokenizer
-)
+from .llama_tokenizer import BaseLlamaTokenizer, LlamaTokenizer
 import llama_cpp.llama_cpp as llama_cpp
 import llama_cpp.llama_chat_format as llama_chat_format
 
@@ -53,9 +50,7 @@ from ._internals import (
     _LlamaSamplingContext,  # type: ignore
 )
 from ._logger import set_verbose
-from ._utils import (
-    suppress_stdout_stderr
-)
+from ._utils import suppress_stdout_stderr
 
 
 class Llama:
@@ -192,7 +187,11 @@ class Llama:
             Llama.__backend_initialized = True
 
         if isinstance(numa, bool):
-            self.numa = llama_cpp.GGML_NUMA_STRATEGY_DISTRIBUTE if numa else llama_cpp.GGML_NUMA_STRATEGY_DISABLED
+            self.numa = (
+                llama_cpp.GGML_NUMA_STRATEGY_DISTRIBUTE
+                if numa
+                else llama_cpp.GGML_NUMA_STRATEGY_DISABLED
+            )
         else:
             self.numa = numa
 
@@ -249,9 +248,9 @@ class Llama:
                 else:
                     raise ValueError(f"Unknown value type for {k}: {v}")
 
-            self._kv_overrides_array[
-                -1
-            ].key = b"\0"  # ensure sentinel element is zeroed
+            self._kv_overrides_array[-1].key = (
+                b"\0"  # ensure sentinel element is zeroed
+            )
             self.model_params.kv_overrides = self._kv_overrides_array
 
         self.n_batch = min(n_ctx, n_batch)  # ???
@@ -259,7 +258,7 @@ class Llama:
         self.n_threads_batch = n_threads_batch or max(
             multiprocessing.cpu_count() // 2, 1
         )
-        
+
         # Context Params
         self.context_params = llama_cpp.llama_context_default_params()
         self.context_params.seed = seed
@@ -292,7 +291,9 @@ class Llama:
         )
         self.context_params.yarn_orig_ctx = yarn_orig_ctx if yarn_orig_ctx != 0 else 0
         self.context_params.mul_mat_q = mul_mat_q
-        self.context_params.logits_all = logits_all if draft_model is None else True # Must be set to True for speculative decoding
+        self.context_params.logits_all = (
+            logits_all if draft_model is None else True
+        )  # Must be set to True for speculative decoding
         self.context_params.embedding = embedding
         self.context_params.offload_kqv = offload_kqv
 
@@ -382,8 +383,14 @@ class Llama:
         if self.verbose:
             print(f"Model metadata: {self.metadata}", file=sys.stderr)
 
-        if self.chat_format is None and self.chat_handler is None and "tokenizer.chat_template" in self.metadata:
-            chat_format = llama_chat_format.guess_chat_format_from_gguf_metadata(self.metadata)
+        if (
+            self.chat_format is None
+            and self.chat_handler is None
+            and "tokenizer.chat_template" in self.metadata
+        ):
+            chat_format = llama_chat_format.guess_chat_format_from_gguf_metadata(
+                self.metadata
+            )
 
             if chat_format is not None:
                 self.chat_format = chat_format
@@ -409,9 +416,7 @@ class Llama:
                     print(f"Using chat bos_token: {bos_token}", file=sys.stderr)
 
                 self.chat_handler = llama_chat_format.Jinja2ChatFormatter(
-                    template=template,
-                    eos_token=eos_token,
-                    bos_token=bos_token
+                    template=template, eos_token=eos_token, bos_token=bos_token
                 ).to_chat_handler()
 
         if self.chat_format is None and self.chat_handler is None:
@@ -462,7 +467,9 @@ class Llama:
         """
         return self.tokenizer_.tokenize(text, add_bos, special)
 
-    def detokenize(self, tokens: List[int], prev_tokens: Optional[List[int]] = None) -> bytes:
+    def detokenize(
+        self, tokens: List[int], prev_tokens: Optional[List[int]] = None
+    ) -> bytes:
         """Detokenize a list of tokens.
 
         Args:
@@ -568,7 +575,7 @@ class Llama:
             logits[:] = (
                 logits_processor(self._input_ids, logits)
                 if idx is None
-                else logits_processor(self._input_ids[:idx + 1], logits)
+                else logits_processor(self._input_ids[: idx + 1], logits)
             )
 
         sampling_params = _LlamaSamplingParams(
@@ -710,7 +717,9 @@ class Llama:
 
             if self.draft_model is not None:
                 self.input_ids[self.n_tokens : self.n_tokens + len(tokens)] = tokens
-                draft_tokens = self.draft_model(self.input_ids[:self.n_tokens + len(tokens)])
+                draft_tokens = self.draft_model(
+                    self.input_ids[: self.n_tokens + len(tokens)]
+                )
                 tokens.extend(
                     draft_tokens.astype(int)[
                         : self._n_ctx - self.n_tokens - len(tokens)
@@ -795,6 +804,7 @@ class Llama:
 
         # decode and fetch embeddings
         data: List[List[float]] = []
+
         def decode_batch(n_seq: int):
             assert self._ctx.ctx is not None
             llama_cpp.llama_kv_cache_clear(self._ctx.ctx)
@@ -803,9 +813,9 @@ class Llama:
 
             # store embeddings
             for i in range(n_seq):
-                embedding: List[float] = llama_cpp.llama_get_embeddings_ith(self._ctx.ctx, i)[
-                    :n_embd
-                ]
+                embedding: List[float] = llama_cpp.llama_get_embeddings_ith(
+                    self._ctx.ctx, i
+                )[:n_embd]
                 if normalize:
                     norm = float(np.linalg.norm(embedding))
                     embedding = [v / norm for v in embedding]
@@ -1672,12 +1682,13 @@ class Llama:
         """
         try:
             from openai.types.chat import ChatCompletion, ChatCompletionChunk
-            stream = kwargs.get("stream", False) # type: ignore
+
+            stream = kwargs.get("stream", False)  # type: ignore
             assert isinstance(stream, bool)
             if stream:
-                return (ChatCompletionChunk(**chunk) for chunk in self.create_chat_completion(*args, **kwargs)) # type: ignore
+                return (ChatCompletionChunk(**chunk) for chunk in self.create_chat_completion(*args, **kwargs))  # type: ignore
             else:
-                return ChatCompletion(**self.create_chat_completion(*args, **kwargs)) # type: ignore
+                return ChatCompletion(**self.create_chat_completion(*args, **kwargs))  # type: ignore
         except ImportError:
             raise ImportError(
                 "To use create_chat_completion_openai_v1, you must install the openai package."
@@ -1873,8 +1884,7 @@ class Llama:
     def from_pretrained(
         cls,
         repo_id: str,
-        filename: Optional[str] = None,
-        pattern: Optional[str] = None,
+        filename: Optional[str],
         local_dir: Optional[Union[str, os.PathLike[str]]] = ".",
         local_dir_use_symlinks: Union[bool, Literal["auto"]] = "auto",
         **kwargs: Any,
@@ -1885,8 +1895,7 @@ class Llama:
 
         Args:
             repo_id: The model repo id.
-            filename: The filename / path of the model in the repo.
-            pattern: A pattern to match the filename of the model in the repo.
+            filename: A filename or glob pattern to match the model file in the repo.
             local_dir: The local directory to save the model to.
             local_dir_use_symlinks: Whether to use symlinks when downloading the model.
             **kwargs: Additional keyword arguments to pass to the Llama constructor.
@@ -1917,31 +1926,17 @@ class Llama:
             rel_path = Path(file).relative_to(repo_id)
             file_list.append(str(rel_path))
 
-        if filename and pattern:
-            raise ValueError(
-                "Only one of filename or pattern can be specified, not both."
-            )
-
-        if not filename and not pattern:
-            raise ValueError("One of filename or pattern must be specified.")
-
-        matching_files = [file for file in file_list if fnmatch.fnmatch(file, filename or pattern)]  # type: ignore
+        matching_files = [file for file in file_list if fnmatch.fnmatch(file, filename)]  # type: ignore
 
         if len(matching_files) == 0:
-            if pattern:
-                raise ValueError(
-                    f"No files found in {repo_id} matching pattern {pattern}\n\n"
-                    f"Available Files:\n{json.dumps(file_list)}"
-                )
-            else:
-                raise ValueError(
-                    f"No file found in {repo_id} with filename {filename}\n\n"
-                    f"Available Files:\n{json.dumps(file_list)}"
-                )
+            raise ValueError(
+                f"No file found in {repo_id} that match {filename}\n\n"
+                f"Available Files:\n{json.dumps(file_list)}"
+            )
 
         if len(matching_files) > 1:
             raise ValueError(
-                f"Multiple files found in {repo_id} matching {filename or pattern}\n\n"
+                f"Multiple files found in {repo_id} matching {filename}\n\n"
                 f"Available Files:\n{json.dumps(files)}"
             )
 

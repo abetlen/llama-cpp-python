@@ -220,7 +220,7 @@ You'll need to install the `huggingface-hub` package to use this feature (`pip i
 ```python
 llama = Llama.from_pretrained(
     repo_id="Qwen/Qwen1.5-0.5B-Chat-GGUF",
-    pattern="*q8_0.gguf",
+    filename="*q8_0.gguf",
     verbose=False
 )
 ```
