@@ -26,6 +26,7 @@ High-level Python bindings for llama.cpp.
             - load_state
             - token_bos
             - token_eos
+            - from_pretrained
         show_root_heading: true
 
 ::: llama_cpp.LlamaGrammar
