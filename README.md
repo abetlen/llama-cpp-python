@@ -212,6 +212,19 @@ Below is a short example demonstrating how to use the high-level API to for basi
 
 Text completion is available through the [`__call__`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.__call__) and [`create_completion`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.create_completion) methods of the [`Llama`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama) class.
 
+## Pulling models from Hugging Face
+
+You can pull `Llama` models from Hugging Face using the `from_pretrained` method.
+You'll need to install the `huggingface-hub` package to use this feature (`pip install huggingface-hub`).
+
+```python
+llama = Llama.from_pretrained(
+    repo_id="Qwen/Qwen1.5-0.5B-Chat-GGUF",
+    pattern="*q8_0.gguf",
+    verbose=False
+)
+```
+
 ### Chat Completion
 
 The high-level API also provides a simple interface for chat completion.
