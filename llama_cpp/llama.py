@@ -523,7 +523,7 @@ class Llama:
             # Update n_tokens
             self.n_tokens += n_tokens
 
-    def eval_parallel(self, tokens: Sequence[int]):
+    def eval_parallel(self, tokens: List[int]):
         """Evaluate a list of tokens in different sequences but at the same position.
 
         Args:
@@ -745,14 +745,18 @@ class Llama:
         else:
             return vecs[0][:max_len]
 
-    def generate_parallel(self, prompts, max_tokens=None, **kwargs):
-        # tokenize the prompts
-        n_parallel = len(prompts)
-        tokens_list = [self.tokenize(p.encode("utf-8")) for p in prompts]
-        ntoks_list = [len(toks) for toks in tokens_list]
+    def generate_parallel(
+        self,
+        tokens: List[List[int]],
+        max_tokens: Optional[int] = None,
+        **kwargs
+    ) -> Iterator[List[int]]:
+        # get prompt and token counts
+        n_parallel = len(tokens)
+        n_tokens = [len(toks) for toks in tokens]
 
         # set default max_tokens
-        max_prompt = max(ntoks_list)
+        max_prompt = max(n_tokens)
         if max_tokens is None:
             max_tokens = self._n_ctx // n_parallel - max_prompt
         max_length = max_prompt + max_tokens
@@ -766,7 +770,7 @@ class Llama:
         # subsets of the prompts.
 
         # find the longest common prefix
-        prefix_tokens = self.longest_common_prefix(tokens_list)
+        prefix_tokens = self.longest_common_prefix(tokens)
         prefix_len = len(prefix_tokens)
 
         # reset batch and run prefix eval
@@ -782,7 +786,7 @@ class Llama:
 
         # since the prompts may be of different lengths, just yield the common prefix
         for i in range(prefix_len):
-            result = [tokens_list[j][i] for j in range(n_parallel)]
+            result = [tokens[j][i] for j in range(n_parallel)]
             yield result
 
         # run the decoding loop
@@ -795,8 +799,8 @@ class Llama:
                     continue
 
                 # see if we're still in the prompt
-                if k < ntoks_list[i]:
-                    new_id = tokens_list[i][k]
+                if k < n_tokens[i]:
+                    new_id = tokens[i][k]
                 else:
                     # get last logits and sample a new token
                     new_id = self.sample(idx=i_batch[i], **kwargs)
@@ -817,8 +821,7 @@ class Llama:
                 self.eval_parallel(new_ids)
 
             # yield new tokens
-            result = [new_ids[j] if j >= 0 else None for j in i_batch]
-            yield result
+            yield [new_ids[j] if j >= 0 else None for j in i_batch]
 
     def create_embedding(
         self, input: Union[str, List[str]], model: Optional[str] = None
@@ -1566,15 +1569,25 @@ class Llama:
         completion: Completion = next(completion_or_chunks)  # type: ignore
         return completion
 
-    def _create_completion_parallel(self, prompts, stream=False, **kwargs):
-        for toks in self.generate_parallel(prompts, **kwargs):
+    def _create_completion_parallel(
+        self,
+        prompts: List[str],
+        **kwargs
+    ) -> Iterator[List[str]]:
+        tokens: List[List[int]] = [self.tokenize(p.encode("utf-8")) for p in prompts]
+        for toks in self.generate_parallel(tokens, **kwargs):
             yield [
                 self.detokenize([tok]).decode("utf-8") if tok is not None else ""
                 for tok in toks
             ]
 
-    def create_completion_parallel(self, prompts, stream=False, **kwargs):
-        genpar = self._create_completion_parallel(prompts, **kwargs)
+    def create_completion_parallel(
+        self,
+        prompts: List[str],
+        stream: bool = False,
+        **kwargs
+    ) -> List[str]:
+        genpar: Iterator[List[str]] = self._create_completion_parallel(prompts, **kwargs)
         if stream:
             return genpar
         else:
