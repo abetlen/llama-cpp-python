@@ -993,6 +993,26 @@ def format_saiga(
     return ChatFormatterResponse(prompt=_prompt.strip())
 
 
+# Chat format for Google's Gemma models, see more details and available models:
+# https://huggingface.co/collections/google/gemma-release-65d5efbccdbb8c4202ec078b
+@register_chat_format("gemma")
+def format_gemma(
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    **kwargs: Any,
+) -> ChatFormatterResponse:
+    system_message = _get_system_message(messages)
+    if system_message is not None and system_message != "":
+        raise ValueError(
+            "`role='system'` messages are not allowed on Google's Gemma models."
+        )
+    _roles = dict(user="<start_of_turn>user\n", assistant="<start_of_turn>model\n")
+    _sep = "<end_of_turn>\n"
+    _messages = _map_roles(messages, _roles)
+    _messages.append((_roles["assistant"], None))
+    _prompt = _format_no_colon_single(system_message="", messages=_messages, sep=_sep)
+    return ChatFormatterResponse(prompt=_prompt, stop=_sep)
+
+
 # Tricky chat formats that require custom chat handlers
 
 
