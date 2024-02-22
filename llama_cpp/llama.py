@@ -1566,13 +1566,19 @@ class Llama:
         completion: Completion = next(completion_or_chunks)  # type: ignore
         return completion
 
-    def create_completion_parallel(self, prompts, **kwargs):
-        streams = ["" for _ in prompts]
+    def _create_completion_parallel(self, prompts, stream=False, **kwargs):
         for toks in self.generate_parallel(prompts, **kwargs):
-            for i, tok in enumerate(toks):
-                if tok is not None:
-                    streams[i] += self.detokenize([tok]).decode("utf-8")
-        return streams
+            yield [
+                self.detokenize([tok]).decode("utf-8") if tok is not None else ""
+                for tok in toks
+            ]
+
+    def create_completion_parallel(self, prompts, stream=False, **kwargs):
+        genpar = self._create_completion_parallel(prompts, **kwargs)
+        if stream:
+            return genpar
+        else:
+            return ["".join(toks) for toks in zip(*genpar)]
 
     def __call__(
         self,
