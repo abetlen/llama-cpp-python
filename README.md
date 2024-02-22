@@ -84,6 +84,7 @@ llama-cpp-python -C cmake.args="-DLLAMA_BLAS=ON;-DLLAMA_BLAS_VENDOR=OpenBLAS"
 
 </details>
 
+https://github.com/abetlen/llama-cpp-python/releases/download/${VERSION}/
 
 ### Supported Backends
 
@@ -268,9 +269,9 @@ Below is a short example demonstrating how to use the high-level API to for basi
 
 Text completion is available through the [`__call__`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.__call__) and [`create_completion`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.create_completion) methods of the [`Llama`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama) class.
 
-## Pulling models from Hugging Face
+### Pulling models from Hugging Face Hub
 
-You can pull `Llama` models from Hugging Face using the `from_pretrained` method.
+You can download `Llama` models in `gguf` format directly from Hugging Face using the [`from_pretrained`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.from_pretrained) method.
 You'll need to install the `huggingface-hub` package to use this feature (`pip install huggingface-hub`).
 
 ```python
@@ -281,7 +282,7 @@ llm = Llama.from_pretrained(
 )
 ```
 
-By default the `from_pretrained` method will download the model to the huggingface cache directory so you can manage installed model files with the `huggingface-cli` tool.
+By default [`from_pretrained`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.from_pretrained) will download the model to the huggingface cache directory, you can then manage installed model files with the [`huggingface-cli`](https://huggingface.co/docs/huggingface_hub/en/guides/cli) tool.
 
 ### Chat Completion
 
@@ -308,13 +309,16 @@ Note that `chat_format` option must be set for the particular model you are usin
 
 Chat completion is available through the [`create_chat_completion`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.create_chat_completion) method of the [`Llama`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama) class.
 
+For OpenAI API v1 compatibility, you use the [`create_chat_completion_openai_v1`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.create_chat_completion_openai_v1) method which will return pydantic models instead of dicts.
+
+
 ### JSON and JSON Schema Mode
 
-If you want to constrain chat responses to only valid JSON or a specific JSON Schema you can use the `response_format` argument to the `create_chat_completion` method.
+To constrain chat responses to only valid JSON or a specific JSON Schema use the `response_format` argument in [`create_chat_completion`](http://localhost:8000/api-reference/#llama_cpp.Llama.create_chat_completion).
 
 #### JSON Mode
 
-The following example will constrain the response to be valid JSON.
+The following example will constrain the response to valid JSON strings only.
 
 ```python
 >>> from llama_cpp import Llama
@@ -336,7 +340,7 @@ The following example will constrain the response to be valid JSON.
 
 #### JSON Schema Mode
 
-To constrain the response to a specific JSON Schema, you can use the `schema` property of the `response_format` argument.
+To constrain the response further to a specific JSON Schema add the schema to the `schema` property of the `response_format` argument.
 
 ```python
 >>> from llama_cpp import Llama
@@ -471,7 +475,7 @@ llama = Llama(
 
 ### Embeddings
 
-`llama-cpp-python` supports generating embeddings from the text.
+To generate text embeddings use [`create_embedding`](http://localhost:8000/api-reference/#llama_cpp.Llama.create_embedding).
 
 ```python
 import llama_cpp
@@ -480,7 +484,7 @@ llm = llama_cpp.Llama(model_path="path/to/model.gguf", embeddings=True)
 
 embeddings = llm.create_embedding("Hello, world!")
 
-# or batched
+# or create multiple embeddings at once
 
 embeddings = llm.create_embedding(["Hello, world!", "Goodbye, world!"])
 ```
