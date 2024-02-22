@@ -12,14 +12,14 @@ This package provides:
 
 - Low-level access to C API via `ctypes` interface.
 - High-level Python API for text completion
-  - OpenAI-like API
-  - [LangChain compatibility](https://python.langchain.com/docs/integrations/llms/llamacpp)
-  - [LlamaIndex compatibility](https://docs.llamaindex.ai/en/stable/examples/llm/llama_2_llama_cpp.html)
+    - OpenAI-like API
+    - [LangChain compatibility](https://python.langchain.com/docs/integrations/llms/llamacpp)
+    - [LlamaIndex compatibility](https://docs.llamaindex.ai/en/stable/examples/llm/llama_2_llama_cpp.html)
 - OpenAI compatible web server
-  - [Local Copilot replacement](https://llama-cpp-python.readthedocs.io/en/latest/server/#code-completion)
-  - [Function Calling support](https://llama-cpp-python.readthedocs.io/en/latest/server/#function-calling)
-  - [Vision API support](https://llama-cpp-python.readthedocs.io/en/latest/server/#multimodal-models)
-  - [Multiple Models](https://llama-cpp-python.readthedocs.io/en/latest/server/#configuration-and-multi-model-support)
+    - [Local Copilot replacement](https://llama-cpp-python.readthedocs.io/en/latest/server/#code-completion)
+    - [Function Calling support](https://llama-cpp-python.readthedocs.io/en/latest/server/#function-calling)
+    - [Vision API support](https://llama-cpp-python.readthedocs.io/en/latest/server/#multimodal-models)
+    - [Multiple Models](https://llama-cpp-python.readthedocs.io/en/latest/server/#configuration-and-multi-model-support)
 
 Documentation is available at [https://llama-cpp-python.readthedocs.io/en/latest](https://llama-cpp-python.readthedocs.io/en/latest).
 
