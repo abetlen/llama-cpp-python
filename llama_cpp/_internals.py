@@ -51,6 +51,9 @@ class _LlamaModel:
             self.path_model.encode("utf-8"), self.params
         )
 
+        if self.model is None:
+            raise ValueError(f"Failed to load model from file: {path_model}")
+
     def __del__(self):
         if self.model is not None and self._llama_free_model is not None:
             self._llama_free_model(self.model)
@@ -257,6 +260,9 @@ class _LlamaContext:
         self.ctx = llama_cpp.llama_new_context_with_model(
             self.model.model, self.params
         )
+
+        if self.ctx is None:
+            raise ValueError("Failed to create llama_context")
 
     def __del__(self):
         if self.ctx is not None and self._llama_free is not None:
