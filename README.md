@@ -561,7 +561,7 @@ Below is a short example demonstrating how to use the low-level API to tokenize 
 ```python
 >>> import llama_cpp
 >>> import ctypes
->>> llama_cpp.llama_backend_init(numa=False) # Must be called once at the start of each program
+>>> llama_cpp.llama_backend_init(False) # Must be called once at the start of each program
 >>> params = llama_cpp.llama_context_default_params()
 # use bytes for char * params
 >>> model = llama_cpp.llama_load_model_from_file(b"./models/7b/llama-model.gguf", params)
@@ -569,7 +569,7 @@ Below is a short example demonstrating how to use the low-level API to tokenize 
 >>> max_tokens = params.n_ctx
 # use ctypes arrays for array params
 >>> tokens = (llama_cpp.llama_token * int(max_tokens))()
->>> n_tokens = llama_cpp.llama_tokenize(ctx, b"Q: Name the planets in the solar system? A: ", tokens, max_tokens, add_bos=llama_cpp.c_bool(True))
+>>> n_tokens = llama_cpp.llama_tokenize(ctx, b"Q: Name the planets in the solar system? A: ", tokens, max_tokens, llama_cpp.c_bool(True))
 >>> llama_cpp.llama_free(ctx)
 ```
 
