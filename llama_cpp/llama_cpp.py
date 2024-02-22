@@ -15,9 +15,9 @@ from typing import (
     Optional,
     TYPE_CHECKING,
     TypeVar,
-    TypeAlias,
     Generic,
 )
+from typing_extensions import TypeAlias
 
 
 # Load the library
