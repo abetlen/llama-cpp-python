@@ -49,7 +49,7 @@ If this fails, add `--verbose` to the `pip install` see the full cmake build log
 
 All `llama.cpp` cmake build options can be set via the `CMAKE_ARGS` environment variable or via the `--config-settings / -C` cli flag during installation.
 
-<details>
+<details open>
 <summary>Environment Variables</summary>
 
 ```bash
@@ -89,7 +89,7 @@ llama-cpp-python -C cmake.args="-DLLAMA_BLAS=ON;-DLLAMA_BLAS_VENDOR=OpenBLAS"
 
 Below are some common backends, their build commands and any additional environment variables required.
 
-<details>
+<details open>
 <summary>OpenBLAS (CPU)</summary>
 
 To install with OpenBLAS, set the `LLAMA_BLAS` and `LLAMA_BLAS_VENDOR` environment variables before installing:
