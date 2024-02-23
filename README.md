@@ -423,10 +423,10 @@ Due to discrepancies between llama.cpp and HuggingFace's tokenizers, it is requi
 >>> from llama_cpp import Llama
 >>> from llama_cpp.llama_tokenizer import LlamaHFTokenizer
 >>> llm = Llama.from_pretrained(
-  repo_id="meetkai/functionary-7b-v1-GGUF",
+  repo_id="meetkai/functionary-small-v2.2-GGUF",
   filename="functionary-small-v2.2.q4_0.gguf",
   chat_format="functionary-v2",
-  tokenizer=LlamaHFTokenizer.from_pretrained("meetkai/functionary-7b-v1-GGUF")
+  tokenizer=LlamaHFTokenizer.from_pretrained("meetkai/functionary-small-v2.2-GGUF")
 )
 ```
 </details>
