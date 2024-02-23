@@ -84,8 +84,6 @@ llama-cpp-python -C cmake.args="-DLLAMA_BLAS=ON;-DLLAMA_BLAS_VENDOR=OpenBLAS"
 
 </details>
 
-https://github.com/abetlen/llama-cpp-python/releases/download/${VERSION}/
-
 ### Supported Backends
 
 Below are some common backends, their build commands and any additional environment variables required.
