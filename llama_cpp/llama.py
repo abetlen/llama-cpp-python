@@ -5,8 +5,10 @@ import sys
 import uuid
 import time
 import json
+import ctypes
 import fnmatch
 import multiprocessing
+
 from typing import (
     List,
     Optional,
@@ -20,7 +22,6 @@ from typing import (
 from collections import deque
 from pathlib import Path
 
-import ctypes
 
 from llama_cpp.llama_types import List
 
@@ -480,7 +481,7 @@ class Llama:
         Returns:
             The detokenized string.
         """
-        return self.tokenizer_.detokenize(tokens, prev_tokens)
+        return self.tokenizer_.detokenize(tokens, prev_tokens=prev_tokens)
 
     def set_cache(self, cache: Optional[BaseLlamaCache]):
         """Set the cache.
@@ -1016,13 +1017,13 @@ class Llama:
             grammar=grammar,
         ):
             if token == self._token_eos:
-                text = self.detokenize(completion_tokens)
+                text = self.detokenize(completion_tokens, prev_tokens=prompt_tokens)
                 finish_reason = "stop"
                 break
 
             completion_tokens.append(token)
 
-            all_text = self.detokenize(completion_tokens)
+            all_text = self.detokenize(completion_tokens, prev_tokens=prompt_tokens)
 
             # Contains multi-byte UTF8
             for k, char in enumerate(all_text[-3:]):
@@ -1046,7 +1047,7 @@ class Llama:
 
             if stream:
                 remaining_tokens = completion_tokens[returned_tokens:]
-                remaining_text = self.detokenize(remaining_tokens)
+                remaining_text = self.detokenize(remaining_tokens, prev_tokens=prompt_tokens + completion_tokens[:returned_tokens])
                 remaining_length = len(remaining_text)
 
                 # We want to avoid yielding any characters from
@@ -1068,17 +1069,17 @@ class Llama:
                     for token in remaining_tokens:
                         if token == self.token_bos():
                             continue
-                        token_end_position += len(self.detokenize([token]))
+                        token_end_position += len(self.detokenize([token], prev_tokens=prompt_tokens + completion_tokens[:returned_tokens]))
                         # Check if stop sequence is in the token
                         if token_end_position > (
                             remaining_length - first_stop_position
                         ):
                             break
-                        token_str = self.detokenize([token]).decode(
+                        token_str = self.detokenize([token], prev_tokens=prompt_tokens + completion_tokens[:returned_tokens]).decode(
                             "utf-8", errors="ignore"
                         )
                         text_offset = len(prompt) + len(
-                            self.detokenize(completion_tokens[:returned_tokens]).decode(
+                            self.detokenize(completion_tokens[:returned_tokens], prev_tokens=prompt_tokens + completion_tokens[:returned_tokens]).decode(
                                 "utf-8", errors="ignore"
                             )
                         )
@@ -1100,7 +1101,7 @@ class Llama:
                         top_logprob.update({token_str: current_logprobs[int(token)]})
                         logprobs_or_none = {
                             "tokens": [
-                                self.detokenize([token]).decode(
+                                self.detokenize([token], prev_tokens=prompt_tokens + completion_tokens[:returned_tokens]).decode(
                                     "utf-8", errors="ignore"
                                 )
                             ],
@@ -1116,7 +1117,7 @@ class Llama:
                             "model": model_name,
                             "choices": [
                                 {
-                                    "text": self.detokenize([token]).decode(
+                                    "text": self.detokenize([token], prev_tokens=prompt_tokens + completion_tokens[:returned_tokens]).decode(
                                         "utf-8", errors="ignore"
                                     ),
                                     "index": 0,
@@ -1130,7 +1131,7 @@ class Llama:
                         decode_success = False
                         for i in range(1, len(remaining_tokens) + 1):
                             try:
-                                bs = self.detokenize(remaining_tokens[:i])
+                                bs = self.detokenize(remaining_tokens[:i], prev_tokens=prompt_tokens + completion_tokens[:returned_tokens])
                                 ts = bs.decode("utf-8")
                                 decode_success = True
                                 break
@@ -1165,14 +1166,14 @@ class Llama:
                         }
 
             if len(completion_tokens) >= max_tokens:
-                text = self.detokenize(completion_tokens)
+                text = self.detokenize(completion_tokens, prev_tokens=prompt_tokens)
                 finish_reason = "length"
                 break
 
         if stopping_criteria is not None and stopping_criteria(
             self._input_ids, self._scores[-1, :]
         ):
-            text = self.detokenize(completion_tokens)
+            text = self.detokenize(completion_tokens, prev_tokens=prompt_tokens)
             finish_reason = "stop"
 
         if self.verbose:
@@ -1180,7 +1181,7 @@ class Llama:
 
         if stream:
             remaining_tokens = completion_tokens[returned_tokens:]
-            all_text = self.detokenize(remaining_tokens)
+            all_text = self.detokenize(remaining_tokens, prev_tokens=prompt_tokens + completion_tokens[:returned_tokens])
             any_stop = [s for s in stop_sequences if s in all_text]
             if len(any_stop) > 0:
                 end = min(all_text.index(stop) for stop in any_stop)
@@ -1189,7 +1190,7 @@ class Llama:
 
             token_end_position = 0
             for token in remaining_tokens:
-                token_end_position += len(self.detokenize([token]))
+                token_end_position += len(self.detokenize([token], prev_tokens=prompt_tokens + completion_tokens[:returned_tokens]))
 
                 logprobs_or_none: Optional[CompletionLogprobs] = None
                 if logprobs is not None:
@@ -1199,7 +1200,7 @@ class Llama:
                         "utf-8", errors="ignore"
                     )
                     text_offset = len(prompt) + len(
-                        self.detokenize(completion_tokens[:returned_tokens])
+                        self.detokenize(completion_tokens[:returned_tokens], prev_tokens=prompt_tokens + completion_tokens[:returned_tokens])
                     )
                     token_offset = len(prompt_tokens) + returned_tokens - 1
                     logits = self._scores[token_offset, :]
@@ -1313,8 +1314,8 @@ class Llama:
                 all_tokens = completion_tokens
 
             all_token_strs = [
-                self.detokenize([token]).decode("utf-8", errors="ignore")
-                for token in all_tokens
+                self.detokenize([token], prev_tokens=all_tokens[:i]).decode("utf-8", errors="ignore")
+                for i, token in enumerate(all_tokens)
             ]
             all_logprobs = Llama.logits_to_logprobs(self._scores)[token_offset:]
             # TODO: may be able to change this loop to use np.take_along_dim
@@ -1339,7 +1340,7 @@ class Llama:
                 )
                 token_logprobs.append(logprobs_token[int(token)])
                 top_logprob: Optional[Dict[str, float]] = {
-                    self.detokenize([i]).decode("utf-8", errors="ignore"): logprob
+                    self.detokenize([i], prev_tokens=all_tokens[:idx]).decode("utf-8", errors="ignore"): logprob
                     for logprob, i in sorted_logprobs[:logprobs]
                 }
                 top_logprob.update({token_str: logprobs_token[int(token)]})
@@ -1594,6 +1595,8 @@ class Llama:
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
         logit_bias: Optional[Dict[str, float]] = None,
+        logprobs: Optional[bool] = None,
+        top_logprobs: Optional[int] = None,
     ) -> Union[
         CreateChatCompletionResponse, Iterator[CreateChatCompletionStreamResponse]
     ]:
@@ -1790,7 +1793,7 @@ class Llama:
         state_size = llama_cpp.llama_get_state_size(self._ctx.ctx)
         if self.verbose:
             print(f"Llama.save_state: got state size: {state_size}", file=sys.stderr)
-        llama_state = (llama_cpp.c_uint8 * int(state_size))()
+        llama_state = (ctypes.c_uint8 * int(state_size))()
         if self.verbose:
             print("Llama.save_state: allocated state", file=sys.stderr)
         n_bytes = llama_cpp.llama_copy_state_data(self._ctx.ctx, llama_state)
@@ -1798,7 +1801,7 @@ class Llama:
             print(f"Llama.save_state: copied llama state: {n_bytes}", file=sys.stderr)
         if int(n_bytes) > int(state_size):
             raise RuntimeError("Failed to copy llama state data")
-        llama_state_compact = (llama_cpp.c_uint8 * int(n_bytes))()
+        llama_state_compact = (ctypes.c_uint8 * int(n_bytes))()
         llama_cpp.ctypes.memmove(llama_state_compact, llama_state, int(n_bytes))
         if self.verbose:
             print(
