@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.47]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@973053d8b0d04809836b3339a50f68d9c842de90
+
+## [0.2.46]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@ba2135ccae7462470b3865c6e41d2e1d734eac05
+- feat: Pull models directly from huggingface by @abetlen in #1206
+- feat(low-level-api): Improve API static type-safety and performance. Low level api functions are positional args only now. by @abetlen in #1205
+
+## [0.2.45]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@89febfed9322c8849520dc63c93ee4f5fd72556e
+
+## [0.2.44]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@4524290e87b8e107cc2b56e1251751546f4b9051
+- fix: create_embedding broken response for input type str by @abetlen in 0ce66bc080fe537590b05b24bf442480bf2dd045
+- fix: Use '\n' seperator for EventSourceResponse by @khimaros in #1188
+- fix: Incorporate embedding pooling layer fixes by @iamlemec in #1194
+
 ## [0.2.43]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@8084d554406b767d36b3250b3b787462d5dd626f

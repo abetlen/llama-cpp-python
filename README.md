@@ -12,60 +12,94 @@ This package provides:
 
 - Low-level access to C API via `ctypes` interface.
 - High-level Python API for text completion
-  - OpenAI-like API
-  - [LangChain compatibility](https://python.langchain.com/docs/integrations/llms/llamacpp)
-  - [LlamaIndex compatibility](https://docs.llamaindex.ai/en/stable/examples/llm/llama_2_llama_cpp.html)
+    - OpenAI-like API
+    - [LangChain compatibility](https://python.langchain.com/docs/integrations/llms/llamacpp)
+    - [LlamaIndex compatibility](https://docs.llamaindex.ai/en/stable/examples/llm/llama_2_llama_cpp.html)
 - OpenAI compatible web server
-  - [Local Copilot replacement](https://llama-cpp-python.readthedocs.io/en/latest/server/#code-completion)
-  - [Function Calling support](https://llama-cpp-python.readthedocs.io/en/latest/server/#function-calling)
-  - [Vision API support](https://llama-cpp-python.readthedocs.io/en/latest/server/#multimodal-models)
-  - [Multiple Models](https://llama-cpp-python.readthedocs.io/en/latest/server/#configuration-and-multi-model-support)
+    - [Local Copilot replacement](https://llama-cpp-python.readthedocs.io/en/latest/server/#code-completion)
+    - [Function Calling support](https://llama-cpp-python.readthedocs.io/en/latest/server/#function-calling)
+    - [Vision API support](https://llama-cpp-python.readthedocs.io/en/latest/server/#multimodal-models)
+    - [Multiple Models](https://llama-cpp-python.readthedocs.io/en/latest/server/#configuration-and-multi-model-support)
 
 Documentation is available at [https://llama-cpp-python.readthedocs.io/en/latest](https://llama-cpp-python.readthedocs.io/en/latest).
 
 ## Installation
 
-`llama-cpp-python` can be installed directly from PyPI as a source distribution by running:
+Requirements:
+
+  - Python 3.8+
+  - C compiler
+      - Linux: gcc or clang
+      - Windows: Visual Studio or MinGW
+      - MacOS: Xcode
+
+To install the package, run:
 
 ```bash
 pip install llama-cpp-python
 ```
 
-This will build `llama.cpp` from source using cmake and your system's c compiler (required) and install the library alongside this python package.
+This will also build `llama.cpp` from source and install it alongside this python package.
 
-If you run into issues during installation add the `--verbose` flag to the `pip install` command to see the full cmake build log.
+If this fails, add `--verbose` to the `pip install` see the full cmake build log.
 
-### Installation with Specific Hardware Acceleration (BLAS, CUDA, Metal, etc)
+### Installation Configuration
 
-The default pip install behaviour is to build `llama.cpp` for CPU only on Linux and Windows and use Metal on MacOS.
+`llama.cpp` supports a number of hardware acceleration backends to speed up inference as well as backend specific options. See the [llama.cpp README](https://github.com/ggerganov/llama.cpp#build) for a full list.
 
-`llama.cpp` supports a number of hardware acceleration backends depending including OpenBLAS, cuBLAS, CLBlast, HIPBLAS, and Metal.
-See the [llama.cpp README](https://github.com/ggerganov/llama.cpp#build) for a full list of supported backends.
+All `llama.cpp` cmake build options can be set via the `CMAKE_ARGS` environment variable or via the `--config-settings / -C` cli flag during installation.
 
-All of these backends are supported by `llama-cpp-python` and can be enabled by setting the `CMAKE_ARGS` environment variable before installing.
-
-On Linux and Mac you set the `CMAKE_ARGS` like this:
+<details open>
+<summary>Environment Variables</summary>
 
 ```bash
-CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS" pip install llama-cpp-python
+# Linux and Mac
+CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS" \
+  pip install llama-cpp-python
 ```
 
-On Windows you can set the `CMAKE_ARGS` like this:
-
-```ps
+```powershell
+# Windows
 $env:CMAKE_ARGS = "-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS"
 pip install llama-cpp-python
 ```
+</details>
 
-#### OpenBLAS
+<details>
+<summary>CLI / requirements.txt</summary>
 
-To install with OpenBLAS, set the `LLAMA_BLAS and LLAMA_BLAS_VENDOR` environment variables before installing:
+They can also be set via `pip install -C / --config-settings` command and saved to a `requirements.txt` file:
+
+```bash
+pip install --upgrade pip # ensure pip is up to date
+pip install llama-cpp-python \
+  -C cmake.args="-DLLAMA_BLAS=ON;-DLLAMA_BLAS_VENDOR=OpenBLAS"
+```
+
+```txt
+# requirements.txt
+
+llama-cpp-python -C cmake.args="-DLLAMA_BLAS=ON;-DLLAMA_BLAS_VENDOR=OpenBLAS"
+```
+
+</details>
+
+### Supported Backends
+
+Below are some common backends, their build commands and any additional environment variables required.
+
+<details open>
+<summary>OpenBLAS (CPU)</summary>
+
+To install with OpenBLAS, set the `LLAMA_BLAS` and `LLAMA_BLAS_VENDOR` environment variables before installing:
 
 ```bash
 CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS" pip install llama-cpp-python
 ```
+</details>
 
-#### cuBLAS
+<details>
+<summary>cuBLAS (CUDA)</summary>
 
 To install with cuBLAS, set the `LLAMA_CUBLAS=on` environment variable before installing:
 
@@ -73,7 +107,10 @@ To install with cuBLAS, set the `LLAMA_CUBLAS=on` environment variable before in
 CMAKE_ARGS="-DLLAMA_CUBLAS=on" pip install llama-cpp-python
 ```
 
-#### Metal
+</details>
+
+<details>
+<summary>Metal</summary>
 
 To install with Metal (MPS), set the `LLAMA_METAL=on` environment variable before installing:
 
@@ -81,7 +118,10 @@ To install with Metal (MPS), set the `LLAMA_METAL=on` environment variable befor
 CMAKE_ARGS="-DLLAMA_METAL=on" pip install llama-cpp-python
 ```
 
-#### CLBlast
+</details>
+<details>
+
+<summary>CLBlast (OpenCL)</summary>
 
 To install with CLBlast, set the `LLAMA_CLBLAST=on` environment variable before installing:
 
@@ -89,7 +129,10 @@ To install with CLBlast, set the `LLAMA_CLBLAST=on` environment variable before 
 CMAKE_ARGS="-DLLAMA_CLBLAST=on" pip install llama-cpp-python
 ```
 
-#### hipBLAS
+</details>
+
+<details>
+<summary>hipBLAS (ROCm)</summary>
 
 To install with hipBLAS / ROCm support for AMD cards, set the `LLAMA_HIPBLAS=on` environment variable before installing:
 
@@ -97,7 +140,10 @@ To install with hipBLAS / ROCm support for AMD cards, set the `LLAMA_HIPBLAS=on`
 CMAKE_ARGS="-DLLAMA_HIPBLAS=on" pip install llama-cpp-python
 ```
 
-#### Vulkan
+</details>
+
+<details>
+<summary>Vulkan</summary>
 
 To install with Vulkan support, set the `LLAMA_VULKAN=on` environment variable before installing:
 
@@ -105,15 +151,20 @@ To install with Vulkan support, set the `LLAMA_VULKAN=on` environment variable b
 CMAKE_ARGS="-DLLAMA_VULKAN=on" pip install llama-cpp-python
 ```
 
-#### Kompute
+</details>
+
+<details>
+<summary>Kompute</summary>
 
 To install with Kompute support, set the `LLAMA_KOMPUTE=on` environment variable before installing:
 
 ```bash
 CMAKE_ARGS="-DLLAMA_KOMPUTE=on" pip install llama-cpp-python
 ```
+</details>
 
-#### SYCL
+<details>
+<summary>SYCL</summary>
 
 To install with SYCL support, set the `LLAMA_SYCL=on` environment variable before installing:
 
@@ -121,8 +172,13 @@ To install with SYCL support, set the `LLAMA_SYCL=on` environment variable befor
 source /opt/intel/oneapi/setvars.sh   
 CMAKE_ARGS="-DLLAMA_SYCL=on -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx" pip install llama-cpp-python
 ```
+</details>
+
 
 ### Windows Notes
+
+<details>
+<summary>Error: Can't find 'nmake' or 'CMAKE_C_COMPILER'</summary>
 
 If you run into issues where it complains it can't find `'nmake'` `'?'` or CMAKE_C_COMPILER, you can extract w64devkit as [mentioned in llama.cpp repo](https://github.com/ggerganov/llama.cpp#openblas) and add those manually to CMAKE_ARGS before running `pip` install:
 
@@ -132,12 +188,14 @@ $env:CMAKE_ARGS = "-DLLAMA_OPENBLAS=on -DCMAKE_C_COMPILER=C:/w64devkit/bin/gcc.e
 ```
 
 See the above instructions and set `CMAKE_ARGS` to the BLAS backend you want to use.
+</details>
 
 ### MacOS Notes
 
 Detailed MacOS Metal GPU install documentation is available at [docs/install/macos.md](https://llama-cpp-python.readthedocs.io/en/latest/install/macos/)
 
-#### M1 Mac Performance Issue
+<details>
+<summary>M1 Mac Performance Issue</summary>
 
 Note: If you are using Apple Silicon (M1) Mac, make sure you have installed a version of Python that supports arm64 architecture. For example:
 
@@ -147,24 +205,21 @@ bash Miniforge3-MacOSX-arm64.sh
 ```
 
 Otherwise, while installing it will build the llama.cpp x86 version which will be 10x slower on Apple Silicon (M1) Mac.
+</details>
 
-#### M Series Mac Error: `(mach-o file, but is an incompatible architecture (have 'x86_64', need 'arm64'))`
+<details>
+<summary>M Series Mac Error: `(mach-o file, but is an incompatible architecture (have 'x86_64', need 'arm64'))`</summary>
 
 Try installing with
 
 ```bash
 CMAKE_ARGS="-DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_APPLE_SILICON_PROCESSOR=arm64 -DLLAMA_METAL=on" pip install --upgrade --verbose --force-reinstall --no-cache-dir llama-cpp-python
 ```
+</details>
 
 ### Upgrading and Reinstalling
 
-To upgrade or rebuild `llama-cpp-python` add the following flags to ensure that the package is rebuilt correctly:
-
-```bash
-pip install llama-cpp-python  --upgrade --force-reinstall --no-cache-dir
-```
-
-This will ensure that all source files are re-built with the most recently set `CMAKE_ARGS` flags.
+To upgrade and rebuild `llama-cpp-python` add `--upgrade --force-reinstall --no-cache-dir` flags to the `pip install` command to ensure the package is rebuilt from source.
 
 ## High-level API
 
@@ -212,6 +267,21 @@ Below is a short example demonstrating how to use the high-level API to for basi
 
 Text completion is available through the [`__call__`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.__call__) and [`create_completion`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.create_completion) methods of the [`Llama`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama) class.
 
+### Pulling models from Hugging Face Hub
+
+You can download `Llama` models in `gguf` format directly from Hugging Face using the [`from_pretrained`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.from_pretrained) method.
+You'll need to install the `huggingface-hub` package to use this feature (`pip install huggingface-hub`).
+
+```python
+llm = Llama.from_pretrained(
+    repo_id="Qwen/Qwen1.5-0.5B-Chat-GGUF",
+    filename="*q8_0.gguf",
+    verbose=False
+)
+```
+
+By default [`from_pretrained`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.from_pretrained) will download the model to the huggingface cache directory, you can then manage installed model files with the [`huggingface-cli`](https://huggingface.co/docs/huggingface_hub/en/guides/cli) tool.
+
 ### Chat Completion
 
 The high-level API also provides a simple interface for chat completion.
@@ -237,13 +307,16 @@ Note that `chat_format` option must be set for the particular model you are usin
 
 Chat completion is available through the [`create_chat_completion`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.create_chat_completion) method of the [`Llama`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama) class.
 
+For OpenAI API v1 compatibility, you use the [`create_chat_completion_openai_v1`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.create_chat_completion_openai_v1) method which will return pydantic models instead of dicts.
+
+
 ### JSON and JSON Schema Mode
 
-If you want to constrain chat responses to only valid JSON or a specific JSON Schema you can use the `response_format` argument to the `create_chat_completion` method.
+To constrain chat responses to only valid JSON or a specific JSON Schema use the `response_format` argument in [`create_chat_completion`](http://localhost:8000/api-reference/#llama_cpp.Llama.create_chat_completion).
 
 #### JSON Mode
 
-The following example will constrain the response to be valid JSON.
+The following example will constrain the response to valid JSON strings only.
 
 ```python
 >>> from llama_cpp import Llama
@@ -265,7 +338,7 @@ The following example will constrain the response to be valid JSON.
 
 #### JSON Schema Mode
 
-To constrain the response to a specific JSON Schema, you can use the `schema` property of the `response_format` argument.
+To constrain the response further to a specific JSON Schema add the schema to the `schema` property of the `response_format` argument.
 
 ```python
 >>> from llama_cpp import Llama
@@ -398,6 +471,22 @@ llama = Llama(
 )
 ```
 
+### Embeddings
+
+To generate text embeddings use [`create_embedding`](http://localhost:8000/api-reference/#llama_cpp.Llama.create_embedding).
+
+```python
+import llama_cpp
+
+llm = llama_cpp.Llama(model_path="path/to/model.gguf", embeddings=True)
+
+embeddings = llm.create_embedding("Hello, world!")
+
+# or create multiple embeddings at once
+
+embeddings = llm.create_embedding(["Hello, world!", "Goodbye, world!"])
+```
+
 ### Adjusting the Context Window
 
 The context window of the Llama models determines the maximum number of tokens that can be processed at once. By default, this is set to 512 tokens, but can be adjusted based on your requirements.
@@ -470,7 +559,7 @@ Below is a short example demonstrating how to use the low-level API to tokenize 
 ```python
 >>> import llama_cpp
 >>> import ctypes
->>> llama_cpp.llama_backend_init(numa=False) # Must be called once at the start of each program
+>>> llama_cpp.llama_backend_init(False) # Must be called once at the start of each program
 >>> params = llama_cpp.llama_context_default_params()
 # use bytes for char * params
 >>> model = llama_cpp.llama_load_model_from_file(b"./models/7b/llama-model.gguf", params)
@@ -478,7 +567,7 @@ Below is a short example demonstrating how to use the low-level API to tokenize 
 >>> max_tokens = params.n_ctx
 # use ctypes arrays for array params
 >>> tokens = (llama_cpp.llama_token * int(max_tokens))()
->>> n_tokens = llama_cpp.llama_tokenize(ctx, b"Q: Name the planets in the solar system? A: ", tokens, max_tokens, add_bos=llama_cpp.c_bool(True))
+>>> n_tokens = llama_cpp.llama_tokenize(ctx, b"Q: Name the planets in the solar system? A: ", tokens, max_tokens, llama_cpp.c_bool(True))
 >>> llama_cpp.llama_free(ctx)
 ```
 

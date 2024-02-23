@@ -51,6 +51,9 @@ class _LlamaModel:
             self.path_model.encode("utf-8"), self.params
         )
 
+        if self.model is None:
+            raise ValueError(f"Failed to load model from file: {path_model}")
+
     def __del__(self):
         if self.model is not None and self._llama_free_model is not None:
             self._llama_free_model(self.model)
@@ -79,7 +82,7 @@ class _LlamaModel:
     def desc(self) -> str:
         assert self.model is not None
         buf = ctypes.create_string_buffer(1024)
-        llama_cpp.llama_model_desc(self.model, buf, 1024)  # type: ignore
+        llama_cpp.llama_model_desc(self.model, buf, 1024)
         return buf.value.decode("utf-8")
 
     def size(self) -> int:
@@ -108,7 +111,7 @@ class _LlamaModel:
             scale,
             path_base_model.encode("utf-8")
             if path_base_model is not None
-            else llama_cpp.c_char_p(0),
+            else ctypes.c_char_p(0),
             n_threads,
         )
 
@@ -181,7 +184,7 @@ class _LlamaModel:
     def token_to_piece(self, token: int) -> bytes:
         assert self.model is not None
         buf = ctypes.create_string_buffer(32)
-        llama_cpp.llama_token_to_piece(self.model, token, buf, 32)  # type: ignore
+        llama_cpp.llama_token_to_piece(self.model, token, buf, 32)
         return bytes(buf)
 
     def detokenize(self, tokens: List[int]) -> bytes:
@@ -258,6 +261,9 @@ class _LlamaContext:
             self.model.model, self.params
         )
 
+        if self.ctx is None:
+            raise ValueError("Failed to create llama_context")
+
     def __del__(self):
         if self.ctx is not None and self._llama_free is not None:
             self._llama_free(self.ctx)
@@ -303,8 +309,8 @@ class _LlamaContext:
         assert self.ctx is not None
         assert batch.batch is not None
         return_code = llama_cpp.llama_decode(
-            ctx=self.ctx,
-            batch=batch.batch,
+            self.ctx,
+            batch.batch,
         )
         if return_code != 0:
             raise RuntimeError(f"llama_decode returned {return_code}")
@@ -343,7 +349,7 @@ class _LlamaContext:
         assert self.ctx is not None
         llama_cpp.llama_sample_repetition_penalties(
             self.ctx,
-            ctypes.byref(candidates.candidates),  # type: ignore
+            llama_cpp.byref(candidates.candidates),
             last_tokens_data,
             penalty_last_n,
             penalty_repeat,
@@ -361,7 +367,7 @@ class _LlamaContext:
         assert guidance_ctx.ctx is not None
         llama_cpp.llama_sample_classifier_free_guidance(
             self.ctx,
-            ctypes.byref(candidates.candidates),  # type: ignore
+            llama_cpp.byref(candidates.candidates),
             guidance_ctx.ctx,
             scale,
         )
@@ -370,25 +376,25 @@ class _LlamaContext:
         assert self.ctx is not None
         llama_cpp.llama_sample_softmax(
             self.ctx,
-            ctypes.byref(candidates.candidates),  # type: ignore
+            llama_cpp.byref(candidates.candidates),
         )
 
     def sample_top_k(self, candidates: "_LlamaTokenDataArray", k: int, min_keep: int):
         assert self.ctx is not None
         llama_cpp.llama_sample_top_k(
-            self.ctx, ctypes.byref(candidates.candidates), k, min_keep  # type: ignore
+            self.ctx, llama_cpp.byref(candidates.candidates), k, min_keep
         )
 
     def sample_top_p(self, candidates: "_LlamaTokenDataArray", p: float, min_keep: int):
         assert self.ctx is not None
         llama_cpp.llama_sample_top_p(
-            self.ctx, ctypes.byref(candidates.candidates), p, min_keep  # type: ignore
+            self.ctx, llama_cpp.byref(candidates.candidates), p, min_keep
         )
 
     def sample_min_p(self, candidates: "_LlamaTokenDataArray", p: float, min_keep: int):
         assert self.ctx is not None
         llama_cpp.llama_sample_min_p(
-            self.ctx, ctypes.byref(candidates.candidates), p, min_keep  # type: ignore
+            self.ctx, llama_cpp.byref(candidates.candidates), p, min_keep
         )
 
     def sample_tail_free(
@@ -396,7 +402,7 @@ class _LlamaContext:
     ):
         assert self.ctx is not None
         llama_cpp.llama_sample_tail_free(
-            self.ctx, ctypes.byref(candidates.candidates), z, min_keep  # type: ignore
+            self.ctx, llama_cpp.byref(candidates.candidates), z, min_keep
         )
 
     def sample_typical(
@@ -404,13 +410,13 @@ class _LlamaContext:
     ):
         assert self.ctx is not None
         llama_cpp.llama_sample_typical(
-            self.ctx, ctypes.byref(candidates.candidates), p, min_keep  # type: ignore
+            self.ctx, llama_cpp.byref(candidates.candidates), p, min_keep
         )
 
     def sample_temp(self, candidates: "_LlamaTokenDataArray", temp: float):
         assert self.ctx is not None
         llama_cpp.llama_sample_temp(
-            self.ctx, ctypes.byref(candidates.candidates), temp  # type: ignore
+            self.ctx, llama_cpp.byref(candidates.candidates), temp
         )
 
     def sample_grammar(self, candidates: "_LlamaTokenDataArray", grammar: LlamaGrammar):
@@ -418,7 +424,7 @@ class _LlamaContext:
         assert grammar.grammar is not None
         llama_cpp.llama_sample_grammar(
             self.ctx,
-            ctypes.byref(candidates.candidates),  # type: ignore
+            llama_cpp.byref(candidates.candidates),
             grammar.grammar,
         )
 
@@ -428,12 +434,12 @@ class _LlamaContext:
         tau: float,
         eta: float,
         m: int,
-        mu: ctypes._Pointer[ctypes.c_float],  # type: ignore
+        mu: llama_cpp.CtypesPointerOrRef[ctypes.c_float],
     ) -> int:
         assert self.ctx is not None
         return llama_cpp.llama_sample_token_mirostat(
             self.ctx,
-            ctypes.byref(candidates.candidates),  # type: ignore
+            llama_cpp.byref(candidates.candidates),
             tau,
             eta,
             m,
@@ -441,12 +447,12 @@ class _LlamaContext:
         )
 
     def sample_token_mirostat_v2(
-        self, candidates: "_LlamaTokenDataArray", tau: float, eta: float, mu: ctypes._Pointer[ctypes.c_float]  # type: ignore
+        self, candidates: "_LlamaTokenDataArray", tau: float, eta: float, mu: llama_cpp.CtypesPointerOrRef[ctypes.c_float]
     ) -> int:
         assert self.ctx is not None
         return llama_cpp.llama_sample_token_mirostat_v2(
             self.ctx,
-            ctypes.byref(candidates.candidates),  # type: ignore
+            llama_cpp.byref(candidates.candidates),
             tau,
             eta,
             mu,
@@ -456,14 +462,14 @@ class _LlamaContext:
         assert self.ctx is not None
         return llama_cpp.llama_sample_token_greedy(
             self.ctx,
-            ctypes.byref(candidates.candidates),  # type: ignore
+            llama_cpp.byref(candidates.candidates),
         )
 
     def sample_token(self, candidates: "_LlamaTokenDataArray") -> int:
         assert self.ctx is not None
         return llama_cpp.llama_sample_token(
             self.ctx,
-            ctypes.byref(candidates.candidates),  # type: ignore
+            llama_cpp.byref(candidates.candidates),
         )
 
     # Grammar
@@ -493,7 +499,7 @@ class _LlamaBatch:
     def __init__(
         self, *, n_tokens: int, embd: int, n_seq_max: int, verbose: bool = True
     ):
-        self.n_tokens = n_tokens
+        self._n_tokens = n_tokens
         self.embd = embd
         self.n_seq_max = n_seq_max
         self.verbose = verbose
@@ -502,7 +508,7 @@ class _LlamaBatch:
 
         self.batch = None
         self.batch = llama_cpp.llama_batch_init(
-            self.n_tokens, self.embd, self.n_seq_max
+            self._n_tokens, self.embd, self.n_seq_max
         )
 
     def __del__(self):
@@ -560,7 +566,7 @@ class _LlamaTokenDataArray:
             size=self.n_vocab,
             sorted=False,
         )
-        self.default_candidates_data_id = np.arange(self.n_vocab, dtype=np.intc)
+        self.default_candidates_data_id = np.arange(self.n_vocab, dtype=np.intc) # type: ignore
         self.default_candidates_data_p = np.zeros(self.n_vocab, dtype=np.single)
 
     def copy_logits(self, logits: npt.NDArray[np.single]):
@@ -570,12 +576,13 @@ class _LlamaTokenDataArray:
         self.candidates.data = self.candidates_data.ctypes.data_as(
             llama_cpp.llama_token_data_p
         )
-        self.candidates.sorted = llama_cpp.c_bool(False)
-        self.candidates.size = llama_cpp.c_size_t(self.n_vocab)
+        self.candidates.sorted = ctypes.c_bool(False)
+        self.candidates.size = ctypes.c_size_t(self.n_vocab)
 
 
 # Python wrappers over common/common
 def _tokenize(model: _LlamaModel, text: str, add_bos: bool, special: bool) -> list[int]:
+    assert model.model is not None
     n_tokens = len(text) + 1 if add_bos else len(text)
     result = (llama_cpp.llama_token * n_tokens)()
     n_tokens = llama_cpp.llama_tokenize(
@@ -747,7 +754,7 @@ class _LlamaSamplingContext:
                 ctx_main.sample_repetition_penalties(
                     token_data_array,
                     # TODO: Only create this once
-                    (llama_cpp.llama_token * len(self.prev))(*self.prev),  # type: ignore
+                    (llama_cpp.llama_token * len(self.prev))(*self.prev),
                     self.params.penalty_last_n,
                     self.params.penalty_repeat,
                     self.params.penalty_freq,

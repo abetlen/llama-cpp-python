@@ -4,6 +4,8 @@ import os
 import sys
 import uuid
 import time
+import json
+import fnmatch
 import multiprocessing
 from typing import (
     List,
@@ -16,6 +18,7 @@ from typing import (
     Callable,
 )
 from collections import deque
+from pathlib import Path
 
 import ctypes
 
@@ -29,10 +32,7 @@ from .llama_cache import (
     LlamaDiskCache,  # type: ignore
     LlamaRAMCache,  # type: ignore
 )
-from .llama_tokenizer import (
-    BaseLlamaTokenizer,
-    LlamaTokenizer
-)
+from .llama_tokenizer import BaseLlamaTokenizer, LlamaTokenizer
 import llama_cpp.llama_cpp as llama_cpp
 import llama_cpp.llama_chat_format as llama_chat_format
 
@@ -50,9 +50,7 @@ from ._internals import (
     _LlamaSamplingContext,  # type: ignore
 )
 from ._logger import set_verbose
-from ._utils import (
-    suppress_stdout_stderr
-)
+from ._utils import suppress_stdout_stderr
 
 
 class Llama:
@@ -98,7 +96,7 @@ class Llama:
         lora_scale: float = 1.0,
         lora_path: Optional[str] = None,
         # Backend Params
-        numa: bool = False,
+        numa: Union[bool, int] = False,
         # Chat Format Params
         chat_format: Optional[str] = None,
         chat_handler: Optional[llama_chat_format.LlamaChatCompletionHandler] = None,
@@ -166,7 +164,7 @@ class Llama:
             last_n_tokens_size: Maximum number of tokens to keep in the last_n_tokens deque.
             lora_base: Optional path to base model, useful if using a quantized base model and you want to apply LoRA to an f16 model.
             lora_path: Path to a LoRA file to apply to the model.
-            numa: Enable NUMA support. (NOTE: The initial value of this parameter is used for the remainder of the program as this value is set in llama_backend_init)
+            numa: numa policy
             chat_format: String specifying the chat format to use when calling create_chat_completion.
             chat_handler: Optional chat handler to use when calling create_chat_completion.
             draft_model: Optional draft model to use for speculative decoding.
@@ -183,11 +181,23 @@ class Llama:
 
         set_verbose(verbose)
 
-        self.numa = numa
         if not Llama.__backend_initialized:
             with suppress_stdout_stderr(disable=verbose):
-                llama_cpp.llama_backend_init(self.numa)
+                llama_cpp.llama_backend_init()
             Llama.__backend_initialized = True
+
+        if isinstance(numa, bool):
+            self.numa = (
+                llama_cpp.GGML_NUMA_STRATEGY_DISTRIBUTE
+                if numa
+                else llama_cpp.GGML_NUMA_STRATEGY_DISABLED
+            )
+        else:
+            self.numa = numa
+
+        if self.numa != llama_cpp.GGML_NUMA_STRATEGY_DISABLED:
+            with suppress_stdout_stderr(disable=verbose):
+                llama_cpp.llama_numa_init(self.numa)
 
         self.model_path = model_path
 
@@ -238,9 +248,9 @@ class Llama:
                 else:
                     raise ValueError(f"Unknown value type for {k}: {v}")
 
-            self._kv_overrides_array[
-                -1
-            ].key = b"\0"  # ensure sentinel element is zeroed
+            self._kv_overrides_array[-1].key = (
+                b"\0"  # ensure sentinel element is zeroed
+            )
             self.model_params.kv_overrides = self._kv_overrides_array
 
         self.n_batch = min(n_ctx, n_batch)  # ???
@@ -248,7 +258,7 @@ class Llama:
         self.n_threads_batch = n_threads_batch or max(
             multiprocessing.cpu_count() // 2, 1
         )
-        
+
         # Context Params
         self.context_params = llama_cpp.llama_context_default_params()
         self.context_params.seed = seed
@@ -281,7 +291,9 @@ class Llama:
         )
         self.context_params.yarn_orig_ctx = yarn_orig_ctx if yarn_orig_ctx != 0 else 0
         self.context_params.mul_mat_q = mul_mat_q
-        self.context_params.logits_all = logits_all if draft_model is None else True # Must be set to True for speculative decoding
+        self.context_params.logits_all = (
+            logits_all if draft_model is None else True
+        )  # Must be set to True for speculative decoding
         self.context_params.embedding = embedding
         self.context_params.offload_kqv = offload_kqv
 
@@ -371,8 +383,14 @@ class Llama:
         if self.verbose:
             print(f"Model metadata: {self.metadata}", file=sys.stderr)
 
-        if self.chat_format is None and self.chat_handler is None and "tokenizer.chat_template" in self.metadata:
-            chat_format = llama_chat_format.guess_chat_format_from_gguf_metadata(self.metadata)
+        if (
+            self.chat_format is None
+            and self.chat_handler is None
+            and "tokenizer.chat_template" in self.metadata
+        ):
+            chat_format = llama_chat_format.guess_chat_format_from_gguf_metadata(
+                self.metadata
+            )
 
             if chat_format is not None:
                 self.chat_format = chat_format
@@ -398,9 +416,7 @@ class Llama:
                     print(f"Using chat bos_token: {bos_token}", file=sys.stderr)
 
                 self.chat_handler = llama_chat_format.Jinja2ChatFormatter(
-                    template=template,
-                    eos_token=eos_token,
-                    bos_token=bos_token
+                    template=template, eos_token=eos_token, bos_token=bos_token
                 ).to_chat_handler()
 
         if self.chat_format is None and self.chat_handler is None:
@@ -451,7 +467,9 @@ class Llama:
         """
         return self.tokenizer_.tokenize(text, add_bos, special)
 
-    def detokenize(self, tokens: List[int], prev_tokens: Optional[List[int]] = None) -> bytes:
+    def detokenize(
+        self, tokens: List[int], prev_tokens: Optional[List[int]] = None
+    ) -> bytes:
         """Detokenize a list of tokens.
 
         Args:
@@ -557,7 +575,7 @@ class Llama:
             logits[:] = (
                 logits_processor(self._input_ids, logits)
                 if idx is None
-                else logits_processor(self._input_ids[:idx + 1], logits)
+                else logits_processor(self._input_ids[: idx + 1], logits)
             )
 
         sampling_params = _LlamaSamplingParams(
@@ -699,7 +717,9 @@ class Llama:
 
             if self.draft_model is not None:
                 self.input_ids[self.n_tokens : self.n_tokens + len(tokens)] = tokens
-                draft_tokens = self.draft_model(self.input_ids[:self.n_tokens + len(tokens)])
+                draft_tokens = self.draft_model(
+                    self.input_ids[: self.n_tokens + len(tokens)]
+                )
                 tokens.extend(
                     draft_tokens.astype(int)[
                         : self._n_ctx - self.n_tokens - len(tokens)
@@ -719,6 +739,8 @@ class Llama:
         """
         assert self._model.model is not None
         model_name: str = model if model is not None else self.model_path
+
+        input = input if isinstance(input, list) else [input]
 
         # get numeric embeddings
         embeds: List[List[float]]
@@ -762,7 +784,7 @@ class Llama:
         """
         assert self._ctx.ctx is not None
         n_embd = self.n_embd()
-        n_ctx = self.n_ctx()
+        n_batch = self.n_batch
 
         if self.context_params.embedding == False:
             raise RuntimeError(
@@ -782,54 +804,56 @@ class Llama:
 
         # decode and fetch embeddings
         data: List[List[float]] = []
-        def decode_batch(sizes: List[int]):
+
+        def decode_batch(n_seq: int):
             assert self._ctx.ctx is not None
             llama_cpp.llama_kv_cache_clear(self._ctx.ctx)
             self._ctx.decode(self._batch)
             self._batch.reset()
 
             # store embeddings
-            for i, s in enumerate(sizes):
-                embedding = llama_cpp.llama_get_embeddings_ith(self._ctx.ctx, i)[
-                    :n_embd
-                ]
-                norm = np.linalg.norm(embedding) if normalize else s
-                embedding: List[float] = [v / float(norm) for v in embedding]
+            for i in range(n_seq):
+                embedding: List[float] = llama_cpp.llama_get_embeddings_ith(
+                    self._ctx.ctx, i
+                )[:n_embd]
+                if normalize:
+                    norm = float(np.linalg.norm(embedding))
+                    embedding = [v / norm for v in embedding]
                 data.append(embedding)
 
         # init state
         total_tokens = 0
         t_batch = 0
-        s_sizes: List[int] = []
+        p_batch = 0
 
         # accumulate batches and encode
         for text in inputs:
             tokens = self.tokenize(text.encode("utf-8"))
             if truncate:
-                tokens = tokens[:n_ctx]
+                tokens = tokens[:n_batch]
 
             n_tokens = len(tokens)
             total_tokens += n_tokens
 
             # check for overrun
-            if n_tokens > n_ctx:
+            if n_tokens > n_batch:
                 raise ValueError(
-                    f"Requested tokens ({n_tokens}) exceed context window of {n_ctx}"
+                    f"Requested tokens ({n_tokens}) exceed batch size of {n_batch}"
                 )
 
             # time to eval batch
-            if t_batch + n_tokens > self._n_ctx:
-                decode_batch(s_sizes)
+            if t_batch + n_tokens > n_batch:
+                decode_batch(p_batch)
                 t_batch = 0
-                s_sizes = []
+                p_batch = 0
 
             # add to batch
-            self._batch.add_sequence(tokens, len(s_sizes), False)
+            self._batch.add_sequence(tokens, p_batch, False)
             t_batch += n_tokens
-            s_sizes.append(n_tokens)
+            p_batch += 1
 
         # hanlde last batch
-        decode_batch(s_sizes)
+        decode_batch(p_batch)
 
         if self.verbose:
             llama_cpp.llama_print_timings(self._ctx.ctx)
@@ -1658,12 +1682,13 @@ class Llama:
         """
         try:
             from openai.types.chat import ChatCompletion, ChatCompletionChunk
-            stream = kwargs.get("stream", False) # type: ignore
+
+            stream = kwargs.get("stream", False)  # type: ignore
             assert isinstance(stream, bool)
             if stream:
-                return (ChatCompletionChunk(**chunk) for chunk in self.create_chat_completion(*args, **kwargs)) # type: ignore
+                return (ChatCompletionChunk(**chunk) for chunk in self.create_chat_completion(*args, **kwargs))  # type: ignore
             else:
-                return ChatCompletion(**self.create_chat_completion(*args, **kwargs)) # type: ignore
+                return ChatCompletion(**self.create_chat_completion(*args, **kwargs))  # type: ignore
         except ImportError:
             raise ImportError(
                 "To use create_chat_completion_openai_v1, you must install the openai package."
@@ -1793,7 +1818,7 @@ class Llama:
         self.input_ids = state.input_ids.copy()
         self.n_tokens = state.n_tokens
         state_size = state.llama_state_size
-        LLamaStateArrayType = llama_cpp.c_uint8 * state_size
+        LLamaStateArrayType = ctypes.c_uint8 * state_size
         llama_state = LLamaStateArrayType.from_buffer_copy(state.llama_state)
 
         if llama_cpp.llama_set_state_data(self._ctx.ctx, llama_state) != state_size:
@@ -1855,7 +1880,100 @@ class Llama:
                 break
         return longest_prefix
 
+    @classmethod
+    def from_pretrained(
+        cls,
+        repo_id: str,
+        filename: Optional[str],
+        local_dir: Optional[Union[str, os.PathLike[str]]] = None,
+        local_dir_use_symlinks: Union[bool, Literal["auto"]] = "auto",
+        cache_dir: Optional[Union[str, os.PathLike[str]]] = None,
+        **kwargs: Any,
+    ) -> "Llama":
+        """Create a Llama model from a pretrained model name or path.
+        This method requires the huggingface-hub package.
+        You can install it with `pip install huggingface-hub`.
 
+        Args:
+            repo_id: The model repo id.
+            filename: A filename or glob pattern to match the model file in the repo.
+            local_dir: The local directory to save the model to.
+            local_dir_use_symlinks: Whether to use symlinks when downloading the model.
+            **kwargs: Additional keyword arguments to pass to the Llama constructor.
+
+        Returns:
+            A Llama model."""
+        try:
+            from huggingface_hub import hf_hub_download, HfFileSystem
+            from huggingface_hub.utils import validate_repo_id
+        except ImportError:
+            raise ImportError(
+                "Llama.from_pretrained requires the huggingface-hub package. "
+                "You can install it with `pip install huggingface-hub`."
+            )
+
+        validate_repo_id(repo_id)
+
+        hffs = HfFileSystem()
+
+        files = [
+            file["name"] if isinstance(file, dict) else file
+            for file in hffs.ls(repo_id)
+        ]
+
+        # split each file into repo_id, subfolder, filename
+        file_list: List[str] = []
+        for file in files:
+            rel_path = Path(file).relative_to(repo_id)
+            file_list.append(str(rel_path))
+
+        matching_files = [file for file in file_list if fnmatch.fnmatch(file, filename)]  # type: ignore
+
+        if len(matching_files) == 0:
+            raise ValueError(
+                f"No file found in {repo_id} that match {filename}\n\n"
+                f"Available Files:\n{json.dumps(file_list)}"
+            )
+
+        if len(matching_files) > 1:
+            raise ValueError(
+                f"Multiple files found in {repo_id} matching {filename}\n\n"
+                f"Available Files:\n{json.dumps(files)}"
+            )
+
+        (matching_file,) = matching_files
+
+        subfolder = str(Path(matching_file).parent)
+        filename = Path(matching_file).name
+
+        # download the file
+        hf_hub_download(
+            repo_id=repo_id,
+            filename=filename,
+            subfolder=subfolder,
+            local_dir=local_dir,
+            local_dir_use_symlinks=local_dir_use_symlinks,
+            cache_dir=cache_dir,
+        )
+
+        if local_dir is None:
+            model_path = hf_hub_download(
+                repo_id=repo_id,
+                filename=filename,
+                subfolder=subfolder,
+                local_dir=local_dir,
+                local_dir_use_symlinks=local_dir_use_symlinks,
+                cache_dir=cache_dir,
+                local_files_only=True,
+
+            )
+        else:
+            model_path = os.path.join(local_dir, filename)
+
+        return cls(
+            model_path=model_path,
+            **kwargs,
+        )
 
 
 class LlamaState:
