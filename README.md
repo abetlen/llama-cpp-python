@@ -365,14 +365,10 @@ To constrain the response further to a specific JSON Schema add the schema to th
 
 ### Function Calling
 
-The high-level API also provides a simple interface for function calling. This is possible through the `functionary` pre-trained models chat format or through the generic `chatml-function-calling` chat format.
-
-The gguf-converted files for functionary can be found here: [functionary-7b-v1](https://huggingface.co/abetlen/functionary-7b-v1-GGUF)
+The high-level API supports OpenAI compatible function and tool calling. This is possible through the `functionary` pre-trained models chat format or through the generic `chatml-function-calling` chat format.
 
 ```python
 >>> from llama_cpp import Llama
->>> llm = Llama(model_path="path/to/functionary/llama-model.gguf", chat_format="functionary")
->>> # or 
 >>> llm = Llama(model_path="path/to/chatml/llama-model.gguf", chat_format="chatml-function-calling")
 >>> llm.create_chat_completion(
       messages = [
@@ -415,6 +411,25 @@ The gguf-converted files for functionary can be found here: [functionary-7b-v1](
       }]
 )
 ```
+
+<details>
+<summary>Functionary v2</summary>
+
+The various gguf-converted files for this set of models can be found [here](https://huggingface.co/meetkai). Functionary is able to intelligently call functions and also analyze any provided function outputs to generate coherent responses. All v2 models of functionary supports **parallel function calling**. You can provide either `functionary-v1` or `functionary-v2` for the `chat_format` when initializing the Llama class.
+
+Due to discrepancies between llama.cpp and HuggingFace's tokenizers, it is required to provide HF Tokenizer for functionary. The `LlamaHFTokenizer` class can be initialized and passed into the Llama class. This will override the default llama.cpp tokenizer used in Llama class. The tokenizer files are already included in the respective HF repositories hosting the gguf files.
+
+```python
+>>> from llama_cpp import Llama
+>>> from llama_cpp.llama_tokenizer import LlamaHFTokenizer
+>>> llm = Llama.from_pretrained(
+  repo_id="meetkai/functionary-7b-v1-GGUF",
+  filename="functionary-small-v2.2.q4_0.gguf",
+  chat_format="functionary-v2",
+  tokenizer=LlamaHFTokenizer.from_pretrained("meetkai/functionary-7b-v1-GGUF")
+)
+```
+</details>
 
 ### Multi-modal Models
 
