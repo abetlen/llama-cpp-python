@@ -14,6 +14,7 @@ import llama_cpp.llama as llama
 import llama_cpp.llama_types as llama_types
 import llama_cpp.llama_grammar as llama_grammar
 
+from ._logger import logger
 from ._utils import suppress_stdout_stderr, Singleton
 
 ### Common Chat Templates and Special Tokens ###
@@ -1002,7 +1003,7 @@ def format_gemma(
 ) -> ChatFormatterResponse:
     system_message = _get_system_message(messages)
     if system_message is not None and system_message != "":
-        raise ValueError(
+        logger.debug(
             "`role='system'` messages are not allowed on Google's Gemma models."
         )
     _roles = dict(user="<start_of_turn>user\n", assistant="<start_of_turn>model\n")
