@@ -7,11 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.50]
+
+- docs: Update Functionary OpenAI Server Readme by @jeffrey-fong in #1193
+- fix: LlamaHFTokenizer now receives pre_tokens by @abetlen in 47bad30dd716443652275099fa3851811168ff4a
+
 ## [0.2.49]
 
 - fix: module 'llama_cpp.llama_cpp' has no attribute 'c_uint8' in Llama.save_state by @abetlen in db776a885cd4c20811f22f8bd1a27ecc71dba927
 - feat: Auto detect Mixtral's slightly different format by @lukestanley in #1214
-
 
 ## [0.2.48]
 
@@ -151,7 +155,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - feat: Update llama.cpp to ggerganov/llama.cpp@b3a7c20b5c035250257d2b62851c379b159c899a
 - feat: Add `saiga` chat format by @femoiseev in #1050
 - feat: Added `chatglm3` chat format by @xaviviro in #1059
-- fix: Correct typo in README.md by @qeleb in (#1058) 
+- fix: Correct typo in README.md by @qeleb in (#1058)
 
 ## [0.2.26]
 
@@ -284,7 +288,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.11]
 
-- Fix bug in `llama_model_params` object has no attribute `logits_all` by @abetlen in d696251fbe40015e8616ea7a7d7ad5257fd1b896 
+- Fix bug in `llama_model_params` object has no attribute `logits_all` by @abetlen in d696251fbe40015e8616ea7a7d7ad5257fd1b896
 
 ## [0.2.10]
 
@@ -472,7 +476,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.60]
 
-NOTE: This release was deleted due to a bug  with the packaging system that caused pip installations to fail.
+NOTE: This release was deleted due to a bug with the packaging system that caused pip installations to fail.
 
 - Truncate max_tokens in create_completion so requested tokens doesn't exceed context size.
 - Temporarily disable cache for completion requests
