@@ -120,9 +120,20 @@ class LlamaProxy:
                         kv_overrides[key] = float(value)
                     else:
                         raise ValueError(f"Unknown value type {value_type}")
+        
+        import functools
 
-        _model = llama_cpp.Llama(
-            model_path=settings.model,
+        kwargs = {}
+
+        if settings.hf_model_repo_id is not None:
+            create_fn = functools.partial(llama_cpp.Llama.from_pretrained, repo_id=settings.hf_model_repo_id, filename=settings.model)
+        else:
+            create_fn = llama_cpp.Llama
+            kwargs["model_path"] = settings.model
+        
+
+        _model = create_fn(
+            **kwargs,
             # Model Params
             n_gpu_layers=settings.n_gpu_layers,
             main_gpu=settings.main_gpu,
