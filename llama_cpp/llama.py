@@ -65,7 +65,7 @@ class Llama:
         *,
         # Model Params
         n_gpu_layers: int = 0,
-        split_mode: int = llama_cpp.LLAMA_SPLIT_LAYER,
+        split_mode: int = llama_cpp.LLAMA_SPLIT_MODE_LAYER,
         main_gpu: int = 0,
         tensor_split: Optional[List[float]] = None,
         vocab_only: bool = False,
@@ -78,7 +78,7 @@ class Llama:
         n_batch: int = 512,
         n_threads: Optional[int] = None,
         n_threads_batch: Optional[int] = None,
-        rope_scaling_type: Optional[int] = llama_cpp.LLAMA_ROPE_SCALING_UNSPECIFIED,
+        rope_scaling_type: Optional[int] = llama_cpp.LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED,
         rope_freq_base: float = 0.0,
         rope_freq_scale: float = 0.0,
         yarn_ext_factor: float = -1.0,
@@ -238,13 +238,13 @@ class Llama:
             for i, (k, v) in enumerate(kv_overrides.items()):
                 self._kv_overrides_array[i].key = k.encode("utf-8")
                 if isinstance(v, bool):
-                    self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_BOOL
+                    self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_TYPE_BOOL
                     self._kv_overrides_array[i].value.bool_value = v
                 elif isinstance(v, int):
-                    self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_INT
+                    self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_TYPE_INT
                     self._kv_overrides_array[i].value.int_value = v
                 elif isinstance(v, float):
-                    self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_FLOAT
+                    self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_TYPE_FLOAT
                     self._kv_overrides_array[i].value.float_value = v
                 else:
                     raise ValueError(f"Unknown value type for {k}: {v}")
@@ -270,7 +270,7 @@ class Llama:
         self.context_params.rope_scaling_type = (
             rope_scaling_type
             if rope_scaling_type is not None
-            else llama_cpp.LLAMA_ROPE_SCALING_UNSPECIFIED
+            else llama_cpp.LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED
         )
         self.context_params.rope_freq_base = (
             rope_freq_base if rope_freq_base != 0.0 else 0
