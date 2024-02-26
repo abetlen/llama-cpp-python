@@ -109,12 +109,13 @@ if TYPE_CHECKING:
 
     CtypesFuncPointer: TypeAlias = ctypes._FuncPointer  # type: ignore
 
+F = TypeVar("F", bound=Callable[..., Any])
 
 def ctypes_function_for_shared_library(lib: ctypes.CDLL):
     def ctypes_function(
         name: str, argtypes: List[Any], restype: Any, enabled: bool = True
     ):
-        def decorator(f: Callable[..., Any]):
+        def decorator(f: F) -> F:
             if enabled:
                 func = getattr(lib, name)
                 func.argtypes = argtypes
@@ -245,6 +246,8 @@ LLAMA_TOKEN_TYPE_BYTE = 6
 #     LLAMA_FTYPE_MOSTLY_IQ3_XXS       = 23, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_IQ1_S         = 24, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_IQ4_NL        = 25, // except 1d tensors
+#     LLAMA_FTYPE_MOSTLY_IQ3_S         = 26, // except 1d tensors
+#     LLAMA_FTYPE_MOSTLY_IQ3_M         = 27, // except 1d tensors
 
 #     LLAMA_FTYPE_GUESSED = 1024, // not specified in the model file
 # };
@@ -272,38 +275,40 @@ LLAMA_FTYPE_MOSTLY_Q3_K_XS = 22
 LLAMA_FTYPE_MOSTLY_IQ3_XXS = 23
 LLAMA_FTYPE_MOSTLY_IQ1_S = 24
 LLAMA_FTYPE_MOSTLY_IQ4_NL = 25
+LLAMA_FTYPE_MOSTLY_IQ3_S = 26
+LLAMA_FTYPE_MOSTLY_IQ3_M = 27
 LLAMA_FTYPE_GUESSED = 1024
 
 # enum llama_rope_scaling_type {
-#     LLAMA_ROPE_SCALING_UNSPECIFIED = -1,
-#     LLAMA_ROPE_SCALING_NONE        = 0,
-#     LLAMA_ROPE_SCALING_LINEAR      = 1,
-#     LLAMA_ROPE_SCALING_YARN        = 2,
-#     LLAMA_ROPE_SCALING_MAX_VALUE   = LLAMA_ROPE_SCALING_YARN,
+#     LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED = -1,
+#     LLAMA_ROPE_SCALING_TYPE_NONE        = 0,
+#     LLAMA_ROPE_SCALING_TYPE_LINEAR      = 1,
+#     LLAMA_ROPE_SCALING_TYPE_YARN        = 2,
+#     LLAMA_ROPE_SCALING_TYPE_MAX_VALUE   = LLAMA_ROPE_SCALING_TYPE_YARN,
 # };
-LLAMA_ROPE_SCALING_UNSPECIFIED = -1
-LLAMA_ROPE_SCALING_NONE = 0
-LLAMA_ROPE_SCALING_LINEAR = 1
-LLAMA_ROPE_SCALING_YARN = 2
-LLAMA_ROPE_SCALING_MAX_VALUE = LLAMA_ROPE_SCALING_YARN
+LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED = -1
+LLAMA_ROPE_SCALING_TYPE_NONE = 0
+LLAMA_ROPE_SCALING_TYPE_LINEAR = 1
+LLAMA_ROPE_SCALING_TYPE_YARN = 2
+LLAMA_ROPE_SCALING_TYPE_MAX_VALUE = LLAMA_ROPE_SCALING_TYPE_YARN
 
 # enum llama_pooling_type {
-#     LLAMA_POOLING_NONE = 0,
-#     LLAMA_POOLING_MEAN = 1,
-#     LLAMA_POOLING_CLS  = 2,
+#     LLAMA_POOLING_TYPE_NONE = 0,
+#     LLAMA_POOLING_TYPE_MEAN = 1,
+#     LLAMA_POOLING_TYPE_CLS  = 2,
 # };
-LLAMA_POOLING_NONE = 0
-LLAMA_POOLING_MEAN = 1
-LLAMA_POOLING_CLS = 2
+LLAMA_POOLING_TYPE_NONE = 0
+LLAMA_POOLING_TYPE_MEAN = 1
+LLAMA_POOLING_TYPE_CLS = 2
 
 # enum llama_split_mode {
-#     LLAMA_SPLIT_NONE    = 0, // single GPU
-#     LLAMA_SPLIT_LAYER   = 1, // split layers and KV across GPUs
-#     LLAMA_SPLIT_ROW     = 2, // split rows across GPUs
+#     LLAMA_SPLIT_MODE_NONE    = 0, // single GPU
+#     LLAMA_SPLIT_MODE_LAYER   = 1, // split layers and KV across GPUs
+#     LLAMA_SPLIT_MODE_ROW     = 2, // split rows across GPUs
 # };
-LLAMA_SPLIT_NONE = 0
-LLAMA_SPLIT_LAYER = 1
-LLAMA_SPLIT_ROW = 2
+LLAMA_SPLIT_MODE_NONE = 0
+LLAMA_SPLIT_MODE_LAYER = 1
+LLAMA_SPLIT_MODE_ROW = 2
 
 
 # typedef struct llama_token_data {
@@ -416,13 +421,13 @@ class llama_batch(ctypes.Structure):
 
 
 # enum llama_model_kv_override_type {
-#     LLAMA_KV_OVERRIDE_INT,
-#     LLAMA_KV_OVERRIDE_FLOAT,
-#     LLAMA_KV_OVERRIDE_BOOL,
+#     LLAMA_KV_OVERRIDE_TYPE_INT,
+#     LLAMA_KV_OVERRIDE_TYPE_FLOAT,
+#     LLAMA_KV_OVERRIDE_TYPE_BOOL,
 # };
-LLAMA_KV_OVERRIDE_INT = 0
-LLAMA_KV_OVERRIDE_FLOAT = 1
-LLAMA_KV_OVERRIDE_BOOL = 2
+LLAMA_KV_OVERRIDE_TYPE_INT = 0
+LLAMA_KV_OVERRIDE_TYPE_FLOAT = 1
+LLAMA_KV_OVERRIDE_TYPE_BOOL = 2
 
 
 # struct llama_model_kv_override {
