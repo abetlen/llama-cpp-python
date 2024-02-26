@@ -291,7 +291,7 @@ class _LlamaContext:
 
     def kv_cache_seq_shift(self, seq_id: int, p0: int, p1: int, shift: int):
         assert self.ctx is not None
-        llama_cpp.llama_kv_cache_seq_shift(self.ctx, seq_id, p0, p1, shift)
+        llama_cpp.llama_kv_cache_seq_add(self.ctx, seq_id, p0, p1, shift)
 
     def get_state_size(self) -> int:
         assert self.ctx is not None
