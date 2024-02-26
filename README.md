@@ -468,6 +468,38 @@ Then you'll need to use a custom chat handler to load the clip model and process
 )
 ```
 
+<details>
+<summary>Loading a Local Image</summary>
+
+Images can be passed as base64 encoded data URIs. The following example demonstrates how to do this.
+
+```python
+import base64
+
+def image_to_base64_data_uri(file_path):
+    with open(file_path, "rb") as img_file:
+        base64_data = base64.b64encode(img_file.read()).decode('utf-8')
+        return f"data:image/png;base64,{base64_data}"
+
+# Replace 'file_path.png' with the actual path to your PNG file
+file_path = 'file_path.png'
+data_uri = image_to_base64_data_uri(file_path)
+
+messages = [
+    {"role": "system", "content": "You are an assistant who perfectly describes images."},
+    {
+        "role": "user",
+        "content": [
+            {"type": "image_url", "image_url": {"url": data_uri }},
+            {"type" : "text", "text": "Describe this image in detail please."}
+        ]
+    }
+]
+
+```
+
+</details>
+
 ### Speculative Decoding
 
 `llama-cpp-python` supports speculative decoding which allows the model to generate completions based on a draft model.

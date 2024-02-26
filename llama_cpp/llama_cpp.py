@@ -200,6 +200,20 @@ LLAMA_VOCAB_TYPE_BPE = 1
 LLAMA_VOCAB_TYPE_WPM = 2
 
 
+# // note: these values should be synchronized with ggml_rope
+# // TODO: maybe move this enum to ggml.h (ggml_rope_type)
+# enum llama_rope_type {
+#     LLAMA_ROPE_TYPE_NONE = -1,
+#     LLAMA_ROPE_TYPE_NORM =  0,
+#     LLAMA_ROPE_TYPE_NEOX =  2,
+#     LLAMA_ROPE_TYPE_GLM  =  4,
+# };
+LLAMA_ROPE_TYPE_NONE = -1
+LLAMA_ROPE_TYPE_NORM = 0
+LLAMA_ROPE_TYPE_NEOX = 2
+LLAMA_ROPE_TYPE_GLM = 4
+
+
 # enum llama_token_type {
 #     LLAMA_TOKEN_TYPE_UNDEFINED    = 0,
 #     LLAMA_TOKEN_TYPE_NORMAL       = 1,
@@ -242,12 +256,14 @@ LLAMA_TOKEN_TYPE_BYTE = 6
 #     LLAMA_FTYPE_MOSTLY_IQ2_XXS       = 19, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_IQ2_XS        = 20, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_Q2_K_S        = 21, // except 1d tensors
-#     LLAMA_FTYPE_MOSTLY_Q3_K_XS       = 22, // except 1d tensors
+#     LLAMA_FTYPE_MOSTLY_IQ3_XS        = 22, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_IQ3_XXS       = 23, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_IQ1_S         = 24, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_IQ4_NL        = 25, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_IQ3_S         = 26, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_IQ3_M         = 27, // except 1d tensors
+#     LLAMA_FTYPE_MOSTLY_IQ2_S         = 28, // except 1d tensors
+#     LLAMA_FTYPE_MOSTLY_IQ2_M         = 29, // except 1d tensors
 
 #     LLAMA_FTYPE_GUESSED = 1024, // not specified in the model file
 # };
@@ -271,12 +287,14 @@ LLAMA_FTYPE_MOSTLY_Q6_K = 18
 LLAMA_FTYPE_MOSTLY_IQ2_XXS = 19
 LLAMA_FTYPE_MOSTLY_IQ2_XS = 20
 LLAMA_FTYPE_MOSTLY_Q2_K_S = 21
-LLAMA_FTYPE_MOSTLY_Q3_K_XS = 22
+LLAMA_FTYPE_MOSTLY_IQ3_XS = 22
 LLAMA_FTYPE_MOSTLY_IQ3_XXS = 23
 LLAMA_FTYPE_MOSTLY_IQ1_S = 24
 LLAMA_FTYPE_MOSTLY_IQ4_NL = 25
 LLAMA_FTYPE_MOSTLY_IQ3_S = 26
 LLAMA_FTYPE_MOSTLY_IQ3_M = 27
+LLAMA_FTYPE_MOSTLY_IQ2_S = 28
+LLAMA_FTYPE_MOSTLY_IQ2_M = 29
 LLAMA_FTYPE_GUESSED = 1024
 
 # enum llama_rope_scaling_type {
@@ -892,104 +910,84 @@ def llama_time_us() -> int:
 
 
 # LLAMA_API size_t llama_max_devices(void);
-
-
 @ctypes_function("llama_max_devices", [], ctypes.c_size_t)
 def llama_max_devices() -> int:
     ...
 
 
 # LLAMA_API bool llama_supports_mmap       (void);
-
-
 @ctypes_function("llama_supports_mmap", [], ctypes.c_bool)
 def llama_supports_mmap() -> bool:
     ...
 
 
 # LLAMA_API bool llama_supports_mlock      (void);
-
-
 @ctypes_function("llama_supports_mlock", [], ctypes.c_bool)
 def llama_supports_mlock() -> bool:
     ...
 
 
 # LLAMA_API bool llama_supports_gpu_offload(void);
-
-
 @ctypes_function("llama_supports_gpu_offload", [], ctypes.c_bool)
 def llama_supports_gpu_offload() -> bool:
     ...
 
 
 # LLAMA_API DEPRECATED(bool llama_mmap_supported (void), "use llama_supports_mmap() instead");
-
-
 @ctypes_function("llama_mmap_supported", [], ctypes.c_bool)
 def llama_mmap_supported() -> bool:
     ...
 
 
 # LLAMA_API DEPRECATED(bool llama_mlock_supported(void), "use llama_supports_mlock() instead");
-
-
 @ctypes_function("llama_mlock_supported", [], ctypes.c_bool)
 def llama_mlock_supported() -> bool:
     ...
 
 
 # LLAMA_API const struct llama_model * llama_get_model(const struct llama_context * ctx);
-
-
 @ctypes_function("llama_get_model", [llama_context_p_ctypes], llama_model_p_ctypes)
 def llama_get_model(ctx: llama_context_p, /) -> Optional[llama_model_p]:
     ...
 
 
 # LLAMA_API uint32_t llama_n_ctx      (const struct llama_context * ctx);
-
-
 @ctypes_function("llama_n_ctx", [llama_context_p_ctypes], ctypes.c_uint32)
 def llama_n_ctx(ctx: llama_context_p, /) -> int:
     ...
 
 
 # LLAMA_API uint32_t llama_n_batch    (const struct llama_context * ctx);
-
-
 @ctypes_function("llama_n_batch", [llama_context_p_ctypes], ctypes.c_uint32)
 def llama_n_batch(ctx: llama_context_p, /) -> int:
     ...
 
 
 # LLAMA_API enum llama_vocab_type llama_vocab_type(const struct llama_model * model);
-
-
 @ctypes_function("llama_vocab_type", [llama_model_p_ctypes], ctypes.c_int)
 def llama_vocab_type(model: llama_model_p, /) -> int:
     ...
 
 
+# LLAMA_API enum llama_rope_type  llama_rope_type (const struct llama_model * model);
+@ctypes_function("llama_rope_type", [llama_model_p_ctypes], ctypes.c_int)
+def llama_rope_type(model: llama_model_p, /) -> int:
+    ...
+
+
 # LLAMA_API int32_t llama_n_vocab    (const struct llama_model * model);
-
-
 @ctypes_function("llama_n_vocab", [llama_model_p_ctypes], ctypes.c_int32)
 def llama_n_vocab(model: llama_model_p, /) -> int:
     ...
 
 
 # LLAMA_API int32_t llama_n_ctx_train(const struct llama_model * model);
-
-
 @ctypes_function("llama_n_ctx_train", [llama_model_p_ctypes], ctypes.c_int32)
 def llama_n_ctx_train(model: llama_model_p, /) -> int:
     ...
 
 
 # LLAMA_API int32_t llama_n_embd     (const struct llama_model * model);
-
-
 @ctypes_function("llama_n_embd", [llama_model_p_ctypes], ctypes.c_int32)
 def llama_n_embd(model: llama_model_p, /) -> int:
     ...
@@ -997,8 +995,6 @@ def llama_n_embd(model: llama_model_p, /) -> int:
 
 # // Get the model's RoPE frequency scaling factor
 # LLAMA_API float llama_rope_freq_scale_train(const struct llama_model * model);
-
-
 @ctypes_function("llama_rope_freq_scale_train", [llama_model_p_ctypes], ctypes.c_float)
 def llama_rope_freq_scale_train(model: llama_model_p, /) -> float:
     """Get the model's RoPE frequency scaling factor"""
@@ -1013,8 +1009,6 @@ def llama_rope_freq_scale_train(model: llama_model_p, /) -> float:
 
 # // Get metadata value as a string by key name
 # LLAMA_API int32_t llama_model_meta_val_str(const struct llama_model * model, const char * key, char * buf, size_t buf_size);
-
-
 @ctypes_function(
     "llama_model_meta_val_str",
     [
@@ -1038,8 +1032,6 @@ def llama_model_meta_val_str(
 
 # // Get the number of metadata key/value pairs
 # LLAMA_API int32_t llama_model_meta_count(const struct llama_model * model);
-
-
 @ctypes_function("llama_model_meta_count", [llama_model_p_ctypes], ctypes.c_int32)
 def llama_model_meta_count(model: llama_model_p, /) -> int:
     """Get the number of metadata key/value pairs"""
@@ -1048,8 +1040,6 @@ def llama_model_meta_count(model: llama_model_p, /) -> int:
 
 # // Get metadata key name by index
 # LLAMA_API int32_t llama_model_meta_key_by_index(const struct llama_model * model, int32_t i, char * buf, size_t buf_size);
-
-
 @ctypes_function(
     "llama_model_meta_key_by_index",
     [
@@ -1073,8 +1063,6 @@ def llama_model_meta_key_by_index(
 
 # // Get metadata value as a string by index
 # LLAMA_API int32_t llama_model_meta_val_str_by_index(const struct llama_model * model, int32_t i, char * buf, size_t buf_size);
-
-
 @ctypes_function(
     "llama_model_meta_val_str_by_index",
     [
@@ -1098,8 +1086,6 @@ def llama_model_meta_val_str_by_index(
 
 # // Get a string describing the model type
 # LLAMA_API int32_t llama_model_desc(const struct llama_model * model, char * buf, size_t buf_size);
-
-
 @ctypes_function(
     "llama_model_desc",
     [llama_model_p_ctypes, ctypes.c_char_p, ctypes.c_size_t],
@@ -1117,8 +1103,6 @@ def llama_model_desc(
 
 # // Returns the total size of all the tensors in the model in bytes
 # LLAMA_API uint64_t llama_model_size(const struct llama_model * model);
-
-
 @ctypes_function("llama_model_size", [llama_model_p_ctypes], ctypes.c_uint64)
 def llama_model_size(model: llama_model_p, /) -> int:
     """Returns the total size of all the tensors in the model in bytes"""
@@ -1127,8 +1111,6 @@ def llama_model_size(model: llama_model_p, /) -> int:
 
 # // Returns the total number of parameters in the model
 # LLAMA_API uint64_t llama_model_n_params(const struct llama_model * model);
-
-
 @ctypes_function("llama_model_n_params", [llama_model_p_ctypes], ctypes.c_uint64)
 def llama_model_n_params(model: llama_model_p, /) -> int:
     """Returns the total number of parameters in the model"""
@@ -1137,8 +1119,6 @@ def llama_model_n_params(model: llama_model_p, /) -> int:
 
 # // Get a llama model tensor
 # LLAMA_API struct ggml_tensor * llama_get_model_tensor(struct llama_model * model, const char * name);
-
-
 @ctypes_function(
     "llama_get_model_tensor", [llama_model_p_ctypes, ctypes.c_char_p], ctypes.c_void_p
 )
@@ -1154,8 +1134,6 @@ def llama_get_model_tensor(
 #         const char * fname_inp,
 #         const char * fname_out,
 #         const llama_model_quantize_params * params);
-
-
 @ctypes_function(
     "llama_model_quantize",
     [
@@ -1188,8 +1166,6 @@ def llama_model_quantize(
 #                   const char * path_base_model,
 #                      int32_t   n_threads),
 #         "use llama_model_apply_lora_from_file instead");
-
-
 @ctypes_function(
     "llama_apply_lora_from_file",
     [
@@ -1224,8 +1200,6 @@ def llama_apply_lora_from_file(
 #                        float   scale,
 #                   const char * path_base_model,
 #                      int32_t   n_threads);
-
-
 @ctypes_function(
     "llama_model_apply_lora_from_file",
     [
@@ -1313,8 +1287,6 @@ llama_kv_cache_view_p = ctypes.POINTER(llama_kv_cache_view)
 
 # // Create an empty KV cache view. (use only for debugging purposes)
 # LLAMA_API struct llama_kv_cache_view llama_kv_cache_view_init(const struct llama_context * ctx, int32_t n_max_seq);
-
-
 @ctypes_function(
     "llama_kv_cache_view_init",
     [llama_context_p_ctypes, ctypes.c_int32],
@@ -1329,8 +1301,6 @@ def llama_kv_cache_view_init(
 
 # // Free a KV cache view. (use only for debugging purposes)
 # LLAMA_API void llama_kv_cache_view_free(struct llama_kv_cache_view * view);
-
-
 @ctypes_function("llama_kv_cache_view_free", [llama_kv_cache_view_p], None)
 def llama_kv_cache_view_free(view: "ctypes.pointer[llama_kv_cache_view]", /):  # type: ignore
     """Free a KV cache view. (use only for debugging purposes)"""
@@ -1339,8 +1309,6 @@ def llama_kv_cache_view_free(view: "ctypes.pointer[llama_kv_cache_view]", /):  #
 
 # // Update the KV cache view structure with the current state of the KV cache. (use only for debugging purposes)
 # LLAMA_API void llama_kv_cache_view_update(const struct llama_context * ctx, struct llama_kv_cache_view * view);
-
-
 @ctypes_function(
     "llama_kv_cache_view_update", [llama_context_p_ctypes, llama_kv_cache_view_p], None
 )
@@ -1352,8 +1320,6 @@ def llama_kv_cache_view_update(ctx: llama_context_p, view: CtypesPointerOrRef[ll
 # // Returns the number of tokens in the KV cache (slow, use only for debug)
 # // If a KV cell has multiple sequences assigned to it, it will be counted multiple times
 # LLAMA_API int32_t llama_get_kv_cache_token_count(const struct llama_context * ctx);
-
-
 @ctypes_function(
     "llama_get_kv_cache_token_count", [llama_context_p_ctypes], ctypes.c_int32
 )
@@ -1366,8 +1332,6 @@ def llama_get_kv_cache_token_count(ctx: llama_context_p, /) -> int:
 
 # // Returns the number of used KV cells (i.e. have at least one sequence assigned to them)
 # LLAMA_API int32_t llama_get_kv_cache_used_cells(const struct llama_context * ctx);
-
-
 @ctypes_function(
     "llama_get_kv_cache_used_cells", [llama_context_p_ctypes], ctypes.c_int32
 )
@@ -1379,8 +1343,6 @@ def llama_get_kv_cache_used_cells(ctx: llama_context_p, /) -> int:
 # // Clear the KV cache
 # LLAMA_API void llama_kv_cache_clear(
 #         struct llama_context * ctx);
-
-
 @ctypes_function("llama_kv_cache_clear", [llama_context_p_ctypes], None)
 def llama_kv_cache_clear(ctx: llama_context_p, /):
     """Clear the KV cache"""
@@ -1396,8 +1358,6 @@ def llama_kv_cache_clear(ctx: llama_context_p, /):
 #                 llama_seq_id   seq_id,
 #                    llama_pos   p0,
 #                    llama_pos   p1);
-
-
 @ctypes_function(
     "llama_kv_cache_seq_rm",
     [
@@ -1432,8 +1392,6 @@ def llama_kv_cache_seq_rm(
 #                 llama_seq_id   seq_id_dst,
 #                    llama_pos   p0,
 #                    llama_pos   p1);
-
-
 @ctypes_function(
     "llama_kv_cache_seq_cp",
     [
@@ -1464,8 +1422,6 @@ def llama_kv_cache_seq_cp(
 # LLAMA_API void llama_kv_cache_seq_keep(
 #         struct llama_context * ctx,
 #                 llama_seq_id   seq_id);
-
-
 @ctypes_function(
     "llama_kv_cache_seq_keep", [llama_context_p_ctypes, llama_seq_id], None
 )
@@ -1475,19 +1431,19 @@ def llama_kv_cache_seq_keep(ctx: llama_context_p, seq_id: Union[llama_seq_id, in
 
 
 # // Adds relative position "delta" to all tokens that belong to the specified sequence and have positions in [p0, p1)
-# // If the KV cache is RoPEd, the KV data is updated accordingly
+# // If the KV cache is RoPEd, the KV data is updated accordingly:
+# //   - lazily on next llama_decode()
+# //   - explicitly with llama_kv_cache_update()
 # // p0 < 0 : [0,  p1]
 # // p1 < 0 : [p0, inf)
-# LLAMA_API void llama_kv_cache_seq_shift(
+# LLAMA_API void llama_kv_cache_seq_add(
 #         struct llama_context * ctx,
 #                 llama_seq_id   seq_id,
 #                    llama_pos   p0,
 #                    llama_pos   p1,
 #                    llama_pos   delta);
-
-
 @ctypes_function(
-    "llama_kv_cache_seq_shift",
+    "llama_kv_cache_seq_add",
     [
         llama_context_p_ctypes,
         llama_seq_id,
@@ -1497,7 +1453,7 @@ def llama_kv_cache_seq_keep(ctx: llama_context_p, seq_id: Union[llama_seq_id, in
     ],
     None,
 )
-def llama_kv_cache_seq_shift(
+def llama_kv_cache_seq_add(
     ctx: llama_context_p,
     seq_id: Union[llama_seq_id, int],
     p0: Union[llama_pos, int],
@@ -1506,7 +1462,9 @@ def llama_kv_cache_seq_shift(
     /,
 ):
     """Adds relative position "delta" to all tokens that belong to the specified sequence and have positions in [p0, p1)
-    If the KV cache is RoPEd, the KV data is updated accordingly
+    If the KV cache is RoPEd, the KV data is updated accordingly:
+    - lazily on next llama_decode()
+    - explicitly with llama_kv_cache_update()
     p0 < 0 : [0,  p1]
     p1 < 0 : [p0, inf)"""
     ...
@@ -1522,8 +1480,6 @@ def llama_kv_cache_seq_shift(
 #                    llama_pos   p0,
 #                    llama_pos   p1,
 #                          int   d);
-
-
 @ctypes_function(
     "llama_kv_cache_seq_div",
     [
@@ -1550,6 +1506,28 @@ def llama_kv_cache_seq_div(
     ...
 
 
+# // Defragment the KV cache
+# // This will be applied:
+# //   - lazily on next llama_decode()
+# //   - explicitly with llama_kv_cache_update()
+# LLAMA_API void llama_kv_cache_defrag(struct llama_context * ctx);
+@ctypes_function("llama_kv_cache_defrag", [llama_context_p_ctypes], None)
+def llama_kv_cache_defrag(ctx: llama_context_p, /):
+    """Defragment the KV cache
+    This will be applied:
+    - lazily on next llama_decode()
+    - explicitly with llama_kv_cache_update()"""
+    ...
+
+
+# // Apply the KV cache updates (such as K-shifts, defragmentation, etc.)
+# LLAMA_API void llama_kv_cache_update(struct llama_context * ctx);
+@ctypes_function("llama_kv_cache_update", [llama_context_p_ctypes], None)
+def llama_kv_cache_update(ctx: llama_context_p, /):
+    """Apply the KV cache updates (such as K-shifts, defragmentation, etc.)"""
+    ...
+
+
 # //
 # // State / sessions
 # //
@@ -1558,8 +1536,6 @@ def llama_kv_cache_seq_div(
 # Returns the maximum size in bytes of the state (rng, logits, embedding
 # and kv_cache) - will often be smaller after compacting tokens
 # LLAMA_API size_t llama_get_state_size(const struct llama_context * ctx);
-
-
 @ctypes_function("llama_get_state_size", [llama_context_p_ctypes], ctypes.c_size_t)
 def llama_get_state_size(ctx: llama_context_p, /) -> int:
     """Returns the maximum size in bytes of the state (rng, logits, embedding
@@ -1573,8 +1549,6 @@ def llama_get_state_size(ctx: llama_context_p, /) -> int:
 # LLAMA_API size_t llama_copy_state_data(
 #         struct llama_context * ctx,
 #                      uint8_t * dst);
-
-
 @ctypes_function(
     "llama_copy_state_data",
     [
@@ -1597,8 +1571,6 @@ def llama_copy_state_data(
 # LLAMA_API size_t llama_set_state_data(
 #         struct llama_context * ctx,
 #                      uint8_t * src);
-
-
 @ctypes_function(
     "llama_set_state_data",
     [llama_context_p_ctypes, ctypes.POINTER(ctypes.c_uint8)],
@@ -1618,8 +1590,6 @@ def llama_set_state_data(
 #                  llama_token * tokens_out,
 #                       size_t   n_token_capacity,
 #                       size_t * n_token_count_out);
-
-
 @ctypes_function(
     "llama_load_session_file",
     [
@@ -1647,8 +1617,6 @@ def llama_load_session_file(
 #                   const char * path_session,
 #            const llama_token * tokens,
 #                       size_t   n_token_count);
-
-
 @ctypes_function(
     "llama_save_session_file",
     [
@@ -1685,8 +1653,6 @@ def llama_save_session_file(
 #                      int32_t   n_tokens,
 #                      int32_t   n_past),
 #         "use llama_decode() instead");
-
-
 @ctypes_function(
     "llama_eval",
     [
@@ -1720,8 +1686,6 @@ def llama_eval(
 #                      int32_t   n_tokens,
 #                      int32_t   n_past),
 #         "use llama_decode() instead");
-
-
 @ctypes_function(
     "llama_eval_embd",
     [
@@ -1753,8 +1717,6 @@ def llama_eval_embd(
 #                   int32_t   n_tokens,
 #                 llama_pos   pos_0,
 #              llama_seq_id   seq_id);
-
-
 @ctypes_function(
     "llama_batch_get_one",
     [
@@ -1790,8 +1752,6 @@ def llama_batch_get_one(
 #         int32_t n_tokens,
 #         int32_t embd,
 #         int32_t n_seq_max);
-
-
 @ctypes_function(
     "llama_batch_init", [ctypes.c_int32, ctypes.c_int32, ctypes.c_int32], llama_batch
 )
@@ -1813,8 +1773,6 @@ def llama_batch_init(
 
 # // Frees a batch of tokens allocated with llama_batch_init()
 # LLAMA_API void llama_batch_free(struct llama_batch batch);
-
-
 @ctypes_function("llama_batch_free", [llama_batch], None)
 def llama_batch_free(batch: llama_batch, /):
     """Frees a batch of tokens allocated with llama_batch_init()"""
@@ -1828,8 +1786,6 @@ def llama_batch_free(batch: llama_batch, /):
 # LLAMA_API int32_t llama_decode(
 #         struct llama_context * ctx,
 #           struct llama_batch   batch);
-
-
 @ctypes_function("llama_decode", [llama_context_p_ctypes, llama_batch], ctypes.c_int32)
 def llama_decode(ctx: llama_context_p, batch: llama_batch, /) -> int:
     """Positive return values does not mean a fatal error, but rather a warning.
@@ -1843,8 +1799,6 @@ def llama_decode(ctx: llama_context_p, batch: llama_batch, /) -> int:
 # // n_threads is the number of threads used for generation (single token)
 # // n_threads_batch is the number of threads used for prompt and batch processing (multiple tokens)
 # LLAMA_API void llama_set_n_threads(struct llama_context * ctx, uint32_t n_threads, uint32_t n_threads_batch);
-
-
 @ctypes_function(
     "llama_set_n_threads",
     [
@@ -1873,8 +1827,6 @@ def llama_set_n_threads(
 # // Rows: n_tokens provided with llama_batch
 # // Cols: n_vocab
 # LLAMA_API float * llama_get_logits(struct llama_context * ctx);
-
-
 @ctypes_function(
     "llama_get_logits", [llama_context_p_ctypes], ctypes.POINTER(ctypes.c_float)
 )
@@ -1890,8 +1842,6 @@ def llama_get_logits(ctx: llama_context_p, /) -> CtypesArray[ctypes.c_float]:
 # // Logits for the ith token. Equivalent to:
 # // llama_get_logits(ctx) + i*n_vocab
 # LLAMA_API float * llama_get_logits_ith(struct llama_context * ctx, int32_t i);
-
-
 @ctypes_function(
     "llama_get_logits_ith",
     [llama_context_p_ctypes, ctypes.c_int32],
@@ -1908,8 +1858,6 @@ def llama_get_logits_ith(
 # Get the embeddings for the input
 # shape: [n_embd] (1-dimensional)
 # LLAMA_API float * llama_get_embeddings(struct llama_context * ctx);
-
-
 @ctypes_function(
     "llama_get_embeddings", [llama_context_p_ctypes], ctypes.POINTER(ctypes.c_float)
 )
@@ -1922,8 +1870,6 @@ def llama_get_embeddings(ctx: llama_context_p, /) -> CtypesArray[ctypes.c_float]
 # // Get the embeddings for the ith sequence
 # // llama_get_embeddings(ctx) + i*n_embd
 # LLAMA_API float * llama_get_embeddings_ith(struct llama_context * ctx, int32_t i);
-
-
 @ctypes_function(
     "llama_get_embeddings_ith",
     [llama_context_p_ctypes, ctypes.c_int32],
@@ -1943,8 +1889,6 @@ def llama_get_embeddings_ith(
 
 
 # LLAMA_API const char * llama_token_get_text(const struct llama_model * model, llama_token token);
-
-
 @ctypes_function(
     "llama_token_get_text", [llama_model_p_ctypes, llama_token], ctypes.c_char_p
 )
@@ -1955,8 +1899,6 @@ def llama_token_get_text(
 
 
 # LLAMA_API float llama_token_get_score(const struct llama_model * model, llama_token token);
-
-
 @ctypes_function(
     "llama_token_get_score", [llama_model_p_ctypes, llama_token], ctypes.c_float
 )
@@ -1967,8 +1909,6 @@ def llama_token_get_score(
 
 
 # LLAMA_API enum llama_token_type llama_token_get_type(const struct llama_model * model, llama_token token);
-
-
 @ctypes_function(
     "llama_token_get_type", [llama_model_p_ctypes, llama_token], ctypes.c_int
 )
@@ -1982,8 +1922,6 @@ def llama_token_get_type(
 
 
 # LLAMA_API llama_token llama_token_bos(const struct llama_model * model); // beginning-of-sentence
-
-
 @ctypes_function("llama_token_bos", [llama_model_p_ctypes], llama_token)
 def llama_token_bos(model: llama_model_p, /) -> int:
     """beginning-of-sentence"""
@@ -1991,8 +1929,6 @@ def llama_token_bos(model: llama_model_p, /) -> int:
 
 
 # LLAMA_API llama_token llama_token_eos(const struct llama_model * model); // end-of-sentence
-
-
 @ctypes_function("llama_token_eos", [llama_model_p_ctypes], llama_token)
 def llama_token_eos(model: llama_model_p, /) -> int:
     """end-of-sentence"""
@@ -2000,8 +1936,6 @@ def llama_token_eos(model: llama_model_p, /) -> int:
 
 
 # LLAMA_API llama_token llama_token_nl (const struct llama_model * model); // next-line
-
-
 @ctypes_function("llama_token_nl", [llama_model_p_ctypes], llama_token)
 def llama_token_nl(model: llama_model_p, /) -> int:
     """next-line"""
@@ -2010,8 +1944,6 @@ def llama_token_nl(model: llama_model_p, /) -> int:
 
 # // Returns -1 if unknown, 1 for true or 0 for false.
 # LLAMA_API int32_t         llama_add_bos_token(const struct llama_model * model);
-
-
 @ctypes_function("llama_add_bos_token", [llama_model_p_ctypes], ctypes.c_int32)
 def llama_add_bos_token(model: llama_model_p, /) -> int:
     """Returns -1 if unknown, 1 for true or 0 for false."""
@@ -2020,8 +1952,6 @@ def llama_add_bos_token(model: llama_model_p, /) -> int:
 
 # // Returns -1 if unknown, 1 for true or 0 for false.
 # LLAMA_API int32_t         llama_add_eos_token(const struct llama_model * model);
-
-
 @ctypes_function("llama_add_eos_token", [llama_model_p_ctypes], ctypes.c_int32)
 def llama_add_eos_token(model: llama_model_p, /) -> int:
     """Returns -1 if unknown, 1 for true or 0 for false."""
@@ -2030,8 +1960,6 @@ def llama_add_eos_token(model: llama_model_p, /) -> int:
 
 # // codellama infill tokens
 # LLAMA_API llama_token llama_token_prefix(const struct llama_model * model); // Beginning of infill prefix
-
-
 @ctypes_function("llama_token_prefix", [llama_model_p_ctypes], llama_token)
 def llama_token_prefix(model: llama_model_p) -> int:
     """codellama infill tokens"""
@@ -2039,24 +1967,18 @@ def llama_token_prefix(model: llama_model_p) -> int:
 
 
 # LLAMA_API llama_token llama_token_middle(const struct llama_model * model); // Beginning of infill middle
-
-
 @ctypes_function("llama_token_middle", [llama_model_p_ctypes], llama_token)
 def llama_token_middle(model: llama_model_p, /) -> int:
     ...
 
 
 # LLAMA_API llama_token llama_token_suffix(const struct llama_model * model); // Beginning of infill suffix
-
-
 @ctypes_function("llama_token_suffix", [llama_model_p_ctypes], llama_token)
 def llama_token_suffix(model: llama_model_p, /) -> int:
     ...
 
 
 # LLAMA_API llama_token llama_token_eot   (const struct llama_model * model); // End of infill middle
-
-
 @ctypes_function("llama_token_eot", [llama_model_p_ctypes], llama_token)
 def llama_token_eot(model: llama_model_p, /) -> int:
     ...
@@ -2081,8 +2003,6 @@ def llama_token_eot(model: llama_model_p, /) -> int:
 #                      int32_t   n_max_tokens,
 #                         bool   add_bos,
 #                         bool   special);
-
-
 @ctypes_function(
     "llama_tokenize",
     [
@@ -2119,8 +2039,6 @@ def llama_tokenize(
 #                        llama_token   token,
 #                               char * buf,
 #                            int32_t   length);
-
-
 @ctypes_function(
     "llama_token_to_piece",
     [
@@ -2164,8 +2082,6 @@ def llama_token_to_piece(
 #                               bool   add_ass,
 #                               char * buf,
 #                            int32_t   length);
-
-
 @ctypes_function(
     "llama_chat_apply_template",
     [
@@ -2195,8 +2111,6 @@ def llama_chat_apply_template(
 #         const llama_grammar_element ** rules,
 #                                 size_t    n_rules,
 #                                 size_t    start_rule_index);
-
-
 @ctypes_function(
     "llama_grammar_init",
     [
