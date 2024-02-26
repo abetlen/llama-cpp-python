@@ -1471,12 +1471,15 @@ class SchemaConverter:
 
         if schema_type == "object" and "properties" in schema:
             # TODO: `required` keyword
-            prop_order = self._prop_order
-            prop_pairs = sorted(
-                schema["properties"].items(),
-                # sort by position in prop_order (if specified) then by key
-                key=lambda kv: (prop_order.get(kv[0], len(prop_order)), kv[0]),
-            )
+            if self._prop_order:
+                prop_order = self._prop_order
+                prop_pairs = sorted(
+                    schema["properties"].items(),
+                    # sort by position in prop_order (if specified) then by key
+                    key=lambda kv: (prop_order.get(kv[0], len(prop_order)), kv[0]),
+                )
+            else:
+                prop_pairs = schema["properties"].items()
 
             rule = '"{" space'
             for i, (prop_name, prop_schema) in enumerate(prop_pairs):
@@ -1495,9 +1498,21 @@ class SchemaConverter:
             item_rule_name = self.visit(
                 schema["items"], f'{name}{"-" if name else ""}item'
             )
-            rule = (
-                f'"[" space ({item_rule_name} ("," space {item_rule_name})*)? "]" space'
-            )
+            list_item_operator = f'("," space {item_rule_name})'
+            successive_items = ""
+            min_items = schema.get("minItems", 0)
+            if min_items > 0:
+               first_item = f"({item_rule_name})"
+               successive_items = list_item_operator * (min_items - 1)
+               min_items -= 1
+            else:
+               first_item = f"({item_rule_name})?"
+            max_items = schema.get("maxItems")
+            if max_items is not None and max_items > min_items:
+                successive_items += (list_item_operator + "?") * (max_items - min_items - 1)
+            else:
+                successive_items += list_item_operator + "*"
+            rule = f'"[" space {first_item} {successive_items} "]" space'
             return self._add_rule(rule_name, rule)
 
         else:

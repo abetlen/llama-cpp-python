@@ -6,6 +6,7 @@ from typing import Dict, Optional, Union, List
 
 import llama_cpp
 import llama_cpp.llama_speculative as llama_speculative
+import llama_cpp.llama_tokenizer as llama_tokenizer
 
 from llama_cpp.server.settings import ModelSettings
 
@@ -93,6 +94,10 @@ class LlamaProxy:
                 )
             )
 
+        tokenizer: Optional[llama_cpp.BaseLlamaTokenizer] = None
+        if settings.hf_pretrained_model_name_or_path is not None:
+            tokenizer = llama_tokenizer.LlamaHFTokenizer.from_pretrained(settings.hf_pretrained_model_name_or_path)
+
         draft_model = None
         if settings.draft_model is not None:
             draft_model = llama_speculative.LlamaPromptLookupDecoding(
@@ -115,9 +120,20 @@ class LlamaProxy:
                         kv_overrides[key] = float(value)
                     else:
                         raise ValueError(f"Unknown value type {value_type}")
+        
+        import functools
 
-        _model = llama_cpp.Llama(
-            model_path=settings.model,
+        kwargs = {}
+
+        if settings.hf_model_repo_id is not None:
+            create_fn = functools.partial(llama_cpp.Llama.from_pretrained, repo_id=settings.hf_model_repo_id, filename=settings.model)
+        else:
+            create_fn = llama_cpp.Llama
+            kwargs["model_path"] = settings.model
+        
+
+        _model = create_fn(
+            **kwargs,
             # Model Params
             n_gpu_layers=settings.n_gpu_layers,
             main_gpu=settings.main_gpu,
@@ -156,6 +172,8 @@ class LlamaProxy:
             chat_handler=chat_handler,
             # Speculative Decoding
             draft_model=draft_model,
+            # Tokenizer
+            tokenizer=tokenizer,
             # Misc
             verbose=settings.verbose,
         )

@@ -12,6 +12,9 @@ deps:
 build:
 	python3 -m pip install --verbose -e .
 
+build.debug:
+	CMAKE_ARGS="-DCMAKE_BUILD_TYPE=Debug" python3 -m pip install --verbose --config-settings=cmake.verbose=true --config-settings=logging.level=INFO --config-settings=install.strip=false  --editable .
+
 build.cuda:
 	CMAKE_ARGS="-DLLAMA_CUBLAS=on" python3 -m pip install --verbose -e .
 
@@ -19,10 +22,10 @@ build.opencl:
 	CMAKE_ARGS="-DLLAMA_CLBLAST=on" python3 -m pip install --verbose -e .
 
 build.openblas:
-	CMAKE_ARGS="-DLLAMA_CLBLAST=on" python3 -m pip install --verbose -e .
+	CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS" python3 -m pip install --verbose -e .
 
 build.blis:
-	CMAKE_ARGS="-DLLAMA_OPENBLAS=on -DLLAMA_OPENBLAS_VENDOR=blis" python3 -m pip install --verbose -e .
+	CMAKE_ARGS="-DLLAMA_BLAS=on -DLLAMA_BLAS_VENDOR=FLAME" python3 -m pip install --verbose -e .
 
 build.metal:
 	CMAKE_ARGS="-DLLAMA_METAL=on" python3 -m pip install --verbose -e .

@@ -292,6 +292,7 @@ async def create_completion(
                 inner_send_chan=send_chan,
                 iterator=iterator(),
             ),
+            sep='\n',
         )
     else:
         return iterator_or_completion
@@ -426,6 +427,7 @@ async def create_chat_completion(
                 inner_send_chan=send_chan,
                 iterator=iterator(),
             ),
+            sep='\n',
         )
     else:
         return iterator_or_completion

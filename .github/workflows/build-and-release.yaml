@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          submodules: "true"
+          submodules: "recursive"
 
       # Used to host cibuildwheel
       - uses: actions/setup-python@v3
@@ -48,7 +48,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          submodules: "true"
+          submodules: "recursive"
       - uses: actions/setup-python@v3
         with:
           python-version: "3.8"

@@ -72,4 +72,4 @@ Documentation = "https://llama-cpp-python.readthedocs.io/en/latest/"
 Changelog = "https://llama-cpp-python.readthedocs.io/en/latest/changelog/"
 
 [tool.pytest.ini_options]
-addopts = "--ignore=vendor"
+testpaths = "tests"

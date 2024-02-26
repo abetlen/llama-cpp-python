@@ -4,7 +4,11 @@ import os
 import sys
 import uuid
 import time
+import json
+import ctypes
+import fnmatch
 import multiprocessing
+
 from typing import (
     List,
     Optional,
@@ -16,8 +20,10 @@ from typing import (
     Callable,
 )
 from collections import deque
+from pathlib import Path
 
-import ctypes
+
+from llama_cpp.llama_types import List
 
 from .llama_types import *
 from .llama_grammar import LlamaGrammar
@@ -27,6 +33,7 @@ from .llama_cache import (
     LlamaDiskCache,  # type: ignore
     LlamaRAMCache,  # type: ignore
 )
+from .llama_tokenizer import BaseLlamaTokenizer, LlamaTokenizer
 import llama_cpp.llama_cpp as llama_cpp
 import llama_cpp.llama_chat_format as llama_chat_format
 
@@ -44,6 +51,7 @@ from ._internals import (
     _LlamaSamplingContext,  # type: ignore
 )
 from ._logger import set_verbose
+from ._utils import suppress_stdout_stderr
 
 
 class Llama:
@@ -57,7 +65,7 @@ class Llama:
         *,
         # Model Params
         n_gpu_layers: int = 0,
-        split_mode: int = llama_cpp.LLAMA_SPLIT_LAYER,
+        split_mode: int = llama_cpp.LLAMA_SPLIT_MODE_LAYER,
         main_gpu: int = 0,
         tensor_split: Optional[List[float]] = None,
         vocab_only: bool = False,
@@ -70,7 +78,7 @@ class Llama:
         n_batch: int = 512,
         n_threads: Optional[int] = None,
         n_threads_batch: Optional[int] = None,
-        rope_scaling_type: Optional[int] = llama_cpp.LLAMA_ROPE_SCALING_UNSPECIFIED,
+        rope_scaling_type: Optional[int] = llama_cpp.LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED,
         rope_freq_base: float = 0.0,
         rope_freq_scale: float = 0.0,
         yarn_ext_factor: float = -1.0,
@@ -89,12 +97,14 @@ class Llama:
         lora_scale: float = 1.0,
         lora_path: Optional[str] = None,
         # Backend Params
-        numa: bool = False,
+        numa: Union[bool, int] = False,
         # Chat Format Params
         chat_format: Optional[str] = None,
         chat_handler: Optional[llama_chat_format.LlamaChatCompletionHandler] = None,
         # Speculative Decoding
         draft_model: Optional[LlamaDraftModel] = None,
+        # Tokenizer Override
+        tokenizer: Optional[BaseLlamaTokenizer] = None,
         # Misc
         verbose: bool = True,
         # Extra Params
@@ -155,10 +165,11 @@ class Llama:
             last_n_tokens_size: Maximum number of tokens to keep in the last_n_tokens deque.
             lora_base: Optional path to base model, useful if using a quantized base model and you want to apply LoRA to an f16 model.
             lora_path: Path to a LoRA file to apply to the model.
-            numa: Enable NUMA support. (NOTE: The initial value of this parameter is used for the remainder of the program as this value is set in llama_backend_init)
+            numa: numa policy
             chat_format: String specifying the chat format to use when calling create_chat_completion.
             chat_handler: Optional chat handler to use when calling create_chat_completion.
             draft_model: Optional draft model to use for speculative decoding.
+            tokenizer: Optional tokenizer to override the default tokenizer from llama.cpp.
             verbose: Print verbose output to stderr.
 
         Raises:
@@ -171,10 +182,23 @@ class Llama:
 
         set_verbose(verbose)
 
-        self.numa = numa
         if not Llama.__backend_initialized:
-            llama_cpp.llama_backend_init(self.numa)
+            with suppress_stdout_stderr(disable=verbose):
+                llama_cpp.llama_backend_init()
             Llama.__backend_initialized = True
+
+        if isinstance(numa, bool):
+            self.numa = (
+                llama_cpp.GGML_NUMA_STRATEGY_DISTRIBUTE
+                if numa
+                else llama_cpp.GGML_NUMA_STRATEGY_DISABLED
+            )
+        else:
+            self.numa = numa
+
+        if self.numa != llama_cpp.GGML_NUMA_STRATEGY_DISABLED:
+            with suppress_stdout_stderr(disable=verbose):
+                llama_cpp.llama_numa_init(self.numa)
 
         self.model_path = model_path
 
@@ -214,20 +238,20 @@ class Llama:
             for i, (k, v) in enumerate(kv_overrides.items()):
                 self._kv_overrides_array[i].key = k.encode("utf-8")
                 if isinstance(v, bool):
-                    self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_BOOL
+                    self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_TYPE_BOOL
                     self._kv_overrides_array[i].value.bool_value = v
                 elif isinstance(v, int):
-                    self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_INT
+                    self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_TYPE_INT
                     self._kv_overrides_array[i].value.int_value = v
                 elif isinstance(v, float):
-                    self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_FLOAT
+                    self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_TYPE_FLOAT
                     self._kv_overrides_array[i].value.float_value = v
                 else:
                     raise ValueError(f"Unknown value type for {k}: {v}")
 
-            self._kv_overrides_array[
-                -1
-            ].key = b"\0"  # ensure sentinel element is zeroed
+            self._kv_overrides_array[-1].key = (
+                b"\0"  # ensure sentinel element is zeroed
+            )
             self.model_params.kv_overrides = self._kv_overrides_array
 
         self.n_batch = min(n_ctx, n_batch)  # ???
@@ -235,6 +259,7 @@ class Llama:
         self.n_threads_batch = n_threads_batch or max(
             multiprocessing.cpu_count() // 2, 1
         )
+
         # Context Params
         self.context_params = llama_cpp.llama_context_default_params()
         self.context_params.seed = seed
@@ -245,7 +270,7 @@ class Llama:
         self.context_params.rope_scaling_type = (
             rope_scaling_type
             if rope_scaling_type is not None
-            else llama_cpp.LLAMA_ROPE_SCALING_UNSPECIFIED
+            else llama_cpp.LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED
         )
         self.context_params.rope_freq_base = (
             rope_freq_base if rope_freq_base != 0.0 else 0
@@ -267,7 +292,9 @@ class Llama:
         )
         self.context_params.yarn_orig_ctx = yarn_orig_ctx if yarn_orig_ctx != 0 else 0
         self.context_params.mul_mat_q = mul_mat_q
-        self.context_params.logits_all = logits_all
+        self.context_params.logits_all = (
+            logits_all if draft_model is None else True
+        )  # Must be set to True for speculative decoding
         self.context_params.embedding = embedding
         self.context_params.offload_kqv = offload_kqv
 
@@ -286,6 +313,10 @@ class Llama:
         self._model = _LlamaModel(
             path_model=self.model_path, params=self.model_params, verbose=self.verbose
         )
+
+        # Override tokenizer
+        self.tokenizer_ = tokenizer or LlamaTokenizer(self)
+
         # Set the default value for the context and correct the batch
         if n_ctx == 0:
             n_ctx = self._model.n_ctx_train()
@@ -353,8 +384,14 @@ class Llama:
         if self.verbose:
             print(f"Model metadata: {self.metadata}", file=sys.stderr)
 
-        if self.chat_format is None and self.chat_handler is None and "tokenizer.chat_template" in self.metadata:
-            chat_format = llama_chat_format.guess_chat_format_from_gguf_metadata(self.metadata)
+        if (
+            self.chat_format is None
+            and self.chat_handler is None
+            and "tokenizer.chat_template" in self.metadata
+        ):
+            chat_format = llama_chat_format.guess_chat_format_from_gguf_metadata(
+                self.metadata
+            )
 
             if chat_format is not None:
                 self.chat_format = chat_format
@@ -380,9 +417,7 @@ class Llama:
                     print(f"Using chat bos_token: {bos_token}", file=sys.stderr)
 
                 self.chat_handler = llama_chat_format.Jinja2ChatFormatter(
-                    template=template,
-                    eos_token=eos_token,
-                    bos_token=bos_token
+                    template=template, eos_token=eos_token, bos_token=bos_token
                 ).to_chat_handler()
 
         if self.chat_format is None and self.chat_handler is None:
@@ -431,18 +466,21 @@ class Llama:
         Returns:
             A list of tokens.
         """
-        return self._model.tokenize(text, add_bos, special)
+        return self.tokenizer_.tokenize(text, add_bos, special)
 
-    def detokenize(self, tokens: List[int]) -> bytes:
+    def detokenize(
+        self, tokens: List[int], prev_tokens: Optional[List[int]] = None
+    ) -> bytes:
         """Detokenize a list of tokens.
 
         Args:
             tokens: The list of tokens to detokenize.
+            prev_tokens: The list of previous tokens. Offset mapping will be performed if provided
 
         Returns:
             The detokenized string.
         """
-        return self._model.detokenize(tokens)
+        return self.tokenizer_.detokenize(tokens, prev_tokens=prev_tokens)
 
     def set_cache(self, cache: Optional[BaseLlamaCache]):
         """Set the cache.
@@ -538,7 +576,7 @@ class Llama:
             logits[:] = (
                 logits_processor(self._input_ids, logits)
                 if idx is None
-                else logits_processor(self._input_ids[:idx], logits)
+                else logits_processor(self._input_ids[: idx + 1], logits)
             )
 
         sampling_params = _LlamaSamplingParams(
@@ -680,7 +718,9 @@ class Llama:
 
             if self.draft_model is not None:
                 self.input_ids[self.n_tokens : self.n_tokens + len(tokens)] = tokens
-                draft_tokens = self.draft_model(self.input_ids[:self.n_tokens + len(tokens)])
+                draft_tokens = self.draft_model(
+                    self.input_ids[: self.n_tokens + len(tokens)]
+                )
                 tokens.extend(
                     draft_tokens.astype(int)[
                         : self._n_ctx - self.n_tokens - len(tokens)
@@ -698,9 +738,54 @@ class Llama:
         Returns:
             An embedding object.
         """
-        assert self._ctx.ctx is not None
         assert self._model.model is not None
         model_name: str = model if model is not None else self.model_path
+
+        input = input if isinstance(input, list) else [input]
+
+        # get numeric embeddings
+        embeds: List[List[float]]
+        total_tokens: int
+        embeds, total_tokens = self.embed(input, return_count=True)  # type: ignore
+
+        # convert to CreateEmbeddingResponse
+        data: List[Embedding] = [
+            {
+                "object": "embedding",
+                "embedding": emb,
+                "index": idx,
+            }
+            for idx, emb in enumerate(embeds)
+        ]
+
+        return {
+            "object": "list",
+            "data": data,
+            "model": model_name,
+            "usage": {
+                "prompt_tokens": total_tokens,
+                "total_tokens": total_tokens,
+            },
+        }
+
+    def embed(
+        self,
+        input: Union[str, List[str]],
+        normalize: bool = True,
+        truncate: bool = True,
+        return_count: bool = False,
+    ):
+        """Embed a string.
+
+        Args:
+            input: The utf-8 encoded string to embed.
+
+        Returns:
+            A list of embeddings
+        """
+        assert self._ctx.ctx is not None
+        n_embd = self.n_embd()
+        n_batch = self.n_batch
 
         if self.context_params.embedding == False:
             raise RuntimeError(
@@ -715,48 +800,74 @@ class Llama:
         else:
             inputs = input
 
-        data: List[Embedding] = []
+        # reset batch
+        self._batch.reset()
+
+        # decode and fetch embeddings
+        data: List[List[float]] = []
+
+        def decode_batch(n_seq: int):
+            assert self._ctx.ctx is not None
+            llama_cpp.llama_kv_cache_clear(self._ctx.ctx)
+            self._ctx.decode(self._batch)
+            self._batch.reset()
+
+            # store embeddings
+            for i in range(n_seq):
+                embedding: List[float] = llama_cpp.llama_get_embeddings_ith(
+                    self._ctx.ctx, i
+                )[:n_embd]
+                if normalize:
+                    norm = float(np.linalg.norm(embedding))
+                    embedding = [v / norm for v in embedding]
+                data.append(embedding)
+
+        # init state
         total_tokens = 0
-        for index, input in enumerate(inputs):
-            tokens = self.tokenize(input.encode("utf-8"), special=True)
-            self.reset()
-            self.eval(tokens)
+        t_batch = 0
+        p_batch = 0
+
+        # accumulate batches and encode
+        for text in inputs:
+            tokens = self.tokenize(text.encode("utf-8"))
+            if truncate:
+                tokens = tokens[:n_batch]
+
             n_tokens = len(tokens)
             total_tokens += n_tokens
-            embedding = llama_cpp.llama_get_embeddings(self._ctx.ctx)[
-                : llama_cpp.llama_n_embd(self._model.model)
-            ]
 
-            data.append(
-                {
-                    "object": "embedding",
-                    "embedding": embedding,
-                    "index": index,
-                }
-            )
+            # check for overrun
+            if n_tokens > n_batch:
+                raise ValueError(
+                    f"Requested tokens ({n_tokens}) exceed batch size of {n_batch}"
+                )
+
+            # time to eval batch
+            if t_batch + n_tokens > n_batch:
+                decode_batch(p_batch)
+                t_batch = 0
+                p_batch = 0
+
+            # add to batch
+            self._batch.add_sequence(tokens, p_batch, False)
+            t_batch += n_tokens
+            p_batch += 1
+
+        # hanlde last batch
+        decode_batch(p_batch)
+
         if self.verbose:
             llama_cpp.llama_print_timings(self._ctx.ctx)
 
-        return {
-            "object": "list",
-            "data": data,
-            "model": model_name,
-            "usage": {
-                "prompt_tokens": total_tokens,
-                "total_tokens": total_tokens,
-            },
-        }
+        output = data[0] if isinstance(input, str) else data
 
-    def embed(self, input: str) -> List[float]:
-        """Embed a string.
+        llama_cpp.llama_kv_cache_clear(self._ctx.ctx)
+        self.reset()
 
-        Args:
-            input: The utf-8 encoded string to embed.
-
-        Returns:
-            A list of embeddings
-        """
-        return list(map(float, self.create_embedding(input)["data"][0]["embedding"]))
+        if return_count:
+            return output, total_tokens
+        else:
+            return output
 
     def _create_completion(
         self,
@@ -905,13 +1016,13 @@ class Llama:
             grammar=grammar,
         ):
             if token == self._token_eos:
-                text = self.detokenize(completion_tokens)
+                text = self.detokenize(completion_tokens, prev_tokens=prompt_tokens)
                 finish_reason = "stop"
                 break
 
             completion_tokens.append(token)
 
-            all_text = self.detokenize(completion_tokens)
+            all_text = self.detokenize(completion_tokens, prev_tokens=prompt_tokens)
 
             # Contains multi-byte UTF8
             for k, char in enumerate(all_text[-3:]):
@@ -935,7 +1046,7 @@ class Llama:
 
             if stream:
                 remaining_tokens = completion_tokens[returned_tokens:]
-                remaining_text = self.detokenize(remaining_tokens)
+                remaining_text = self.detokenize(remaining_tokens, prev_tokens=prompt_tokens + completion_tokens[:returned_tokens])
                 remaining_length = len(remaining_text)
 
                 # We want to avoid yielding any characters from
@@ -957,17 +1068,17 @@ class Llama:
                     for token in remaining_tokens:
                         if token == self.token_bos():
                             continue
-                        token_end_position += len(self.detokenize([token]))
+                        token_end_position += len(self.detokenize([token], prev_tokens=prompt_tokens + completion_tokens[:returned_tokens]))
                         # Check if stop sequence is in the token
                         if token_end_position > (
                             remaining_length - first_stop_position
                         ):
                             break
-                        token_str = self.detokenize([token]).decode(
+                        token_str = self.detokenize([token], prev_tokens=prompt_tokens + completion_tokens[:returned_tokens]).decode(
                             "utf-8", errors="ignore"
                         )
                         text_offset = len(prompt) + len(
-                            self.detokenize(completion_tokens[:returned_tokens]).decode(
+                            self.detokenize(completion_tokens[:returned_tokens], prev_tokens=prompt_tokens + completion_tokens[:returned_tokens]).decode(
                                 "utf-8", errors="ignore"
                             )
                         )
@@ -989,7 +1100,7 @@ class Llama:
                         top_logprob.update({token_str: current_logprobs[int(token)]})
                         logprobs_or_none = {
                             "tokens": [
-                                self.detokenize([token]).decode(
+                                self.detokenize([token], prev_tokens=prompt_tokens + completion_tokens[:returned_tokens]).decode(
                                     "utf-8", errors="ignore"
                                 )
                             ],
@@ -1005,7 +1116,7 @@ class Llama:
                             "model": model_name,
                             "choices": [
                                 {
-                                    "text": self.detokenize([token]).decode(
+                                    "text": self.detokenize([token], prev_tokens=prompt_tokens + completion_tokens[:returned_tokens]).decode(
                                         "utf-8", errors="ignore"
                                     ),
                                     "index": 0,
@@ -1019,7 +1130,7 @@ class Llama:
                         decode_success = False
                         for i in range(1, len(remaining_tokens) + 1):
                             try:
-                                bs = self.detokenize(remaining_tokens[:i])
+                                bs = self.detokenize(remaining_tokens[:i], prev_tokens=prompt_tokens + completion_tokens[:returned_tokens])
                                 ts = bs.decode("utf-8")
                                 decode_success = True
                                 break
@@ -1054,14 +1165,14 @@ class Llama:
                         }
 
             if len(completion_tokens) >= max_tokens:
-                text = self.detokenize(completion_tokens)
+                text = self.detokenize(completion_tokens, prev_tokens=prompt_tokens)
                 finish_reason = "length"
                 break
 
         if stopping_criteria is not None and stopping_criteria(
             self._input_ids, self._scores[-1, :]
         ):
-            text = self.detokenize(completion_tokens)
+            text = self.detokenize(completion_tokens, prev_tokens=prompt_tokens)
             finish_reason = "stop"
 
         if self.verbose:
@@ -1069,7 +1180,7 @@ class Llama:
 
         if stream:
             remaining_tokens = completion_tokens[returned_tokens:]
-            all_text = self.detokenize(remaining_tokens)
+            all_text = self.detokenize(remaining_tokens, prev_tokens=prompt_tokens + completion_tokens[:returned_tokens])
             any_stop = [s for s in stop_sequences if s in all_text]
             if len(any_stop) > 0:
                 end = min(all_text.index(stop) for stop in any_stop)
@@ -1078,7 +1189,7 @@ class Llama:
 
             token_end_position = 0
             for token in remaining_tokens:
-                token_end_position += len(self.detokenize([token]))
+                token_end_position += len(self.detokenize([token], prev_tokens=prompt_tokens + completion_tokens[:returned_tokens]))
 
                 logprobs_or_none: Optional[CompletionLogprobs] = None
                 if logprobs is not None:
@@ -1088,7 +1199,7 @@ class Llama:
                         "utf-8", errors="ignore"
                     )
                     text_offset = len(prompt) + len(
-                        self.detokenize(completion_tokens[:returned_tokens])
+                        self.detokenize(completion_tokens[:returned_tokens], prev_tokens=prompt_tokens + completion_tokens[:returned_tokens])
                     )
                     token_offset = len(prompt_tokens) + returned_tokens - 1
                     logits = self._scores[token_offset, :]
@@ -1202,8 +1313,8 @@ class Llama:
                 all_tokens = completion_tokens
 
             all_token_strs = [
-                self.detokenize([token]).decode("utf-8", errors="ignore")
-                for token in all_tokens
+                self.detokenize([token], prev_tokens=all_tokens[:i]).decode("utf-8", errors="ignore")
+                for i, token in enumerate(all_tokens)
             ]
             all_logprobs = Llama.logits_to_logprobs(self._scores)[token_offset:]
             # TODO: may be able to change this loop to use np.take_along_dim
@@ -1228,7 +1339,7 @@ class Llama:
                 )
                 token_logprobs.append(logprobs_token[int(token)])
                 top_logprob: Optional[Dict[str, float]] = {
-                    self.detokenize([i]).decode("utf-8", errors="ignore"): logprob
+                    self.detokenize([i], prev_tokens=all_tokens[:idx]).decode("utf-8", errors="ignore"): logprob
                     for logprob, i in sorted_logprobs[:logprobs]
                 }
                 top_logprob.update({token_str: logprobs_token[int(token)]})
@@ -1483,6 +1594,8 @@ class Llama:
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
         logit_bias: Optional[Dict[str, float]] = None,
+        logprobs: Optional[bool] = None,
+        top_logprobs: Optional[int] = None,
     ) -> Union[
         CreateChatCompletionResponse, Iterator[CreateChatCompletionStreamResponse]
     ]:
@@ -1551,6 +1664,39 @@ class Llama:
             grammar=grammar,
             logit_bias=logit_bias,
         )
+
+    def create_chat_completion_openai_v1(
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ):
+        """Generate a chat completion with return type based on the the OpenAI v1 API.
+
+        OpenAI python package is required to use this method.
+
+        You can install it with `pip install openai`.
+
+        Args:
+            *args: Positional arguments to pass to create_chat_completion.
+            **kwargs: Keyword arguments to pass to create_chat_completion.
+
+        Returns:
+            Generated chat completion or a stream of chat completion chunks.
+        """
+        try:
+            from openai.types.chat import ChatCompletion, ChatCompletionChunk
+
+            stream = kwargs.get("stream", False)  # type: ignore
+            assert isinstance(stream, bool)
+            if stream:
+                return (ChatCompletionChunk(**chunk) for chunk in self.create_chat_completion(*args, **kwargs))  # type: ignore
+            else:
+                return ChatCompletion(**self.create_chat_completion(*args, **kwargs))  # type: ignore
+        except ImportError:
+            raise ImportError(
+                "To use create_chat_completion_openai_v1, you must install the openai package."
+                "You can install it with `pip install openai`."
+            )
 
     def __getstate__(self):
         return dict(
@@ -1646,7 +1792,7 @@ class Llama:
         state_size = llama_cpp.llama_get_state_size(self._ctx.ctx)
         if self.verbose:
             print(f"Llama.save_state: got state size: {state_size}", file=sys.stderr)
-        llama_state = (llama_cpp.c_uint8 * int(state_size))()
+        llama_state = (ctypes.c_uint8 * int(state_size))()
         if self.verbose:
             print("Llama.save_state: allocated state", file=sys.stderr)
         n_bytes = llama_cpp.llama_copy_state_data(self._ctx.ctx, llama_state)
@@ -1654,7 +1800,7 @@ class Llama:
             print(f"Llama.save_state: copied llama state: {n_bytes}", file=sys.stderr)
         if int(n_bytes) > int(state_size):
             raise RuntimeError("Failed to copy llama state data")
-        llama_state_compact = (llama_cpp.c_uint8 * int(n_bytes))()
+        llama_state_compact = (ctypes.c_uint8 * int(n_bytes))()
         llama_cpp.ctypes.memmove(llama_state_compact, llama_state, int(n_bytes))
         if self.verbose:
             print(
@@ -1675,7 +1821,7 @@ class Llama:
         self.input_ids = state.input_ids.copy()
         self.n_tokens = state.n_tokens
         state_size = state.llama_state_size
-        LLamaStateArrayType = llama_cpp.c_uint8 * state_size
+        LLamaStateArrayType = ctypes.c_uint8 * state_size
         llama_state = LLamaStateArrayType.from_buffer_copy(state.llama_state)
 
         if llama_cpp.llama_set_state_data(self._ctx.ctx, llama_state) != state_size:
@@ -1693,8 +1839,8 @@ class Llama:
         """Return the vocabulary size."""
         return self._model.n_vocab()
 
-    def tokenizer(self) -> "LlamaTokenizer":
-        """Return the tokenizer for this model."""
+    def tokenizer(self) -> LlamaTokenizer:
+        """Return the llama tokenizer for this model."""
         return LlamaTokenizer(self)
 
     def token_eos(self) -> int:
@@ -1737,22 +1883,100 @@ class Llama:
                 break
         return longest_prefix
 
+    @classmethod
+    def from_pretrained(
+        cls,
+        repo_id: str,
+        filename: Optional[str],
+        local_dir: Optional[Union[str, os.PathLike[str]]] = None,
+        local_dir_use_symlinks: Union[bool, Literal["auto"]] = "auto",
+        cache_dir: Optional[Union[str, os.PathLike[str]]] = None,
+        **kwargs: Any,
+    ) -> "Llama":
+        """Create a Llama model from a pretrained model name or path.
+        This method requires the huggingface-hub package.
+        You can install it with `pip install huggingface-hub`.
 
-class LlamaTokenizer:
-    def __init__(self, llama: Llama):
-        self.llama = llama
+        Args:
+            repo_id: The model repo id.
+            filename: A filename or glob pattern to match the model file in the repo.
+            local_dir: The local directory to save the model to.
+            local_dir_use_symlinks: Whether to use symlinks when downloading the model.
+            **kwargs: Additional keyword arguments to pass to the Llama constructor.
 
-    def encode(self, text: str, add_bos: bool = True) -> List[int]:
-        return self.llama.tokenize(
-            text.encode("utf-8", errors="ignore"), add_bos=add_bos, special=True
+        Returns:
+            A Llama model."""
+        try:
+            from huggingface_hub import hf_hub_download, HfFileSystem
+            from huggingface_hub.utils import validate_repo_id
+        except ImportError:
+            raise ImportError(
+                "Llama.from_pretrained requires the huggingface-hub package. "
+                "You can install it with `pip install huggingface-hub`."
+            )
+
+        validate_repo_id(repo_id)
+
+        hffs = HfFileSystem()
+
+        files = [
+            file["name"] if isinstance(file, dict) else file
+            for file in hffs.ls(repo_id)
+        ]
+
+        # split each file into repo_id, subfolder, filename
+        file_list: List[str] = []
+        for file in files:
+            rel_path = Path(file).relative_to(repo_id)
+            file_list.append(str(rel_path))
+
+        matching_files = [file for file in file_list if fnmatch.fnmatch(file, filename)]  # type: ignore
+
+        if len(matching_files) == 0:
+            raise ValueError(
+                f"No file found in {repo_id} that match {filename}\n\n"
+                f"Available Files:\n{json.dumps(file_list)}"
+            )
+
+        if len(matching_files) > 1:
+            raise ValueError(
+                f"Multiple files found in {repo_id} matching {filename}\n\n"
+                f"Available Files:\n{json.dumps(files)}"
+            )
+
+        (matching_file,) = matching_files
+
+        subfolder = str(Path(matching_file).parent)
+        filename = Path(matching_file).name
+
+        # download the file
+        hf_hub_download(
+            repo_id=repo_id,
+            filename=filename,
+            subfolder=subfolder,
+            local_dir=local_dir,
+            local_dir_use_symlinks=local_dir_use_symlinks,
+            cache_dir=cache_dir,
         )
 
-    def decode(self, tokens: List[int]) -> str:
-        return self.llama.detokenize(tokens).decode("utf-8", errors="ignore")
+        if local_dir is None:
+            model_path = hf_hub_download(
+                repo_id=repo_id,
+                filename=filename,
+                subfolder=subfolder,
+                local_dir=local_dir,
+                local_dir_use_symlinks=local_dir_use_symlinks,
+                cache_dir=cache_dir,
+                local_files_only=True,
 
-    @classmethod
-    def from_ggml_file(cls, path: str) -> "LlamaTokenizer":
-        return cls(Llama(model_path=path, vocab_only=True))
+            )
+        else:
+            model_path = os.path.join(local_dir, filename)
+
+        return cls(
+            model_path=model_path,
+            **kwargs,
+        )
 
 
 class LlamaState:
