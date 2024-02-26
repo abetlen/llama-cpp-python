@@ -1960,7 +1960,7 @@ class Llava15ChatHandler:
                                         self.clip_ctx,
                                         llama.context_params.n_threads,
                                         c_ubyte_ptr,
-                                        length=len(image_bytes),
+                                        len(image_bytes),
                                     )
                                 )
                             try:
