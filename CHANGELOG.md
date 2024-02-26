@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.52]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@a33e6a0d2a66104ea9a906bdbf8a94d050189d91
+- fix: Llava15ChatHandler (this function takes at least 4 arguments) by @abetlen in 8383a9e5620f5df5a88f62da16813eac200dd706
+
 ## [0.2.51]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@c39373398803c669056304090050fe3f44b41bf9
