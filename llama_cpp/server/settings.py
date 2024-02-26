@@ -143,6 +143,11 @@ class ModelSettings(BaseSettings):
         default=None,
         description="The model name or path to a pretrained HuggingFace tokenizer model. Same as you would pass to AutoTokenizer.from_pretrained().",
     )
+    # Loading from HuggingFace Model Hub
+    hf_model_repo_id: Optional[str] = Field(
+        default=None,
+        description="The model repo id to use for the HuggingFace tokenizer model.",
+    )
     # Speculative Decoding
     draft_model: Optional[str] = Field(
         default=None,

@@ -577,6 +577,12 @@ python3 -m llama_cpp.server --model models/7B/llama-model.gguf --chat_format cha
 That will format the prompt according to how model expects it. You can find the prompt format in the model card.
 For possible options, see [llama_cpp/llama_chat_format.py](llama_cpp/llama_chat_format.py) and look for lines starting with "@register_chat_format".
 
+If you have `huggingface-hub` installed, you can also use the `--hf_model_repo_id` flag to load a model from the Hugging Face Hub.
+
+```bash
+python3 -m llama_cpp.server --hf_model_repo_id Qwen/Qwen1.5-0.5B-Chat-GGUF --model '*q8_0.gguf'
+```
+
 ### Web Server Features
 
 - [Local Copilot replacement](https://llama-cpp-python.readthedocs.io/en/latest/server/#code-completion)
