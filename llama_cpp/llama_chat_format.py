@@ -1840,7 +1840,7 @@ def functionary_v1_v2_chat_handler(
 class Llava15ChatHandler:
     _clip_free = None
 
-   def __init__(self, clip_model_path: str, verbose: bool = False):
+    def __init__(self, clip_model_path: str, verbose: bool = False):
         import llama_cpp.llava_cpp as llava_cpp
 
         self._llava_cpp = llava_cpp
