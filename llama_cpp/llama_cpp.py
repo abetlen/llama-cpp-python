@@ -264,6 +264,7 @@ LLAMA_TOKEN_TYPE_BYTE = 6
 #     LLAMA_FTYPE_MOSTLY_IQ3_M         = 27, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_IQ2_S         = 28, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_IQ2_M         = 29, // except 1d tensors
+#     LLAMA_FTYPE_MOSTLY_IQ4_XS        = 30, // except 1d tensors
 
 #     LLAMA_FTYPE_GUESSED = 1024, // not specified in the model file
 # };
@@ -295,6 +296,7 @@ LLAMA_FTYPE_MOSTLY_IQ3_S = 26
 LLAMA_FTYPE_MOSTLY_IQ3_M = 27
 LLAMA_FTYPE_MOSTLY_IQ2_S = 28
 LLAMA_FTYPE_MOSTLY_IQ2_M = 29
+LLAMA_FTYPE_MOSTLY_IQ4_XS = 30
 LLAMA_FTYPE_GUESSED = 1024
 
 # enum llama_rope_scaling_type {
@@ -548,6 +550,7 @@ class llama_model_params(ctypes.Structure):
 #     float    yarn_beta_fast;   // YaRN low correction dim
 #     float    yarn_beta_slow;   // YaRN high correction dim
 #     uint32_t yarn_orig_ctx;    // YaRN original context size
+#     float    defrag_thold;     // defragment the KV cache if holes/size > thold, < 0 disabled (default)
 
 #     ggml_backend_sched_eval_callback cb_eval;
 #     void * cb_eval_user_data;
@@ -580,6 +583,7 @@ class llama_context_params(ctypes.Structure):
         yarn_beta_fast (float): YaRN low correction dim
         yarn_beta_slow (float): YaRN high correction dim
         yarn_orig_ctx (int): YaRN original context size
+        defrag_thold (float): defragment the KV cache if holes/size > thold, < 0 disabled (default)
         cb_eval (ggml_backend_sched_eval_callback): callback for scheduling eval
         cb_eval_user_data (ctypes.ctypes.c_void_p): user data for cb_eval
         type_k (int): data type for K cache
@@ -605,6 +609,7 @@ class llama_context_params(ctypes.Structure):
         ("yarn_beta_fast", ctypes.c_float),
         ("yarn_beta_slow", ctypes.c_float),
         ("yarn_orig_ctx", ctypes.c_uint32),
+        ("defrag_thold", ctypes.c_float),
         ("cb_eval", ggml_backend_sched_eval_callback),
         ("cb_eval_user_data", ctypes.c_void_p),
         ("type_k", ctypes.c_int),
