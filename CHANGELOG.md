@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.53]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@cb49e0f8c906e5da49e9f6d64a57742a9a241c6a
+- fix: eos/bos_token set correctly for Jinja2ChatFormatter and automatic chat formatter by @CISC in #1230
+
 ## [0.2.52]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@a33e6a0d2a66104ea9a906bdbf8a94d050189d91
