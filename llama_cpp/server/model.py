@@ -88,15 +88,15 @@ class LlamaProxy:
             assert (
                 settings.hf_tokenizer_config_path is not None
             ), "hf_tokenizer_config_path must be set for hf-tokenizer-config"
-            chat_handler = (
-                llama_cpp.llama_chat_format.hf_tokenizer_config_to_chat_completion_handler(
-                    json.load(open(settings.hf_tokenizer_config_path))
-                )
+            chat_handler = llama_cpp.llama_chat_format.hf_tokenizer_config_to_chat_completion_handler(
+                json.load(open(settings.hf_tokenizer_config_path))
             )
 
         tokenizer: Optional[llama_cpp.BaseLlamaTokenizer] = None
         if settings.hf_pretrained_model_name_or_path is not None:
-            tokenizer = llama_tokenizer.LlamaHFTokenizer.from_pretrained(settings.hf_pretrained_model_name_or_path)
+            tokenizer = llama_tokenizer.LlamaHFTokenizer.from_pretrained(
+                settings.hf_pretrained_model_name_or_path
+            )
 
         draft_model = None
         if settings.draft_model is not None:
@@ -120,17 +120,20 @@ class LlamaProxy:
                         kv_overrides[key] = float(value)
                     else:
                         raise ValueError(f"Unknown value type {value_type}")
-        
+
         import functools
 
         kwargs = {}
 
         if settings.hf_model_repo_id is not None:
-            create_fn = functools.partial(llama_cpp.Llama.from_pretrained, repo_id=settings.hf_model_repo_id, filename=settings.model)
+            create_fn = functools.partial(
+                llama_cpp.Llama.from_pretrained,
+                repo_id=settings.hf_model_repo_id,
+                filename=settings.model,
+            )
         else:
             create_fn = llama_cpp.Llama
             kwargs["model_path"] = settings.model
-        
 
         _model = create_fn(
             **kwargs,

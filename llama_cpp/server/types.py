@@ -110,7 +110,7 @@ class CreateCompletionRequest(BaseModel):
         default=None,
         description="A suffix to append to the generated text. If None, no suffix is appended. Useful for chatbots.",
     )
-    max_tokens: Optional[int] =  Field(
+    max_tokens: Optional[int] = Field(
         default=16, ge=0, description="The maximum number of tokens to generate."
     )
     temperature: float = temperature_field
