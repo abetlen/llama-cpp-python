@@ -408,8 +408,8 @@ class Llama:
                 except:
                     bos_token_id = self.token_bos()
 
-                eos_token = self.detokenize([eos_token_id]).decode("utf-8")
-                bos_token = self.detokenize([bos_token_id]).decode("utf-8")
+                eos_token = self._model.token_get_text(eos_token_id)
+                bos_token = self._model.token_get_text(bos_token_id)
 
                 if self.verbose:
                     print(f"Using chat template: {template}", file=sys.stderr)
