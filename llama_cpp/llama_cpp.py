@@ -2129,35 +2129,6 @@ def llama_sample_apply_guidance(
     ...
 
 
-# LLAMA_API DEPRECATED(void llama_sample_classifier_free_guidance(
-#           struct llama_context * ctx,
-#         llama_token_data_array * candidates,
-#           struct llama_context * guidance_ctx,
-#                          float   scale),
-#           "use llama_sample_apply_guidance() instead");
-@ctypes_function(
-    "llama_sample_classifier_free_guidance",
-    [
-        llama_context_p_ctypes,
-        llama_token_data_array_p,
-        llama_context_p_ctypes,
-        ctypes.c_float,
-    ],
-    None,
-)
-def llama_sample_classifier_free_guidance(
-    ctx: llama_context_p,
-    candidates: Union[
-        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array]
-    ],
-    guidance_ctx: llama_context_p,
-    scale: Union[ctypes.c_float, float],
-    /,
-):
-    """Apply classifier-free guidance to the logits as described in academic paper "Stay on topic with Classifier-Free Guidance" https://arxiv.org/abs/2306.17806"""
-    ...
-
-
 # /// @details Sorts candidate tokens by their logits in descending order and calculate probabilities based on logits.
 # LLAMA_API void llama_sample_softmax(
 #         struct llama_context * ctx,
