@@ -111,6 +111,7 @@ if TYPE_CHECKING:
 
 F = TypeVar("F", bound=Callable[..., Any])
 
+
 def ctypes_function_for_shared_library(lib: ctypes.CDLL):
     def ctypes_function(
         name: str, argtypes: List[Any], restype: Any, enabled: bool = True
@@ -938,18 +939,6 @@ def llama_supports_gpu_offload() -> bool:
     ...
 
 
-# LLAMA_API DEPRECATED(bool llama_mmap_supported (void), "use llama_supports_mmap() instead");
-@ctypes_function("llama_mmap_supported", [], ctypes.c_bool)
-def llama_mmap_supported() -> bool:
-    ...
-
-
-# LLAMA_API DEPRECATED(bool llama_mlock_supported(void), "use llama_supports_mlock() instead");
-@ctypes_function("llama_mlock_supported", [], ctypes.c_bool)
-def llama_mlock_supported() -> bool:
-    ...
-
-
 # LLAMA_API const struct llama_model * llama_get_model(const struct llama_context * ctx);
 @ctypes_function("llama_get_model", [llama_context_p_ctypes], llama_model_p_ctypes)
 def llama_get_model(ctx: llama_context_p, /) -> Optional[llama_model_p]:
@@ -1158,47 +1147,6 @@ def llama_model_quantize(
     ...
 
 
-# // Apply a LoRA adapter to a loaded model
-# // path_base_model is the path to a higher quality model to use as a base for
-# // the layers modified by the adapter. Can be NULL to use the current loaded model.
-# // The model needs to be reloaded before applying a new adapter, otherwise the adapter
-# // will be applied on top of the previous one
-# // Returns 0 on success
-# LLAMA_API DEPRECATED(int32_t llama_apply_lora_from_file(
-#         struct llama_context * ctx,
-#                   const char * path_lora,
-#                        float   scale,
-#                   const char * path_base_model,
-#                      int32_t   n_threads),
-#         "use llama_model_apply_lora_from_file instead");
-@ctypes_function(
-    "llama_apply_lora_from_file",
-    [
-        llama_context_p_ctypes,
-        ctypes.c_char_p,
-        ctypes.c_float,
-        ctypes.c_char_p,
-        ctypes.c_int32,
-    ],
-    ctypes.c_int32,
-)
-def llama_apply_lora_from_file(
-    ctx: llama_context_p,
-    path_lora: Union[ctypes.c_char_p, bytes],
-    scale: Union[ctypes.c_float, float],
-    path_base_model: Union[ctypes.c_char_p, bytes],
-    n_threads: Union[ctypes.c_int32, int],
-    /,
-) -> int:
-    """Apply a LoRA adapter to a loaded model
-    path_base_model is the path to a higher quality model to use as a base for
-    the layers modified by the adapter. Can be NULL to use the current loaded model.
-    The model needs to be reloaded before applying a new adapter, otherwise the adapter
-    will be applied on top of the previous one
-    Returns 0 on success"""
-    ...
-
-
 # LLAMA_API int32_t llama_model_apply_lora_from_file(
 #         const struct llama_model * model,
 #                   const char * path_lora,
@@ -1220,7 +1168,7 @@ def llama_model_apply_lora_from_file(
     model: llama_model_p,
     path_lora: Union[ctypes.c_char_p, bytes],
     scale: Union[ctypes.c_float, float],
-    path_base_model: Union[ctypes.c_char_p, bytes],
+    path_base_model: Union[ctypes.c_char_p, bytes, None],
     n_threads: Union[ctypes.c_int32, int],
     /,
 ) -> int:
@@ -1645,72 +1593,6 @@ def llama_save_session_file(
 # //
 # // Decoding
 # //
-
-
-# // Run the llama inference to obtain the logits and probabilities for the next token(s).
-# // tokens + n_tokens is the provided batch of new tokens to process
-# // n_past is the number of tokens to use from previous eval calls
-# // Returns 0 on success
-# // DEPRECATED: use llama_decode() instead
-# LLAMA_API DEPRECATED(int llama_eval(
-#         struct llama_context * ctx,
-#                  llama_token * tokens,
-#                      int32_t   n_tokens,
-#                      int32_t   n_past),
-#         "use llama_decode() instead");
-@ctypes_function(
-    "llama_eval",
-    [
-        llama_context_p_ctypes,
-        llama_token_p,
-        ctypes.c_int32,
-        ctypes.c_int32,
-    ],
-    ctypes.c_int,
-)
-def llama_eval(
-    ctx: llama_context_p,
-    tokens: CtypesArray[llama_token],
-    n_tokens: Union[ctypes.c_int, int],
-    n_past: Union[ctypes.c_int, int],
-    /,
-) -> int:
-    """Run the llama inference to obtain the logits and probabilities for the next token(s).
-    tokens + n_tokens is the provided batch of new tokens to process
-    n_past is the number of tokens to use from previous eval calls
-    Returns 0 on success
-    DEPRECATED: use llama_decode() instead"""
-    ...
-
-
-# // Same as llama_eval, but use float matrix input directly.
-# // DEPRECATED: use llama_decode() instead
-# LLAMA_API DEPRECATED(int llama_eval_embd(
-#         struct llama_context * ctx,
-#                        float * embd,
-#                      int32_t   n_tokens,
-#                      int32_t   n_past),
-#         "use llama_decode() instead");
-@ctypes_function(
-    "llama_eval_embd",
-    [
-        llama_context_p_ctypes,
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_int32,
-        ctypes.c_int32,
-    ],
-    ctypes.c_int,
-)
-def llama_eval_embd(
-    ctx: llama_context_p,
-    embd: CtypesArray[ctypes.c_float],
-    n_tokens: Union[ctypes.c_int, int],
-    n_past: Union[ctypes.c_int, int],
-    /,
-) -> int:
-    """Same as llama_eval, but use float matrix input directly.
-    DEPRECATED: use llama_decode() instead"""
-    ...
 
 
 # // Return batch for single sequence of tokens starting at pos_0
@@ -2471,28 +2353,6 @@ def llama_sample_temp(
         candidates: A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
         temp: The temperature value to use for the sampling. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text.
     """
-    ...
-
-
-# LLAMA_API DEPRECATED(void llama_sample_temperature(
-#             struct llama_context * ctx,
-#           llama_token_data_array * candidates,
-#                            float   temp),
-#         "use llama_sample_temp instead");
-@ctypes_function(
-    "llama_sample_temperature",
-    [llama_context_p_ctypes, llama_token_data_array_p, ctypes.c_float],
-    None,
-)
-def llama_sample_temperature(
-    ctx: llama_context_p,
-    candidates: Union[
-        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array]
-    ],
-    temp: Union[ctypes.c_float, float],
-    /,
-):
-    """use llama_sample_temp instead"""
     ...
 
 

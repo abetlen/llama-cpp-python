@@ -45,11 +45,11 @@ class ModelSettings(BaseSettings):
         default=False, description="Whether to only return the vocabulary."
     )
     use_mmap: bool = Field(
-        default=llama_cpp.llama_mmap_supported(),
+        default=llama_cpp.llama_supports_mmap(),
         description="Use mmap.",
     )
     use_mlock: bool = Field(
-        default=llama_cpp.llama_mlock_supported(),
+        default=llama_cpp.llama_supports_mlock(),
         description="Use mlock.",
     )
     kv_overrides: Optional[List[str]] = Field(
