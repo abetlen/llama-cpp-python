@@ -525,7 +525,7 @@ To generate text embeddings use [`create_embedding`](http://localhost:8000/api-r
 ```python
 import llama_cpp
 
-llm = llama_cpp.Llama(model_path="path/to/model.gguf", embeddings=True)
+llm = llama_cpp.Llama(model_path="path/to/model.gguf", embedding=True)
 
 embeddings = llm.create_embedding("Hello, world!")
 
