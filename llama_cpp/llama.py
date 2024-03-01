@@ -410,7 +410,7 @@ class Llama:
                 bos_token = self._model.token_get_text(bos_token_id)
 
                 if self.verbose:
-                    print(f"Using chat template: {template}", file=sys.stderr)
+                    print(f"Using gguf chat template: {template}", file=sys.stderr)
                     print(f"Using chat eos_token: {eos_token}", file=sys.stderr)
                     print(f"Using chat bos_token: {bos_token}", file=sys.stderr)
 
@@ -420,6 +420,8 @@ class Llama:
 
         if self.chat_format is None and self.chat_handler is None:
             self.chat_format = "llama-2"
+            if self.verbose:
+                print(f"Using fallback chat format: {chat_format}", file=sys.stderr)
 
     @property
     def ctx(self) -> llama_cpp.llama_context_p:
