@@ -86,7 +86,6 @@ class Llama:
         yarn_beta_fast: float = 32.0,
         yarn_beta_slow: float = 1.0,
         yarn_orig_ctx: int = 0,
-        mul_mat_q: bool = True,
         logits_all: bool = False,
         embedding: bool = False,
         offload_kqv: bool = True,
@@ -291,7 +290,6 @@ class Llama:
             yarn_beta_slow if yarn_beta_slow != 0.0 else 0
         )
         self.context_params.yarn_orig_ctx = yarn_orig_ctx if yarn_orig_ctx != 0 else 0
-        self.context_params.mul_mat_q = mul_mat_q
         self.context_params.logits_all = (
             logits_all if draft_model is None else True
         )  # Must be set to True for speculative decoding
@@ -1724,7 +1722,6 @@ class Llama:
             yarn_beta_fast=self.context_params.yarn_beta_fast,
             yarn_beta_slow=self.context_params.yarn_beta_slow,
             yarn_orig_ctx=self.context_params.yarn_orig_ctx,
-            mul_mat_q=self.context_params.mul_mat_q,
             logits_all=self.context_params.logits_all,
             embedding=self.context_params.embedding,
             # Sampling Params
@@ -1768,7 +1765,6 @@ class Llama:
             yarn_beta_fast=state["yarn_beta_fast"],
             yarn_beta_slow=state["yarn_beta_slow"],
             yarn_orig_ctx=state["yarn_orig_ctx"],
-            mul_mat_q=state["mul_mat_q"],
             logits_all=state["logits_all"],
             embedding=state["embedding"],
             # Sampling Params

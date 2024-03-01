@@ -559,9 +559,7 @@ class llama_model_params(ctypes.Structure):
 #     enum ggml_type type_k; // data type for K cache
 #     enum ggml_type type_v; // data type for V cache
 
-
 #     // Keep the booleans together to avoid misalignment during copy-by-value.
-#     bool mul_mat_q;   // if true, use experimental mul_mat_q kernels (DEPRECATED - always true)
 #     bool logits_all;  // the llama_eval() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
 #     bool embedding;   // embedding mode only
 #     bool offload_kqv; // whether to offload the KQV ops (including the KV cache) to GPU
@@ -589,7 +587,6 @@ class llama_context_params(ctypes.Structure):
         cb_eval_user_data (ctypes.ctypes.c_void_p): user data for cb_eval
         type_k (int): data type for K cache
         type_v (int): data type for V cache
-        mul_mat_q (bool): if true, use experimental mul_mat_q kernels (DEPRECATED - always true)
         logits_all (bool): the llama_eval() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
         embedding (bool): embedding mode only
         offload_kqv (bool): whether to offload the KQV ops (including the KV cache) to GPU
@@ -615,7 +612,6 @@ class llama_context_params(ctypes.Structure):
         ("cb_eval_user_data", ctypes.c_void_p),
         ("type_k", ctypes.c_int),
         ("type_v", ctypes.c_int),
-        ("mul_mat_q", ctypes.c_bool),
         ("logits_all", ctypes.c_bool),
         ("embedding", ctypes.c_bool),
         ("offload_kqv", ctypes.c_bool),
@@ -1519,11 +1515,11 @@ def llama_copy_state_data(
     ...
 
 
-# Set the state reading from the specified address
-# Returns the number of bytes read
+# // Set the state reading from the specified address
+# // Returns the number of bytes read
 # LLAMA_API size_t llama_set_state_data(
 #         struct llama_context * ctx,
-#                      uint8_t * src);
+#                const uint8_t * src);
 @ctypes_function(
     "llama_set_state_data",
     [llama_context_p_ctypes, ctypes.POINTER(ctypes.c_uint8)],
