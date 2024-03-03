@@ -188,6 +188,10 @@ class Jinja2ChatFormatter(ChatFormatter):
         self,
         *,
         messages: List[llama_types.ChatCompletionRequestMessage],
+        functions: Optional[List[llama_types.ChatCompletionFunction]] = None,
+        function_call: Optional[llama_types.ChatCompletionRequestFunctionCall] = None,
+        tools: Optional[List[llama_types.ChatCompletionTool]] = None,
+        tool_choice: Optional[llama_types.ChatCompletionToolChoiceOption] = None,
         **kwargs: Any,
     ) -> ChatFormatterResponse:
         def raise_exception(message: str):
@@ -199,6 +203,10 @@ class Jinja2ChatFormatter(ChatFormatter):
             bos_token=self.bos_token,
             raise_exception=raise_exception,
             add_generation_prompt=self.add_generation_prompt,
+            functions=functions,
+            function_call=function_call,
+            tools=tools,
+            tool_choice=tool_choice,
         )
 
         return ChatFormatterResponse(prompt=prompt, stop=[self.eos_token])
@@ -331,6 +339,8 @@ def chat_formatter_to_chat_completion_handler(
             messages=messages,
             functions=functions,
             function_call=function_call,
+            tools=tools,
+            tool_choice=tool_choice,
         )
         prompt = result.prompt
         if result.stop is not None:
