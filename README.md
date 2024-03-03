@@ -286,7 +286,16 @@ By default [`from_pretrained`](https://llama-cpp-python.readthedocs.io/en/latest
 
 The high-level API also provides a simple interface for chat completion.
 
-Note that `chat_format` option must be set for the particular model you are using.
+Chat completion requires that the model know how to format the messages into a single prompt.
+The `Llama` class does this using pre-registered chat formats (ie. `chatml`, `llama-2`, `gemma`, etc) or by providing a custom chat handler object.
+
+The model will will format the messages into a single prompt using the following order of precedence:
+  - Use the `chat_handler` if provided
+  - Use the `chat_format` if provided
+  - Use the `tokenizer.chat_template` from the `gguf` model's metadata (should work for most new models, older models may not have this)
+  - else, fallback to the `llama-2` chat format
+
+Set `verbose=True` to see the selected chat format.
 
 ```python
 >>> from llama_cpp import Llama
@@ -525,7 +534,7 @@ To generate text embeddings use [`create_embedding`](http://localhost:8000/api-r
 ```python
 import llama_cpp
 
-llm = llama_cpp.Llama(model_path="path/to/model.gguf", embeddings=True)
+llm = llama_cpp.Llama(model_path="path/to/model.gguf", embedding=True)
 
 embeddings = llm.create_embedding("Hello, world!")
 

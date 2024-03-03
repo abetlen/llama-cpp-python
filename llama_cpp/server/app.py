@@ -42,7 +42,8 @@ from llama_cpp.server.types import (
     CreateChatCompletionRequest,
     ModelList,
     TokenizeInputRequest,
-    QueryCountResponse, DetokenizeInputRequest,
+    QueryCountResponse,
+    DetokenizeInputRequest,
 )
 from llama_cpp.server.errors import RouteErrorHandler
 
@@ -201,8 +202,8 @@ async def authenticate(
 @router.post(
     "/v1/completions",
     summary="Completion",
-    dependencies=[Depends(authenticate)],    
-    response_model= Union[
+    dependencies=[Depends(authenticate)],
+    response_model=Union[
         llama_cpp.CreateCompletionResponse,
         str,
     ],
@@ -213,19 +214,19 @@ async def authenticate(
                 "application/json": {
                     "schema": {
                         "anyOf": [
-                            {"$ref": "#/components/schemas/CreateCompletionResponse"}                            
+                            {"$ref": "#/components/schemas/CreateCompletionResponse"}
                         ],
                         "title": "Completion response, when stream=False",
                     }
                 },
-                "text/event-stream":{
-                    "schema": {                     
-                      "type": "string",
-                      "title": "Server Side Streaming response, when stream=True. " +
-                        "See SSE format: https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events#Event_stream_format",  # noqa: E501
-                      "example": """data: {... see CreateCompletionResponse ...} \\n\\n data: ... \\n\\n ... data: [DONE]"""
+                "text/event-stream": {
+                    "schema": {
+                        "type": "string",
+                        "title": "Server Side Streaming response, when stream=True. "
+                        + "See SSE format: https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events#Event_stream_format",  # noqa: E501
+                        "example": """data: {... see CreateCompletionResponse ...} \\n\\n data: ... \\n\\n ... data: [DONE]""",
                     }
-                }
+                },
             },
         }
     },
@@ -292,7 +293,7 @@ async def create_completion(
                 inner_send_chan=send_chan,
                 iterator=iterator(),
             ),
-            sep='\n',
+            sep="\n",
         )
     else:
         return iterator_or_completion
@@ -311,32 +312,24 @@ async def create_embedding(
     )
 
 
-@router.post(
-    "/tokenize", summary="Tokenize", dependencies=[Depends(authenticate())]
-)
+@router.post("/tokenize", summary="Tokenize", dependencies=[Depends(authenticate())])
 async def tokenize(
-        body: TokenizeInputRequest,
-        llama_proxy: LlamaProxy = Depends(get_llama_proxy),
+    body: TokenizeInputRequest,
+    llama_proxy: LlamaProxy = Depends(get_llama_proxy),
 ):
-    tokens = llama_proxy(body.model).tokenize(body.inputx.encode("utf-8"), special=True)
+    tokens = llama_proxy(body.model).tokenize(body.input.encode("utf-8"), special=True)
 
-    return {
-        "data": tokens
-    }
+    return {"data": tokens}
 
 
-@router.post(
-    "/detokenize", summary="Detokenize", dependencies=[Depends(authenticate)]
-)
+@router.post("/detokenize", summary="Detokenize", dependencies=[Depends(authenticate)])
 async def detokenize(
-        body: DetokenizeInputRequest,
-        llama_proxy: LlamaProxy = Depends(get_llama_proxy),
+    body: DetokenizeInputRequest,
+    llama_proxy: LlamaProxy = Depends(get_llama_proxy),
 ):
     text = llama_proxy(body.model).detokenize(body.tokens).decode("utf-8")
 
-    return {
-        "text": text
-    }
+    return {"text": text}
 
 
 @router.post(
@@ -346,18 +339,16 @@ async def count_query_tokens(
     body: TokenizeInputRequest,
     llama_proxy: LlamaProxy = Depends(get_llama_proxy),
 ):
-    tokens = llama_proxy(body.model).tokenize(body.query.encode("utf-8"), special=True)
+    tokens = llama_proxy(body.model).tokenize(body.input.encode("utf-8"), special=True)
 
-    return {
-        "count": len(tokens)
-    }
+    return {"count": len(tokens)}
 
 
 @router.post(
-    "/v1/chat/completions", summary="Chat", dependencies=[Depends(authenticate)],
-    response_model= Union[
-        llama_cpp.ChatCompletion, str
-    ],
+    "/v1/chat/completions",
+    summary="Chat",
+    dependencies=[Depends(authenticate)],
+    response_model=Union[llama_cpp.ChatCompletion, str],
     responses={
         "200": {
             "description": "Successful Response",
@@ -365,19 +356,21 @@ async def count_query_tokens(
                 "application/json": {
                     "schema": {
                         "anyOf": [
-                            {"$ref": "#/components/schemas/CreateChatCompletionResponse"}                            
+                            {
+                                "$ref": "#/components/schemas/CreateChatCompletionResponse"
+                            }
                         ],
                         "title": "Completion response, when stream=False",
                     }
                 },
-                "text/event-stream":{
-                    "schema": {                     
-                      "type": "string",
-                      "title": "Server Side Streaming response, when stream=True" +
-                        "See SSE format: https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events#Event_stream_format",  # noqa: E501
-                      "example": """data: {... see CreateChatCompletionResponse ...} \\n\\n data: ... \\n\\n ... data: [DONE]"""
+                "text/event-stream": {
+                    "schema": {
+                        "type": "string",
+                        "title": "Server Side Streaming response, when stream=True"
+                        + "See SSE format: https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events#Event_stream_format",  # noqa: E501
+                        "example": """data: {... see CreateChatCompletionResponse ...} \\n\\n data: ... \\n\\n ... data: [DONE]""",
                     }
-                }
+                },
             },
         }
     },
@@ -427,7 +420,7 @@ async def create_chat_completion(
                 inner_send_chan=send_chan,
                 iterator=iterator(),
             ),
-            sep='\n',
+            sep="\n",
         )
     else:
         return iterator_or_completion

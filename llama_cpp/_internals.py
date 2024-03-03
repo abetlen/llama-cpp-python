@@ -357,21 +357,6 @@ class _LlamaContext:
             penalty_present,
         )
 
-    def sample_classifier_free_guidance(
-        self,
-        candidates: "_LlamaTokenDataArray",
-        guidance_ctx: "_LlamaContext",
-        scale: float,
-    ):
-        assert self.ctx is not None
-        assert guidance_ctx.ctx is not None
-        llama_cpp.llama_sample_classifier_free_guidance(
-            self.ctx,
-            llama_cpp.byref(candidates.candidates),
-            guidance_ctx.ctx,
-            scale,
-        )
-
     def sample_softmax(self, candidates: "_LlamaTokenDataArray"):
         assert self.ctx is not None
         llama_cpp.llama_sample_softmax(
@@ -720,7 +705,7 @@ class _LlamaSamplingContext:
         return ctx_main.model.detokenize(self.prev[-n:]).decode("utf-8")
 
     def sample(
-        self, ctx_main: _LlamaContext, ctx_cfg: Optional[_LlamaContext] = None, idx: int = 0, logits_array: Optional[npt.NDArray[np.single]] = None
+        self, ctx_main: _LlamaContext, idx: int = 0, logits_array: Optional[npt.NDArray[np.single]] = None
     ):
         n_vocab = ctx_main.model.n_vocab()
         id: int = 0
@@ -740,11 +725,6 @@ class _LlamaSamplingContext:
             n_vocab=n_vocab
         )  # TODO: Only create this once
         token_data_array.copy_logits(logits_array)
-
-        if ctx_cfg is not None:
-            ctx_main.sample_classifier_free_guidance(
-                token_data_array, ctx_cfg, self.params.cfg_scale
-            )
 
         # apply penalties
         if len(self.prev) > 0:

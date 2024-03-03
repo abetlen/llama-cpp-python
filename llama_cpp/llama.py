@@ -86,7 +86,6 @@ class Llama:
         yarn_beta_fast: float = 32.0,
         yarn_beta_slow: float = 1.0,
         yarn_orig_ctx: int = 0,
-        mul_mat_q: bool = True,
         logits_all: bool = False,
         embedding: bool = False,
         offload_kqv: bool = True,
@@ -291,7 +290,6 @@ class Llama:
             yarn_beta_slow if yarn_beta_slow != 0.0 else 0
         )
         self.context_params.yarn_orig_ctx = yarn_orig_ctx if yarn_orig_ctx != 0 else 0
-        self.context_params.mul_mat_q = mul_mat_q
         self.context_params.logits_all = (
             logits_all if draft_model is None else True
         )  # Must be set to True for speculative decoding
@@ -408,11 +406,11 @@ class Llama:
                 except:
                     bos_token_id = self.token_bos()
 
-                eos_token = self.detokenize([eos_token_id]).decode("utf-8")
-                bos_token = self.detokenize([bos_token_id]).decode("utf-8")
+                eos_token = self._model.token_get_text(eos_token_id)
+                bos_token = self._model.token_get_text(bos_token_id)
 
                 if self.verbose:
-                    print(f"Using chat template: {template}", file=sys.stderr)
+                    print(f"Using gguf chat template: {template}", file=sys.stderr)
                     print(f"Using chat eos_token: {eos_token}", file=sys.stderr)
                     print(f"Using chat bos_token: {bos_token}", file=sys.stderr)
 
@@ -422,6 +420,8 @@ class Llama:
 
         if self.chat_format is None and self.chat_handler is None:
             self.chat_format = "llama-2"
+            if self.verbose:
+                print(f"Using fallback chat format: {chat_format}", file=sys.stderr)
 
     @property
     def ctx(self) -> llama_cpp.llama_context_p:
@@ -1724,7 +1724,6 @@ class Llama:
             yarn_beta_fast=self.context_params.yarn_beta_fast,
             yarn_beta_slow=self.context_params.yarn_beta_slow,
             yarn_orig_ctx=self.context_params.yarn_orig_ctx,
-            mul_mat_q=self.context_params.mul_mat_q,
             logits_all=self.context_params.logits_all,
             embedding=self.context_params.embedding,
             # Sampling Params
@@ -1768,7 +1767,6 @@ class Llama:
             yarn_beta_fast=state["yarn_beta_fast"],
             yarn_beta_slow=state["yarn_beta_slow"],
             yarn_orig_ctx=state["yarn_orig_ctx"],
-            mul_mat_q=state["mul_mat_q"],
             logits_all=state["logits_all"],
             embedding=state["embedding"],
             # Sampling Params

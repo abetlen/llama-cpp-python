@@ -111,6 +111,7 @@ if TYPE_CHECKING:
 
 F = TypeVar("F", bound=Callable[..., Any])
 
+
 def ctypes_function_for_shared_library(lib: ctypes.CDLL):
     def ctypes_function(
         name: str, argtypes: List[Any], restype: Any, enabled: bool = True
@@ -146,6 +147,12 @@ byref = ctypes.byref  # type: ignore
 ggml_backend_sched_eval_callback = ctypes.CFUNCTYPE(
     ctypes.c_bool, ctypes.c_void_p, ctypes.c_bool, ctypes.c_void_p
 )
+
+# // Abort callback
+# // If not NULL, called before ggml computation
+# // If it returns true, the computation is aborted
+# typedef bool (*ggml_abort_callback)(void * data);
+ggml_abort_callback = ctypes.CFUNCTYPE(ctypes.c_bool, ctypes.c_void_p)
 
 # llama.h bindings
 
@@ -264,6 +271,7 @@ LLAMA_TOKEN_TYPE_BYTE = 6
 #     LLAMA_FTYPE_MOSTLY_IQ3_M         = 27, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_IQ2_S         = 28, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_IQ2_M         = 29, // except 1d tensors
+#     LLAMA_FTYPE_MOSTLY_IQ4_XS        = 30, // except 1d tensors
 
 #     LLAMA_FTYPE_GUESSED = 1024, // not specified in the model file
 # };
@@ -295,6 +303,7 @@ LLAMA_FTYPE_MOSTLY_IQ3_S = 26
 LLAMA_FTYPE_MOSTLY_IQ3_M = 27
 LLAMA_FTYPE_MOSTLY_IQ2_S = 28
 LLAMA_FTYPE_MOSTLY_IQ2_M = 29
+LLAMA_FTYPE_MOSTLY_IQ4_XS = 30
 LLAMA_FTYPE_GUESSED = 1024
 
 # enum llama_rope_scaling_type {
@@ -548,6 +557,7 @@ class llama_model_params(ctypes.Structure):
 #     float    yarn_beta_fast;   // YaRN low correction dim
 #     float    yarn_beta_slow;   // YaRN high correction dim
 #     uint32_t yarn_orig_ctx;    // YaRN original context size
+#     float    defrag_thold;     // defragment the KV cache if holes/size > thold, < 0 disabled (default)
 
 #     ggml_backend_sched_eval_callback cb_eval;
 #     void * cb_eval_user_data;
@@ -555,13 +565,17 @@ class llama_model_params(ctypes.Structure):
 #     enum ggml_type type_k; // data type for K cache
 #     enum ggml_type type_v; // data type for V cache
 
-
 #     // Keep the booleans together to avoid misalignment during copy-by-value.
-#     bool mul_mat_q;   // if true, use experimental mul_mat_q kernels (DEPRECATED - always true)
-#     bool logits_all;  // the llama_eval() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
+#     bool logits_all;  // the llama_decode() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
 #     bool embedding;   // embedding mode only
 #     bool offload_kqv; // whether to offload the KQV ops (including the KV cache) to GPU
 #     bool do_pooling;  // whether to pool (sum) embedding results by sequence id (ignored if no pooling layer)
+
+#     // Abort callback
+#     // if it returns true, execution of llama_decode() will be aborted
+#     // currently works only with CPU execution
+#     ggml_abort_callback abort_callback;
+#     void *              abort_callback_data;
 # };
 class llama_context_params(ctypes.Structure):
     """Parameters for llama_context
@@ -580,15 +594,17 @@ class llama_context_params(ctypes.Structure):
         yarn_beta_fast (float): YaRN low correction dim
         yarn_beta_slow (float): YaRN high correction dim
         yarn_orig_ctx (int): YaRN original context size
+        defrag_thold (float): defragment the KV cache if holes/size > thold, < 0 disabled (default)
         cb_eval (ggml_backend_sched_eval_callback): callback for scheduling eval
         cb_eval_user_data (ctypes.ctypes.c_void_p): user data for cb_eval
         type_k (int): data type for K cache
         type_v (int): data type for V cache
-        mul_mat_q (bool): if true, use experimental mul_mat_q kernels (DEPRECATED - always true)
         logits_all (bool): the llama_eval() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
         embedding (bool): embedding mode only
         offload_kqv (bool): whether to offload the KQV ops (including the KV cache) to GPU
         do_pooling (bool): whether to pool (sum) embedding results by sequence id (ignored if no pooling layer)
+        abort_callback (ggml_abort_callback): abort callback if it returns true, execution of llama_decode() will be aborted
+        abort_callback_data (ctypes.ctypes.c_void_p): data for abort_callback
     """
 
     _fields_ = [
@@ -605,15 +621,17 @@ class llama_context_params(ctypes.Structure):
         ("yarn_beta_fast", ctypes.c_float),
         ("yarn_beta_slow", ctypes.c_float),
         ("yarn_orig_ctx", ctypes.c_uint32),
+        ("defrag_thold", ctypes.c_float),
         ("cb_eval", ggml_backend_sched_eval_callback),
         ("cb_eval_user_data", ctypes.c_void_p),
         ("type_k", ctypes.c_int),
         ("type_v", ctypes.c_int),
-        ("mul_mat_q", ctypes.c_bool),
         ("logits_all", ctypes.c_bool),
         ("embedding", ctypes.c_bool),
         ("offload_kqv", ctypes.c_bool),
         ("do_pooling", ctypes.c_bool),
+        ("abort_callback", ggml_abort_callback),
+        ("abort_callback_data", ctypes.c_void_p),
     ]
 
 
@@ -933,18 +951,6 @@ def llama_supports_gpu_offload() -> bool:
     ...
 
 
-# LLAMA_API DEPRECATED(bool llama_mmap_supported (void), "use llama_supports_mmap() instead");
-@ctypes_function("llama_mmap_supported", [], ctypes.c_bool)
-def llama_mmap_supported() -> bool:
-    ...
-
-
-# LLAMA_API DEPRECATED(bool llama_mlock_supported(void), "use llama_supports_mlock() instead");
-@ctypes_function("llama_mlock_supported", [], ctypes.c_bool)
-def llama_mlock_supported() -> bool:
-    ...
-
-
 # LLAMA_API const struct llama_model * llama_get_model(const struct llama_context * ctx);
 @ctypes_function("llama_get_model", [llama_context_p_ctypes], llama_model_p_ctypes)
 def llama_get_model(ctx: llama_context_p, /) -> Optional[llama_model_p]:
@@ -1153,47 +1159,6 @@ def llama_model_quantize(
     ...
 
 
-# // Apply a LoRA adapter to a loaded model
-# // path_base_model is the path to a higher quality model to use as a base for
-# // the layers modified by the adapter. Can be NULL to use the current loaded model.
-# // The model needs to be reloaded before applying a new adapter, otherwise the adapter
-# // will be applied on top of the previous one
-# // Returns 0 on success
-# LLAMA_API DEPRECATED(int32_t llama_apply_lora_from_file(
-#         struct llama_context * ctx,
-#                   const char * path_lora,
-#                        float   scale,
-#                   const char * path_base_model,
-#                      int32_t   n_threads),
-#         "use llama_model_apply_lora_from_file instead");
-@ctypes_function(
-    "llama_apply_lora_from_file",
-    [
-        llama_context_p_ctypes,
-        ctypes.c_char_p,
-        ctypes.c_float,
-        ctypes.c_char_p,
-        ctypes.c_int32,
-    ],
-    ctypes.c_int32,
-)
-def llama_apply_lora_from_file(
-    ctx: llama_context_p,
-    path_lora: Union[ctypes.c_char_p, bytes],
-    scale: Union[ctypes.c_float, float],
-    path_base_model: Union[ctypes.c_char_p, bytes],
-    n_threads: Union[ctypes.c_int32, int],
-    /,
-) -> int:
-    """Apply a LoRA adapter to a loaded model
-    path_base_model is the path to a higher quality model to use as a base for
-    the layers modified by the adapter. Can be NULL to use the current loaded model.
-    The model needs to be reloaded before applying a new adapter, otherwise the adapter
-    will be applied on top of the previous one
-    Returns 0 on success"""
-    ...
-
-
 # LLAMA_API int32_t llama_model_apply_lora_from_file(
 #         const struct llama_model * model,
 #                   const char * path_lora,
@@ -1215,7 +1180,7 @@ def llama_model_apply_lora_from_file(
     model: llama_model_p,
     path_lora: Union[ctypes.c_char_p, bytes],
     scale: Union[ctypes.c_float, float],
-    path_base_model: Union[ctypes.c_char_p, bytes],
+    path_base_model: Union[ctypes.c_char_p, bytes, None],
     n_threads: Union[ctypes.c_int32, int],
     /,
 ) -> int:
@@ -1566,11 +1531,11 @@ def llama_copy_state_data(
     ...
 
 
-# Set the state reading from the specified address
-# Returns the number of bytes read
+# // Set the state reading from the specified address
+# // Returns the number of bytes read
 # LLAMA_API size_t llama_set_state_data(
 #         struct llama_context * ctx,
-#                      uint8_t * src);
+#                const uint8_t * src);
 @ctypes_function(
     "llama_set_state_data",
     [llama_context_p_ctypes, ctypes.POINTER(ctypes.c_uint8)],
@@ -1640,72 +1605,6 @@ def llama_save_session_file(
 # //
 # // Decoding
 # //
-
-
-# // Run the llama inference to obtain the logits and probabilities for the next token(s).
-# // tokens + n_tokens is the provided batch of new tokens to process
-# // n_past is the number of tokens to use from previous eval calls
-# // Returns 0 on success
-# // DEPRECATED: use llama_decode() instead
-# LLAMA_API DEPRECATED(int llama_eval(
-#         struct llama_context * ctx,
-#                  llama_token * tokens,
-#                      int32_t   n_tokens,
-#                      int32_t   n_past),
-#         "use llama_decode() instead");
-@ctypes_function(
-    "llama_eval",
-    [
-        llama_context_p_ctypes,
-        llama_token_p,
-        ctypes.c_int32,
-        ctypes.c_int32,
-    ],
-    ctypes.c_int,
-)
-def llama_eval(
-    ctx: llama_context_p,
-    tokens: CtypesArray[llama_token],
-    n_tokens: Union[ctypes.c_int, int],
-    n_past: Union[ctypes.c_int, int],
-    /,
-) -> int:
-    """Run the llama inference to obtain the logits and probabilities for the next token(s).
-    tokens + n_tokens is the provided batch of new tokens to process
-    n_past is the number of tokens to use from previous eval calls
-    Returns 0 on success
-    DEPRECATED: use llama_decode() instead"""
-    ...
-
-
-# // Same as llama_eval, but use float matrix input directly.
-# // DEPRECATED: use llama_decode() instead
-# LLAMA_API DEPRECATED(int llama_eval_embd(
-#         struct llama_context * ctx,
-#                        float * embd,
-#                      int32_t   n_tokens,
-#                      int32_t   n_past),
-#         "use llama_decode() instead");
-@ctypes_function(
-    "llama_eval_embd",
-    [
-        llama_context_p_ctypes,
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_int32,
-        ctypes.c_int32,
-    ],
-    ctypes.c_int,
-)
-def llama_eval_embd(
-    ctx: llama_context_p,
-    embd: CtypesArray[ctypes.c_float],
-    n_tokens: Union[ctypes.c_int, int],
-    n_past: Union[ctypes.c_int, int],
-    /,
-) -> int:
-    """Same as llama_eval, but use float matrix input directly.
-    DEPRECATED: use llama_decode() instead"""
-    ...
 
 
 # // Return batch for single sequence of tokens starting at pos_0
@@ -1820,8 +1719,24 @@ def llama_set_n_threads(
     """
     ...
 
+# // Set abort callback
+# LLAMA_API void llama_set_abort_callback(struct llama_context * ctx, ggml_abort_callback abort_callback, void * abort_callback_data);
+@ctypes_function(
+    "llama_set_abort_callback",
+    [llama_context_p_ctypes, ggml_abort_callback, ctypes.c_void_p],
+    None,
+)
+def llama_set_abort_callback(
+    ctx: llama_context_p,
+    abort_callback: Callable[[ctypes.c_void_p], None],
+    abort_callback_data: ctypes.c_void_p,
+    /,
+):
+    """Set abort callback"""
+    ...
 
-# // Token logits obtained from the last call to llama_eval()
+
+# // Token logits obtained from the last call to llama_decode()
 # // The logits for the last token are stored in the last row
 # // Logits for which llama_batch.logits[i] == 0 are undefined
 # // Rows: n_tokens provided with llama_batch
@@ -2242,35 +2157,6 @@ def llama_sample_apply_guidance(
     ...
 
 
-# LLAMA_API DEPRECATED(void llama_sample_classifier_free_guidance(
-#           struct llama_context * ctx,
-#         llama_token_data_array * candidates,
-#           struct llama_context * guidance_ctx,
-#                          float   scale),
-#           "use llama_sample_apply_guidance() instead");
-@ctypes_function(
-    "llama_sample_classifier_free_guidance",
-    [
-        llama_context_p_ctypes,
-        llama_token_data_array_p,
-        llama_context_p_ctypes,
-        ctypes.c_float,
-    ],
-    None,
-)
-def llama_sample_classifier_free_guidance(
-    ctx: llama_context_p,
-    candidates: Union[
-        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array]
-    ],
-    guidance_ctx: llama_context_p,
-    scale: Union[ctypes.c_float, float],
-    /,
-):
-    """Apply classifier-free guidance to the logits as described in academic paper "Stay on topic with Classifier-Free Guidance" https://arxiv.org/abs/2306.17806"""
-    ...
-
-
 # /// @details Sorts candidate tokens by their logits in descending order and calculate probabilities based on logits.
 # LLAMA_API void llama_sample_softmax(
 #         struct llama_context * ctx,
@@ -2466,28 +2352,6 @@ def llama_sample_temp(
         candidates: A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
         temp: The temperature value to use for the sampling. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text.
     """
-    ...
-
-
-# LLAMA_API DEPRECATED(void llama_sample_temperature(
-#             struct llama_context * ctx,
-#           llama_token_data_array * candidates,
-#                            float   temp),
-#         "use llama_sample_temp instead");
-@ctypes_function(
-    "llama_sample_temperature",
-    [llama_context_p_ctypes, llama_token_data_array_p, ctypes.c_float],
-    None,
-)
-def llama_sample_temperature(
-    ctx: llama_context_p,
-    candidates: Union[
-        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array]
-    ],
-    temp: Union[ctypes.c_float, float],
-    /,
-):
-    """use llama_sample_temp instead"""
     ...
 
 

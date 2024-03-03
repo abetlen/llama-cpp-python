@@ -45,11 +45,11 @@ class ModelSettings(BaseSettings):
         default=False, description="Whether to only return the vocabulary."
     )
     use_mmap: bool = Field(
-        default=llama_cpp.llama_mmap_supported(),
+        default=llama_cpp.llama_supports_mmap(),
         description="Use mmap.",
     )
     use_mlock: bool = Field(
-        default=llama_cpp.llama_mlock_supported(),
+        default=llama_cpp.llama_supports_mlock(),
         description="Use mlock.",
     )
     kv_overrides: Optional[List[str]] = Field(
@@ -74,7 +74,9 @@ class ModelSettings(BaseSettings):
         ge=0,
         description="The number of threads to use when batch processing.",
     )
-    rope_scaling_type: int = Field(default=llama_cpp.LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED)
+    rope_scaling_type: int = Field(
+        default=llama_cpp.LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED
+    )
     rope_freq_base: float = Field(default=0.0, description="RoPE base frequency")
     rope_freq_scale: float = Field(
         default=0.0, description="RoPE frequency scaling factor"
@@ -193,6 +195,4 @@ class Settings(ServerSettings, ModelSettings):
 class ConfigFileSettings(ServerSettings):
     """Configuration file format settings."""
 
-    models: List[ModelSettings] = Field(
-        default=[], description="Model configs"
-    )
+    models: List[ModelSettings] = Field(default=[], description="Model configs")

@@ -22,6 +22,7 @@ from llama_cpp.server.types import (
     CreateChatCompletionRequest,
 )
 
+
 class ErrorResponse(TypedDict):
     """OpenAI style error response"""
 
@@ -75,7 +76,7 @@ class ErrorResponseFormatters:
                 (completion_tokens or 0) + prompt_tokens,
                 prompt_tokens,
                 completion_tokens,
-            ), # type: ignore
+            ),  # type: ignore
             type="invalid_request_error",
             param="messages",
             code="context_length_exceeded",
@@ -207,4 +208,3 @@ class RouteErrorHandler(APIRoute):
                 )
 
         return custom_route_handler
-
