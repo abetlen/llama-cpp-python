@@ -312,7 +312,7 @@ async def create_embedding(
     )
 
 
-@router.post("/tokenize", summary="Tokenize", dependencies=[Depends(authenticate())])
+@router.post("/tokenize", summary="Tokenize", dependencies=[Depends(authenticate)])
 async def tokenize(
     body: TokenizeInputRequest,
     llama_proxy: LlamaProxy = Depends(get_llama_proxy),
