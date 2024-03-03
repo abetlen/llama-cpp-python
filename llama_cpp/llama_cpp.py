@@ -320,10 +320,12 @@ LLAMA_ROPE_SCALING_TYPE_YARN = 2
 LLAMA_ROPE_SCALING_TYPE_MAX_VALUE = LLAMA_ROPE_SCALING_TYPE_YARN
 
 # enum llama_pooling_type {
+#     LLAMA_POOLING_TYPE_UNSPECIFIED = -1,
 #     LLAMA_POOLING_TYPE_NONE = 0,
 #     LLAMA_POOLING_TYPE_MEAN = 1,
 #     LLAMA_POOLING_TYPE_CLS  = 2,
 # };
+LLAMA_POOLING_TYPE_UNSPECIFIED = -1
 LLAMA_POOLING_TYPE_NONE = 0
 LLAMA_POOLING_TYPE_MEAN = 1
 LLAMA_POOLING_TYPE_CLS = 2
@@ -547,7 +549,10 @@ class llama_model_params(ctypes.Structure):
 #     uint32_t n_batch;           // prompt processing maximum batch size
 #     uint32_t n_threads;         // number of threads to use for generation
 #     uint32_t n_threads_batch;   // number of threads to use for batch processing
-#     int32_t  rope_scaling_type; // RoPE scaling type, from `enum llama_rope_scaling_type`
+
+#     enum llama_rope_scaling_type rope_scaling_type; // RoPE scaling type, from `enum llama_rope_scaling_type`
+#     enum llama_pooling_type      pooling_type;      // whether to pool (sum) embedding results by sequence id
+#                                                     // (ignored if no pooling layer)
 
 #     // ref: https://github.com/ggerganov/llama.cpp/pull/2054
 #     float    rope_freq_base;   // RoPE base frequency, 0 = from model
@@ -569,7 +574,6 @@ class llama_model_params(ctypes.Structure):
 #     bool logits_all;  // the llama_decode() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
 #     bool embedding;   // embedding mode only
 #     bool offload_kqv; // whether to offload the KQV ops (including the KV cache) to GPU
-#     bool do_pooling;  // whether to pool (sum) embedding results by sequence id (ignored if no pooling layer)
 
 #     // Abort callback
 #     // if it returns true, execution of llama_decode() will be aborted
@@ -587,6 +591,7 @@ class llama_context_params(ctypes.Structure):
         n_threads (int): number of threads to use for generation
         n_threads_batch (int): number of threads to use for batch processing
         rope_scaling_type (int): RoPE scaling type, from `enum llama_rope_scaling_type`
+        pooling_type (int): whether to pool (sum) embedding results by sequence id (ignored if no pooling layer)
         rope_freq_base (float): RoPE base frequency, 0 = from model
         rope_freq_scale (float): RoPE frequency scaling factor, 0 = from model
         yarn_ext_factor (float): YaRN extrapolation mix factor, negative = from model
@@ -602,7 +607,6 @@ class llama_context_params(ctypes.Structure):
         logits_all (bool): the llama_eval() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
         embedding (bool): embedding mode only
         offload_kqv (bool): whether to offload the KQV ops (including the KV cache) to GPU
-        do_pooling (bool): whether to pool (sum) embedding results by sequence id (ignored if no pooling layer)
         abort_callback (ggml_abort_callback): abort callback if it returns true, execution of llama_decode() will be aborted
         abort_callback_data (ctypes.ctypes.c_void_p): data for abort_callback
     """
@@ -613,7 +617,8 @@ class llama_context_params(ctypes.Structure):
         ("n_batch", ctypes.c_uint32),
         ("n_threads", ctypes.c_uint32),
         ("n_threads_batch", ctypes.c_uint32),
-        ("rope_scaling_type", ctypes.c_int32),
+        ("rope_scaling_type", ctypes.c_int),
+        ("pooling_type", ctypes.c_int),
         ("rope_freq_base", ctypes.c_float),
         ("rope_freq_scale", ctypes.c_float),
         ("yarn_ext_factor", ctypes.c_float),
@@ -629,7 +634,6 @@ class llama_context_params(ctypes.Structure):
         ("logits_all", ctypes.c_bool),
         ("embedding", ctypes.c_bool),
         ("offload_kqv", ctypes.c_bool),
-        ("do_pooling", ctypes.c_bool),
         ("abort_callback", ggml_abort_callback),
         ("abort_callback_data", ctypes.c_void_p),
     ]
