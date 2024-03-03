@@ -319,7 +319,7 @@ async def tokenize(
 ):
     tokens = llama_proxy(body.model).tokenize(body.input.encode("utf-8"), special=True)
 
-    return {"data": tokens}
+    return {"tokens": tokens}
 
 
 @router.post("/detokenize", summary="Detokenize", dependencies=[Depends(authenticate)])
