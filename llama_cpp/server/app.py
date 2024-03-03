@@ -42,8 +42,10 @@ from llama_cpp.server.types import (
     CreateChatCompletionRequest,
     ModelList,
     TokenizeInputRequest,
-    QueryCountResponse,
+    TokenizeInputResponse,
+    TokenizeInputCountResponse,
     DetokenizeInputRequest,
+    DetokenizeInputResponse,
 )
 from llama_cpp.server.errors import RouteErrorHandler
 
@@ -312,38 +314,6 @@ async def create_embedding(
     )
 
 
-@router.post("/tokenize", summary="Tokenize", dependencies=[Depends(authenticate)])
-async def tokenize(
-    body: TokenizeInputRequest,
-    llama_proxy: LlamaProxy = Depends(get_llama_proxy),
-):
-    tokens = llama_proxy(body.model).tokenize(body.input.encode("utf-8"), special=True)
-
-    return {"tokens": tokens}
-
-
-@router.post("/detokenize", summary="Detokenize", dependencies=[Depends(authenticate)])
-async def detokenize(
-    body: DetokenizeInputRequest,
-    llama_proxy: LlamaProxy = Depends(get_llama_proxy),
-):
-    text = llama_proxy(body.model).detokenize(body.tokens).decode("utf-8")
-
-    return {"text": text}
-
-
-@router.post(
-    "/tokenize/count", summary="Tokenize Count", dependencies=[Depends(authenticate)]
-)
-async def count_query_tokens(
-    body: TokenizeInputRequest,
-    llama_proxy: LlamaProxy = Depends(get_llama_proxy),
-):
-    tokens = llama_proxy(body.model).tokenize(body.input.encode("utf-8"), special=True)
-
-    return {"count": len(tokens)}
-
-
 @router.post(
     "/v1/chat/completions",
     summary="Chat",
@@ -442,3 +412,35 @@ async def get_models(
             for model_alias in llama_proxy
         ],
     }
+
+
+@router.post("/tokenize", summary="Tokenize", dependencies=[Depends(authenticate)])
+async def tokenize(
+    body: TokenizeInputRequest,
+    llama_proxy: LlamaProxy = Depends(get_llama_proxy),
+) -> TokenizeInputResponse:
+    tokens = llama_proxy(body.model).tokenize(body.input.encode("utf-8"), special=True)
+
+    return {"tokens": tokens}
+
+
+@router.post(
+    "/tokenize/count", summary="Tokenize Count", dependencies=[Depends(authenticate)]
+)
+async def count_query_tokens(
+    body: TokenizeInputRequest,
+    llama_proxy: LlamaProxy = Depends(get_llama_proxy),
+) -> TokenizeInputCountResponse:
+    tokens = llama_proxy(body.model).tokenize(body.input.encode("utf-8"), special=True)
+
+    return {"count": len(tokens)}
+
+
+@router.post("/detokenize", summary="Detokenize", dependencies=[Depends(authenticate)])
+async def detokenize(
+    body: DetokenizeInputRequest,
+    llama_proxy: LlamaProxy = Depends(get_llama_proxy),
+) -> DetokenizeInputResponse:
+    text = llama_proxy(body.model).detokenize(body.tokens).decode("utf-8")
+
+    return {"text": text}

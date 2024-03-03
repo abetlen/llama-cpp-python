@@ -176,36 +176,6 @@ class CreateEmbeddingRequest(BaseModel):
     }
 
 
-class DetokenizeInputRequest(BaseModel):
-    model: Optional[str] = model_field
-    tokens: List[int] = Field(description="A list of toekns to detokenize.")
-
-    model_config = {
-        "json_schema_extra": {
-            "example": [
-                {
-                    "tokens": [123,321,222]
-                }
-            ]
-        }
-    }
-
-
-class TokenizeInputRequest(BaseModel):
-    model: Optional[str] = model_field
-    input: Optional[str] = Field(description="The input to tokenize.")
-
-    model_config = {
-        "json_schema_extra": {
-            "examples": [
-                {
-                    "input": "How many tokens in this query?"
-                }
-            ]
-        }
-    }
-
-
 class ChatCompletionRequestMessage(BaseModel):
     role: Literal["system", "user", "assistant", "function"] = Field(
         default="user", description="The role of the message."
@@ -296,5 +266,37 @@ class ModelList(TypedDict):
     data: List[ModelData]
 
 
-class QueryCountResponse(TypedDict):
-    data: List[int]
+class TokenizeInputRequest(BaseModel):
+    model: Optional[str] = model_field
+    input: Optional[str] = Field(description="The input to tokenize.")
+
+    model_config = {
+        "json_schema_extra": {"examples": [{"input": "How many tokens in this query?"}]}
+    }
+
+
+class TokenizeInputResponse(BaseModel):
+    tokens: List[int] = Field(description="A list of tokens.")
+
+    model_config = {"json_schema_extra": {"example": {"tokens": [123, 321, 222]}}}
+
+
+class TokenizeInputCountResponse(BaseModel):
+    count: int = Field(description="The number of tokens in the input.")
+
+    model_config = {"json_schema_extra": {"example": {"count": 5}}}
+
+
+class DetokenizeInputRequest(BaseModel):
+    model: Optional[str] = model_field
+    tokens: List[int] = Field(description="A list of toekns to detokenize.")
+
+    model_config = {"json_schema_extra": {"example": [{"tokens": [123, 321, 222]}]}}
+
+
+class DetokenizeInputResponse(BaseModel):
+    text: str = Field(description="The detokenized text.")
+
+    model_config = {
+        "json_schema_extra": {"example": {"text": "How many tokens in this query?"}}
+    }
