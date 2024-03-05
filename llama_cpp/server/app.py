@@ -87,6 +87,13 @@ def get_llama_proxy():
             llama_outer_lock.release()
 
 
+_ping_message_factory = None
+
+def set_ping_message_factory(factory):
+   global  _ping_message_factory
+   _ping_message_factory = factory
+
+
 def create_app(
     settings: Settings | None = None,
     server_settings: ServerSettings | None = None,
@@ -137,6 +144,9 @@ def create_app(
 
     assert model_settings is not None
     set_llama_proxy(model_settings=model_settings)
+
+    if server_settings.disable_ping_events:
+        set_ping_message_factory(lambda: bytes())
 
     return app
 
@@ -302,6 +312,7 @@ async def create_completion(
                 iterator=iterator(),
             ),
             sep="\n",
+            ping_message_factory=_ping_message_factory,
         )
     else:
         return iterator_or_completion
@@ -470,6 +481,7 @@ async def create_chat_completion(
                 iterator=iterator(),
             ),
             sep="\n",
+            ping_message_factory=_ping_message_factory,
         )
     else:
         return iterator_or_completion
