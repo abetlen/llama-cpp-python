@@ -399,7 +399,7 @@ llama_progress_callback = ctypes.CFUNCTYPE(
 # // - embd   : token embeddings (i.e. float vector of size n_embd) (used when token is NULL)
 # // - pos    : the positions of the respective token in the sequence
 # // - seq_id : the sequence to which the respective token belongs
-# // - logits : if zero, the logits for the respective token will not be output
+# // - logits : if zero, the logits (and/or the embeddings) for the respective token will not be output
 # //
 # typedef struct llama_batch {
 #     int32_t n_tokens;
@@ -409,7 +409,7 @@ llama_progress_callback = ctypes.CFUNCTYPE(
 #     llama_pos    *  pos;
 #     int32_t      *  n_seq_id;
 #     llama_seq_id ** seq_id;
-#     int8_t       *  logits;
+#     int8_t       *  logits; // TODO: rename this to "output"
 
 
 #     // NOTE: helpers for smooth API transition - can be deprecated in the future
@@ -572,7 +572,7 @@ class llama_model_params(ctypes.Structure):
 
 #     // Keep the booleans together to avoid misalignment during copy-by-value.
 #     bool logits_all;  // the llama_decode() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
-#     bool embedding;   // embedding mode only
+#     bool embeddings;  // if true, extract embeddings (together with logits)
 #     bool offload_kqv; // whether to offload the KQV ops (including the KV cache) to GPU
 
 #     // Abort callback
@@ -605,7 +605,7 @@ class llama_context_params(ctypes.Structure):
         type_k (int): data type for K cache
         type_v (int): data type for V cache
         logits_all (bool): the llama_eval() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
-        embedding (bool): embedding mode only
+        embeddings (bool): if true, extract embeddings (together with logits)
         offload_kqv (bool): whether to offload the KQV ops (including the KV cache) to GPU
         abort_callback (ggml_abort_callback): abort callback if it returns true, execution of llama_decode() will be aborted
         abort_callback_data (ctypes.ctypes.c_void_p): data for abort_callback
@@ -632,7 +632,7 @@ class llama_context_params(ctypes.Structure):
         ("type_k", ctypes.c_int),
         ("type_v", ctypes.c_int),
         ("logits_all", ctypes.c_bool),
-        ("embedding", ctypes.c_bool),
+        ("embeddings", ctypes.c_bool),
         ("offload_kqv", ctypes.c_bool),
         ("abort_callback", ggml_abort_callback),
         ("abort_callback_data", ctypes.c_void_p),
@@ -1774,8 +1774,8 @@ def llama_get_logits_ith(
     ...
 
 
-# Get the embeddings for the input
-# shape: [n_embd] (1-dimensional)
+# // Get all output token embeddings
+# // shape: [n_tokens*n_embd] (1-dimensional)
 # LLAMA_API float * llama_get_embeddings(struct llama_context * ctx);
 @ctypes_function(
     "llama_get_embeddings", [llama_context_p_ctypes], ctypes.POINTER(ctypes.c_float)
@@ -1786,8 +1786,9 @@ def llama_get_embeddings(ctx: llama_context_p, /) -> CtypesArray[ctypes.c_float]
     ...
 
 
-# // Get the embeddings for the ith sequence
+# // Get the embeddings for the ith token
 # // llama_get_embeddings(ctx) + i*n_embd
+# // shape: [n_embd] (1-dimensional)
 # LLAMA_API float * llama_get_embeddings_ith(struct llama_context * ctx, int32_t i);
 @ctypes_function(
     "llama_get_embeddings_ith",
@@ -1801,6 +1802,23 @@ def llama_get_embeddings_ith(
     llama_get_embeddings(ctx) + i*n_embd"""
     ...
 
+
+# // Get the embeddings for a sequence id
+# // Returns NULL if pooling_type is LLAMA_POOLING_TYPE_NONE
+# // shape: [n_embd] (1-dimensional)
+# LLAMA_API float * llama_get_embeddings_seq(struct llama_context * ctx, llama_seq_id seq_id);
+@ctypes_function(
+    "llama_get_embeddings_seq",
+    [llama_context_p_ctypes, llama_seq_id],
+    ctypes.POINTER(ctypes.c_float),
+)
+def llama_get_embeddings_seq(
+    ctx: llama_context_p, seq_id: Union[llama_seq_id, int], /
+) -> CtypesArray[ctypes.c_float]:
+    """Get the embeddings for a sequence id
+    Returns NULL if pooling_type is LLAMA_POOLING_TYPE_NONE
+    shape: [n_embd] (1-dimensional)"""
+    ...
 
 # //
 # // Vocab

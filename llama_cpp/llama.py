@@ -293,7 +293,7 @@ class Llama:
         self.context_params.logits_all = (
             logits_all if draft_model is None else True
         )  # Must be set to True for speculative decoding
-        self.context_params.embedding = embedding
+        self.context_params.embeddings = embedding # TODO: Rename to embeddings
         self.context_params.offload_kqv = offload_kqv
 
         # Sampling Params
@@ -787,7 +787,7 @@ class Llama:
         n_embd = self.n_embd()
         n_batch = self.n_batch
 
-        if self.context_params.embedding == False:
+        if self.context_params.embeddings == False:
             raise RuntimeError(
                 "Llama model must be created with embedding=True to call this method"
             )
@@ -1725,7 +1725,7 @@ class Llama:
             yarn_beta_slow=self.context_params.yarn_beta_slow,
             yarn_orig_ctx=self.context_params.yarn_orig_ctx,
             logits_all=self.context_params.logits_all,
-            embedding=self.context_params.embedding,
+            embedding=self.context_params.embeddings,
             # Sampling Params
             last_n_tokens_size=self.last_n_tokens_size,
             # LoRA Params
