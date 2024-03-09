@@ -41,6 +41,11 @@ from llama_cpp.server.types import (
     CreateEmbeddingRequest,
     CreateChatCompletionRequest,
     ModelList,
+    TokenizeInputRequest,
+    TokenizeInputResponse,
+    TokenizeInputCountResponse,
+    DetokenizeInputRequest,
+    DetokenizeInputResponse,
 )
 from llama_cpp.server.errors import RouteErrorHandler
 
@@ -196,6 +201,9 @@ async def authenticate(
     )
 
 
+openai_v1_tag = "OpenAI V1"
+
+
 @router.post(
     "/v1/completions",
     summary="Completion",
@@ -227,11 +235,13 @@ async def authenticate(
             },
         }
     },
+    tags=[openai_v1_tag],
 )
 @router.post(
     "/v1/engines/copilot-codex/completions",
     include_in_schema=False,
     dependencies=[Depends(authenticate)],
+    tags=[openai_v1_tag],
 )
 async def create_completion(
     request: Request,
@@ -297,7 +307,10 @@ async def create_completion(
 
 
 @router.post(
-    "/v1/embeddings", summary="Embedding", dependencies=[Depends(authenticate)]
+    "/v1/embeddings",
+    summary="Embedding",
+    dependencies=[Depends(authenticate)],
+    tags=[openai_v1_tag],
 )
 async def create_embedding(
     request: CreateEmbeddingRequest,
@@ -339,6 +352,7 @@ async def create_embedding(
             },
         }
     },
+    tags=[openai_v1_tag],
 )
 async def create_chat_completion(
     request: Request,
@@ -391,7 +405,12 @@ async def create_chat_completion(
         return iterator_or_completion
 
 
-@router.get("/v1/models", summary="Models", dependencies=[Depends(authenticate)])
+@router.get(
+    "/v1/models",
+    summary="Models",
+    dependencies=[Depends(authenticate)],
+    tags=[openai_v1_tag],
+)
 async def get_models(
     llama_proxy: LlamaProxy = Depends(get_llama_proxy),
 ) -> ModelList:
@@ -407,3 +426,51 @@ async def get_models(
             for model_alias in llama_proxy
         ],
     }
+
+
+extras_tag = "Extras"
+
+
+@router.post(
+    "/extras/tokenize",
+    summary="Tokenize",
+    dependencies=[Depends(authenticate)],
+    tags=[extras_tag],
+)
+async def tokenize(
+    body: TokenizeInputRequest,
+    llama_proxy: LlamaProxy = Depends(get_llama_proxy),
+) -> TokenizeInputResponse:
+    tokens = llama_proxy(body.model).tokenize(body.input.encode("utf-8"), special=True)
+
+    return {"tokens": tokens}
+
+
+@router.post(
+    "/extras/tokenize/count",
+    summary="Tokenize Count",
+    dependencies=[Depends(authenticate)],
+    tags=[extras_tag],
+)
+async def count_query_tokens(
+    body: TokenizeInputRequest,
+    llama_proxy: LlamaProxy = Depends(get_llama_proxy),
+) -> TokenizeInputCountResponse:
+    tokens = llama_proxy(body.model).tokenize(body.input.encode("utf-8"), special=True)
+
+    return {"count": len(tokens)}
+
+
+@router.post(
+    "/extras/detokenize",
+    summary="Detokenize",
+    dependencies=[Depends(authenticate)],
+    tags=[extras_tag],
+)
+async def detokenize(
+    body: DetokenizeInputRequest,
+    llama_proxy: LlamaProxy = Depends(get_llama_proxy),
+) -> DetokenizeInputResponse:
+    text = llama_proxy(body.model).detokenize(body.tokens).decode("utf-8")
+
+    return {"text": text}
