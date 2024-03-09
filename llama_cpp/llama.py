@@ -814,7 +814,7 @@ class Llama:
 
             # store embeddings
             for i in range(n_seq):
-                embedding: List[float] = llama_cpp.llama_get_embeddings_ith(
+                embedding: List[float] = llama_cpp.llama_get_embeddings_seq(
                     self._ctx.ctx, i
                 )[:n_embd]
                 if normalize:
