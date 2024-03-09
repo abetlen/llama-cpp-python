@@ -286,7 +286,7 @@ By default [`from_pretrained`](https://llama-cpp-python.readthedocs.io/en/latest
 
 The high-level API also provides a simple interface for chat completion.
 
-Chat completion requires that the model know how to format the messages into a single prompt.
+Chat completion requires that the model knows how to format the messages into a single prompt.
 The `Llama` class does this using pre-registered chat formats (ie. `chatml`, `llama-2`, `gemma`, etc) or by providing a custom chat handler object.
 
 The model will will format the messages into a single prompt using the following order of precedence:
