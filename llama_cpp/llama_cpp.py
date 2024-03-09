@@ -1803,22 +1803,6 @@ def llama_get_embeddings_ith(
     ...
 
 
-# // Get the embeddings for sequence seq_id
-# // shape: [n_embd] (1-dimensional)
-# LLAMA_API float * llama_get_embeddings_seq(struct llama_context * ctx, llama_seq_id seq_id);
-@ctypes_function(
-    "llama_get_embeddings_seq",
-    [llama_context_p_ctypes, ctypes.c_int32],
-    ctypes.POINTER(ctypes.c_float),
-)
-def llama_get_embeddings_seq(
-    ctx: llama_context_p, i: Union[ctypes.c_int32, int], /
-) -> CtypesArray[ctypes.c_float]:
-    """Get the embeddings for sequence seq_id
-    shape: [n_embd] (1-dimensional)"""
-    ...
-
-
 # // Get the embeddings for a sequence id
 # // Returns NULL if pooling_type is LLAMA_POOLING_TYPE_NONE
 # // shape: [n_embd] (1-dimensional)
