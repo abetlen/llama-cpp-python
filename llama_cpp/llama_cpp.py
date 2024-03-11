@@ -1728,6 +1728,17 @@ def llama_set_n_threads(
     """
     ...
 
+
+# // Set whether to use causal attention or not
+# // If set to true, the model will only attend to the past tokens
+# LLAMA_API void llama_set_causal_attn(struct llama_context * ctx, bool causal_attn);
+@ctypes_function("llama_set_causal_attn", [llama_context_p_ctypes, ctypes.c_bool], None)
+def llama_set_causal_attn(ctx: llama_context_p, causal_attn: bool, /):
+    """Set whether to use causal attention or not
+    If set to true, the model will only attend to the past tokens"""
+    ...
+
+
 # // Set abort callback
 # LLAMA_API void llama_set_abort_callback(struct llama_context * ctx, ggml_abort_callback abort_callback, void * abort_callback_data);
 @ctypes_function(
