@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.56]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@c2101a2e909ac7c08976d414e64e96c90ee5fa9e
+- feat(server): Add endpoints for tokenize, detokenize and count tokens by @felipelo in #1136
+- feat: Switch embed to llama_get_embeddings_seq by @iamlemec in #1263
+- fix: Fixed json strings grammar by blacklisting character control set by @ExtReMLapin in d02a9cf16ff88ad011e2eb1ce29f4d9400f13cd1
+- fix: Check for existence of clip model path by @kejcao in #1264
+
 ## [0.2.55]
 
 - feat: Update llama.cpp to ggerganov/9731134296af3a6839cd682e51d9c2109a871de5

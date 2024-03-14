@@ -1858,6 +1858,9 @@ class Llava15ChatHandler:
         self.verbose = verbose
         self._clip_free = self._llava_cpp._libllava.clip_free  # type: ignore
 
+        if not os.path.exists(clip_model_path):
+            raise ValueError(f"Clip model path does not exist: {clip_model_path}")
+
         with suppress_stdout_stderr(disable=self.verbose):
             self.clip_ctx = self._llava_cpp.clip_model_load(
                 self.clip_model_path.encode(), 0
