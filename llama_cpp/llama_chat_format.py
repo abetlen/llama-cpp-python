@@ -360,6 +360,46 @@ def chat_formatter_to_chat_completion_handler(
                     llama_grammar.JSON_GBNF, verbose=llama.verbose
                 )
 
+        # Convert legacy functions to tools
+        if functions is not None:
+            tools = [
+                {
+                    "type": "function",
+                    "function": function,
+                }
+                for function in functions
+            ]
+
+        # Convert legacy function_call to tool_choice
+        if function_call is not None:
+            if isinstance(function_call, str) and (
+                function_call == "none" or function_call == "auto"
+            ):
+                tool_choice = function_call
+            if isinstance(function_call, dict) and "name" in function_call:
+                tool_choice = {
+                    "type": "function",
+                    "function": {
+                        "name": function_call["name"],
+                    },
+                }
+
+        if tool_choice is not None and isinstance(tool_choice, dict) and tools is not None:
+            name = tool_choice["function"]["name"]
+            tool = next((t for t in tools if t["function"]["name"] == name), None)
+            if tool is None:
+                raise ValueError(f"Tool choice '{name}' not found in tools.")
+            schema = tool["function"]["parameters"]
+            try:
+                # create grammar from json schema
+                grammar = llama_grammar.LlamaGrammar.from_json_schema(
+                    json.dumps(schema), verbose=llama.verbose
+                )
+            except Exception as e:
+                grammar = llama_grammar.LlamaGrammar.from_string(
+                    llama_grammar.JSON_GBNF, verbose=llama.verbose
+                )
+
         completion_or_chunks = llama.create_completion(
             prompt=prompt,
             temperature=temperature,
