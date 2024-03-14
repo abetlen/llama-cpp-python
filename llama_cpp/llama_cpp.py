@@ -579,7 +579,6 @@ class llama_model_params(ctypes.Structure):
 #     bool embeddings;  // if true, extract embeddings (together with logits)
 #     bool offload_kqv; // whether to offload the KQV ops (including the KV cache) to GPU
 
-
 #     // Abort callback
 #     // if it returns true, execution of llama_decode() will be aborted
 #     // currently works only with CPU execution
