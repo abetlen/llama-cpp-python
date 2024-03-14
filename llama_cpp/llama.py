@@ -821,7 +821,11 @@ class Llama:
                     self._ctx.ctx, i
                 )
                 if not ptr:
-                    raise RuntimeError("Failed to get embeddings from sequence pooling type is not set")
+                    ptr = llama_cpp.llama_get_embeddings_ith(
+                        self._ctx.ctx, i
+                    )
+                if not ptr:
+                    raise RuntimeError(f"Failed to get embeddings for sequence {i}")
                 embedding: List[float] = ptr[:n_embd]
                 if normalize:
                     norm = float(np.linalg.norm(embedding))
