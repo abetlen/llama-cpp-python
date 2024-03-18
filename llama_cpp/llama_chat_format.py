@@ -1632,6 +1632,7 @@ def functionary_v1_v2_chat_handler(
             logits_processor=logits_processor,
             grammar=grammar,
         )
+        completion_or_completion_chunks["choices"][0]["text"] = completion_or_completion_chunks["choices"][0]["text"].lstrip()
         return _convert_completion_to_chat(completion_or_completion_chunks, stream=stream)  # type: ignore
 
     assert stream is False  # TODO: support stream mode
@@ -1789,11 +1790,12 @@ def functionary_v1_v2_chat_handler(
                 completion = create_completion(stop=stops)
                 completion_text = completion["choices"][0]["text"]
                 if function_name == "all":
-                    content += completion_text
+                    content += completion_text.removesuffix("\n<|from|>assistant\n").removesuffix("\n<|from|> assistant\n")
                     content = content.lstrip()
                     # Check whether the model wants to generate another turn
-                    if "<|from|> assistant" in completion_text:
-                        prompt += f"{completion_text.strip()}\n<|from|>assistant\n<|recipient|>"
+                    if "<|from|> assistant" in completion_text or "<|from|>assistant" in completion_text:
+                        cleaned_completion_text = completion_text.removesuffix("\n<|from|>assistant\n").removesuffix("\n<|from|> assistant\n").strip()
+                        prompt += f"{cleaned_completion_text}\n<|from|>assistant\n<|recipient|>"
                     else:
                         break
                 else:
@@ -1802,7 +1804,7 @@ def functionary_v1_v2_chat_handler(
                     prompt += completion_text.strip()
                     grammar = None
                     completion = create_completion(stop=stops)
-                    if "<|from|> assistant" in completion["choices"][0]["text"]:
+                    if "<|from|> assistant" in completion["choices"][0]["text"] or "<|from|>assistant" in completion["choices"][0]["text"]:
                         prompt += "\n<|from|>assistant\n<|recipient|>"
                     else:
                         break
