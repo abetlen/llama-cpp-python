@@ -12,14 +12,7 @@ import llama_cpp
 import anyio
 from anyio.streams.memory import MemoryObjectSendStream
 from starlette.concurrency import run_in_threadpool, iterate_in_threadpool
-from fastapi import (
-    Depends,
-    FastAPI,
-    APIRouter,
-    Request,
-    HTTPException,
-    status,
-)
+from fastapi import Depends, FastAPI, APIRouter, Request, HTTPException, status, Body
 from fastapi.middleware import Middleware
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer
@@ -356,7 +349,64 @@ async def create_embedding(
 )
 async def create_chat_completion(
     request: Request,
-    body: CreateChatCompletionRequest,
+    body: CreateChatCompletionRequest = Body(
+        openapi_examples={
+            "normal": {
+                "summary": "Chat Completion",
+                "value": {
+                    "model": "gpt-3.5-turbo",
+                    "messages": [
+                        {"role": "system", "content": "You are a helpful assistant."},
+                        {"role": "user", "content": "What is the capital of France?"},
+                    ],
+                },
+            },
+            "json_mode": {
+                "summary": "JSON Mode",
+                "value": {
+                    "model": "gpt-3.5-turbo",
+                    "messages": [
+                        {"role": "system", "content": "You are a helpful assistant."},
+                        {"role": "user", "content": "Who won the world series in 2020"},
+                    ],
+                    "response_format": { "type": "json_object" }
+                },
+            },
+            "tool_calling": {
+                "summary": "Tool Calling",
+                "value": {
+                    "model": "gpt-3.5-turbo",
+                    "messages": [
+                        {"role": "system", "content": "You are a helpful assistant."},
+                        {"role": "user", "content": "Extract Jason is 30 years old."},
+                    ],
+                    "tools": [
+                        {
+                            "type": "function",
+                            "function": {
+                                "name": "User",
+                                "description": "User record",
+                                "parameters": {
+                                    "type": "object",
+                                    "properties": {
+                                        "name": {"type": "string"},
+                                        "age": {"type": "number"},
+                                    },
+                                    "required": ["name", "age"],
+                                },
+                            }
+                        }
+                    ],
+                    "tool_choice": {
+                        "type": "function",
+                        "function": {
+                            "name": "User",
+                        }
+                    }
+                },
+            },
+        }
+    ),
     llama_proxy: LlamaProxy = Depends(get_llama_proxy),
 ) -> llama_cpp.ChatCompletion:
     exclude = {
