@@ -198,13 +198,15 @@ llama_seq_id = ctypes.c_int32
 
 
 # enum llama_vocab_type {
-#     LLAMA_VOCAB_TYPE_SPM = 0, // SentencePiece
-#     LLAMA_VOCAB_TYPE_BPE = 1, // Byte Pair Encoding
-#     LLAMA_VOCAB_TYPE_WPM = 2, // WordPiece
+#     LLAMA_VOCAB_TYPE_NONE = 0, // For models without vocab
+#     LLAMA_VOCAB_TYPE_SPM  = 1, // SentencePiece
+#     LLAMA_VOCAB_TYPE_BPE  = 2, // Byte Pair Encoding
+#     LLAMA_VOCAB_TYPE_WPM  = 3, // WordPiece
 # };
-LLAMA_VOCAB_TYPE_SPM = 0
-LLAMA_VOCAB_TYPE_BPE = 1
-LLAMA_VOCAB_TYPE_WPM = 2
+LLAMA_VOCAB_TYPE_NONE = 0
+LLAMA_VOCAB_TYPE_SPM = 1
+LLAMA_VOCAB_TYPE_BPE = 2
+LLAMA_VOCAB_TYPE_WPM = 3
 
 
 # // note: these values should be synchronized with ggml_rope
@@ -578,6 +580,7 @@ class llama_model_params(ctypes.Structure):
 #     bool logits_all;  // the llama_decode() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
 #     bool embeddings;  // if true, extract embeddings (together with logits)
 #     bool offload_kqv; // whether to offload the KQV ops (including the KV cache) to GPU
+
 
 #     // Abort callback
 #     // if it returns true, execution of llama_decode() will be aborted
@@ -1004,6 +1007,11 @@ def llama_n_ctx_train(model: llama_model_p, /) -> int: ...
 def llama_n_embd(model: llama_model_p, /) -> int: ...
 
 
+# LLAMA_API int32_t llama_n_layer    (const struct llama_model * model);
+@ctypes_function("llama_n_layer", [llama_model_p_ctypes], ctypes.c_int32)
+def llama_n_layer(model: llama_model_p, /) -> int: ...
+
+
 # // Get the model's RoPE frequency scaling factor
 # LLAMA_API float llama_rope_freq_scale_train(const struct llama_model * model);
 @ctypes_function("llama_rope_freq_scale_train", [llama_model_p_ctypes], ctypes.c_float)
@@ -1164,12 +1172,18 @@ def llama_model_quantize(
     ...
 
 
+# // Apply a LoRA adapter to a loaded model
+# // path_base_model is the path to a higher quality model to use as a base for
+# // the layers modified by the adapter. Can be NULL to use the current loaded model.
+# // The model needs to be reloaded before applying a new adapter, otherwise the adapter
+# // will be applied on top of the previous one
+# // Returns 0 on success
 # LLAMA_API int32_t llama_model_apply_lora_from_file(
 #         const struct llama_model * model,
-#                   const char * path_lora,
-#                        float   scale,
-#                   const char * path_base_model,
-#                      int32_t   n_threads);
+#                       const char * path_lora,
+#                            float   scale,
+#                       const char * path_base_model,
+#                          int32_t   n_threads);
 @ctypes_function(
     "llama_model_apply_lora_from_file",
     [
@@ -1188,7 +1202,57 @@ def llama_model_apply_lora_from_file(
     path_base_model: Union[ctypes.c_char_p, bytes, None],
     n_threads: Union[ctypes.c_int32, int],
     /,
-) -> int: ...
+) -> int:
+    """Apply a LoRA adapter to a loaded model
+    path_base_model is the path to a higher quality model to use as a base for
+    the layers modified by the adapter. Can be NULL to use the current loaded model.
+    The model needs to be reloaded before applying a new adapter, otherwise the adapter
+    will be applied on top of the previous one
+    Returns 0 on success"""
+    ...
+
+
+# // Apply a loaded control vector to a llama_context, or if data is NULL, clear
+# // the currently loaded vector.
+# // n_embd should be the size of a single layer's control, and data should point
+# // to an n_embd x n_layers buffer starting from layer 1.
+# // il_start and il_end are the layer range the vector should apply to (both inclusive)
+# // See llama_control_vector_load in common to load a control vector.
+# LLAMA_API int32_t llama_control_vector_apply(
+#         struct llama_context * lctx,
+#                  const float * data,
+#                       size_t   len,
+#                      int32_t   n_embd,
+#                      int32_t   il_start,
+#                      int32_t   il_end);
+@ctypes_function(
+    "llama_control_vector_apply",
+    [
+        llama_context_p_ctypes,
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int32,
+        ctypes.c_int32,
+        ctypes.c_int32,
+    ],
+    ctypes.c_int32,
+)
+def llama_control_vector_apply(
+    lctx: llama_context_p,
+    data: CtypesPointerOrRef[ctypes.c_float],
+    len: int,
+    n_embd: int,
+    il_start: int,
+    il_end: int,
+    /,
+) -> int:
+    """Apply a loaded control vector to a llama_context, or if data is NULL, clear
+    the currently loaded vector.
+    n_embd should be the size of a single layer's control, and data should point
+    to an n_embd x n_layers buffer starting from layer 1.
+    il_start and il_end are the layer range the vector should apply to (both inclusive)
+    See llama_control_vector_load in common to load a control vector."""
+    ...
 
 
 # //
@@ -1203,6 +1267,12 @@ def llama_model_apply_lora_from_file(
 #     llama_pos pos;
 # };
 class llama_kv_cache_view_cell(ctypes.Structure):
+    """Information associated with an individual cell in the KV cache view.
+
+    Attributes:
+        pos (llama_pos): The position for this cell. Takes KV cache shifts into account.
+            May be negative if the cell is not populated."""
+
     _fields_ = [("pos", llama_pos)]
 
 
@@ -1983,7 +2053,7 @@ def llama_tokenize(
     /,
 ) -> int:
     """Convert the provided text into tokens.
-    
+
     Args:
         model: The model to use for tokenization.
         text: The text to tokenize.
@@ -1993,10 +2063,11 @@ def llama_tokenize(
         add_bos: Whether to add a beginning-of-sentence token.
         special: Allow tokenizing special and/or control tokens which otherwise are not exposed and treated as plaintext.
                  Does not insert a leading space.
-                 
+
     Returns:
         Returns the number of tokens on success, no more than n_tokens_max
-        Returns a negative number on failure - the number of tokens that would have been returned"""
+        Returns a negative number on failure - the number of tokens that would have been returned
+    """
     ...
 
 
