@@ -17,6 +17,11 @@ if (LLAMA_BUILD)
         set(LLAMA_FMA "Off" CACHE BOOL "llama: enable FMA" FORCE)
         set(LLAMA_F16C "Off" CACHE BOOL "llama: enable F16C" FORCE)
     endif()
+
+    if (APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
+        set(LLAMA_METAL_EMBED_LIBRARY "On" CACHE BOOL "llama: embed metal library" FORCE)
+    endif()
+
     add_subdirectory(vendor/llama.cpp)
     install(
         TARGETS llama 
