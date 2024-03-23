@@ -668,13 +668,15 @@ It might not exist for progress report where '.' is output repeatedly."""
 
 # // model quantization parameters
 # typedef struct llama_model_quantize_params {
-#     int32_t nthread;             // number of threads to use for quantizing, if <=0 will use std::thread::hardware_concurrency()
-#     enum llama_ftype ftype;      // quantize to this llama_ftype
-#     bool allow_requantize;       // allow quantizing non-f32/f16 tensors
-#     bool quantize_output_tensor; // quantize output.weight
-#     bool only_copy;              // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
-#     bool pure;                   // quantize all tensors to the default type
-#     void * imatrix;              // pointer to importance matrix data
+#     int32_t nthread;                     // number of threads to use for quantizing, if <=0 will use std::thread::hardware_concurrency()
+#     enum llama_ftype ftype;              // quantize to this llama_ftype
+#     enum ggml_type output_tensor_type;   // output tensor type
+#     enum ggml_type token_embedding_type; // itoken embeddings tensor type
+#     bool allow_requantize;               // allow quantizing non-f32/f16 tensors
+#     bool quantize_output_tensor;         // quantize output.weight
+#     bool only_copy;                      // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
+#     bool pure;                           // quantize all tensors to the default type
+#     void * imatrix;                      // pointer to importance matrix data
 # } llama_model_quantize_params;
 class llama_model_quantize_params(ctypes.Structure):
     """Parameters for llama_model_quantize
@@ -682,16 +684,20 @@ class llama_model_quantize_params(ctypes.Structure):
     Attributes:
         nthread (int): number of threads to use for quantizing, if <=0 will use std::thread::hardware_concurrency()
         ftype (int): quantize to this llama_ftype
+        output_tensor_type (int): output tensor type
+        token_embedding_type (int): itoken embeddings tensor type
         allow_requantize (bool): allow quantizing non-f32/f16 tensors
         quantize_output_tensor (bool): quantize output.weight
         only_copy (bool): only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
         pure (bool): quantize all tensors to the default type
-        imatrix (ctypes.ctypes.c_void_p): pointer to importance matrix data
+        imatrix (ctypes.c_void_p): pointer to importance matrix data
     """
 
     _fields_ = [
         ("nthread", ctypes.c_int32),
         ("ftype", ctypes.c_int),
+        ("output_tensor_type", ctypes.c_int),
+        ("token_embedding_type", ctypes.c_int),
         ("allow_requantize", ctypes.c_bool),
         ("quantize_output_tensor", ctypes.c_bool),
         ("only_copy", ctypes.c_bool),
@@ -2741,6 +2747,48 @@ def llama_beam_search(
     n_predict: Union[ctypes.c_int, int],
     /,
 ): ...
+
+
+# /// @details Build a split GGUF final path for this chunk.
+# ///          llama_split_path(split_path, sizeof(split_path), "/models/ggml-model-q4_0", 2, 4) => split_path = "/models/ggml-model-q4_0-00002-of-00004.gguf"
+# //  Returns the split_path length.
+# LLAMA_API int llama_split_path(char * split_path, size_t maxlen, const char * path_prefix, int split_no, int split_count);
+@ctypes_function(
+    "llama_split_path",
+    [ctypes.c_char_p, ctypes.c_size_t, ctypes.c_char_p, ctypes.c_int, ctypes.c_int],
+    ctypes.c_int,
+)
+def llama_split_path(
+    split_path: bytes,
+    maxlen: Union[ctypes.c_size_t, int],
+    path_prefix: bytes,
+    split_no: Union[ctypes.c_int, int],
+    split_count: Union[ctypes.c_int, int],
+    /,
+) -> int:
+    """Build a split GGUF final path for this chunk."""
+    ...
+
+
+# /// @details Extract the path prefix from the split_path if and only if the split_no and split_count match.
+# ///          llama_split_prefix(split_prefix, 64, "/models/ggml-model-q4_0-00002-of-00004.gguf", 2, 4) => split_prefix = "/models/ggml-model-q4_0"
+# //  Returns the split_prefix length.
+# LLAMA_API int llama_split_prefix(char * split_prefix, size_t maxlen, const char * split_path, int split_no, int split_count);
+@ctypes_function(
+    "llama_split_prefix",
+    [ctypes.c_char_p, ctypes.c_size_t, ctypes.c_char_p, ctypes.c_int, ctypes.c_int],
+    ctypes.c_int,
+)
+def llama_split_prefix(
+    split_prefix: bytes,
+    maxlen: Union[ctypes.c_size_t, int],
+    split_path: bytes,
+    split_no: Union[ctypes.c_int, int],
+    split_count: Union[ctypes.c_int, int],
+    /,
+) -> int:
+    """Extract the path prefix from the split_path if and only if the split_no and split_count match."""
+    ...
 
 
 # Performance information
