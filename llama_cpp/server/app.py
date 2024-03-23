@@ -493,7 +493,7 @@ async def tokenize(
 ) -> TokenizeInputResponse:
     tokens = llama_proxy(body.model).tokenize(body.input.encode("utf-8"), special=True)
 
-    return {"tokens": tokens}
+    return TokenizeInputResponse(tokens=tokens)
 
 
 @router.post(
@@ -508,7 +508,7 @@ async def count_query_tokens(
 ) -> TokenizeInputCountResponse:
     tokens = llama_proxy(body.model).tokenize(body.input.encode("utf-8"), special=True)
 
-    return {"count": len(tokens)}
+    return TokenizeInputCountResponse(count=len(tokens))
 
 
 @router.post(
@@ -523,4 +523,4 @@ async def detokenize(
 ) -> DetokenizeInputResponse:
     text = llama_proxy(body.model).detokenize(body.tokens).decode("utf-8")
 
-    return {"text": text}
+    return DetokenizeInputResponse(text=text)

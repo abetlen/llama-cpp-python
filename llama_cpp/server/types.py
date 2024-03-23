@@ -268,7 +268,7 @@ class ModelList(TypedDict):
 
 class TokenizeInputRequest(BaseModel):
     model: Optional[str] = model_field
-    input: Optional[str] = Field(description="The input to tokenize.")
+    input: str = Field(description="The input to tokenize.")
 
     model_config = {
         "json_schema_extra": {"examples": [{"input": "How many tokens in this query?"}]}
