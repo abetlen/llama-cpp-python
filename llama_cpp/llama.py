@@ -79,9 +79,7 @@ class Llama:
         n_batch: int = 512,
         n_threads: Optional[int] = None,
         n_threads_batch: Optional[int] = None,
-        rope_scaling_type: Optional[
-            int
-        ] = llama_cpp.LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED,
+        rope_scaling_type: Optional[int] = llama_cpp.LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED,
         pooling_type: int = llama_cpp.LLAMA_POOLING_TYPE_UNSPECIFIED,
         rope_freq_base: float = 0.0,
         rope_freq_scale: float = 0.0,
@@ -242,19 +240,13 @@ class Llama:
             for i, (k, v) in enumerate(kv_overrides.items()):
                 self._kv_overrides_array[i].key = k.encode("utf-8")
                 if isinstance(v, bool):
-                    self._kv_overrides_array[i].tag = (
-                        llama_cpp.LLAMA_KV_OVERRIDE_TYPE_BOOL
-                    )
+                    self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_TYPE_BOOL
                     self._kv_overrides_array[i].value.bool_value = v
                 elif isinstance(v, int):
-                    self._kv_overrides_array[i].tag = (
-                        llama_cpp.LLAMA_KV_OVERRIDE_TYPE_INT
-                    )
+                    self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_TYPE_INT
                     self._kv_overrides_array[i].value.int_value = v
                 elif isinstance(v, float):
-                    self._kv_overrides_array[i].tag = (
-                        llama_cpp.LLAMA_KV_OVERRIDE_TYPE_FLOAT
-                    )
+                    self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_TYPE_FLOAT
                     self._kv_overrides_array[i].value.float_value = v
                 else:
                     raise ValueError(f"Unknown value type for {k}: {v}")
@@ -305,7 +297,7 @@ class Llama:
         self.context_params.logits_all = (
             logits_all if draft_model is None else True
         )  # Must be set to True for speculative decoding
-        self.context_params.embeddings = embedding  # TODO: Rename to embeddings
+        self.context_params.embeddings = embedding # TODO: Rename to embeddings
         self.context_params.offload_kqv = offload_kqv
 
         # Sampling Params
@@ -826,11 +818,11 @@ class Llama:
 
             # store embeddings
             for i in range(n_seq):
-                ptr = llama_cpp.llama_get_embeddings_seq(self._ctx.ctx, i)
+                ptr = llama_cpp.llama_get_embeddings_seq(
+                    self._ctx.ctx, i
+                )
                 if not ptr:
-                    raise RuntimeError(
-                        "Failed to get embeddings from sequence pooling type is not set"
-                    )
+                    raise RuntimeError("Failed to get embeddings from sequence pooling type is not set")
                 embedding: List[float] = ptr[:n_embd]
                 if normalize:
                     norm = float(np.linalg.norm(embedding))
@@ -1061,10 +1053,7 @@ class Llama:
 
             if stream:
                 remaining_tokens = completion_tokens[returned_tokens:]
-                remaining_text = self.detokenize(
-                    remaining_tokens,
-                    prev_tokens=prompt_tokens + completion_tokens[:returned_tokens],
-                )
+                remaining_text = self.detokenize(remaining_tokens, prev_tokens=prompt_tokens + completion_tokens[:returned_tokens])
                 remaining_length = len(remaining_text)
 
                 # We want to avoid yielding any characters from
@@ -1086,29 +1075,19 @@ class Llama:
                     for token in remaining_tokens:
                         if token == self.token_bos():
                             continue
-                        token_end_position += len(
-                            self.detokenize(
-                                [token],
-                                prev_tokens=prompt_tokens
-                                + completion_tokens[:returned_tokens],
-                            )
-                        )
+                        token_end_position += len(self.detokenize([token], prev_tokens=prompt_tokens + completion_tokens[:returned_tokens]))
                         # Check if stop sequence is in the token
                         if token_end_position > (
                             remaining_length - first_stop_position
                         ):
                             break
-                        token_str = self.detokenize(
-                            [token],
-                            prev_tokens=prompt_tokens
-                            + completion_tokens[:returned_tokens],
-                        ).decode("utf-8", errors="ignore")
+                        token_str = self.detokenize([token], prev_tokens=prompt_tokens + completion_tokens[:returned_tokens]).decode(
+                            "utf-8", errors="ignore"
+                        )
                         text_offset = len(prompt) + len(
-                            self.detokenize(
-                                completion_tokens[:returned_tokens],
-                                prev_tokens=prompt_tokens
-                                + completion_tokens[:returned_tokens],
-                            ).decode("utf-8", errors="ignore")
+                            self.detokenize(completion_tokens[:returned_tokens], prev_tokens=prompt_tokens + completion_tokens[:returned_tokens]).decode(
+                                "utf-8", errors="ignore"
+                            )
                         )
                         token_offset = len(prompt_tokens) + returned_tokens
                         logits = self._scores[token_offset - 1, :]
@@ -1128,11 +1107,9 @@ class Llama:
                         top_logprob.update({token_str: current_logprobs[int(token)]})
                         logprobs_or_none = {
                             "tokens": [
-                                self.detokenize(
-                                    [token],
-                                    prev_tokens=prompt_tokens
-                                    + completion_tokens[:returned_tokens],
-                                ).decode("utf-8", errors="ignore")
+                                self.detokenize([token], prev_tokens=prompt_tokens + completion_tokens[:returned_tokens]).decode(
+                                    "utf-8", errors="ignore"
+                                )
                             ],
                             "text_offset": [text_offset],
                             "token_logprobs": [current_logprobs[int(token)]],
@@ -1146,11 +1123,9 @@ class Llama:
                             "model": model_name,
                             "choices": [
                                 {
-                                    "text": self.detokenize(
-                                        [token],
-                                        prev_tokens=prompt_tokens
-                                        + completion_tokens[:returned_tokens],
-                                    ).decode("utf-8", errors="ignore"),
+                                    "text": self.detokenize([token], prev_tokens=prompt_tokens + completion_tokens[:returned_tokens]).decode(
+                                        "utf-8", errors="ignore"
+                                    ),
                                     "index": 0,
                                     "logprobs": logprobs_or_none,
                                     "finish_reason": None,
@@ -1162,11 +1137,7 @@ class Llama:
                         decode_success = False
                         for i in range(1, len(remaining_tokens) + 1):
                             try:
-                                bs = self.detokenize(
-                                    remaining_tokens[:i],
-                                    prev_tokens=prompt_tokens
-                                    + completion_tokens[:returned_tokens],
-                                )
+                                bs = self.detokenize(remaining_tokens[:i], prev_tokens=prompt_tokens + completion_tokens[:returned_tokens])
                                 ts = bs.decode("utf-8")
                                 decode_success = True
                                 break
@@ -1216,10 +1187,7 @@ class Llama:
 
         if stream:
             remaining_tokens = completion_tokens[returned_tokens:]
-            all_text = self.detokenize(
-                remaining_tokens,
-                prev_tokens=prompt_tokens + completion_tokens[:returned_tokens],
-            )
+            all_text = self.detokenize(remaining_tokens, prev_tokens=prompt_tokens + completion_tokens[:returned_tokens])
             any_stop = [s for s in stop_sequences if s in all_text]
             if len(any_stop) > 0:
                 end = min(all_text.index(stop) for stop in any_stop)
@@ -1228,12 +1196,7 @@ class Llama:
 
             token_end_position = 0
             for token in remaining_tokens:
-                token_end_position += len(
-                    self.detokenize(
-                        [token],
-                        prev_tokens=prompt_tokens + completion_tokens[:returned_tokens],
-                    )
-                )
+                token_end_position += len(self.detokenize([token], prev_tokens=prompt_tokens + completion_tokens[:returned_tokens]))
 
                 logprobs_or_none: Optional[CompletionLogprobs] = None
                 if logprobs is not None:
@@ -1243,11 +1206,7 @@ class Llama:
                         "utf-8", errors="ignore"
                     )
                     text_offset = len(prompt) + len(
-                        self.detokenize(
-                            completion_tokens[:returned_tokens],
-                            prev_tokens=prompt_tokens
-                            + completion_tokens[:returned_tokens],
-                        )
+                        self.detokenize(completion_tokens[:returned_tokens], prev_tokens=prompt_tokens + completion_tokens[:returned_tokens])
                     )
                     token_offset = len(prompt_tokens) + returned_tokens - 1
                     logits = self._scores[token_offset, :]
@@ -1361,9 +1320,7 @@ class Llama:
                 all_tokens = completion_tokens
 
             all_token_strs = [
-                self.detokenize([token], prev_tokens=all_tokens[:i]).decode(
-                    "utf-8", errors="ignore"
-                )
+                self.detokenize([token], prev_tokens=all_tokens[:i]).decode("utf-8", errors="ignore")
                 for i, token in enumerate(all_tokens)
             ]
             all_logprobs = Llama.logits_to_logprobs(self._scores)[token_offset:]
@@ -1389,9 +1346,7 @@ class Llama:
                 )
                 token_logprobs.append(logprobs_token[int(token)])
                 top_logprob: Optional[Dict[str, float]] = {
-                    self.detokenize([i], prev_tokens=all_tokens[:idx]).decode(
-                        "utf-8", errors="ignore"
-                    ): logprob
+                    self.detokenize([i], prev_tokens=all_tokens[:idx]).decode("utf-8", errors="ignore"): logprob
                     for logprob, i in sorted_logprobs[:logprobs]
                 }
                 top_logprob.update({token_str: logprobs_token[int(token)]})
