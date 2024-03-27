@@ -175,8 +175,8 @@ LLAMA_FILE_MAGIC_GGSN = 0x6767736E
 
 # define LLAMA_SESSION_MAGIC   LLAMA_FILE_MAGIC_GGSN
 LLAMA_SESSION_MAGIC = LLAMA_FILE_MAGIC_GGSN
-# define LLAMA_SESSION_VERSION 4
-LLAMA_SESSION_VERSION = 4
+# define LLAMA_SESSION_VERSION 5
+LLAMA_SESSION_VERSION = 5
 
 
 # struct llama_model;
@@ -274,6 +274,7 @@ LLAMA_TOKEN_TYPE_BYTE = 6
 #     LLAMA_FTYPE_MOSTLY_IQ2_S         = 28, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_IQ2_M         = 29, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_IQ4_XS        = 30, // except 1d tensors
+#     LLAMA_FTYPE_MOSTLY_IQ1_M         = 31, // except 1d tensors
 
 #     LLAMA_FTYPE_GUESSED = 1024, // not specified in the model file
 # };
@@ -677,6 +678,7 @@ It might not exist for progress report where '.' is output repeatedly."""
 #     bool only_copy;                      // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
 #     bool pure;                           // quantize all tensors to the default type
 #     void * imatrix;                      // pointer to importance matrix data
+#     void * kv_overrides;                 // pointer to vector containing overrides
 # } llama_model_quantize_params;
 class llama_model_quantize_params(ctypes.Structure):
     """Parameters for llama_model_quantize
@@ -691,6 +693,7 @@ class llama_model_quantize_params(ctypes.Structure):
         only_copy (bool): only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
         pure (bool): quantize all tensors to the default type
         imatrix (ctypes.c_void_p): pointer to importance matrix data
+        kv_overrides (ctypes.c_void_p): pointer to vector containing overrides
     """
 
     _fields_ = [
@@ -703,6 +706,7 @@ class llama_model_quantize_params(ctypes.Structure):
         ("only_copy", ctypes.c_bool),
         ("pure", ctypes.c_bool),
         ("imatrix", ctypes.c_void_p),
+        ("kv_overrides", ctypes.c_void_p),
     ]
 
 
@@ -1838,9 +1842,9 @@ def llama_synchronize(ctx: llama_context_p, /):
 
 
 # // Token logits obtained from the last call to llama_decode()
-# // The logits for the last token are stored in the last row
-# // Logits for which llama_batch.logits[i] == 0 are undefined
-# // Rows: n_tokens provided with llama_batch
+# // The logits for which llama_batch.logits[i] != 0 are stored contiguously
+# // in the order they have appeared in the batch.
+# // Rows: number of tokens for which llama_batch.logits[i] != 0
 # // Cols: n_vocab
 # LLAMA_API float * llama_get_logits(struct llama_context * ctx);
 @ctypes_function(
@@ -1859,7 +1863,8 @@ def llama_get_logits(ctx: llama_context_p, /) -> CtypesArray[ctypes.c_float]:
 
 
 # // Logits for the ith token. Equivalent to:
-# // llama_get_logits(ctx) + i*n_vocab
+# // llama_get_logits(ctx) + ctx->output_ids[i]*n_vocab
+# // returns NULL for invalid ids.
 # LLAMA_API float * llama_get_logits_ith(struct llama_context * ctx, int32_t i);
 @ctypes_function(
     "llama_get_logits_ith",
@@ -1874,8 +1879,12 @@ def llama_get_logits_ith(
     ...
 
 
-# // Get all output token embeddings
-# // shape: [n_tokens*n_embd] (1-dimensional)
+# // Get all output token embeddings.
+# // when pooling_type == LLAMA_POOLING_TYPE_NONE or when using a generative model,
+# // the embeddings for which llama_batch.logits[i] != 0 are stored contiguously
+# // in the order they have appeared in the batch.
+# // shape: [n_outputs*n_embd]
+# // Otherwise, returns NULL.
 # LLAMA_API float * llama_get_embeddings(struct llama_context * ctx);
 @ctypes_function(
     "llama_get_embeddings", [llama_context_p_ctypes], ctypes.POINTER(ctypes.c_float)
@@ -1886,9 +1895,10 @@ def llama_get_embeddings(ctx: llama_context_p, /) -> CtypesArray[ctypes.c_float]
     ...
 
 
-# // Get the embeddings for the ith token
-# // llama_get_embeddings(ctx) + i*n_embd
+# // Get the embeddings for the ith token. Equivalent to:
+# // llama_get_embeddings(ctx) + ctx->output_ids[i]*n_embd
 # // shape: [n_embd] (1-dimensional)
+# // returns NULL for invalid ids.
 # LLAMA_API float * llama_get_embeddings_ith(struct llama_context * ctx, int32_t i);
 @ctypes_function(
     "llama_get_embeddings_ith",
