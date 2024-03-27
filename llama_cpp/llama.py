@@ -21,6 +21,7 @@ from typing import (
 )
 from collections import deque
 from pathlib import Path
+from tqdm import tqdm
 
 
 from llama_cpp.llama_types import List
@@ -515,7 +516,13 @@ class Llama:
         assert self._ctx.ctx is not None
         assert self._batch.batch is not None
         self._ctx.kv_cache_seq_rm(-1, self.n_tokens, -1)
-        for i in range(0, len(tokens), self.n_batch):
+
+        if len(tokens) > 1:
+            progress_bar = tqdm(range(0, len(tokens), self.n_batch), desc="Prompt evaluation", leave=False)
+        else:
+            progress_bar = range(0, len(tokens), self.n_batch)
+
+        for i in progress_bar:
             batch = tokens[i : min(len(tokens), i + self.n_batch)]
             n_past = self.n_tokens
             n_tokens = len(batch)
