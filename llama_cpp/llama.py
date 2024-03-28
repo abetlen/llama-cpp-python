@@ -107,6 +107,9 @@ class Llama:
         tokenizer: Optional[BaseLlamaTokenizer] = None,
         # Misc
         verbose: bool = True,
+        # KV cache quantization
+        type_k: str = 'f16',
+        type_v: str = 'f16',
         # Extra Params
         **kwargs,  # type: ignore
     ):
@@ -172,6 +175,8 @@ class Llama:
             draft_model: Optional draft model to use for speculative decoding.
             tokenizer: Optional tokenizer to override the default tokenizer from llama.cpp.
             verbose: Print verbose output to stderr.
+            type_k: KV cache data type for K (default: f16)
+            type_v: KV cache data type for V (default: f16)
 
         Raises:
             ValueError: If the model path does not exist.
@@ -298,7 +303,19 @@ class Llama:
         )  # Must be set to True for speculative decoding
         self.context_params.embeddings = embedding # TODO: Rename to embeddings
         self.context_params.offload_kqv = offload_kqv
-
+        #  KV cache quantization
+        kv_cache_type = {
+            'f32': 0,
+            'f16': 1,
+            'q8_0': 8,
+            'q4_0': 2,
+            'q4_1': 3,
+            'iq4_nl': 20,
+            'q5_0': 6,
+            'q5_1': 7
+        }
+        self.context_params.type_k = kv_cache_type[type_k]
+        self.context_params.type_v = kv_cache_type[type_v]
         # Sampling Params
         self.last_n_tokens_size = last_n_tokens_size
 
