@@ -209,6 +209,15 @@ class CreateChatCompletionRequest(BaseModel):
         default=None,
         description="The maximum number of tokens to generate. Defaults to inf",
     )
+    logprobs: Optional[bool] = Field(
+        default=True,
+        description="Whether to output the logprobs or not. Default is True"
+    )
+    top_logprobs: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="The number of logprobs to generate. If None, no logprobs are generated. logprobs need to set to True.",
+    )
     temperature: float = temperature_field
     top_p: float = top_p_field
     min_p: float = min_p_field
