@@ -1641,9 +1641,6 @@ class Llama:
         handler = self.chat_handler or llama_chat_format.get_chat_completion_handler(
             self.chat_format
         )
-        _logprobs = top_logprobs
-        if not logprobs:
-            _logprobs = 0
         return handler(
             llama=self,
             messages=messages,
@@ -1656,7 +1653,7 @@ class Llama:
             top_k=top_k,
             min_p=min_p,
             typical_p=typical_p,
-            logprobs=_logprobs,
+            logprobs=top_logprobs if logprobs else None,
             stream=stream,
             stop=stop,
             seed=seed,
