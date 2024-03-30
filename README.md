@@ -321,7 +321,7 @@ For OpenAI API v1 compatibility, you use the [`create_chat_completion_openai_v1`
 
 ### JSON and JSON Schema Mode
 
-To constrain chat responses to only valid JSON or a specific JSON Schema use the `response_format` argument in [`create_chat_completion`](http://localhost:8000/api-reference/#llama_cpp.Llama.create_chat_completion).
+To constrain chat responses to only valid JSON or a specific JSON Schema use the `response_format` argument in [`create_chat_completion`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.create_chat_completion).
 
 #### JSON Mode
 
@@ -529,7 +529,7 @@ llama = Llama(
 
 ### Embeddings
 
-To generate text embeddings use [`create_embedding`](http://localhost:8000/api-reference/#llama_cpp.Llama.create_embedding).
+To generate text embeddings use [`create_embedding`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.create_embedding).
 
 ```python
 import llama_cpp
