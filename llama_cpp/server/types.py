@@ -130,7 +130,6 @@ class CreateCompletionRequest(BaseModel):
     presence_penalty: Optional[float] = presence_penalty_field
     frequency_penalty: Optional[float] = frequency_penalty_field
     logit_bias: Optional[Dict[str, float]] = Field(None)
-    logprobs: Optional[int] = Field(None)
     seed: Optional[int] = Field(None)
 
     # ignored or currently unsupported
