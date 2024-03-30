@@ -209,7 +209,7 @@ class CreateChatCompletionRequest(BaseModel):
         description="The maximum number of tokens to generate. Defaults to inf",
     )
     logprobs: Optional[bool] = Field(
-        default=True,
+        default=False,
         description="Whether to output the logprobs or not. Default is True"
     )
     top_logprobs: Optional[int] = Field(
