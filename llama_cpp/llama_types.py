@@ -84,6 +84,7 @@ class ChatCompletionFunction(TypedDict):
 class ChatCompletionResponseChoice(TypedDict):
     index: int
     message: "ChatCompletionResponseMessage"
+    logprobs: Optional[CompletionLogprobs]
     finish_reason: Optional[str]
 
 

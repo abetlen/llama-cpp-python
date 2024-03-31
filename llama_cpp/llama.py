@@ -1670,6 +1670,7 @@ class Llama:
             top_k=top_k,
             min_p=min_p,
             typical_p=typical_p,
+            logprobs=top_logprobs if logprobs else None,
             stream=stream,
             stop=stop,
             seed=seed,
