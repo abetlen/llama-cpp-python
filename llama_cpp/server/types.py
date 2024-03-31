@@ -130,7 +130,6 @@ class CreateCompletionRequest(BaseModel):
     presence_penalty: Optional[float] = presence_penalty_field
     frequency_penalty: Optional[float] = frequency_penalty_field
     logit_bias: Optional[Dict[str, float]] = Field(None)
-    logprobs: Optional[int] = Field(None)
     seed: Optional[int] = Field(None)
 
     # ignored or currently unsupported
@@ -208,6 +207,15 @@ class CreateChatCompletionRequest(BaseModel):
     max_tokens: Optional[int] = Field(
         default=None,
         description="The maximum number of tokens to generate. Defaults to inf",
+    )
+    logprobs: Optional[bool] = Field(
+        default=False,
+        description="Whether to output the logprobs or not. Default is True"
+    )
+    top_logprobs: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="The number of logprobs to generate. If None, no logprobs are generated. logprobs need to set to True.",
     )
     temperature: float = temperature_field
     top_p: float = top_p_field

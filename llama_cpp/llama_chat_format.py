@@ -231,6 +231,7 @@ def _convert_text_completion_to_chat(
                     "role": "assistant",
                     "content": completion["choices"][0]["text"],
                 },
+                "logprobs": completion["choices"][0]["logprobs"],
                 "finish_reason": completion["choices"][0]["finish_reason"],
             }
         ],
@@ -254,6 +255,7 @@ def _convert_text_completion_chunks_to_chat(
                         "delta": {
                             "role": "assistant",
                         },
+                        "logprobs": None,
                         "finish_reason": None,
                     }
                 ],
@@ -273,6 +275,7 @@ def _convert_text_completion_chunks_to_chat(
                         if chunk["choices"][0]["finish_reason"] is None
                         else {}
                     ),
+                    "logprobs": chunk["choices"][0]["logprobs"],
                     "finish_reason": chunk["choices"][0]["finish_reason"],
                 }
             ],
@@ -487,6 +490,7 @@ def chat_formatter_to_chat_completion_handler(
         temperature: float = 0.2,
         top_p: float = 0.95,
         top_k: int = 40,
+        logprobs: int = 0,
         min_p: float = 0.05,
         typical_p: float = 1.0,
         stream: bool = False,
@@ -576,6 +580,7 @@ def chat_formatter_to_chat_completion_handler(
             top_k=top_k,
             min_p=min_p,
             typical_p=typical_p,
+            logprobs=logprobs,
             stream=stream,
             stop=stop,
             seed=seed,
