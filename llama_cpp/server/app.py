@@ -405,6 +405,18 @@ async def create_chat_completion(
                     }
                 },
             },
+            "logprobs": {
+                "summary": "Logprobs",
+                "value": {
+                    "model": "gpt-3.5-turbo",
+                    "messages": [
+                        {"role": "system", "content": "You are a helpful assistant."},
+                        {"role": "user", "content": "What is the capital of France?"},
+                    ],
+                    "logprobs": True,
+                    "top_logprobs": 10
+                },
+            },
         }
     ),
     llama_proxy: LlamaProxy = Depends(get_llama_proxy),
@@ -493,7 +505,7 @@ async def tokenize(
 ) -> TokenizeInputResponse:
     tokens = llama_proxy(body.model).tokenize(body.input.encode("utf-8"), special=True)
 
-    return {"tokens": tokens}
+    return TokenizeInputResponse(tokens=tokens)
 
 
 @router.post(
@@ -508,7 +520,7 @@ async def count_query_tokens(
 ) -> TokenizeInputCountResponse:
     tokens = llama_proxy(body.model).tokenize(body.input.encode("utf-8"), special=True)
 
-    return {"count": len(tokens)}
+    return TokenizeInputCountResponse(count=len(tokens))
 
 
 @router.post(
@@ -523,4 +535,4 @@ async def detokenize(
 ) -> DetokenizeInputResponse:
     text = llama_proxy(body.model).detokenize(body.tokens).decode("utf-8")
 
-    return {"text": text}
+    return DetokenizeInputResponse(text=text)

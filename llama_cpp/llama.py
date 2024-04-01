@@ -105,6 +105,9 @@ class Llama:
         draft_model: Optional[LlamaDraftModel] = None,
         # Tokenizer Override
         tokenizer: Optional[BaseLlamaTokenizer] = None,
+        # KV cache quantization
+        type_k: Optional[int] = None,
+        type_v: Optional[int] = None,
         # Misc
         verbose: bool = True,
         # Extra Params
@@ -172,6 +175,8 @@ class Llama:
             draft_model: Optional draft model to use for speculative decoding.
             tokenizer: Optional tokenizer to override the default tokenizer from llama.cpp.
             verbose: Print verbose output to stderr.
+            type_k: KV cache data type for K (default: f16)
+            type_v: KV cache data type for V (default: f16)
 
         Raises:
             ValueError: If the model path does not exist.
@@ -298,7 +303,11 @@ class Llama:
         )  # Must be set to True for speculative decoding
         self.context_params.embeddings = embedding # TODO: Rename to embeddings
         self.context_params.offload_kqv = offload_kqv
-
+        #  KV cache quantization
+        if type_k is not None:
+            self.context_params.type_k = type_k
+        if type_v is not None:
+            self.context_params.type_v = type_v
         # Sampling Params
         self.last_n_tokens_size = last_n_tokens_size
 
@@ -1653,6 +1662,7 @@ class Llama:
             top_k=top_k,
             min_p=min_p,
             typical_p=typical_p,
+            logprobs=top_logprobs if logprobs else None,
             stream=stream,
             stop=stop,
             seed=seed,
@@ -1723,6 +1733,7 @@ class Llama:
             n_threads=self.context_params.n_threads,
             n_threads_batch=self.context_params.n_threads_batch,
             rope_scaling_type=self.context_params.rope_scaling_type,
+            pooling_type=self.context_params.pooling_type,
             rope_freq_base=self.context_params.rope_freq_base,
             rope_freq_scale=self.context_params.rope_freq_scale,
             yarn_ext_factor=self.context_params.yarn_ext_factor,
@@ -1732,6 +1743,7 @@ class Llama:
             yarn_orig_ctx=self.context_params.yarn_orig_ctx,
             logits_all=self.context_params.logits_all,
             embedding=self.context_params.embeddings,
+            offload_kqv=self.context_params.offload_kqv,
             # Sampling Params
             last_n_tokens_size=self.last_n_tokens_size,
             # LoRA Params
@@ -1743,51 +1755,17 @@ class Llama:
             # Chat Format Params
             chat_format=self.chat_format,
             chat_handler=self.chat_handler,
+            # Speculative Decidng
+            draft_model=self.draft_model,
+            # KV cache quantization
+            type_k=self.context_params.type_k,
+            type_v=self.context_params.type_v,
             # Misc
             verbose=self.verbose,
         )
 
     def __setstate__(self, state):
-        self.__init__(
-            model_path=state["model_path"],
-            # Model Params
-            n_gpu_layers=state["n_gpu_layers"],
-            split_mode=state["split_mode"],
-            main_gpu=state["main_gpu"],
-            tensor_split=state["tensor_split"],
-            vocab_only=state["vocab_only"],
-            use_mmap=state["use_mmap"],
-            use_mlock=state["use_mlock"],
-            kv_overrides=state["kv_overrides"],
-            # Context Params
-            seed=state["seed"],
-            n_ctx=state["n_ctx"],
-            n_batch=state["n_batch"],
-            n_threads=state["n_threads"],
-            n_threads_batch=state["n_threads_batch"],
-            rope_freq_base=state["rope_freq_base"],
-            rope_freq_scale=state["rope_freq_scale"],
-            rope_scaling_type=state["rope_scaling_type"],
-            yarn_ext_factor=state["yarn_ext_factor"],
-            yarn_attn_factor=state["yarn_attn_factor"],
-            yarn_beta_fast=state["yarn_beta_fast"],
-            yarn_beta_slow=state["yarn_beta_slow"],
-            yarn_orig_ctx=state["yarn_orig_ctx"],
-            logits_all=state["logits_all"],
-            embedding=state["embedding"],
-            # Sampling Params
-            last_n_tokens_size=state["last_n_tokens_size"],
-            # LoRA Params
-            lora_base=state["lora_base"],
-            lora_path=state["lora_path"],
-            # Backend Params
-            numa=state["numa"],
-            # Chat Format Params
-            chat_format=state["chat_format"],
-            chat_handler=state["chat_handler"],
-            # Misc
-            verbose=state["verbose"],
-        )
+        self.__init__(**state)
 
     def save_state(self) -> LlamaState:
         assert self._ctx.ctx is not None

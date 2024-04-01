@@ -175,6 +175,9 @@ class LlamaProxy:
             chat_handler=chat_handler,
             # Speculative Decoding
             draft_model=draft_model,
+            # KV Cache Quantization
+            type_k=settings.type_k,
+            type_v=settings.type_v,
             # Tokenizer
             tokenizer=tokenizer,
             # Misc

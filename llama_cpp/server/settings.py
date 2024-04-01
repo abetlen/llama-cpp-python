@@ -159,6 +159,15 @@ class ModelSettings(BaseSettings):
         default=10,
         description="Number of tokens to predict using the draft model.",
     )
+    # KV Cache Quantization
+    type_k: Optional[int] = Field(
+        default=None,
+        description="Type of the key cache quantization.",
+    )
+    type_v: Optional[int] = Field(
+        default=None,
+        description="Type of the value cache quantization.",
+    )
     # Misc
     verbose: bool = Field(
         default=True, description="Whether to print debug information."

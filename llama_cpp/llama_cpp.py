@@ -141,6 +141,70 @@ def byref(obj: CtypesCData, offset: Optional[int] = None) -> CtypesRef[CtypesCDa
 
 byref = ctypes.byref  # type: ignore
 
+# from ggml.h
+# // NOTE: always add types at the end of the enum to keep backward compatibility
+# enum ggml_type {
+#     GGML_TYPE_F32     = 0,
+#     GGML_TYPE_F16     = 1,
+#     GGML_TYPE_Q4_0    = 2,
+#     GGML_TYPE_Q4_1    = 3,
+#     // GGML_TYPE_Q4_2 = 4, support has been removed
+#     // GGML_TYPE_Q4_3 = 5, support has been removed
+#     GGML_TYPE_Q5_0    = 6,
+#     GGML_TYPE_Q5_1    = 7,
+#     GGML_TYPE_Q8_0    = 8,
+#     GGML_TYPE_Q8_1    = 9,
+#     GGML_TYPE_Q2_K    = 10,
+#     GGML_TYPE_Q3_K    = 11,
+#     GGML_TYPE_Q4_K    = 12,
+#     GGML_TYPE_Q5_K    = 13,
+#     GGML_TYPE_Q6_K    = 14,
+#     GGML_TYPE_Q8_K    = 15,
+#     GGML_TYPE_IQ2_XXS = 16,
+#     GGML_TYPE_IQ2_XS  = 17,
+#     GGML_TYPE_IQ3_XXS = 18,
+#     GGML_TYPE_IQ1_S   = 19,
+#     GGML_TYPE_IQ4_NL  = 20,
+#     GGML_TYPE_IQ3_S   = 21,
+#     GGML_TYPE_IQ2_S   = 22,
+#     GGML_TYPE_IQ4_XS  = 23,
+#     GGML_TYPE_I8      = 24,
+#     GGML_TYPE_I16     = 25,
+#     GGML_TYPE_I32     = 26,
+#     GGML_TYPE_I64     = 27,
+#     GGML_TYPE_F64     = 28,
+#     GGML_TYPE_IQ1_M   = 29,
+#     GGML_TYPE_COUNT,
+# };
+GGML_TYPE_F32 = 0
+GGML_TYPE_F16 = 1
+GGML_TYPE_Q4_0 = 2
+GGML_TYPE_Q4_1 = 3
+GGML_TYPE_Q5_0 = 6
+GGML_TYPE_Q5_1 = 7
+GGML_TYPE_Q8_0 = 8
+GGML_TYPE_Q8_1 = 9
+GGML_TYPE_Q2_K = 10
+GGML_TYPE_Q3_K = 11
+GGML_TYPE_Q4_K = 12
+GGML_TYPE_Q5_K = 13
+GGML_TYPE_Q6_K = 14
+GGML_TYPE_Q8_K = 15
+GGML_TYPE_IQ2_XXS = 16
+GGML_TYPE_IQ2_XS = 17
+GGML_TYPE_IQ3_XXS = 18
+GGML_TYPE_IQ1_S = 19
+GGML_TYPE_IQ4_NL = 20
+GGML_TYPE_IQ3_S = 21
+GGML_TYPE_IQ2_S = 22
+GGML_TYPE_IQ4_XS = 23
+GGML_TYPE_I8 = 24
+GGML_TYPE_I16 = 25
+GGML_TYPE_I32 = 26
+GGML_TYPE_I64 = 27
+GGML_TYPE_F64 = 28
+GGML_TYPE_IQ1_M = 29
+GGML_TYPE_COUNT = 30
 
 # from ggml-backend.h
 # typedef bool (*ggml_backend_sched_eval_callback)(struct ggml_tensor * t, bool ask, void * user_data);
@@ -175,8 +239,8 @@ LLAMA_FILE_MAGIC_GGSN = 0x6767736E
 
 # define LLAMA_SESSION_MAGIC   LLAMA_FILE_MAGIC_GGSN
 LLAMA_SESSION_MAGIC = LLAMA_FILE_MAGIC_GGSN
-# define LLAMA_SESSION_VERSION 4
-LLAMA_SESSION_VERSION = 4
+# define LLAMA_SESSION_VERSION 5
+LLAMA_SESSION_VERSION = 5
 
 
 # struct llama_model;
@@ -199,14 +263,18 @@ llama_seq_id = ctypes.c_int32
 
 # enum llama_vocab_type {
 #     LLAMA_VOCAB_TYPE_NONE = 0, // For models without vocab
-#     LLAMA_VOCAB_TYPE_SPM  = 1, // SentencePiece
-#     LLAMA_VOCAB_TYPE_BPE  = 2, // Byte Pair Encoding
-#     LLAMA_VOCAB_TYPE_WPM  = 3, // WordPiece
+#     LLAMA_VOCAB_TYPE_SPM  = 1, // LLaMA tokenizer based on byte-level BPE with byte fallback
+#     LLAMA_VOCAB_TYPE_BPE  = 2, // GPT-2 tokenizer based on byte-level BPE
+#     LLAMA_VOCAB_TYPE_WPM  = 3, // BERT tokenizer based on WordPiece
 # };
 LLAMA_VOCAB_TYPE_NONE = 0
+"""For models without vocab"""
 LLAMA_VOCAB_TYPE_SPM = 1
+"""LLaMA tokenizer based on byte-level BPE with byte fallback"""
 LLAMA_VOCAB_TYPE_BPE = 2
+"""GPT-2 tokenizer based on byte-level BPE"""
 LLAMA_VOCAB_TYPE_WPM = 3
+"""BERT tokenizer based on WordPiece"""
 
 
 # // note: these values should be synchronized with ggml_rope
@@ -274,6 +342,7 @@ LLAMA_TOKEN_TYPE_BYTE = 6
 #     LLAMA_FTYPE_MOSTLY_IQ2_S         = 28, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_IQ2_M         = 29, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_IQ4_XS        = 30, // except 1d tensors
+#     LLAMA_FTYPE_MOSTLY_IQ1_M         = 31, // except 1d tensors
 
 #     LLAMA_FTYPE_GUESSED = 1024, // not specified in the model file
 # };
@@ -668,13 +737,16 @@ It might not exist for progress report where '.' is output repeatedly."""
 
 # // model quantization parameters
 # typedef struct llama_model_quantize_params {
-#     int32_t nthread;             // number of threads to use for quantizing, if <=0 will use std::thread::hardware_concurrency()
-#     enum llama_ftype ftype;      // quantize to this llama_ftype
-#     bool allow_requantize;       // allow quantizing non-f32/f16 tensors
-#     bool quantize_output_tensor; // quantize output.weight
-#     bool only_copy;              // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
-#     bool pure;                   // quantize all tensors to the default type
-#     void * imatrix;              // pointer to importance matrix data
+#     int32_t nthread;                     // number of threads to use for quantizing, if <=0 will use std::thread::hardware_concurrency()
+#     enum llama_ftype ftype;              // quantize to this llama_ftype
+#     enum ggml_type output_tensor_type;   // output tensor type
+#     enum ggml_type token_embedding_type; // itoken embeddings tensor type
+#     bool allow_requantize;               // allow quantizing non-f32/f16 tensors
+#     bool quantize_output_tensor;         // quantize output.weight
+#     bool only_copy;                      // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
+#     bool pure;                           // quantize all tensors to the default type
+#     void * imatrix;                      // pointer to importance matrix data
+#     void * kv_overrides;                 // pointer to vector containing overrides
 # } llama_model_quantize_params;
 class llama_model_quantize_params(ctypes.Structure):
     """Parameters for llama_model_quantize
@@ -682,21 +754,27 @@ class llama_model_quantize_params(ctypes.Structure):
     Attributes:
         nthread (int): number of threads to use for quantizing, if <=0 will use std::thread::hardware_concurrency()
         ftype (int): quantize to this llama_ftype
+        output_tensor_type (int): output tensor type
+        token_embedding_type (int): itoken embeddings tensor type
         allow_requantize (bool): allow quantizing non-f32/f16 tensors
         quantize_output_tensor (bool): quantize output.weight
         only_copy (bool): only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
         pure (bool): quantize all tensors to the default type
-        imatrix (ctypes.ctypes.c_void_p): pointer to importance matrix data
+        imatrix (ctypes.c_void_p): pointer to importance matrix data
+        kv_overrides (ctypes.c_void_p): pointer to vector containing overrides
     """
 
     _fields_ = [
         ("nthread", ctypes.c_int32),
         ("ftype", ctypes.c_int),
+        ("output_tensor_type", ctypes.c_int),
+        ("token_embedding_type", ctypes.c_int),
         ("allow_requantize", ctypes.c_bool),
         ("quantize_output_tensor", ctypes.c_bool),
         ("only_copy", ctypes.c_bool),
         ("pure", ctypes.c_bool),
         ("imatrix", ctypes.c_void_p),
+        ("kv_overrides", ctypes.c_void_p),
     ]
 
 
@@ -1832,9 +1910,9 @@ def llama_synchronize(ctx: llama_context_p, /):
 
 
 # // Token logits obtained from the last call to llama_decode()
-# // The logits for the last token are stored in the last row
-# // Logits for which llama_batch.logits[i] == 0 are undefined
-# // Rows: n_tokens provided with llama_batch
+# // The logits for which llama_batch.logits[i] != 0 are stored contiguously
+# // in the order they have appeared in the batch.
+# // Rows: number of tokens for which llama_batch.logits[i] != 0
 # // Cols: n_vocab
 # LLAMA_API float * llama_get_logits(struct llama_context * ctx);
 @ctypes_function(
@@ -1853,7 +1931,8 @@ def llama_get_logits(ctx: llama_context_p, /) -> CtypesArray[ctypes.c_float]:
 
 
 # // Logits for the ith token. Equivalent to:
-# // llama_get_logits(ctx) + i*n_vocab
+# // llama_get_logits(ctx) + ctx->output_ids[i]*n_vocab
+# // returns NULL for invalid ids.
 # LLAMA_API float * llama_get_logits_ith(struct llama_context * ctx, int32_t i);
 @ctypes_function(
     "llama_get_logits_ith",
@@ -1868,8 +1947,12 @@ def llama_get_logits_ith(
     ...
 
 
-# // Get all output token embeddings
-# // shape: [n_tokens*n_embd] (1-dimensional)
+# // Get all output token embeddings.
+# // when pooling_type == LLAMA_POOLING_TYPE_NONE or when using a generative model,
+# // the embeddings for which llama_batch.logits[i] != 0 are stored contiguously
+# // in the order they have appeared in the batch.
+# // shape: [n_outputs*n_embd]
+# // Otherwise, returns NULL.
 # LLAMA_API float * llama_get_embeddings(struct llama_context * ctx);
 @ctypes_function(
     "llama_get_embeddings", [llama_context_p_ctypes], ctypes.POINTER(ctypes.c_float)
@@ -1880,9 +1963,10 @@ def llama_get_embeddings(ctx: llama_context_p, /) -> CtypesArray[ctypes.c_float]
     ...
 
 
-# // Get the embeddings for the ith token
-# // llama_get_embeddings(ctx) + i*n_embd
+# // Get the embeddings for the ith token. Equivalent to:
+# // llama_get_embeddings(ctx) + ctx->output_ids[i]*n_embd
 # // shape: [n_embd] (1-dimensional)
+# // returns NULL for invalid ids.
 # LLAMA_API float * llama_get_embeddings_ith(struct llama_context * ctx, int32_t i);
 @ctypes_function(
     "llama_get_embeddings_ith",
@@ -2741,6 +2825,48 @@ def llama_beam_search(
     n_predict: Union[ctypes.c_int, int],
     /,
 ): ...
+
+
+# /// @details Build a split GGUF final path for this chunk.
+# ///          llama_split_path(split_path, sizeof(split_path), "/models/ggml-model-q4_0", 2, 4) => split_path = "/models/ggml-model-q4_0-00002-of-00004.gguf"
+# //  Returns the split_path length.
+# LLAMA_API int llama_split_path(char * split_path, size_t maxlen, const char * path_prefix, int split_no, int split_count);
+@ctypes_function(
+    "llama_split_path",
+    [ctypes.c_char_p, ctypes.c_size_t, ctypes.c_char_p, ctypes.c_int, ctypes.c_int],
+    ctypes.c_int,
+)
+def llama_split_path(
+    split_path: bytes,
+    maxlen: Union[ctypes.c_size_t, int],
+    path_prefix: bytes,
+    split_no: Union[ctypes.c_int, int],
+    split_count: Union[ctypes.c_int, int],
+    /,
+) -> int:
+    """Build a split GGUF final path for this chunk."""
+    ...
+
+
+# /// @details Extract the path prefix from the split_path if and only if the split_no and split_count match.
+# ///          llama_split_prefix(split_prefix, 64, "/models/ggml-model-q4_0-00002-of-00004.gguf", 2, 4) => split_prefix = "/models/ggml-model-q4_0"
+# //  Returns the split_prefix length.
+# LLAMA_API int llama_split_prefix(char * split_prefix, size_t maxlen, const char * split_path, int split_no, int split_count);
+@ctypes_function(
+    "llama_split_prefix",
+    [ctypes.c_char_p, ctypes.c_size_t, ctypes.c_char_p, ctypes.c_int, ctypes.c_int],
+    ctypes.c_int,
+)
+def llama_split_prefix(
+    split_prefix: bytes,
+    maxlen: Union[ctypes.c_size_t, int],
+    split_path: bytes,
+    split_no: Union[ctypes.c_int, int],
+    split_count: Union[ctypes.c_int, int],
+    /,
+) -> int:
+    """Extract the path prefix from the split_path if and only if the split_no and split_count match."""
+    ...
 
 
 # Performance information

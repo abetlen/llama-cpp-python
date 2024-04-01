@@ -130,7 +130,6 @@ class CreateCompletionRequest(BaseModel):
     presence_penalty: Optional[float] = presence_penalty_field
     frequency_penalty: Optional[float] = frequency_penalty_field
     logit_bias: Optional[Dict[str, float]] = Field(None)
-    logprobs: Optional[int] = Field(None)
     seed: Optional[int] = Field(None)
 
     # ignored or currently unsupported
@@ -209,6 +208,15 @@ class CreateChatCompletionRequest(BaseModel):
         default=None,
         description="The maximum number of tokens to generate. Defaults to inf",
     )
+    logprobs: Optional[bool] = Field(
+        default=False,
+        description="Whether to output the logprobs or not. Default is True"
+    )
+    top_logprobs: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="The number of logprobs to generate. If None, no logprobs are generated. logprobs need to set to True.",
+    )
     temperature: float = temperature_field
     top_p: float = top_p_field
     min_p: float = min_p_field
@@ -268,7 +276,7 @@ class ModelList(TypedDict):
 
 class TokenizeInputRequest(BaseModel):
     model: Optional[str] = model_field
-    input: Optional[str] = Field(description="The input to tokenize.")
+    input: str = Field(description="The input to tokenize.")
 
     model_config = {
         "json_schema_extra": {"examples": [{"input": "How many tokens in this query?"}]}
