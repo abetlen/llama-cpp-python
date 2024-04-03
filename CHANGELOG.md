@@ -7,9 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.58]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@ba0c7c70ab5b15f1f2be7fb0dfbe0366dda30d6c
+- feat: add support for KV cache quantization options by @Limour-dev in #1307
+- feat: Add logprobs support to chat completions by @windspirit95 in #1311
+- fix: set LLAMA_METAL_EMBED_LIBRARY=on on MacOS arm64 by @bretello in #1289
+- feat: Add tools/functions variables to Jinja2ChatFormatter, add function response formatting for all simple chat formats by @CISC in #1273
+- fix: Changed local API doc references to hosted by by @lawfordp2017 in #1317
+
+## [0.2.57]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@ac9ee6a4ad740bc1ee484ede43e9f92b5af244c1
+- fix: set default embedding pooling type to unspecified by @abetlen in 4084aabe867b8ec2aba1b22659e59c9318b0d1f3
+- fix: Fix and optimize functionary chat handler by @jeffrey-fong in #1282
+- fix: json mode for basic chat formats by @abetlen in 20e6815252d0efd9f015f7adbf108faaf36e3f3c
+
+## [0.2.56]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@c2101a2e909ac7c08976d414e64e96c90ee5fa9e
+- feat(server): Add endpoints for tokenize, detokenize and count tokens by @felipelo in #1136
+- feat: Switch embed to llama_get_embeddings_seq by @iamlemec in #1263
+- fix: Fixed json strings grammar by blacklisting character control set by @ExtReMLapin in d02a9cf16ff88ad011e2eb1ce29f4d9400f13cd1
+- fix: Check for existence of clip model path by @kejcao in #1264
+
 ## [0.2.55]
 
-- feat: Update llama.cpp to ggerganov/9731134296af3a6839cd682e51d9c2109a871de5
+- feat: Update llama.cpp to ggerganov/llama.cpp@9731134296af3a6839cd682e51d9c2109a871de5
 - docs: fix small typo in README: 'model know how' -> 'model knows how' by @boegel in #1244
 
 ## [0.2.54]
