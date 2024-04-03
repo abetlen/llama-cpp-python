@@ -34,23 +34,10 @@ jobs:
         uses: actions/configure-pages@v4
       - name: Build
         run: |
-          mkdir index
-          mkdir index/whl
-          mkdir index/whl/cpu
-          mkdir index/whl/cpu/llama-cpp-python
-
-          echo "<!DOCTYPE html>" > index.html
-          echo "<html>" >> index.html
-          echo "  <head></head>" >> index.html
-          echo "  <body>" >> index.html
-          echo "    <a href=\"llama-cpp-python/\">llama-cpp-python</a>" >> index.html
-          echo "    <br>"
-          echo "  </body>" >> index.html
-          echo "</html>" >> index.html
-
-          cp index.html index/whl/cpu/index.html
-
-          ./scripts/release-to-pypi-index.sh > index/whl/cpu/llama-cpp-python/index.html
+          ./scripts/releases-to-pep-503.sh index/whl/cpu '^[v]?[0-9]+\.[0-9]+\.[0-9]+$'
+          ./scripts/releases-to-pep-503.sh index/whl/cu121 '^[v]?[0-9]+\.[0-9]+\.[0-9]+-cu121$'
+          ./scripts/releases-to-pep-503.sh index/whl/cu122 '^[v]?[0-9]+\.[0-9]+\.[0-9]+-cu122$'
+          ./scripts/releases-to-pep-503.sh index/whl/metal '^[v]?[0-9]+\.[0-9]+\.[0-9]+-metal$'
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
