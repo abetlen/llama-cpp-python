@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.59]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@ba0c7c70ab5b15f1f2be7fb0dfbe0366dda30d6c
+- feat: Binary wheels for CPU, CUDA (12.1 - 12.3), Metal by @abetlen, @jllllll, and @oobabooga in #1247
+- fix: segfault when logits_all=False by @abetlen in 8649d7671bd1a7c0d9cc6a5ad91c6ca286512ab3
+- fix: last tokens passing to sample_repetition_penalties function by @ymikhailov in #1295
+
 ## [0.2.58]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@ba0c7c70ab5b15f1f2be7fb0dfbe0366dda30d6c
