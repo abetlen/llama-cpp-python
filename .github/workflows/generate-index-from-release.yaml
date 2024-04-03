@@ -1,4 +1,4 @@
-name: Deploy static content to Pages
+name: Wheels Index
 
 on:
   # Trigger on any new release
