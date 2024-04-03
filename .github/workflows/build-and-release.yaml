@@ -11,7 +11,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macOS-latest]
+        os: [ubuntu-20.04, windows-2019, macos-11]
 
     steps:
       - uses: actions/checkout@v3
@@ -23,19 +23,19 @@ jobs:
         with:
           python-version: "3.8"
 
-      - name: Install cibuildwheel
-        run: python -m pip install cibuildwheel==2.12.1
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e .[all]
 
       - name: Build wheels
-        run: python -m cibuildwheel --output-dir wheelhouse
+        uses: pypa/cibuildwheel@v2.16.5
         env:
           # disable repair
           CIBW_REPAIR_WHEEL_COMMAND: ""
+        with:
+          package-dir: .
+          output-dir: wheelhouse
 
       - uses: actions/upload-artifact@v3
         with:
