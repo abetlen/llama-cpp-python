@@ -109,9 +109,9 @@ CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS" pip install llama-cpp-
 </details>
 
 <details>
-<summary>cuBLAS (CUDA)</summary>
+<summary>CUDA</summary>
 
-To install with cuBLAS, set the `LLAMA_CUDA=on` environment variable before installing:
+To install with CUDA support, set the `LLAMA_CUDA=on` environment variable before installing:
 
 ```bash
 CMAKE_ARGS="-DLLAMA_CUDA=on" pip install llama-cpp-python
