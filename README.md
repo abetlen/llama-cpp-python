@@ -102,10 +102,10 @@ CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS" pip install llama-cpp-
 <details>
 <summary>cuBLAS (CUDA)</summary>
 
-To install with cuBLAS, set the `LLAMA_CUBLAS=on` environment variable before installing:
+To install with cuBLAS, set the `LLAMA_CUDA=on` environment variable before installing:
 
 ```bash
-CMAKE_ARGS="-DLLAMA_CUBLAS=on" pip install llama-cpp-python
+CMAKE_ARGS="-DLLAMA_CUDA=on" pip install llama-cpp-python
 ```
 
 </details>
@@ -569,7 +569,7 @@ python3 -m llama_cpp.server --model models/7B/llama-model.gguf
 Similar to Hardware Acceleration section above, you can also install with GPU (cuBLAS) support like this:
 
 ```bash
-CMAKE_ARGS="-DLLAMA_CUBLAS=on" FORCE_CMAKE=1 pip install 'llama-cpp-python[server]'
+CMAKE_ARGS="-DLLAMA_CUDA=on" FORCE_CMAKE=1 pip install 'llama-cpp-python[server]'
 python3 -m llama_cpp.server --model models/7B/llama-model.gguf --n_gpu_layers 35
 ```
 
