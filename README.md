@@ -44,6 +44,15 @@ This will also build `llama.cpp` from source and install it alongside this pytho
 
 If this fails, add `--verbose` to the `pip install` see the full cmake build log.
 
+**Pre-built Wheel (New)**
+
+It is also possible to install a pre-built wheel with basic CPU support.
+
+```bash
+pip install llama-cpp-python \
+  --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+```
+
 ### Installation Configuration
 
 `llama.cpp` supports a number of hardware acceleration backends to speed up inference as well as backend specific options. See the [llama.cpp README](https://github.com/ggerganov/llama.cpp#build) for a full list.
@@ -108,6 +117,30 @@ To install with cuBLAS, set the `LLAMA_CUDA=on` environment variable before inst
 CMAKE_ARGS="-DLLAMA_CUDA=on" pip install llama-cpp-python
 ```
 
+**Pre-built Wheel (New)**
+
+It is also possible to install a pre-built wheel with CUDA support. As long as your system meets some requirements:
+
+- CUDA Version is 12.1, 12.2 or 12.3
+- Python Version is 3.10, 3.11 or 3.12
+
+```bash
+pip install llama-cpp-python \
+  --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/<cuda-version>
+```
+
+Where `<cuda-version>` is one of the following:
+- `cu121`: CUDA 12.1
+- `cu122`: CUDA 12.2
+- `cu123`: CUDA 12.3
+
+For example, to install the CUDA 12.1 wheel:
+
+```bash
+pip install llama-cpp-python \
+  --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121
+```
+
 </details>
 
 <details>
@@ -117,6 +150,18 @@ To install with Metal (MPS), set the `LLAMA_METAL=on` environment variable befor
 
 ```bash
 CMAKE_ARGS="-DLLAMA_METAL=on" pip install llama-cpp-python
+```
+
+**Pre-built Wheel (New)**
+
+It is also possible to install a pre-built wheel with Metal support. As long as your system meets some requirements:
+
+- MacOS Version is 11.0 or later
+- Python Version is 3.10, 3.11 or 3.12
+
+```bash
+pip install llama-cpp-python \
+  --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/metal
 ```
 
 </details>
