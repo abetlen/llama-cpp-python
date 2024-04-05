@@ -458,12 +458,12 @@ The high-level API supports OpenAI compatible function and tool calling. This is
           }
         }
       }],
-      tool_choice=[{
+      tool_choice={
         "type": "function",
         "function": {
           "name": "UserDetail"
         }
-      }]
+      }
 )
 ```
 
