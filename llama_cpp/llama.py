@@ -925,7 +925,7 @@ class Llama:
         prompt: Union[str, List[int]],
         suffix: Optional[str] = None,
         max_tokens: Optional[int] = 16,
-        min_tokens: Optional[int] = 1,
+        min_tokens: int = 0,
         temperature: float = 0.8,
         top_p: float = 0.95,
         min_p: float = 0.05,
@@ -1052,12 +1052,11 @@ class Llama:
             else (self._n_ctx - len(prompt_tokens))
         )
 
-        if min_tokens is not None:
+        if min_tokens > 0:
             def min_length_logits_processor(
                 input_ids: npt.NDArray[np.intc],
                 scores: npt.NDArray[np.single],
             ) -> npt.NDArray[np.single]:
-                print(f"{input_ids=}, {len(prompt_tokens)=}, {len(input_ids)=}, {self._token_eos=}")
                 # Does it make sense to copy the whole array or can we just overwrite the original one?
                 new_scores = np.copy(scores)
                 if len(input_ids) - len(prompt_tokens) < min_tokens:
@@ -1069,8 +1068,6 @@ class Llama:
                 logits_processor = _min_length_logits_processor
             else:
                 logits_processor = logits_processor.extend(_min_length_logits_processor)
-        else:
-            assert False
 
         if stop != []:
             stop_sequences = [s.encode("utf-8") for s in stop]
@@ -1490,7 +1487,7 @@ class Llama:
         prompt: Union[str, List[int]],
         suffix: Optional[str] = None,
         max_tokens: Optional[int] = 16,
-        min_tokens: Optional[int] = 1,
+        min_tokens: int = 0,
         temperature: float = 0.8,
         top_p: float = 0.95,
         min_p: float = 0.05,
@@ -1520,7 +1517,7 @@ class Llama:
             prompt: The prompt to generate text from.
             suffix: A suffix to append to the generated text. If None, no suffix is appended.
             max_tokens: The maximum number of tokens to generate. If max_tokens <= 0 or None, the maximum number of tokens to generate is unlimited and depends on n_ctx.
-            min_tokens: The minimum number of tokens to generate.
+            min_tokens: The minimum number of tokens to generate. It may return fewer tokens if another condition is met (e.g. max_tokens, stop).
             temperature: The temperature to use for sampling.
             top_p: The top-p value to use for nucleus sampling. Nucleus sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
             min_p: The min-p value to use for minimum p sampling. Minimum P sampling as described in https://github.com/ggerganov/llama.cpp/pull/3841
@@ -1590,7 +1587,7 @@ class Llama:
         prompt: str,
         suffix: Optional[str] = None,
         max_tokens: Optional[int] = 16,
-        min_tokens: Optional[int] = 1,
+        min_tokens: int = 0,
         temperature: float = 0.8,
         top_p: float = 0.95,
         min_p: float = 0.05,
@@ -1620,7 +1617,7 @@ class Llama:
             prompt: The prompt to generate text from.
             suffix: A suffix to append to the generated text. If None, no suffix is appended.
             max_tokens: The maximum number of tokens to generate. If max_tokens <= 0 or None, the maximum number of tokens to generate is unlimited and depends on n_ctx.
-            min_tokens: The minimum number of tokens to generate.
+            min_tokens: The minimum number of tokens to generate. It may return fewer tokens if another condition is met (e.g. max_tokens, stop).
             temperature: The temperature to use for sampling.
             top_p: The top-p value to use for nucleus sampling. Nucleus sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
             min_p: The min-p value to use for minimum p sampling. Minimum P sampling as described in https://github.com/ggerganov/llama.cpp/pull/3841
@@ -1697,7 +1694,7 @@ class Llama:
         seed: Optional[int] = None,
         response_format: Optional[ChatCompletionRequestResponseFormat] = None,
         max_tokens: Optional[int] = None,
-        min_tokens: Optional[int] = 1,
+        min_tokens: int = 0,
         presence_penalty: float = 0.0,
         frequency_penalty: float = 0.0,
         repeat_penalty: float = 1.1,
@@ -1732,7 +1729,7 @@ class Llama:
             seed: The seed to use for sampling.
             response_format: The response format to use for the chat completion. Use { "type": "json_object" } to contstrain output to only valid json.
             max_tokens: The maximum number of tokens to generate. If max_tokens <= 0 or None, the maximum number of tokens to generate is unlimited and depends on n_ctx.
-            min_tokens: The minimum number of tokens to generate.
+            min_tokens: The minimum number of tokens to generate. It may return fewer tokens if another condition is met (e.g. max_tokens, stop).
             presence_penalty: The penalty to apply to tokens based on their presence in the prompt.
             frequency_penalty: The penalty to apply to tokens based on their frequency in the prompt.
             repeat_penalty: The penalty to apply to repeated tokens.
