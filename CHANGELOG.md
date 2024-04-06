@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.60]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@75cd4c77292034ecec587ecb401366f57338f7c0
+- fix: Always embed metal library by @abetlen in b3bfea6dbfb6ed9ce18f9a2723e0a9e4bd1da7ad
+- fix: missing logprobs in response, incorrect response type for functionary by @abetlen in 1ae3abbcc3af7f4a25a3ffc40b246f18039565e8
+- fix(docs): incorrect tool_choice example by @CISC in #1330
+
 ## [0.2.59]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@ba0c7c70ab5b15f1f2be7fb0dfbe0366dda30d6c
