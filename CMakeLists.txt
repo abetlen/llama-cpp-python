@@ -18,7 +18,7 @@ if (LLAMA_BUILD)
         set(LLAMA_F16C "Off" CACHE BOOL "llama: enable F16C" FORCE)
     endif()
 
-    if (APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
+    if (APPLE)
         set(LLAMA_METAL_EMBED_LIBRARY "On" CACHE BOOL "llama: embed metal library" FORCE)
     endif()
 
