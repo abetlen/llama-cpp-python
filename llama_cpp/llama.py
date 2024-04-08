@@ -1058,9 +1058,7 @@ class Llama:
                 scores: npt.NDArray[np.single],
             ) -> npt.NDArray[np.single]:
                 if len(input_ids) - len(prompt_tokens) < min_tokens:
-                    new_scores = np.copy(scores)
-                    new_scores[self._token_eos] = -np.inf
-                    return new_scores
+                    scores[self._token_eos] = -np.inf
                 return scores
 
             _min_length_logits_processor = LogitsProcessorList([min_length_logits_processor])
