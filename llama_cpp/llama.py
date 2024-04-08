@@ -1057,11 +1057,11 @@ class Llama:
                 input_ids: npt.NDArray[np.intc],
                 scores: npt.NDArray[np.single],
             ) -> npt.NDArray[np.single]:
-                # Does it make sense to copy the whole array or can we just overwrite the original one?
-                new_scores = np.copy(scores)
                 if len(input_ids) - len(prompt_tokens) < min_tokens:
+                    new_scores = np.copy(scores)
                     new_scores[self._token_eos] = -np.inf
-                return new_scores
+                    return new_scores
+                return scores
 
             _min_length_logits_processor = LogitsProcessorList([min_length_logits_processor])
             if logits_processor is None:
