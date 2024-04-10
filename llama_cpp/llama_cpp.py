@@ -2271,6 +2271,20 @@ def llama_token_eos(model: llama_model_p, /) -> int:
     ...
 
 
+# LLAMA_API llama_token llama_token_cls(const struct llama_model * model); // classification
+@ctypes_function("llama_token_cls", [llama_model_p_ctypes], llama_token)
+def llama_token_cls(model: llama_model_p, /) -> int:
+    """classification"""
+    ...
+
+
+# LLAMA_API llama_token llama_token_sep(const struct llama_model * model); // sentence separator
+@ctypes_function("llama_token_sep", [llama_model_p_ctypes], llama_token)
+def llama_token_sep(model: llama_model_p, /) -> int:
+    """sentence separator"""
+    ...
+
+
 # LLAMA_API llama_token llama_token_nl (const struct llama_model * model); // next-line
 @ctypes_function("llama_token_nl", [llama_model_p_ctypes], llama_token)
 def llama_token_nl(model: llama_model_p, /) -> int:
@@ -2326,16 +2340,16 @@ def llama_token_eot(model: llama_model_p, /) -> int: ...
 # /// @param tokens The tokens pointer must be large enough to hold the resulting tokens.
 # /// @return Returns the number of tokens on success, no more than n_tokens_max
 # /// @return Returns a negative number on failure - the number of tokens that would have been returned
-# /// @param special Allow tokenizing special and/or control tokens which otherwise are not exposed and treated as plaintext.
-# ///                Does not insert a leading space.
+# /// @param parse_special Allow tokenizing special and/or control tokens which otherwise are not exposed and treated
+# ///                      as plaintext. Does not insert a leading space.
 # LLAMA_API int32_t llama_tokenize(
 #     const struct llama_model * model,
 #                   const char * text,
 #                      int32_t   text_len,
 #                  llama_token * tokens,
 #                      int32_t   n_tokens_max,
-#                         bool   add_bos,
-#                         bool   special);
+#                         bool   add_special,
+#                         bool   parse_special);
 @ctypes_function(
     "llama_tokenize",
     [
@@ -2355,8 +2369,8 @@ def llama_tokenize(
     text_len: Union[ctypes.c_int, int],
     tokens: CtypesArray[llama_token],
     n_tokens_max: Union[ctypes.c_int, int],
-    add_bos: Union[ctypes.c_bool, bool],
-    special: Union[ctypes.c_bool, bool],
+    add_special: Union[ctypes.c_bool, bool],
+    parse_special: Union[ctypes.c_bool, bool],
     /,
 ) -> int:
     """Convert the provided text into tokens.
@@ -2367,9 +2381,8 @@ def llama_tokenize(
         text_len: The length of the text.
         tokens: The tokens pointer must be large enough to hold the resulting tokens.
         n_max_tokens: The maximum number of tokens to return.
-        add_bos: Whether to add a beginning-of-sentence token.
-        special: Allow tokenizing special and/or control tokens which otherwise are not exposed and treated as plaintext.
-                 Does not insert a leading space.
+        add_special: Allow tokenizing special and/or control tokens which otherwise are not exposed and treated as plaintext. Does not insert a leading space.
+        parse_special: Allow parsing special tokens.
 
     Returns:
         Returns the number of tokens on success, no more than n_tokens_max
