@@ -1179,6 +1179,12 @@ def llama_rope_type(model: llama_model_p, /) -> int:
     ...
 
 
+# LLAMA_API enum llama_pooling_type llama_pooling_type(const struct llama_model * model);
+@ctypes_function("llama_pooling_type", [llama_model_p_ctypes], ctypes.c_int)
+def llama_pooling_type(model: llama_model_p, /) -> int:
+    ...
+
+
 # LLAMA_API int32_t llama_n_vocab    (const struct llama_model * model);
 @ctypes_function("llama_n_vocab", [llama_model_p_ctypes], ctypes.c_int32)
 def llama_n_vocab(model: llama_model_p, /) -> int:

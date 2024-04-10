@@ -273,6 +273,10 @@ class _LlamaContext:
         assert self.ctx is not None
         return llama_cpp.llama_n_ctx(self.ctx)
 
+    def pooling_type(self) -> int:
+        assert self.ctx is not None
+        return llama_cpp.llama_pooling_type(self.ctx)
+
     def kv_cache_clear(self):
         assert self.ctx is not None
         llama_cpp.llama_kv_cache_clear(self.ctx)
@@ -639,6 +643,16 @@ def _should_add_bos(model: _LlamaModel) -> bool:
         return add_bos != 0
     else:
         return llama_cpp.llama_vocab_type(model.model) == llama_cpp.LLAMA_VOCAB_TYPE_SPM
+
+
+# Embedding functions
+
+
+def _normalize_embedding(embedding):
+    norm = float(np.linalg.norm(embedding))
+    if norm == 0.0:
+        return embedding
+    return [v / norm for v in embedding]
 
 
 # Python wrappers over common/sampling structs
