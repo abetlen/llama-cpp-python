@@ -97,7 +97,15 @@ def create_app(
         if not os.path.exists(config_file):
             raise ValueError(f"Config file {config_file} not found!")
         with open(config_file, "rb") as f:
-            config_file_settings = ConfigFileSettings.model_validate_json(f.read())
+            # Check if yaml file
+            if config_file.endswith(".yaml") or config_file.endswith(".yml"):
+                import yaml
+
+                config_file_settings = ConfigFileSettings.model_validate_json(
+                    json.dumps(yaml.safe_load(f))
+                )
+            else:
+                config_file_settings = ConfigFileSettings.model_validate_json(f.read())
             server_settings = ServerSettings.model_validate(config_file_settings)
             model_settings = config_file_settings.models
 
