@@ -3075,7 +3075,7 @@ def mixtral_function_calling(
     # Case 3: Automatic tool choice
     assert isinstance(tool_choice, str) and tool_choice == "auto"
     function_names = " | ".join(
-        [f'''"name:{tool['function']['name']}:"''' for tool in tools]
+        [f'''"name:{tool['function']['name']}"''' for tool in tools]
     )
 
     initial_gbnf_tool_grammar = (
