@@ -2853,3 +2853,4 @@ def vicuna_function_calling(
     )
     return base_function_calling(end_token="</s>", 
                           **locals())
+

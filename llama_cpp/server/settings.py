@@ -70,7 +70,7 @@ class ModelSettings(BaseSettings):
         description="The number of threads to use.",
     )
     n_threads_batch: int = Field(
-        default=max(multiprocessing.cpu_count() // 2, 1),
+        default=max(multiprocessing.cpu_count(), 1),
         ge=0,
         description="The number of threads to use when batch processing.",
     )
@@ -194,6 +194,10 @@ class ServerSettings(BaseSettings):
     interrupt_requests: bool = Field(
         default=True,
         description="Whether to interrupt requests when a new request is received.",
+    )
+    disable_ping_events: bool = Field(
+        default=False,
+        description="Disable EventSource pings (may be needed for some clients).",
     )
 
 
