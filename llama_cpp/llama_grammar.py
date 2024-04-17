@@ -1769,12 +1769,18 @@ class SchemaConverter:
         schema_type = schema.get('type')
         schema_format = schema.get('format')
         rule_name = name + '-' if name in RESERVED_NAMES else name or 'root'
+        #print(schema)
+        if "$defs" in schema:
+            # add defs to self._defs for later inlining
+            for def_name, def_schema in schema["$defs"].items():
+                self._defs[def_name] = def_schema
 
-        if (ref := schema.get('$ref')) is not None:
+        elif (ref := schema.get('$ref')) is not None:
             return self._add_rule(rule_name, self._resolve_ref(ref))
 
         elif 'oneOf' in schema or 'anyOf' in schema:
             return self._add_rule(rule_name, self._generate_union_rule(name, schema.get('oneOf') or schema['anyOf']))
+        
 
         elif isinstance(schema_type, list):
             return self._add_rule(rule_name, self._generate_union_rule(name, [{'type': t} for t in schema_type]))
