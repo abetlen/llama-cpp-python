@@ -195,6 +195,10 @@ class ServerSettings(BaseSettings):
         default=True,
         description="Whether to interrupt requests when a new request is received.",
     )
+    disable_ping_events: bool = Field(
+        default=False,
+        description="Disable EventSource pings (may be needed for some clients).",
+    )
 
 
 class Settings(ServerSettings, ModelSettings):
