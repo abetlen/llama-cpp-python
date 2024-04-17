@@ -3117,9 +3117,9 @@ def mixtral_function_calling(
         mirostat_eta=mirostat_eta,
         model=model,
         logits_processor=logits_processor,
-        # grammar=llama_grammar.LlamaGrammar.from_string(
-        #     initial_gbnf_tool_grammar, verbose=llama.verbose
-        # ),
+        grammar=llama_grammar.LlamaGrammar.from_string(
+            initial_gbnf_tool_grammar, verbose=llama.verbose
+        ),
     )
     completion: llama_types.CreateCompletionResponse = completion_or_chunks  # type: ignore
     text = completion["choices"][0]["text"]
