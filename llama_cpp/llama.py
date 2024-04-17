@@ -262,9 +262,7 @@ class Llama:
 
         self.n_batch = min(n_ctx, n_batch)  # ???
         self.n_threads = n_threads or max(multiprocessing.cpu_count() // 2, 1)
-        self.n_threads_batch = n_threads_batch or max(
-            multiprocessing.cpu_count() // 2, 1
-        )
+        self.n_threads_batch = n_threads_batch or multiprocessing.cpu_count()
 
         # Context Params
         self.context_params = llama_cpp.llama_context_default_params()

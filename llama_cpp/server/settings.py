@@ -70,7 +70,7 @@ class ModelSettings(BaseSettings):
         description="The number of threads to use.",
     )
     n_threads_batch: int = Field(
-        default=max(multiprocessing.cpu_count() // 2, 1),
+        default=max(multiprocessing.cpu_count(), 1),
         ge=0,
         description="The number of threads to use when batch processing.",
     )
