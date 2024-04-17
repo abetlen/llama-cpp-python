@@ -2910,6 +2910,7 @@ def mixtral_function_calling(
         "  }{% if not loop.last %},{% endif %}\n"
         "  {% endfor %}\n"
         "]\n</s>\n"
+        "When you are done with the function calls, end the message with [/TOOL_CALLS]\n"
         "{% elif message.role == 'tool' %}\n"
         "[TOOL_RESULTS] \n"
         "{\n"
@@ -3082,9 +3083,10 @@ def mixtral_function_calling(
         """root   ::= functions | [INST]\n"""
         f"""functions ::= [TOOL_CALLS] {function_names}\n"""
     )
+    print(initial_gbnf_tool_grammar)
 
     follow_up_gbnf_tool_grammar = (
-        f"""root   ::= functions | "</done>"\n"""
+        f"""root   ::= functions | "[/TOOL_CALLS]"\n"""
         f"""functions ::= {function_names}\n"""
     )
     
@@ -3222,7 +3224,7 @@ def mixtral_function_calling(
             
             response = cast(llama_types.CreateCompletionResponse, response)
 
-            if response["choices"][0]["text"] == "</done>":
+            if response["choices"][0]["text"] == "[/TOOL_CALLS]":
                 break
             tool_name = response["choices"][0]["text"][len("functions.") :].replace(":", "")
             tool = next(
