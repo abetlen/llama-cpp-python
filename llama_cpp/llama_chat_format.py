@@ -2853,3 +2853,438 @@ def vicuna_function_calling(
     )
     return base_function_calling(end_token="</s>", 
                           **locals())
+
+@register_chat_completion_handler("mixtral-function-calling")
+def mixtral_function_calling(
+    llama: llama.Llama,
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    functions: Optional[List[llama_types.ChatCompletionFunction]] = None,
+    function_call: Optional[llama_types.ChatCompletionRequestFunctionCall] = None,
+    tools: Optional[List[llama_types.ChatCompletionTool]] = None,
+    tool_choice: Optional[llama_types.ChatCompletionToolChoiceOption] = None,
+    temperature: float = 0.2,
+    top_p: float = 0.95,
+    top_k: int = 40,
+    min_p: float = 0.05,
+    typical_p: float = 1.0,
+    stream: bool = False,
+    stop: Optional[Union[str, List[str]]] = [],
+    response_format: Optional[llama_types.ChatCompletionRequestResponseFormat] = None,
+    max_tokens: Optional[int] = None,
+    presence_penalty: float = 0.0,
+    frequency_penalty: float = 0.0,
+    repeat_penalty: float = 1.1,
+    tfs_z: float = 1.0,
+    mirostat_mode: int = 0,
+    mirostat_tau: float = 5.0,
+    mirostat_eta: float = 0.1,
+    model: Optional[str] = None,
+    logits_processor: Optional[llama.LogitsProcessorList] = None,
+    grammar: Optional[llama.LlamaGrammar] = None,
+    logprobs: Optional[bool] = None,
+    top_logprobs: Optional[int] = None,
+    **kwargs,  # type: ignore
+) -> Union[
+    llama_types.CreateChatCompletionResponse,
+    Iterator[llama_types.CreateChatCompletionStreamResponse],
+]:
+    end_token = "</s>"
+    function_calling_template = (
+        "{% for message in messages %}\n"
+        "{% if message.role == 'user' %}\n" 
+        "<s>[INST] \n"
+        "{{ message.content }}\n"
+        "[/INST]</s>\n"
+        "{% elif message.role == 'assistant' %}\n" 
+        "[TOOL_CALLS] \n"
+        "[\n"
+        "  {% for tool_call in message.tool_calls %}\n" 
+        "  {\n"
+        "    \"name\": \"{{ tool_call.function.name }}\",\n"
+        "    \"arguments\": {\n"
+        "      {% for arg_key, arg_val in tool_call.arguments.items() %}\n" 
+        "      \"{{ arg_key }}\": \"{{ arg_val }}\"{% if not loop.last %},{% endif %}\n"
+        "      {% endfor %}\n"
+        "    },\n"
+        "    \"id\": \"{{ tool_call.id }}\"\n"
+        "  }{% if not loop.last %},{% endif %}\n"
+        "  {% endfor %}\n"
+        "]\n</s>\n"
+        "{% elif message.role == 'tool' %}\n"
+        "[TOOL_RESULTS] \n"
+        "{\n"
+        "  \"call_id\": \"{{ message.tool_call_id }}\",\n"
+        "  \"content\": {{ message.content }}\n"
+        "}\n"
+        "[/TOOL_RESULTS] \n"
+        "The current temperature in {{ message.location }} is {{ message.content }} degrees Celsius.</s>\n"
+        "{% endif %}\n"
+        "{% endfor %}\n"
+        "[AVAILABLE_TOOLS]\n"
+        "[\n"
+        "  {% for tool in tools %}\n"
+        "  {\n"
+        "    \"type\": \"function\",\n"
+        "    \"function\": {\n"
+        "      \"name\": \"{{ tool.function.name }}\",\n"
+        "      \"description\": \"{{ tool.function.description }}\",\n"
+        "      \"parameters\": {\n"
+        "        \"type\": \"object\",\n"
+        "        \"properties\": {\n"
+        "          {% for param_key, param_spec in tool.function.parameters.items() %}\n"
+        "          \"{{ param_key }}\": {\n"
+        "            \"type\": \"{{ param_spec.type }}\",\n"
+        "            \"description\": \"{{ param_spec.description }}\",\n"
+        "            {% if param_spec.enum %}\"enum\": [{{ param_spec.enum | join(', ') }}],{% endif %}\n"
+        "          }{% if not loop.last %},{% endif %}\n"
+        "          {% endfor %}\n"
+        "        },\n"
+        "        \"required\": [{{ tool.function.required | join(', ') }}]\n"
+        "      }\n"
+        "    }\n"
+        "  }{% if not loop.last %},{% endif %}\n"
+        "  {% endfor %}\n"
+        "]\n"
+        "[/AVAILABLE_TOOLS]\n"
+    )
+    template_renderer = jinja2.Environment(
+        loader=jinja2.BaseLoader(),
+        autoescape=jinja2.select_autoescape(["html", "xml"]),
+        undefined=jinja2.DebugUndefined,
+    ).from_string(function_calling_template)
+    # Convert legacy functions to tools
+    if functions is not None:
+        tools = [
+            {
+                "type": "function",
+                "function": function,
+            }
+            for function in functions
+        ]
+
+    # Convert legacy function_call to tool_choice
+    if function_call is not None:
+        if isinstance(function_call, str) and (
+            function_call == "none" or function_call == "auto"
+        ):
+            tool_choice = function_call
+        if isinstance(function_call, dict) and "name" in function_call:
+            tool_choice = {
+                "type": "function",
+                "function": {
+                    "name": function_call["name"],
+                },
+            }
+
+    stop = [stop, end_token] if isinstance(stop, str) else stop + [end_token] if stop else [end_token]
+    # Case 1: No tool choice by user
+    if (
+        tool_choice is None
+        or (isinstance(tool_choice, str) and tool_choice == "none")
+        or tools is None
+        or len(tools) == 0
+    ):
+        prompt = template_renderer.render(
+            messages=messages,
+            tools=[],
+            tool_calls=None,
+            add_generation_prompt=True,
+        )
+        if response_format is not None and response_format["type"] == "json_object":
+            grammar = _grammar_for_response_format(response_format)
+
+        return _convert_completion_to_chat(
+            llama.create_completion(
+                prompt=prompt,
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
+                min_p=min_p,
+                typical_p=typical_p,
+                stream=stream,
+                stop=stop,
+                max_tokens=max_tokens,
+                presence_penalty=presence_penalty,
+                frequency_penalty=frequency_penalty,
+                repeat_penalty=repeat_penalty,
+                tfs_z=tfs_z,
+                mirostat_mode=mirostat_mode,
+                mirostat_tau=mirostat_tau,
+                mirostat_eta=mirostat_eta,
+                model=model,
+                logits_processor=logits_processor,
+                grammar=grammar,
+                logprobs=top_logprobs if logprobs else None,
+            ),
+            stream=stream,
+        )
+
+    # Case 2: Tool choice by user
+    if isinstance(tool_choice, dict):
+        tool_name = tool_choice["function"]["name"]
+        tool = next(
+            (tool for tool in tools if tool["function"]["name"] == tool_name), None
+        )
+        if tool is None:
+            raise ValueError(f"Tool with name '{tool_name}' not found in tools")
+        prompt = template_renderer.render(
+            messages=messages,
+            tools=tools,
+            tool_calls=True,
+            add_generation_prompt=True,
+        )
+        prompt += f"functions.{tool_name}:\n"
+        try:
+            grammar = llama_grammar.LlamaGrammar.from_json_schema(
+                json.dumps(tool["function"]["parameters"]), verbose=llama.verbose
+            )
+        except Exception as e:
+            grammar = llama_grammar.LlamaGrammar.from_string(
+                llama_grammar.JSON_GBNF, verbose=llama.verbose
+            )
+            if llama.verbose:
+                print(
+                    "Failed to parse function body as JSON schema, falling back to default grammar"
+                )
+                print(e)
+        completion_or_chunks = llama.create_completion(
+            prompt=prompt,
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            min_p=min_p,
+            typical_p=typical_p,
+            stream=stream,
+            stop=stop,
+            max_tokens=max_tokens,
+            presence_penalty=presence_penalty,
+            frequency_penalty=frequency_penalty,
+            repeat_penalty=repeat_penalty,
+            tfs_z=tfs_z,
+            mirostat_mode=mirostat_mode,
+            mirostat_tau=mirostat_tau,
+            mirostat_eta=mirostat_eta,
+            model=model,
+            logits_processor=logits_processor,
+            grammar=grammar,
+        )
+        return _convert_completion_to_chat_function(
+            tool_name, completion_or_chunks, stream
+        )
+
+    # Case 3: Automatic tool choice
+    assert isinstance(tool_choice, str) and tool_choice == "auto"
+    function_names = " | ".join(
+        [f'''[{{"name":"{tool['function']['name']}"''' for tool in tools]
+    )
+
+    initial_gbnf_tool_grammar = (
+        """root   ::= functions | [INST]\n"""
+        f"""functions ::= [TOOL_CALLS] {function_names}\n"""
+    )
+
+    follow_up_gbnf_tool_grammar = (
+        f"""root   ::= functions | "</done>"\n"""
+        f"""functions ::= {function_names}\n"""
+    )
+    
+
+    prompt = template_renderer.render(
+        messages=messages,
+        tools=tools,
+        tool_calls=True,
+        add_generation_prompt=True,
+    )
+    print(prompt)
+    completion_or_chunks = llama.create_completion(
+        prompt=prompt,
+        temperature=temperature,
+        top_p=top_p,
+        top_k=top_k,
+        min_p=min_p,
+        typical_p=typical_p,
+        stream=False,
+        stop=stop,
+        max_tokens=max_tokens,
+        presence_penalty=presence_penalty,
+        frequency_penalty=frequency_penalty,
+        repeat_penalty=repeat_penalty,
+        tfs_z=tfs_z,
+        mirostat_mode=mirostat_mode,
+        mirostat_tau=mirostat_tau,
+        mirostat_eta=mirostat_eta,
+        model=model,
+        logits_processor=logits_processor,
+        grammar=llama_grammar.LlamaGrammar.from_string(
+            initial_gbnf_tool_grammar, verbose=llama.verbose
+        ),
+    )
+    completion: llama_types.CreateCompletionResponse = completion_or_chunks  # type: ignore
+    text = completion["choices"][0]["text"]
+    print(text)
+    if "[INST]" in text:
+        return _convert_completion_to_chat(
+            llama.create_completion(
+                prompt=prompt + "message:\n",
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
+                min_p=min_p,
+                typical_p=typical_p,
+                stream=stream,
+                stop=["</s>"],
+                logprobs=top_logprobs if logprobs else None,
+                max_tokens=None,
+                presence_penalty=presence_penalty,
+                frequency_penalty=frequency_penalty,
+                repeat_penalty=repeat_penalty,
+                tfs_z=tfs_z,
+                mirostat_mode=mirostat_mode,
+                mirostat_tau=mirostat_tau,
+                mirostat_eta=mirostat_eta,
+                model=model,
+                logits_processor=logits_processor,
+            ),
+            stream=stream,
+        )
+
+    # One or more function calls
+    tool_name = text[len("functions.") :].replace(":", "")
+    tool = next((tool for tool in tools if tool["function"]["name"] == tool_name), None)
+    if not stream:
+        completions: List[llama_types.CreateCompletionResponse] = []
+        completions_tool_name: List[str] = []
+        while tool is not None:
+            prompt += f"functions.{tool_name}:\n"
+            try:
+                grammar = llama_grammar.LlamaGrammar.from_json_schema(
+                    json.dumps(tool["function"]["parameters"]), verbose=llama.verbose
+                )
+            except Exception as e:
+                grammar = llama_grammar.LlamaGrammar.from_string(
+                    llama_grammar.JSON_GBNF, verbose=llama.verbose
+                )
+                if llama.verbose:
+                    print(
+                        "Failed to parse function body as JSON schema, falling back to default grammar"
+                    )
+                    print(e)
+            completion_or_chunks = llama.create_completion(
+                prompt=prompt,
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
+                min_p=min_p,
+                typical_p=typical_p,
+                stream=False,
+                stop=stop,
+                max_tokens=None,
+                presence_penalty=presence_penalty,
+                frequency_penalty=frequency_penalty,
+                repeat_penalty=repeat_penalty,
+                tfs_z=tfs_z,
+                mirostat_mode=mirostat_mode,
+                mirostat_tau=mirostat_tau,
+                mirostat_eta=mirostat_eta,
+                model=model,
+                logits_processor=logits_processor,
+                grammar=grammar,
+            )
+            completion_or_chunks = cast(llama_types.CreateCompletionResponse, completion_or_chunks)
+            completions.append(completion_or_chunks)
+            completions_tool_name.append(tool_name)
+            prompt += completion_or_chunks["choices"][0]["text"]
+            prompt += "\n"
+            response = llama.create_completion(
+                prompt=prompt,
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
+                min_p=min_p,
+                typical_p=typical_p,
+                stream=False,
+                stop=stop,
+                max_tokens=None,
+                presence_penalty=presence_penalty,
+                frequency_penalty=frequency_penalty,
+                repeat_penalty=repeat_penalty,
+                tfs_z=tfs_z,
+                mirostat_mode=mirostat_mode,
+                mirostat_tau=mirostat_tau,
+                mirostat_eta=mirostat_eta,
+                model=model,
+                logits_processor=logits_processor,
+                grammar=llama_grammar.LlamaGrammar.from_string(
+                    follow_up_gbnf_tool_grammar, verbose=llama.verbose
+                ),
+                
+            )
+            
+            response = cast(llama_types.CreateCompletionResponse, response)
+
+            if response["choices"][0]["text"] == "</done>":
+                break
+            tool_name = response["choices"][0]["text"][len("functions.") :].replace(":", "")
+            tool = next(
+                (tool for tool in tools if tool["function"]["name"] == tool_name), None
+            )
+
+        # Merge completions
+        function_call_dict: Union[Dict[str, str], Dict[Literal["function_call"], llama_types.ChatCompletionRequestAssistantMessageFunctionCall]] = { 
+            "function_call": {
+                "name": tool_name,
+                "arguments": completions[0]["choices"][0]["text"],
+            }
+        } if len(completions) == 1 else {}
+        return {
+            "id": "chat" + completion["id"],
+            "object": "chat.completion",
+            "created": completion["created"],
+            "model": completion["model"],
+            "choices": [
+                {
+                    "finish_reason": "tool_calls",
+                    "index": 0,
+                    "logprobs": completion["choices"][0]["logprobs"],
+                    "message": {
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": [
+                            {
+                                "id": "call_"
+                                + f"_{i}_"
+                                + tool_name
+                                + "_"
+                                + completion["id"],
+                                "type": "function",
+                                "function": {
+                                    "name": tool_name,
+                                    "arguments": completion["choices"][0]["text"],
+                                },
+                            }
+                            for i, (tool_name, completion) in enumerate(
+                                zip(completions_tool_name, completions)
+                            )
+                        ],
+                        **function_call_dict
+                    },
+                }
+            ],
+            "usage": {
+                "completion_tokens": sum(
+                    completion["usage"]["completion_tokens"] if "usage" in completion else 0
+                    for completion in completions
+                ),
+                "prompt_tokens": sum(
+                    completion["usage"]["prompt_tokens"] if "usage" in completion else 0
+                    for completion in completions
+                ),
+                "total_tokens": sum(
+                    completion["usage"]["total_tokens"] if "usage" in completion else 0
+                    for completion in completions
+                ),
+            },
+        }
+
+    raise ValueError("Automatic streaming tool choice is not supported")
+    
