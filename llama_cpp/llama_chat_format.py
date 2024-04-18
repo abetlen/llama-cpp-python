@@ -2523,6 +2523,9 @@ def base_function_calling(
                 mirostat_eta=mirostat_eta,
                 model=model,
                 logits_processor=logits_processor,
+                grammar=llama_grammar.LlamaGrammar.from_string(
+                    follow_up_msg_gbnf_tool_grammar, verbose=llama.verbose
+                ),
             ),
             stream=stream,
         )
