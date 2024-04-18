@@ -2498,8 +2498,8 @@ def base_function_calling(
     text = completion["choices"][0]["text"]
     print(text)
     if "message" in text:
-        return _convert_completion_to_chat(
-            llama.create_completion(
+        #return _convert_completion_to_chat(
+            msg_completion_or_chunks = llama.create_completion(
                 prompt=prompt + "message:\n",
                 temperature=temperature,
                 top_p=top_p,
@@ -2522,9 +2522,7 @@ def base_function_calling(
                 # grammar=llama_grammar.LlamaGrammar.from_string(
                 #     follow_up_gbnf_tool_grammar, verbose=llama.verbose
                 # ),
-            ),
-            stream=stream,
-        )
+            )
 
     # One or more function calls
     tool_name = text[len("functions.") :].replace(":", "")
@@ -2809,7 +2807,7 @@ def vicuna_function_calling(
         "\nfunctions.{{ tool.function.name }}:\n"
         "{{ tool.function.parameters | tojson }}"
         "\n{% endfor %}"
-        "\n\nYou can respond to users messages with either a single message or multiple function calls, never both. Prioritize function calls over messages, when applicable."
+        "\n\nYou can respond to users messages with either a single message or multiple function calls, never both. If function calls are used, they must be the first part of the response."
         "\n\nTo respond with a message begin the message with 'message:', use the following format:"
         "\n\nmessage:"
         "\n<message>"
