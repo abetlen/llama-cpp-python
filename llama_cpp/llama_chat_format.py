@@ -2571,6 +2571,7 @@ def base_function_calling(
             completions.append(completion_or_chunks)
             completions_tool_name.append(tool_name)
             prompt += completion_or_chunks["choices"][0]["text"]
+            print(prompt)
             prompt += "\n"
             response = llama.create_completion(
                 prompt=prompt,
@@ -2598,7 +2599,7 @@ def base_function_calling(
             )
             
             response = cast(llama_types.CreateCompletionResponse, response)
-
+            print(response["choices"][0])
             if response["choices"][0]["text"] == "</done>":
                 break
             tool_name = response["choices"][0]["text"][len("functions.") :].replace(":", "")
