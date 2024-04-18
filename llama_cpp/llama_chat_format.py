@@ -2462,6 +2462,10 @@ def base_function_calling(
         f"""root   ::= functions | "</done>"\n"""
         f"""functions ::= {function_names}\n"""
     )
+    follow_up_msg_gbnf_tool_grammar = (
+        f"""root   ::= functions | "</s>"\n"""
+        f"""functions ::= {function_names}\n"""
+    )
     
 
     prompt = template_renderer.render(
