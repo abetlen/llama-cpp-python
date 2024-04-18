@@ -2462,11 +2462,7 @@ def base_function_calling(
         f"""root   ::= functions | "</done>"\n"""
         f"""functions ::= {function_names}\n"""
     )
-    follow_up_msg_gbnf_tool_grammar = (
-        f"""root   ::= functions | "</s>"\n"""
-        f"""functions ::= {function_names}\n"""
-    )
-    
+
 
     prompt = template_renderer.render(
         messages=messages,
@@ -2523,9 +2519,9 @@ def base_function_calling(
                 mirostat_eta=mirostat_eta,
                 model=model,
                 logits_processor=logits_processor,
-                grammar=llama_grammar.LlamaGrammar.from_string(
-                    follow_up_msg_gbnf_tool_grammar, verbose=llama.verbose
-                ),
+                # grammar=llama_grammar.LlamaGrammar.from_string(
+                #     follow_up_gbnf_tool_grammar, verbose=llama.verbose
+                # ),
             ),
             stream=stream,
         )
@@ -2813,7 +2809,7 @@ def vicuna_function_calling(
         "\nfunctions.{{ tool.function.name }}:\n"
         "{{ tool.function.parameters | tojson }}"
         "\n{% endfor %}"
-        "\n\nYou can respond to users messages with either a single message or multiple function calls."
+        "\n\nYou can respond to users messages with either a single message or multiple function calls, never both. Prioritize function calls over messages, when applicable."
         "\n\nTo respond with a message begin the message with 'message:', use the following format:"
         "\n\nmessage:"
         "\n<message>"
