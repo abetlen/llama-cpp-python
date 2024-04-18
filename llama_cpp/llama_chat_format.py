@@ -2804,7 +2804,7 @@ def vicuna_function_calling(
         "\nfunctions.{{ tool.function.name }}:\n"
         "{{ tool.function.parameters | tojson }}"
         "\n{% endfor %}"
-        "\n\nYou can respond to users messages with either a single message or multiple function calls."
+        "\n\nYou can respond to users messages with either a single message or multiple function calls, never both. Prioritize function calls over messages."
         "\n\nTo respond with a message begin the message with 'message:', use the following format:"
         "\n\nmessage:"
         "\n<message>"
