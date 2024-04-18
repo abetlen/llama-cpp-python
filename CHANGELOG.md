@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.62]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@3b8f1ec4b18770531d0b1d792f3edf08254e4f0c
+- feat: update grammar schema converter to match llama.cpp by @themrzmaster in #1353
+- feat: add disable_ping_events flag by @khimaros in #1257
+- feat: Make saved state more compact on-disk by @tc-wolf in #1296
+- feat: Use all available CPUs for batch processing by @ddh0 in #1345
+
 ## [0.2.61]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@ba5e134e073ec6837078c874aba44a702944a676
