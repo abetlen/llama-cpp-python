@@ -2498,8 +2498,8 @@ def base_function_calling(
     text = completion["choices"][0]["text"]
     print(text)
     if "message" in text:
-        #return _convert_completion_to_chat(
-            msg_completion_or_chunks = llama.create_completion(
+        return _convert_completion_to_chat(
+            llama.create_completion(
                 prompt=prompt + "message:\n",
                 temperature=temperature,
                 top_p=top_p,
@@ -2522,7 +2522,8 @@ def base_function_calling(
                 # grammar=llama_grammar.LlamaGrammar.from_string(
                 #     follow_up_gbnf_tool_grammar, verbose=llama.verbose
                 # ),
-            )
+            ),stream=stream
+        )
 
     # One or more function calls
     tool_name = text[len("functions.") :].replace(":", "")
