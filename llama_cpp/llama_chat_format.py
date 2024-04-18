@@ -2459,7 +2459,7 @@ def base_function_calling(
     )
 
     follow_up_gbnf_tool_grammar = (
-        f"""root   ::= functions | "{end_token}"\n"""
+        f"""root   ::= functions | "</done>"\n"""
         f"""functions ::= {function_names}\n"""
     )
 
@@ -2600,7 +2600,7 @@ def base_function_calling(
             
             response = cast(llama_types.CreateCompletionResponse, response)
             print(response["choices"][0])
-            if end_token in response["choices"][0]["text"]:
+            if response["choices"][0]["text"] == "</done>":
                 break
             tool_name = response["choices"][0]["text"][len("functions.") :].replace(":", "")
             tool = next(
@@ -2722,7 +2722,7 @@ def chatml_function_calling(
         '\n{ "arg1": "value1", "arg2": "value2" };'
         "\nfunctions.<function_name>:"
         '\n{ "arg1": "value1", "arg2": "value2" }'
-        "\n\nWhen you are done with the function calls, end the message with </done>."
+        "\n\nWhen you are done with the function calls, end the message with </done>. Only execute functions necessary to respond to the user."
         "{% endif %}"
         "<|im_end|>\n"
         "{% endif %}"
@@ -2815,6 +2815,7 @@ def vicuna_function_calling(
         '\n{ "arg1": "value1", "arg2": "value2" };'
         "\nfunctions.<another_function_name>:"
         '\n{ "arg1": "value3", "arg2": "value4" }'
+        "\n\nWhen you are done with the function calls, end the message with </done>."
         "\n\nTo respond with a message begin the message with 'message:', use the following format:"
         "\n\nmessage:"
         "\n<message> </s>"
