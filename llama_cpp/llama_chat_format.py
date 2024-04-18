@@ -2316,6 +2316,8 @@ def base_function_calling(
     grammar: Optional[llama.LlamaGrammar] = None,
     logprobs: Optional[bool] = None,
     top_logprobs: Optional[int] = None,
+    role_prefix: Optional[str] = "",
+    role_suffix: Optional[str] = "",
     **kwargs,  # type: ignore
 ) -> Union[
     llama_types.CreateChatCompletionResponse,
@@ -2377,7 +2379,7 @@ def base_function_calling(
                 min_p=min_p,
                 typical_p=typical_p,
                 stream=stream,
-                stop=stop,
+                stop=stop + ["</done>"],
                 max_tokens=max_tokens,
                 presence_penalty=presence_penalty,
                 frequency_penalty=frequency_penalty,
@@ -2507,7 +2509,7 @@ def base_function_calling(
                 min_p=min_p,
                 typical_p=typical_p,
                 stream=stream,
-                stop=["</s>"],
+                stop=stop+ ["</done>"],
                 logprobs=top_logprobs if logprobs else None,
                 max_tokens=None,
                 presence_penalty=presence_penalty,
@@ -2532,7 +2534,7 @@ def base_function_calling(
         completions: List[llama_types.CreateCompletionResponse] = []
         completions_tool_name: List[str] = []
         while tool is not None:
-            prompt += f"functions.{tool_name}:\n"
+            prompt += f"{role_prefix}functions.{tool_name}:{role_suffix}"
             try:
                 grammar = llama_grammar.LlamaGrammar.from_json_schema(
                     json.dumps(tool["function"]["parameters"]), verbose=llama.verbose
@@ -2570,7 +2572,8 @@ def base_function_calling(
             completion_or_chunks = cast(llama_types.CreateCompletionResponse, completion_or_chunks)
             completions.append(completion_or_chunks)
             completions_tool_name.append(tool_name)
-            prompt += completion_or_chunks["choices"][0]["text"]
+            out = completion_or_chunks["choices"][0]["text"]
+            prompt += f"{role_prefix}{out}{role_suffix}"
             print(prompt)
             prompt += "\n"
             response = llama.create_completion(
@@ -2857,4 +2860,85 @@ def vicuna_function_calling(
         "{% if add_generation_prompt %}</s>ASSISTANT\n{% endif %}"  # Vicuna adds the role for prompt continuation
     )
     return base_function_calling(end_token="</s>", 
+                          **locals())
+
+@register_chat_completion_handler("llama3-function-calling")
+def llama3_function_calling(
+    llama: llama.Llama,
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    functions: Optional[List[llama_types.ChatCompletionFunction]] = None,
+    function_call: Optional[llama_types.ChatCompletionRequestFunctionCall] = None,
+    tools: Optional[List[llama_types.ChatCompletionTool]] = None,
+    tool_choice: Optional[llama_types.ChatCompletionToolChoiceOption] = None,
+    temperature: float = 0.2,
+    top_p: float = 0.95,
+    top_k: int = 40,
+    min_p: float = 0.05,
+    typical_p: float = 1.0,
+    stream: bool = False,
+    stop: Optional[Union[str, List[str]]] = [],
+    response_format: Optional[llama_types.ChatCompletionRequestResponseFormat] = None,
+    max_tokens: Optional[int] = None,
+    presence_penalty: float = 0.0,
+    frequency_penalty: float = 0.0,
+    repeat_penalty: float = 1.1,
+    tfs_z: float = 1.0,
+    mirostat_mode: int = 0,
+    mirostat_tau: float = 5.0,
+    mirostat_eta: float = 0.1,
+    model: Optional[str] = None,
+    logits_processor: Optional[llama.LogitsProcessorList] = None,
+    grammar: Optional[llama.LlamaGrammar] = None,
+    logprobs: Optional[bool] = None,
+    top_logprobs: Optional[int] = None,
+    **kwargs,  # type: ignore
+) -> Union[
+    llama_types.CreateChatCompletionResponse,
+    Iterator[llama_types.CreateChatCompletionStreamResponse],
+]:
+    function_calling_template = (
+        "<|begin_of_text|>"
+        "{% if tool_calls %}"
+        "<|start_header_id|>system<|end_header_id|>\n\n"
+        "{% for message in messages %}"
+        "{% if message.role == 'system' %}"
+        "{{ message.content }}"
+        "{% endif %}"
+        "{% endfor %}"
+        "You have access to the following functions to help you respond to users messages: \n"
+        "{% for tool in tools %}"
+        "\nfunctions.{{ tool.function.name }}:\n"
+        "{{ tool.function.parameters | tojson }}"
+        "\n{% endfor %}"
+        "\nYou can respond to users messages with either a single message or one or more function calls. Never both. Prioritize function calls over messages."
+        "\n When we have a function response, bring it to the user."
+        "\nTo respond with a message begin the message with 'message:'"
+        '\n Example sending message: message: "Hello, how can I help you?"'
+        "\nTo respond with one or more function calls begin the message with 'functions.<function_name>:', use the following format:"
+        "\nfunctions.<function_name>:"
+        '\n{ "arg1": "value1", "arg2": "value2" }'
+        "\nfunctions.<function_name>:"
+        '\n{ "arg1": "value1", "arg2": "value2" }'
+        "\nWhen you are done with the function calls, end the message with </done>."
+        '\nStart your output with either message: or functions. <|eot_id|>\n'
+        "{% endif %}"
+        "{% for message in messages %}"
+        "{% if message.role == 'tool' %}"
+        "<|start_header_id|>assistant<|end_header_id|>\n\n"
+        "Function response: {{ message.content | default('No response available') }}"
+        "<|eot_id|>\n"
+        "{% elif message.role == 'assistant' and message.function_call is defined%}"
+        "<|start_header_id|>{{ message.role }}<|end_header_id|>"
+        "Function called: {{ message.function_call.name | default('No name') }}\n"
+        "Function argument: {{ message.function_call.arguments | default('No arguments') }}"
+        "<|eot_id|>\n"
+        "{% else %}"
+        "<|start_header_id|>{{ message.role }}<|end_header_id|>"
+        "{{ message.content }}"
+        "<|eot_id|>\n"
+        "{% endif %}"
+        "{% endfor %}"
+
+    )
+    return base_function_calling(end_token="<|eot_id|>", role_prefix="<|start_header_id|>assistant<|end_header_id|>", role_suffix="<|eot_id|>",
                           **locals())
