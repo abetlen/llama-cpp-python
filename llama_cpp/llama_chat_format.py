@@ -2809,15 +2809,15 @@ def vicuna_function_calling(
         "{{ tool.function.parameters | tojson }}"
         "\n{% endfor %}"
         "\n\nYou can respond to users messages with either a single message or multiple function calls, never both. If function calls are used, they must be the first part of the response."
-        "\n\nTo respond with a message begin the message with 'message:', use the following format:"
-        "\n\nmessage:"
-        "\n<message> </s>"
         "\n\nTo respond with one or more function calls begin the message with 'functions.<function_name>:', use the following format:"
         "\n\nfunctions.<function_name>:"
         '\n{ "arg1": "value1", "arg2": "value2" };'
         "\nfunctions.<another_function_name>:"
         '\n{ "arg1": "value3", "arg2": "value4" }'
         "\n\nWhen you are done with the function calls, end the message with </done>."
+        "\n\nTo respond with a message begin the message with 'message:', use the following format:"
+        "\n\nmessage:"
+        "\n<message> </s>"
         "{% endif %}"
         "</s>\n"
         "{% endif %}"
