@@ -2466,9 +2466,9 @@ def base_function_calling(
     )
     msg_gbnf_grammar = (
         """root ::= message | functions\n"""
-        """message ::= "message: " [^\n]* "\n"\n"""
+        f"""message ::= "message: " [^{end_token}]* "{end_token}"\n"""
         f"""functions ::= {function_names}\n"""
-)
+    )
 
 
     prompt = template_renderer.render(
