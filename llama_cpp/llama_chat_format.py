@@ -2910,21 +2910,25 @@ def llama3_function_calling(
         "\nfunctions.{{ tool.function.name }}:\n"
         "{{ tool.function.parameters | tojson }}"
         "\n{% endfor %}"
-        "\nYou can respond to users messages with either a single message or one or more function calls. Never both. Prioritize function calls over messages."
-        "\nTo respond with a message begin the message with 'message:'"
-        '\n Example sending message: message: "Hello, how can I help you?"'
-        "\nTo respond with one or more function calls begin the message with 'functions.<function_name>:', use the following format:"
+        "\nYou can respond to user messages either by sending a single message or by making one or more function calls. You should never do both. Always prioritize function calls over messages."
+        "\nTo send a response message, start your message with 'message:'"
+        '\nExample of sending a message: message: "Hello, how can I help you?"'
+        "\nTo use one or more function calls, start your response with 'functions.<function_name>:', follow this format:"
         "\nfunctions.<function_name>:"
         '\n{ "arg1": "value1", "arg2": "value2" }'
         "\nfunctions.<function_name>:"
         '\n{ "arg1": "value1", "arg2": "value2" }'
-        "\nWhen you are done with the function calls, end the message with </done>."
-        '\nStart your output with either message: or functions. <|eot_id|>\n'
+        "\nWhen you have completed entering function calls, end your output with '</done>'."
+        '\nStart your output with either "message:" or "functions.". Do not mix the two.'
+        '\n In any hypothesis you should output: message: function_name: arguments never do that'
+        "\nWhen you encounter a <tool_output> tag from a user message, it indicates the output from a previously executed function."
+        "Please present this output in an easy-to-understand format, as the user has not seen it directly.\n"
+        "Example: <tool_output> item: Cheeseburguer, price: 12 </tool_output> You should output: I found a Cheeseburguer that costs 12 dollars."
         "{% endif %}"
         "{% for message in messages %}"
         "{% if message.role == 'tool' %}"
         "<|start_header_id|>user<|end_header_id|>\n\n"
-        "here is the Function response, bring it to me in a nice way: {{ message.content | default('No response available') }}"
+        "<tool_output>  {{ message.content | default('No response available') }} </tool_output>"
         "<|eot_id|>\n"
         "{% elif message.role == 'assistant' and message.function_call is defined%}"
         "<|start_header_id|>{{ message.role }}<|end_header_id|>\n\n"
