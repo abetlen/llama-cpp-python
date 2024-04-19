@@ -2464,6 +2464,11 @@ def base_function_calling(
         f"""root   ::= functions | "</done>"\n"""
         f"""functions ::= {function_names}\n"""
     )
+    msg_gbnf_grammar = (
+        """root ::= message | functions\n"""
+        """message ::= "message: " [^\n]* "\n"\n"""
+        f"""functions ::= {function_names}\n"""
+)
 
 
     prompt = template_renderer.render(
@@ -2499,9 +2504,9 @@ def base_function_calling(
     completion: llama_types.CreateCompletionResponse = completion_or_chunks  # type: ignore
     text = completion["choices"][0]["text"]
     print(text)
-    if "message" in text:
+    if "message:" in text:
         message_output = llama.create_completion(
-                prompt=prompt + "message:\n",
+                prompt=prompt,
                 temperature=temperature,
                 top_p=top_p,
                 top_k=top_k,
@@ -2520,13 +2525,13 @@ def base_function_calling(
                 mirostat_eta=mirostat_eta,
                 model=model,
                 logits_processor=logits_processor,
-                # grammar=llama_grammar.LlamaGrammar.from_string(
-                #     follow_up_gbnf_tool_grammar, verbose=llama.verbose
-                # ),
+                grammar=llama_grammar.LlamaGrammar.from_string(
+                    msg_gbnf_grammar, verbose=llama.verbose
+                ),
             )
-        text: llama_types.CreateCompletionResponse = message_output  # type: ignore
+        text: llama_types.CreateCompletionResponse = message_output["choices"][0]["text"]  # type: ignore
         # fallback
-        if not text["choices"][0]["text"].startswith("functions."):
+        if not text.startswith("functions."):
             return _convert_completion_to_chat(message_output,stream=stream)
 
     # One or more function calls
