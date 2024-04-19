@@ -1496,10 +1496,14 @@ ESCAPED_IN_REGEXPS_BUT_NOT_IN_LITERALS = set('[]()|{}*+?')
 
 
 class SchemaConverter:
-    def __init__(self, prop_order):
+    def __init__(self, *, prop_order, allow_fetch, dotall, raw_pattern):
         self._prop_order = prop_order
-        self._rules = {"space": SPACE_RULE}
-        self._defs: Dict[str, Any] = {}
+        self._allow_fetch = allow_fetch
+        self._dotall = dotall
+        self._raw_pattern = raw_pattern
+        self._rules = {
+            'space': SPACE_RULE,
+        }
         self._refs = {}
         self._refs_being_resolved = set()
 
@@ -1938,12 +1942,11 @@ class SchemaConverter:
             f'{name} ::= {rule}'
             for name, rule in sorted(self._rules.items(), key=lambda kv: kv[0])
         )
-
-
 def json_schema_to_gbnf(schema: str, prop_order: Optional[List[str]] = None):
     prop_order = prop_order or []
     schema = json.loads(schema)
     prop_order = {name: idx for idx, name in enumerate(prop_order)}
-    converter = SchemaConverter(prop_order)
+    converter = SchemaConverter(prop_order=prop_order, allow_fetch=False, dotall=False, raw_pattern=False)
+    schema = converter.resolve_refs(schema, "stdin")
     converter.visit(schema, "")
     return converter.format_grammar()
