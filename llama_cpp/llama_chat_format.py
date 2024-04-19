@@ -2911,7 +2911,6 @@ def llama3_function_calling(
         "{{ tool.function.parameters | tojson }}"
         "\n{% endfor %}"
         "\nYou can respond to users messages with either a single message or one or more function calls. Never both. Prioritize function calls over messages."
-        "\n When the last input we have is function response, bring it to the user. The user cant directly see the function response, unless the assistant shows it."
         "\nTo respond with a message begin the message with 'message:'"
         '\n Example sending message: message: "Hello, how can I help you?"'
         "\nTo respond with one or more function calls begin the message with 'functions.<function_name>:', use the following format:"
