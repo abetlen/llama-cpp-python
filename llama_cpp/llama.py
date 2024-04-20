@@ -426,7 +426,10 @@ class Llama:
                     print(f"Using chat bos_token: {bos_token}", file=sys.stderr)
 
                 self.chat_handler = llama_chat_format.Jinja2ChatFormatter(
-                    template=template, eos_token=eos_token, bos_token=bos_token
+                    template=template,
+                    eos_token=eos_token,
+                    bos_token=bos_token,
+                    stop_token_ids=[eos_token_id],
                 ).to_chat_handler()
 
         if self.chat_format is None and self.chat_handler is None:
