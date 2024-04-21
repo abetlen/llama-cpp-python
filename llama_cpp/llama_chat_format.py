@@ -920,6 +920,26 @@ def format_llama2(
     return ChatFormatterResponse(prompt=_prompt)
 
 
+# Chat format for Llama-3 models, see more details at:
+# https://github.com/meta-llama/llama3/blob/main/llama/tokenizer.py#L202-L229
+@register_chat_format("llama-3")
+def format_llama3(
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    **kwargs: Any,
+) -> ChatFormatterResponse:
+    _roles = dict(
+        system="<|start_header_id|>system<|end_header_id|>\n\n",
+        user="<|start_header_id|>user<|end_header_id|>\n\n",
+        assistant="<|start_header_id|>assistant<|end_header_id|>\n\n",
+    )
+    _begin_token = "<|begin_of_text|>"
+    _sep = "<|eot_id|>"
+    _messages = _map_roles(messages, _roles)
+    _messages.append((_roles["assistant"], None))
+    _prompt = _format_no_colon_single(_begin_token, _messages, _sep)
+    return ChatFormatterResponse(prompt=_prompt, stop=_sep)
+
+
 @register_chat_format("alpaca")
 def format_alpaca(
     messages: List[llama_types.ChatCompletionRequestMessage],
