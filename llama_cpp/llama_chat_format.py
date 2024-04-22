@@ -2809,7 +2809,9 @@ def vicuna_function_calling(
 ]:
     function_calling_template = (
         "{% for message in messages %}"
+        "{% if message.role != 'tool' %}"
         "{{ message.role.upper() }}\n"  # Vicuna uses upper case for roles
+        "{% endif %}"
         # System message
         "{% if message.role == 'system' %}"
         "{{ message.content }}"
@@ -2817,7 +2819,7 @@ def vicuna_function_calling(
         "\n\nYou have access to the following functions:\n"
         "{% for tool in tools %}"
         "\nfunctions.{{ tool.function.name }}:\n"
-        "{{ tool.function.parameters | tojson }}"
+        "{{ tool.function.arguments | tojson }}"
         "\n{% endfor %}"
         "\n\nYou can respond to users messages with either a single message or multiple function calls, never both. If function calls are used, they must be the first part of the response."
         "\n\nTo respond with one or more function calls begin the message with 'functions.<function_name>:', use the following format:"
