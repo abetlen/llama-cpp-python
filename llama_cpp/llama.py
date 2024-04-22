@@ -1034,7 +1034,8 @@ class Llama:
             logits_processor=logits_processor,
             grammar=grammar,
         ):
-            if token == self._token_eos:
+            assert self._model.model is not None
+            if llama_cpp.llama_token_is_eog(self._model.model, token):
                 text = self.detokenize(completion_tokens, prev_tokens=prompt_tokens)
                 finish_reason = "stop"
                 break
