@@ -2819,7 +2819,7 @@ def vicuna_function_calling(
         "\n\nYou have access to the following functions:\n"
         "{% for tool in tools %}"
         "\nfunctions.{{ tool.function.name }}:\n"
-        "{{ tool.function.arguments | tojson }}"
+        "{{ tool.function.arguments }}"
         "\n{% endfor %}"
         "\n\nYou can respond to users messages with either a single message or multiple function calls, never both. If function calls are used, they must be the first part of the response."
         "\n\nTo respond with one or more function calls begin the message with 'functions.<function_name>:', use the following format:"
