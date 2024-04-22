@@ -919,6 +919,23 @@ def format_llama2(
     _prompt = _format_llama2(system_message, _messages, " ", "</s>") + "[/INST]"
     return ChatFormatterResponse(prompt=_prompt)
 
+@register_chat_format("llama-3")
+def format_llama3(
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    **kwargs: Any,
+) -> ChatFormatterResponse:
+    _roles = dict(
+        system="<|start_header_id|>system<|end_header_id|>\n\n",
+        user="<|start_header_id|>user<|end_header_id|>\n\n",
+        assistant="<|start_header_id|>assistant<|end_header_id|>\n\n",
+    )
+    _begin_token = "<|begin_of_text|>"
+    _sep = "<|eot_id|>"
+    _messages = _map_roles(messages, _roles)
+    _messages.append((_roles["assistant"], None))
+    _prompt = _format_no_colon_single(_begin_token, _messages, _sep)
+    return ChatFormatterResponse(prompt=_prompt, stop=_sep)
+
 
 @register_chat_format("alpaca")
 def format_alpaca(
