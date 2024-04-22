@@ -2830,6 +2830,7 @@ def vicuna_function_calling(
         "\n\nmessage:"
         "\n<message> </s>"
         "{% endif %}"
+        "\nAfter performing a function call, the function will send a response containing the return values of the function calls between <tool_output> tags. Present it to the user.\n"
         "</s>\n"
         "{% endif %}"
         # User message
@@ -2860,7 +2861,7 @@ def vicuna_function_calling(
         # Tool message (treated as Assistant response)
         "{% if message.role == 'tool' %}"
         "ASSISTANT:\n"
-        "Function response: {{ message.content | default('No response available') }}"
+        "<tool_output>: {{ message.content | default('No response available') }} </tool_output>"
         "</s>\n"
         "{% endif %}"
         "{% endfor %}"
@@ -2927,15 +2928,14 @@ def llama3_function_calling(
         '\n{ "arg1": "value1", "arg2": "value2" }'
         "\nWhen you have completed entering function calls, end your output with '</done>'."
         '\nStart your output with either "message:" or "functions.". Do not mix the two.'
-        "\nAfter performing a function call, the user will send a response containing the return values of the function calls between <tool_output> tags."
-        "Always present this output back to the user, as the user has not seen it directly.\n"
-        "Example: <tool_output> item: Cheeseburguer, price: 12 </tool_output> You should output: I found a Cheeseburguer that costs 12 dollars."
+        "\nAfter performing a function call, the function will send a response containing the return values of the function calls between <tool_output> tags. Present it to the user.\n"
+        #"Example: <tool_output> item: Cheeseburguer, price: 12 </tool_output> You should output: I found a Cheeseburguer that costs 12 dollars."
         "{% endif %}"
         "<|eot_id|>\n"
         "{% for message in messages %}"
         "{% if message.role == 'tool'%}"
         "<|start_header_id|>user<|end_header_id|>\n\n"
-        "Function output, bring it to me: <tool_output>  {{ message.content | default('No response available') }} </tool_output>"
+        "<tool_output>  {{ message.content | default('No response available') }} </tool_output>"
         "<|eot_id|>\n"
         "{% elif message.role == 'assistant' and message.function_call is defined%}"
         "<|start_header_id|>{{ message.role }}<|end_header_id|>\n\n"
