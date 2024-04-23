@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.64]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@4e96a812b3ce7322a29a3008db2ed73d9087b176
+- feat: Add `llama-3` chat format by @andreabak in #1371
+- feat: Use new llama_token_is_eog in create_completions by @abetlen in d40a250ef3cfaa8224d12c83776a2f1de96ae3d1
+- feat(server): Provide ability to dynamically allocate all threads if desired using -1 by @sean-bailey in #1364
+- ci: Build arm64 wheels by @gaby in 611781f5319719a3d05fefccbbf0cc321742a026
+- fix: Update scikit-build-core build dependency avoid bug in 0.9.1 by @evelkey in #1370
+
 ## [0.2.63]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@0e4802b2ecbaab04b4f829fde4a3096ca19c84b5
