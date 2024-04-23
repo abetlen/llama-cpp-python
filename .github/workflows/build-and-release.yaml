@@ -41,6 +41,35 @@ jobs:
         with:
           path: ./wheelhouse/*.whl
 
+  build_arm64_wheels:
+    name: Build arm64 wheels
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: linux/arm64
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.16.5
+        env:
+          CIBW_SKIP: "*musllinux* pp*"
+          CIBW_REPAIR_WHEEL_COMMAND: ""
+          CIBW_ARCHS: "aarch64"
+          CIBW_BUILD: "cp38-* cp39-* cp310-* cp311-* cp312-*"
+        with:
+          output-dir: wheelhouse/
+
+      - name: Upload wheels as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.version }}
+          path: wheelhouse/*.whl
+
   build_sdist:
     name: Build source distribution
     runs-on: ubuntu-latest
@@ -65,7 +94,7 @@ jobs:
 
   release:
     name: Release
-    needs: [build_wheels, build_sdist]
+    needs: [build_wheels, build_arm64_wheels, build_sdist]
     runs-on: ubuntu-latest
 
     steps:
