@@ -2532,6 +2532,7 @@ def base_function_calling(
         text: llama_types.CreateCompletionResponse = message_output["choices"][0]["text"]  # type: ignore
         # fallback
         if not text.startswith("functions."):
+            message_output["choices"][0]["text"] = message_output["choices"][0]["text"].replace("message:", "")
             return _convert_completion_to_chat(message_output,stream=stream)
 
     # One or more function calls
@@ -2819,7 +2820,7 @@ def vicuna_function_calling(
         "\n\nYou have access to the following functions:\n"
         "{% for tool in tools %}"
         "\nfunctions.{{ tool.function.name }}:\n"
-        "{{ tool.function.arguments }}"
+        "{{ tool.function.parameters }}"
         "\n{% endfor %}"
         "\n\nYou can respond to users messages with either a single message or multiple function calls, never both. If function calls are used, they must be the first part of the response."
         "\n\nTo respond with one or more function calls begin the message with 'functions.<function_name>:', use the following format:"
@@ -2854,7 +2855,7 @@ def vicuna_function_calling(
         "{% if tool_calls %}"
         "{% for tool_call in message.tool_calls %}"
         "functions.{{ tool_call.function.name }}:\n"
-        "{{ (tool_call.arguments | default('{}') | tojson) }}"
+        "{{ (tool_call.function.parameters | default('{}') | tojson) }}"
         "{% if not loop.last %};{% endif %}"  # Semicolon separator if not the last function call
         "{% endfor %}"
         "</s>\n"
