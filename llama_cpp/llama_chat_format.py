@@ -2464,6 +2464,11 @@ def base_function_calling(
         f"""root   ::= functions | "</done>"\n"""
         f"""functions ::= {function_names}\n"""
     )
+    msg_gbnf_grammar = (
+        """root ::= message | functions\n"""
+        f"""message ::= "message: " [^{end_token}]* "{end_token}"\n"""
+        f"""functions ::= {function_names}\n"""
+    )
 
 
     prompt = template_renderer.render(
@@ -2499,10 +2504,9 @@ def base_function_calling(
     completion: llama_types.CreateCompletionResponse = completion_or_chunks  # type: ignore
     text = completion["choices"][0]["text"]
     print(text)
-    if "message" in text:
-        return _convert_completion_to_chat(
-            llama.create_completion(
-                prompt=prompt + "message:\n",
+    if "message:" in text:
+        message_output = llama.create_completion(
+                prompt=prompt,
                 temperature=temperature,
                 top_p=top_p,
                 top_k=top_k,
@@ -2521,11 +2525,15 @@ def base_function_calling(
                 mirostat_eta=mirostat_eta,
                 model=model,
                 logits_processor=logits_processor,
-                # grammar=llama_grammar.LlamaGrammar.from_string(
-                #     follow_up_gbnf_tool_grammar, verbose=llama.verbose
-                # ),
-            ),stream=stream
-        )
+                grammar=llama_grammar.LlamaGrammar.from_string(
+                    msg_gbnf_grammar, verbose=llama.verbose
+                ),
+            )
+        text: llama_types.CreateCompletionResponse = message_output["choices"][0]["text"]  # type: ignore
+        # fallback
+        if not text.startswith("functions."):
+            message_output["choices"][0]["text"] = message_output["choices"][0]["text"].replace("message:", "")
+            return _convert_completion_to_chat(message_output,stream=stream)
 
     # One or more function calls
     tool_name = text[len("functions.") :].replace(":", "")
@@ -2802,7 +2810,9 @@ def vicuna_function_calling(
 ]:
     function_calling_template = (
         "{% for message in messages %}"
+        "{% if message.role != 'tool' %}"
         "{{ message.role.upper() }}\n"  # Vicuna uses upper case for roles
+        "{% endif %}"
         # System message
         "{% if message.role == 'system' %}"
         "{{ message.content }}"
@@ -2810,7 +2820,7 @@ def vicuna_function_calling(
         "\n\nYou have access to the following functions:\n"
         "{% for tool in tools %}"
         "\nfunctions.{{ tool.function.name }}:\n"
-        "{{ tool.function.parameters | tojson }}"
+        "{{ tool.function.parameters }}"
         "\n{% endfor %}"
         "\n\nYou can respond to users messages with either a single message or multiple function calls, never both. If function calls are used, they must be the first part of the response."
         "\n\nTo respond with one or more function calls begin the message with 'functions.<function_name>:', use the following format:"
@@ -2823,6 +2833,7 @@ def vicuna_function_calling(
         "\n\nmessage:"
         "\n<message> </s>"
         "{% endif %}"
+        "\nAfter performing a function call, the function will send a response containing the return values of the function calls between <tool_output> tags. Present it to the user.\n"
         "</s>\n"
         "{% endif %}"
         # User message
@@ -2844,7 +2855,7 @@ def vicuna_function_calling(
         "{% if tool_calls %}"
         "{% for tool_call in message.tool_calls %}"
         "functions.{{ tool_call.function.name }}:\n"
-        "{{ (tool_call.arguments | default('{}') | tojson) }}"
+        "{{ (tool_call.function.parameters | default('{}') | tojson) }}"
         "{% if not loop.last %};{% endif %}"  # Semicolon separator if not the last function call
         "{% endfor %}"
         "</s>\n"
@@ -2853,7 +2864,7 @@ def vicuna_function_calling(
         # Tool message (treated as Assistant response)
         "{% if message.role == 'tool' %}"
         "ASSISTANT:\n"
-        "Function response: {{ message.content | default('No response available') }}"
+        "<tool_output>: {{ message.content | default('No response available') }} </tool_output>"
         "</s>\n"
         "{% endif %}"
         "{% endfor %}"
@@ -2910,29 +2921,32 @@ def llama3_function_calling(
         "\nfunctions.{{ tool.function.name }}:\n"
         "{{ tool.function.parameters | tojson }}"
         "\n{% endfor %}"
-        "\nYou can respond to users messages with either a single message or one or more function calls. Never both. Prioritize function calls over messages."
-        "\nTo respond with a message begin the message with 'message:'"
-        '\n Example sending message: message: "Hello, how can I help you?"'
-        "\nTo respond with one or more function calls begin the message with 'functions.<function_name>:', use the following format:"
+        "\nYou can respond to user messages either by sending a single message or by making one or more function calls. You should never do both. Always prioritize function calls over messages."
+        "\nTo send a response message, start your message with 'message:'"
+        '\nExample of sending a message: message: "Hello, how can I help you?"'
+        "\nTo use one or more function calls, start your response with 'functions.<function_name>:', follow this format:"
         "\nfunctions.<function_name>:"
         '\n{ "arg1": "value1", "arg2": "value2" }'
         "\nfunctions.<function_name>:"
         '\n{ "arg1": "value1", "arg2": "value2" }'
-        "\nWhen you are done with the function calls, end the message with </done>."
-        '\nStart your output with either message: or functions. <|eot_id|>\n'
+        "\nWhen you have completed entering function calls, end your output with '</done>'."
+        '\nStart your output with either "message:" or "functions.". Do not mix the two.'
+        "\nAfter performing a function call, the function will send a response containing the return values of the function calls between <tool_output> tags. Present it to the user.\n"
+        #"Example: <tool_output> item: Cheeseburguer, price: 12 </tool_output> You should output: I found a Cheeseburguer that costs 12 dollars."
         "{% endif %}"
+        "<|eot_id|>\n"
         "{% for message in messages %}"
-        "{% if message.role == 'tool' %}"
+        "{% if message.role == 'tool'%}"
         "<|start_header_id|>user<|end_header_id|>\n\n"
-        "here is the Function response, bring it to me in a nice way: {{ message.content | default('No response available') }}"
+        "<tool_output>  {{ message.content | default('No response available') }} </tool_output>"
         "<|eot_id|>\n"
         "{% elif message.role == 'assistant' and message.function_call is defined%}"
-        "<|start_header_id|>{{ message.role }}<|end_header_id|>"
+        "<|start_header_id|>{{ message.role }}<|end_header_id|>\n\n"
         "Function called: {{ message.function_call.name | default('No name') }}\n"
         "Function argument: {{ message.function_call.arguments | default('No arguments') }}"
         "<|eot_id|>\n"
-        "{% else %}"
-        "<|start_header_id|>{{ message.role }}<|end_header_id|>"
+        "{% elif message.role != 'system' %}"
+        "<|start_header_id|>{{ message.role }}<|end_header_id|>\n\n"
         "{{ message.content }}"
         "<|eot_id|>\n"
         "{% endif %}"
