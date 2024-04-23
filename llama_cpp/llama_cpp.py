@@ -2380,6 +2380,18 @@ def llama_token_get_type(
     ...
 
 
+# // Check if the token is supposed to end generation (end-of-generation, eg. EOS, EOT, etc.)
+# LLAMA_API bool llama_token_is_eog(const struct llama_model * model, llama_token token);
+@ctypes_function(
+    "llama_token_is_eog", [llama_model_p_ctypes, llama_token], ctypes.c_bool
+)
+def llama_token_is_eog(
+    model: llama_model_p, token: Union[llama_token, int], /
+) -> bool:
+    """Check if the token is supposed to end generation (end-of-generation, eg. EOS, EOT, etc.)"""
+    ...
+
+
 # // Special tokens
 
 
@@ -2434,7 +2446,7 @@ def llama_add_eos_token(model: llama_model_p, /) -> int:
     ...
 
 
-# // codellama infill tokens
+# // Codellama infill tokens
 # LLAMA_API llama_token llama_token_prefix(const struct llama_model * model); // Beginning of infill prefix
 @ctypes_function("llama_token_prefix", [llama_model_p_ctypes], llama_token)
 def llama_token_prefix(model: llama_model_p) -> int:
@@ -2524,11 +2536,13 @@ def llama_tokenize(
 # // Uses the vocabulary in the provided context.
 # // Does not write null terminator to the buffer.
 # // User code is responsible to remove the leading whitespace of the first non-BOS token when decoding multiple tokens.
+# // @param special If true, special tokens are rendered in the output.
 # LLAMA_API int32_t llama_token_to_piece(
 #           const struct llama_model * model,
 #                        llama_token   token,
 #                               char * buf,
-#                            int32_t   length);
+#                            int32_t   length,
+#                               bool   special);
 @ctypes_function(
     "llama_token_to_piece",
     [
@@ -2536,6 +2550,7 @@ def llama_tokenize(
         llama_token,
         ctypes.c_char_p,
         ctypes.c_int32,
+        ctypes.c_bool,
     ],
     ctypes.c_int32,
 )
@@ -2544,13 +2559,20 @@ def llama_token_to_piece(
     token: Union[llama_token, int],
     buf: Union[ctypes.c_char_p, bytes, CtypesArray[ctypes.c_char]],
     length: Union[ctypes.c_int, int],
+    special: Union[ctypes.c_bool, bool],
     /,
 ) -> int:
     """Token Id -> Piece.
     Uses the vocabulary in the provided context.
     Does not write null terminator to the buffer.
     User code is responsible to remove the leading whitespace of the first non-BOS token when decoding multiple tokens.
-    """
+
+    Args:
+        model: The model to use for tokenization.
+        token: The token to convert.
+        buf: The buffer to write the token to.
+        length: The length of the buffer.
+        special: If true, special tokens are rendered in the output."""
     ...
 
 
