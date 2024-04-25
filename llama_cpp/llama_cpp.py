@@ -1167,13 +1167,19 @@ def llama_n_seq_max(ctx: llama_context_p, /) -> int:
     ...
 
 
-# LLAMA_API enum llama_vocab_type llama_vocab_type(const struct llama_model * model);
+# LLAMA_API enum llama_pooling_type llama_pooling_type(const struct llama_context * ctx);
+@ctypes_function("llama_pooling_type", [llama_context_p_ctypes], ctypes.c_int)
+def llama_pooling_type(ctx: llama_context_p, /) -> int:
+    ...
+
+
+# LLAMA_API enum llama_vocab_type   llama_vocab_type  (const struct llama_model   * model);
 @ctypes_function("llama_vocab_type", [llama_model_p_ctypes], ctypes.c_int)
 def llama_vocab_type(model: llama_model_p, /) -> int:
     ...
 
 
-# LLAMA_API enum llama_rope_type  llama_rope_type (const struct llama_model * model);
+# LLAMA_API enum llama_rope_type    llama_rope_type   (const struct llama_model   * model);
 @ctypes_function("llama_rope_type", [llama_model_p_ctypes], ctypes.c_int)
 def llama_rope_type(model: llama_model_p, /) -> int:
     ...
@@ -3097,7 +3103,7 @@ def llama_sample_token_greedy(
     ...
 
 
-# /// @details Randomly selects a token from the candidates based on their probabilities.
+# /// @details Randomly selects a token from the candidates based on their probabilities using the RNG of ctx.
 # LLAMA_API llama_token llama_sample_token(
 #         struct llama_context * ctx,
 #       llama_token_data_array * candidates);
