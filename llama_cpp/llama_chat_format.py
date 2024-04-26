@@ -2078,11 +2078,21 @@ def functionary_v1_v2_chat_handler(
                 completion_text = completion["choices"][0]["text"]
                 completion_tokens += completion["usage"]["completion_tokens"]
                 if function_name == "all":
-                    content += completion_text.removesuffix("\n<|from|>assistant\n").removesuffix("\n<|from|> assistant\n")
+                    if completion_text.endswith("\n<|from|>assistant\n"):
+                        content += completion_text[:-len("\n<|from|>assistant\n")]
+                    if completion_text.endswith("\n<|from|> assistant\n"):
+                        content += completion_text[-len("\n<|from|> assistant\n")]
+                    else:
+                        content += completion_text
                     content = content.lstrip()
                     # Check whether the model wants to generate another turn
                     if "<|from|> assistant" in completion_text or "<|from|>assistant" in completion_text:
-                        cleaned_completion_text = completion_text.removesuffix("\n<|from|>assistant\n").removesuffix("\n<|from|> assistant\n").strip()
+                        if completion_text.endswith("\n<|from|>assistant\n"):
+                            cleaned_completion_text = completion_text[:-len("\n<|from|>assistant\n")].strip()
+                        elif completion_text.endswith("\n<|from|> assistant\n"):
+                            cleaned_completion_text = completion_text[-len("\n<|from|> assistant\n")].strip()
+                        else:
+                            cleaned_completion_text = completion_text.strip()
                         prompt += f"{cleaned_completion_text}\n<|from|>assistant\n<|recipient|>"
                     else:
                         break
@@ -2125,8 +2135,9 @@ def functionary_v1_v2_chat_handler(
         "function_call": {
             "name": tool_calls[0]["function"]["name"],
             "arguments": tool_calls[0]["function"]["arguments"],
-        }
-    } if len(tool_calls) == 1 else {}
+        } if len(tool_calls) > 0 and tools is None else None,
+        "tool_calls": tool_calls if len(tool_calls) > 0 and tools is not None else None,
+    } 
     completion["usage"]["completion_tokens"] = completion_tokens
     return llama_types.CreateChatCompletionResponse(
         id="chat" + completion["id"],
@@ -2140,7 +2151,7 @@ def functionary_v1_v2_chat_handler(
                 "message": {
                     "role": "assistant",
                     "content": None if content == "" else content,
-                    "tool_calls": tool_calls,
+                    "tool_calls": tool_calls if tools is not None else None,
                     **function_call_dict,
                 },
                 "finish_reason": "tool_calls" if len(tool_calls) > 0 else "stop",
