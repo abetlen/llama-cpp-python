@@ -2131,13 +2131,15 @@ def functionary_v1_v2_chat_handler(
         )
 
     # TODO: support stream mode
-    function_call_dict: Union[Dict[str, str], Dict[Literal["function_call"], llama_types.ChatCompletionRequestAssistantMessageFunctionCall]] = { 
-        "function_call": {
-            "name": tool_calls[0]["function"]["name"],
-            "arguments": tool_calls[0]["function"]["arguments"],
-        } if len(tool_calls) > 0 and tools is None else None,
-        "tool_calls": tool_calls if len(tool_calls) > 0 and tools is not None else None,
-    } 
+    function_call_dict: Union[Dict[str, str], Dict[Literal["function_call"], llama_types.ChatCompletionRequestAssistantMessageFunctionCall]] = {}
+    if len(tool_calls) > 0:
+        if tools is not None:
+            function_call_dict["tool_calls"] = tool_calls
+        else:
+            function_call_dict["function_call"] = {
+                "name": tool_calls[0]["function"]["name"],
+                "arguments": tool_calls[0]["function"]["arguments"],
+            }
     completion["usage"]["completion_tokens"] = completion_tokens
     return llama_types.CreateChatCompletionResponse(
         id="chat" + completion["id"],
@@ -2151,7 +2153,6 @@ def functionary_v1_v2_chat_handler(
                 "message": {
                     "role": "assistant",
                     "content": None if content == "" else content,
-                    "tool_calls": tool_calls if tools is not None else None,
                     **function_call_dict,
                 },
                 "finish_reason": "tool_calls" if len(tool_calls) > 0 else "stop",
