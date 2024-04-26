@@ -74,7 +74,7 @@ jobs:
         if: runner.os == 'Windows' && steps.vs-integration-cache.outputs.cache-hit != 'true'
         run: |
           if ($env:CUDAVER -eq '12.1.1') {$x = '12.1.0'} else {$x = $env:CUDAVER}
-          $links = (Invoke-RestMethod 'https://github.com/Jimver/cuda-toolkit/raw/dc0ca7bb29c5a92f7a963d3d5c93f8d59765136a/src/links/windows-links.ts').Trim().split().where({$_ -ne ''})
+          $links = (Invoke-RestMethod 'https://raw.githubusercontent.com/Jimver/cuda-toolkit/master/src/links/windows-links.ts').Trim().split().where({$_ -ne ''})
           for ($i=$q=0;$i -lt $links.count -and $q -lt 2;$i++) {if ($links[$i] -eq "'$x',") {$q++}}
           Invoke-RestMethod $links[$i].Trim("'") -OutFile 'cudainstaller.zip'
           & 'C:\Program Files\7-Zip\7z.exe' e cudainstaller.zip -oMSBuildExtensions -r *\MSBuildExtensions\* > $null
