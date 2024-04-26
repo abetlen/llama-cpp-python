@@ -38,6 +38,9 @@ MIXTRAL_INSTRUCT_CHAT_TEMPLATE = "{{ bos_token }}{% for message in messages %}{%
 # Source: https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct/blob/main/tokenizer_config.json
 LLAMA3_INSTRUCT_CHAT_TEMPLATE = "{% set loop_messages = messages %}{% for message in loop_messages %}{% set content = '<|start_header_id|>' + message['role'] + '<|end_header_id|>\n\n'+ message['content'] | trim + '<|eot_id|>' %}{% if loop.index0 == 0 %}{% set content = bos_token + content %}{% endif %}{{ content }}{% endfor %}{% if add_generation_prompt %}{{ '<|start_header_id|>assistant<|end_header_id|>\n\n' }}{% endif %}"
 
+# Source: https://huggingface.co/microsoft/Phi-3-mini-128k-instruct/blob/main/tokenizer_config.json
+PHI_3_MINI_INSTRUCT_CHAT_TEMPLATE = "{{ bos_token }}{% for message in messages %}{% if (message['role'] == 'system') %}{{'<|system|>' + '\n' + message['content'] + '<|end|>' + '\n'}}{% elif (message['role'] == 'user') %}{{'<|user|>' + '\n' + message['content'] + '<|end|>' + '\n' + '<|assistant|>' + '\n'}}{% elif message['role'] == 'assistant' %}{{message['content'] + '<|end|>' + '\n'}}{% endif %}{% endfor %}"
+
 ### Chat Completion Handler ###
 
 
@@ -734,6 +737,9 @@ def guess_chat_format_from_gguf_metadata(metadata: Dict[str, str]) -> Optional[s
 
     if metadata["tokenizer.chat_template"] == LLAMA3_INSTRUCT_CHAT_TEMPLATE:
         return "llama-3"
+    
+    if metadata["tokenizer.chat_template"] == PHI_3_MINI_INSTRUCT_CHAT_TEMPLATE:
+        return "phi-3-mini"
 
     return None
 
@@ -1323,6 +1329,27 @@ def format_gemma(
     _prompt = _format_no_colon_single(system_message="", messages=_messages, sep=_sep)
     return ChatFormatterResponse(prompt=_prompt, stop=_sep)
 
+@register_chat_format("phi_3_mini")
+def format_phi_3_mini(
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    **kwargs: Any,
+) -> ChatFormatterResponse:
+    system_message = _get_system_message(messages)
+    if system_message != "":
+        logger.debug(
+            "`role='system'` messages are not allowed on Microsoft's Phi models."
+        )
+    _roles = dict(
+        user="<|user|>\nuser<|end>\n", 
+        assistant="<|assistant|>\nassistant<|end|>\n", 
+        system="<|system|>\nsystem<|end|>\n"
+    )
+    _begin_token = "<s>"
+    _sep = "</s>"
+    _messages = _map_roles(messages, _roles)
+    _messages.append((_roles["assistant"], None))
+    _prompt = _format_add_colon_single(_begin_token, _messages, _sep)
+    return ChatFormatterResponse(prompt=_prompt, stop=_sep)
 
 # Tricky chat formats that require custom chat handlers
 
