@@ -811,6 +811,7 @@ It might not exist for progress report where '.' is output repeatedly."""
 #     bool quantize_output_tensor;         // quantize output.weight
 #     bool only_copy;                      // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
 #     bool pure;                           // quantize all tensors to the default type
+#     bool keep_split;                     // quantize to the same number of shards
 #     void * imatrix;                      // pointer to importance matrix data
 #     void * kv_overrides;                 // pointer to vector containing overrides
 # } llama_model_quantize_params;
@@ -826,6 +827,7 @@ class llama_model_quantize_params(ctypes.Structure):
         quantize_output_tensor (bool): quantize output.weight
         only_copy (bool): only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
         pure (bool): quantize all tensors to the default type
+        keep_split (bool): quantize to the same number of shards
         imatrix (ctypes.c_void_p): pointer to importance matrix data
         kv_overrides (ctypes.c_void_p): pointer to vector containing overrides
     """
@@ -839,6 +841,7 @@ class llama_model_quantize_params(ctypes.Structure):
         quantize_output_tensor: bool
         only_copy: bool
         pure: bool
+        keep_split: bool
         imatrix: ctypes.c_void_p
         kv_overrides: ctypes.c_void_p
 
@@ -851,6 +854,7 @@ class llama_model_quantize_params(ctypes.Structure):
         ("quantize_output_tensor", ctypes.c_bool),
         ("only_copy", ctypes.c_bool),
         ("pure", ctypes.c_bool),
+        ("keep_split", ctypes.c_bool),
         ("imatrix", ctypes.c_void_p),
         ("kv_overrides", ctypes.c_void_p),
     ]
