@@ -1340,12 +1340,12 @@ def format_phi_3_mini(
             "`role='system'` messages are not allowed on Microsoft's Phi models."
         )
     _roles = dict(
-        user="<|user|>\nuser<|end>\n", 
-        assistant="<|assistant|>\nassistant<|end|>\n", 
-        system="<|system|>\nsystem<|end|>\n"
+        user="<|user|>", 
+        assistant="<|assistant|>", 
+        system="<|system|>"
     )
     _begin_token = "<s>"
-    _sep = "</s>"
+    _sep = "<|end|>"
     _messages = _map_roles(messages, _roles)
     _messages.append((_roles["assistant"], None))
     _prompt = _format_add_colon_single(_begin_token, _messages, _sep)
