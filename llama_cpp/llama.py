@@ -50,6 +50,7 @@ from ._internals import (
     _LlamaTokenDataArray,  # type: ignore
     _LlamaSamplingParams,  # type: ignore
     _LlamaSamplingContext,  # type: ignore
+    _normalize_embedding,  # type: ignore
 )
 from ._logger import set_verbose
 from ._utils import suppress_stdout_stderr
@@ -760,7 +761,7 @@ class Llama:
         input = input if isinstance(input, list) else [input]
 
         # get numeric embeddings
-        embeds: List[List[float]]
+        embeds: Union[List[List[float]], List[List[List[float]]]]
         total_tokens: int
         embeds, total_tokens = self.embed(input, return_count=True)  # type: ignore
 
@@ -787,7 +788,7 @@ class Llama:
     def embed(
         self,
         input: Union[str, List[str]],
-        normalize: bool = True,
+        normalize: bool = False,
         truncate: bool = True,
         return_count: bool = False,
     ):
@@ -802,6 +803,10 @@ class Llama:
         assert self._ctx.ctx is not None
         n_embd = self.n_embd()
         n_batch = self.n_batch
+
+        # get pooling information
+        pooling_type = self.pooling_type()
+        logits_all = pooling_type == llama_cpp.LLAMA_POOLING_TYPE_NONE
 
         if self.context_params.embeddings == False:
             raise RuntimeError(
@@ -820,29 +825,37 @@ class Llama:
         self._batch.reset()
 
         # decode and fetch embeddings
-        data: List[List[float]] = []
+        data: Union[List[List[float]], List[List[List[float]]]] = []
 
-        def decode_batch(n_seq: int):
+        def decode_batch(seq_sizes: List[int]):
             assert self._ctx.ctx is not None
             llama_cpp.llama_kv_cache_clear(self._ctx.ctx)
             self._ctx.decode(self._batch)
             self._batch.reset()
 
             # store embeddings
-            for i in range(n_seq):
-                ptr = llama_cpp.llama_get_embeddings_seq(
-                    self._ctx.ctx, i
-                )
-                if not ptr:
-                    raise RuntimeError("Failed to get embeddings from sequence pooling type is not set")
-                embedding: List[float] = ptr[:n_embd]
-                if normalize:
-                    norm = float(np.linalg.norm(embedding))
-                    embedding = [v / norm for v in embedding]
-                data.append(embedding)
+            if pooling_type == llama_cpp.LLAMA_POOLING_TYPE_NONE:
+                pos: int = 0
+                for i, size in enumerate(seq_sizes):
+                    ptr = llama_cpp.llama_get_embeddings(self._ctx.ctx)
+                    embedding: List[List[float]] = [
+                        ptr[pos + j * n_embd : pos + (j + 1) * n_embd] for j in range(size)
+                    ]
+                    if normalize:
+                        embedding = [_normalize_embedding(e) for e in embedding]
+                    data.append(embedding)
+                    pos += size
+            else:
+                for i in range(len(seq_sizes)):
+                    ptr = llama_cpp.llama_get_embeddings_seq(self._ctx.ctx, i)
+                    embedding: List[float] = ptr[:n_embd]
+                    if normalize:
+                        embedding = _normalize_embedding(embedding)
+                    data.append(embedding)
 
         # init state
         total_tokens = 0
+        s_batch = []
         t_batch = 0
         p_batch = 0
 
@@ -863,17 +876,21 @@ class Llama:
 
             # time to eval batch
             if t_batch + n_tokens > n_batch:
-                decode_batch(p_batch)
+                decode_batch(s_batch)
+                s_batch = []
                 t_batch = 0
                 p_batch = 0
 
             # add to batch
-            self._batch.add_sequence(tokens, p_batch, False)
+            self._batch.add_sequence(tokens, p_batch, logits_all)
+
+            # update batch stats
+            s_batch.append(n_tokens)
             t_batch += n_tokens
             p_batch += 1
 
         # hanlde last batch
-        decode_batch(p_batch)
+        decode_batch(s_batch)
 
         if self.verbose:
             llama_cpp.llama_print_timings(self._ctx.ctx)
@@ -1844,6 +1861,10 @@ class Llama:
     def token_nl(self) -> int:
         """Return the newline token."""
         return self._model.token_nl()
+
+    def pooling_type(self) -> str:
+        """Return the pooling type."""
+        return self._ctx.pooling_type()
 
     @staticmethod
     def logits_to_logprobs(

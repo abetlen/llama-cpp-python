@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import multiprocessing
 
-from typing import Optional, List, Literal, Union
-from pydantic import Field, root_validator
+from typing import Optional, List, Literal, Union, Dict, cast
+from typing_extensions import Self
+
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings
 
 import llama_cpp
@@ -173,15 +175,16 @@ class ModelSettings(BaseSettings):
         default=True, description="Whether to print debug information."
     )
 
-    @root_validator(pre=True)  # pre=True to ensure this runs before any other validation
-    def set_dynamic_defaults(cls, values):
+    @model_validator(mode="before")  # pre=True to ensure this runs before any other validation
+    def set_dynamic_defaults(self) -> Self:
         # If n_threads or n_threads_batch is -1, set it to multiprocessing.cpu_count()
         cpu_count = multiprocessing.cpu_count()
+        values = cast(Dict[str, int], self)
         if values.get('n_threads', 0) == -1:
             values['n_threads'] = cpu_count
         if values.get('n_threads_batch', 0) == -1:
             values['n_threads_batch'] = cpu_count
-        return values
+        return self
 
 
 class ServerSettings(BaseSettings):
