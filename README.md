@@ -575,7 +575,7 @@ llama = Llama(
 
 ### Embeddings
 
-To generate text embeddings use [`create_embedding`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.create_embedding).
+To generate text embeddings use [`create_embedding`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.create_embedding) or [`embed`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.embed). Note that you must pass `embedding=True` to the constructor upon model creation for these to work properly.
 
 ```python
 import llama_cpp
@@ -588,6 +588,12 @@ embeddings = llm.create_embedding("Hello, world!")
 
 embeddings = llm.create_embedding(["Hello, world!", "Goodbye, world!"])
 ```
+
+There are two primary notions of embeddings in a Transformer-style model: *token level* and *sequence level*. Sequence level embeddings are produced by "pooling" token level embeddings together, usually by averaging them or using the first token.
+
+Models that are explicitly geared towards embeddings will usually return sequence level embeddings by default, one for each input string. Non-embedding models such as those designed for text generation will typically return only token level embeddings, one for each token in each sequence. Thus the dimensionality of the return type will be one higher for token level embeddings.
+
+It is possible to control pooling behavior in some cases using the `pooling_type` flag on model creation. You can ensure token level embeddings from any model using `LLAMA_POOLING_TYPE_NONE`. The reverse, getting a generation oriented model to yield sequence level embeddings is currently not possible, but you can always do the pooling manually.
 
 ### Adjusting the Context Window
 
