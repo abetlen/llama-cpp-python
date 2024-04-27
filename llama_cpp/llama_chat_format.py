@@ -2232,6 +2232,7 @@ class Llava15ChatHandler:
         typical_p: float = 1.0,
         stream: bool = False,
         stop: Optional[Union[str, List[str]]] = [],
+        seed: Optional[int] = None,
         response_format: Optional[
             llama_types.ChatCompletionRequestResponseFormat
         ] = None,
@@ -2246,6 +2247,9 @@ class Llava15ChatHandler:
         model: Optional[str] = None,
         logits_processor: Optional[llama.LogitsProcessorList] = None,
         grammar: Optional[llama.LlamaGrammar] = None,
+        logit_bias: Optional[Dict[str, float]] = None,
+        logprobs: Optional[bool] = None,
+        top_logprobs: Optional[int] = None,
         **kwargs,  # type: ignore
     ) -> Union[
         llama_types.CreateChatCompletionResponse,
@@ -2309,32 +2313,77 @@ class Llava15ChatHandler:
         if response_format is not None and response_format["type"] == "json_object":
             grammar = _grammar_for_response_format(response_format)
 
-        # TODO: Add function call support
+        # Convert legacy functions to tools
+        if functions is not None:
+            tools = [
+                {
+                    "type": "function",
+                    "function": function,
+                }
+                for function in functions
+            ]
 
-        return _convert_completion_to_chat(
-            llama.create_completion(
-                prompt=prompt,
-                temperature=temperature,
-                top_p=top_p,
-                top_k=top_k,
-                min_p=min_p,
-                typical_p=typical_p,
-                stream=stream,
-                stop=stop,
-                max_tokens=max_tokens,
-                presence_penalty=presence_penalty,
-                frequency_penalty=frequency_penalty,
-                repeat_penalty=repeat_penalty,
-                tfs_z=tfs_z,
-                mirostat_mode=mirostat_mode,
-                mirostat_tau=mirostat_tau,
-                mirostat_eta=mirostat_eta,
-                model=model,
-                logits_processor=logits_processor,
-                grammar=grammar,
-            ),
+        # Convert legacy function_call to tool_choice
+        if function_call is not None:
+            if isinstance(function_call, str) and (
+                function_call == "none" or function_call == "auto"
+            ):
+                tool_choice = function_call
+            if isinstance(function_call, dict) and "name" in function_call:
+                tool_choice = {
+                    "type": "function",
+                    "function": {
+                        "name": function_call["name"],
+                    },
+                }
+
+        tool = None
+        if tool_choice is not None and isinstance(tool_choice, dict) and tools is not None:
+            name = tool_choice["function"]["name"]
+            tool = next((t for t in tools if t["function"]["name"] == name), None)
+            if tool is None:
+                raise ValueError(f"Tool choice '{name}' not found in tools.")
+            schema = tool["function"]["parameters"]
+            try:
+                # create grammar from json schema
+                grammar = llama_grammar.LlamaGrammar.from_json_schema(
+                    json.dumps(schema), verbose=llama.verbose
+                )
+            except Exception as e:
+                grammar = llama_grammar.LlamaGrammar.from_string(
+                    llama_grammar.JSON_GBNF, verbose=llama.verbose
+                )
+
+        completion_or_chunks = llama.create_completion(
+            prompt=prompt,
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            min_p=min_p,
+            typical_p=typical_p,
+            logprobs=top_logprobs if logprobs else None,
             stream=stream,
+            stop=stop,
+            seed=seed,
+            max_tokens=max_tokens,
+            presence_penalty=presence_penalty,
+            frequency_penalty=frequency_penalty,
+            repeat_penalty=repeat_penalty,
+            tfs_z=tfs_z,
+            mirostat_mode=mirostat_mode,
+            mirostat_tau=mirostat_tau,
+            mirostat_eta=mirostat_eta,
+            model=model,
+            logits_processor=logits_processor,
+            grammar=grammar,
+            logit_bias=logit_bias,
         )
+        if tool is not None:
+            tool_name = tool["function"]["name"]
+            return _convert_completion_to_chat_function(
+                tool_name, completion_or_chunks, stream
+            )
+        return _convert_completion_to_chat(completion_or_chunks, stream=stream)
 
     @staticmethod
     def _load_image(image_url: str) -> bytes:
