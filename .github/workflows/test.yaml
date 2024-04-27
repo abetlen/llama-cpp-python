@@ -19,7 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: "true"
+          submodules: "recursive"
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
@@ -42,7 +42,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          submodules: "true"
+          submodules: "recursive"
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
@@ -57,7 +57,7 @@ jobs:
 
   build-macos:
 
-    runs-on: macos-latest
+    runs-on: macos-13
     strategy:
       matrix:
         python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
@@ -65,7 +65,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          submodules: "true"
+          submodules: "recursive"
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
@@ -85,7 +85,7 @@ jobs:
   #   steps:
   #     - uses: actions/checkout@v3
   #       with:
-  #         submodules: "true"
+  #         submodules: "recursive"
   #     - name: Set up Python 3.8
   #       uses: actions/setup-python@v4
   #       with:
@@ -107,12 +107,12 @@ jobs:
 
   build-macos-metal:
 
-    runs-on: macos-latest
+    runs-on: macos-13
 
     steps:
       - uses: actions/checkout@v3
         with:
-          submodules: "true"
+          submodules: "recursive"
       - name: Set up Python 3.8
         uses: actions/setup-python@v4
         with:

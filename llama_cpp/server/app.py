@@ -12,14 +12,7 @@ import llama_cpp
 import anyio
 from anyio.streams.memory import MemoryObjectSendStream
 from starlette.concurrency import run_in_threadpool, iterate_in_threadpool
-from fastapi import (
-    Depends,
-    FastAPI,
-    APIRouter,
-    Request,
-    HTTPException,
-    status,
-)
+from fastapi import Depends, FastAPI, APIRouter, Request, HTTPException, status, Body
 from fastapi.middleware import Middleware
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer
@@ -41,6 +34,11 @@ from llama_cpp.server.types import (
     CreateEmbeddingRequest,
     CreateChatCompletionRequest,
     ModelList,
+    TokenizeInputRequest,
+    TokenizeInputResponse,
+    TokenizeInputCountResponse,
+    DetokenizeInputRequest,
+    DetokenizeInputResponse,
 )
 from llama_cpp.server.errors import RouteErrorHandler
 
@@ -89,6 +87,13 @@ def get_llama_proxy():
             llama_outer_lock.release()
 
 
+_ping_message_factory = None
+
+def set_ping_message_factory(factory):
+   global  _ping_message_factory
+   _ping_message_factory = factory
+
+
 def create_app(
     settings: Settings | None = None,
     server_settings: ServerSettings | None = None,
@@ -99,7 +104,15 @@ def create_app(
         if not os.path.exists(config_file):
             raise ValueError(f"Config file {config_file} not found!")
         with open(config_file, "rb") as f:
-            config_file_settings = ConfigFileSettings.model_validate_json(f.read())
+            # Check if yaml file
+            if config_file.endswith(".yaml") or config_file.endswith(".yml"):
+                import yaml
+
+                config_file_settings = ConfigFileSettings.model_validate_json(
+                    json.dumps(yaml.safe_load(f))
+                )
+            else:
+                config_file_settings = ConfigFileSettings.model_validate_json(f.read())
             server_settings = ServerSettings.model_validate(config_file_settings)
             model_settings = config_file_settings.models
 
@@ -131,6 +144,9 @@ def create_app(
 
     assert model_settings is not None
     set_llama_proxy(model_settings=model_settings)
+
+    if server_settings.disable_ping_events:
+        set_ping_message_factory(lambda: bytes())
 
     return app
 
@@ -196,11 +212,14 @@ async def authenticate(
     )
 
 
+openai_v1_tag = "OpenAI V1"
+
+
 @router.post(
     "/v1/completions",
     summary="Completion",
-    dependencies=[Depends(authenticate)],    
-    response_model= Union[
+    dependencies=[Depends(authenticate)],
+    response_model=Union[
         llama_cpp.CreateCompletionResponse,
         str,
     ],
@@ -211,27 +230,29 @@ async def authenticate(
                 "application/json": {
                     "schema": {
                         "anyOf": [
-                            {"$ref": "#/components/schemas/CreateCompletionResponse"}                            
+                            {"$ref": "#/components/schemas/CreateCompletionResponse"}
                         ],
                         "title": "Completion response, when stream=False",
                     }
                 },
-                "text/event-stream":{
-                    "schema": {                     
-                      "type": "string",
-                      "title": "Server Side Streaming response, when stream=True. " +
-                        "See SSE format: https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events#Event_stream_format",  # noqa: E501
-                      "example": """data: {... see CreateCompletionResponse ...} \\n\\n data: ... \\n\\n ... data: [DONE]"""
+                "text/event-stream": {
+                    "schema": {
+                        "type": "string",
+                        "title": "Server Side Streaming response, when stream=True. "
+                        + "See SSE format: https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events#Event_stream_format",  # noqa: E501
+                        "example": """data: {... see CreateCompletionResponse ...} \\n\\n data: ... \\n\\n ... data: [DONE]""",
                     }
-                }
+                },
             },
         }
     },
+    tags=[openai_v1_tag],
 )
 @router.post(
     "/v1/engines/copilot-codex/completions",
     include_in_schema=False,
     dependencies=[Depends(authenticate)],
+    tags=[openai_v1_tag],
 )
 async def create_completion(
     request: Request,
@@ -290,13 +311,18 @@ async def create_completion(
                 inner_send_chan=send_chan,
                 iterator=iterator(),
             ),
+            sep="\n",
+            ping_message_factory=_ping_message_factory,
         )
     else:
         return iterator_or_completion
 
 
 @router.post(
-    "/v1/embeddings", summary="Embedding", dependencies=[Depends(authenticate)]
+    "/v1/embeddings",
+    summary="Embedding",
+    dependencies=[Depends(authenticate)],
+    tags=[openai_v1_tag],
 )
 async def create_embedding(
     request: CreateEmbeddingRequest,
@@ -309,10 +335,10 @@ async def create_embedding(
 
 
 @router.post(
-    "/v1/chat/completions", summary="Chat", dependencies=[Depends(authenticate)],
-    response_model= Union[
-        llama_cpp.ChatCompletion, str
-    ],
+    "/v1/chat/completions",
+    summary="Chat",
+    dependencies=[Depends(authenticate)],
+    response_model=Union[llama_cpp.ChatCompletion, str],
     responses={
         "200": {
             "description": "Successful Response",
@@ -320,26 +346,98 @@ async def create_embedding(
                 "application/json": {
                     "schema": {
                         "anyOf": [
-                            {"$ref": "#/components/schemas/CreateChatCompletionResponse"}                            
+                            {
+                                "$ref": "#/components/schemas/CreateChatCompletionResponse"
+                            }
                         ],
                         "title": "Completion response, when stream=False",
                     }
                 },
-                "text/event-stream":{
-                    "schema": {                     
-                      "type": "string",
-                      "title": "Server Side Streaming response, when stream=True" +
-                        "See SSE format: https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events#Event_stream_format",  # noqa: E501
-                      "example": """data: {... see CreateChatCompletionResponse ...} \\n\\n data: ... \\n\\n ... data: [DONE]"""
+                "text/event-stream": {
+                    "schema": {
+                        "type": "string",
+                        "title": "Server Side Streaming response, when stream=True"
+                        + "See SSE format: https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events#Event_stream_format",  # noqa: E501
+                        "example": """data: {... see CreateChatCompletionResponse ...} \\n\\n data: ... \\n\\n ... data: [DONE]""",
                     }
-                }
+                },
             },
         }
     },
+    tags=[openai_v1_tag],
 )
 async def create_chat_completion(
     request: Request,
-    body: CreateChatCompletionRequest,
+    body: CreateChatCompletionRequest = Body(
+        openapi_examples={
+            "normal": {
+                "summary": "Chat Completion",
+                "value": {
+                    "model": "gpt-3.5-turbo",
+                    "messages": [
+                        {"role": "system", "content": "You are a helpful assistant."},
+                        {"role": "user", "content": "What is the capital of France?"},
+                    ],
+                },
+            },
+            "json_mode": {
+                "summary": "JSON Mode",
+                "value": {
+                    "model": "gpt-3.5-turbo",
+                    "messages": [
+                        {"role": "system", "content": "You are a helpful assistant."},
+                        {"role": "user", "content": "Who won the world series in 2020"},
+                    ],
+                    "response_format": { "type": "json_object" }
+                },
+            },
+            "tool_calling": {
+                "summary": "Tool Calling",
+                "value": {
+                    "model": "gpt-3.5-turbo",
+                    "messages": [
+                        {"role": "system", "content": "You are a helpful assistant."},
+                        {"role": "user", "content": "Extract Jason is 30 years old."},
+                    ],
+                    "tools": [
+                        {
+                            "type": "function",
+                            "function": {
+                                "name": "User",
+                                "description": "User record",
+                                "parameters": {
+                                    "type": "object",
+                                    "properties": {
+                                        "name": {"type": "string"},
+                                        "age": {"type": "number"},
+                                    },
+                                    "required": ["name", "age"],
+                                },
+                            }
+                        }
+                    ],
+                    "tool_choice": {
+                        "type": "function",
+                        "function": {
+                            "name": "User",
+                        }
+                    }
+                },
+            },
+            "logprobs": {
+                "summary": "Logprobs",
+                "value": {
+                    "model": "gpt-3.5-turbo",
+                    "messages": [
+                        {"role": "system", "content": "You are a helpful assistant."},
+                        {"role": "user", "content": "What is the capital of France?"},
+                    ],
+                    "logprobs": True,
+                    "top_logprobs": 10
+                },
+            },
+        }
+    ),
     llama_proxy: LlamaProxy = Depends(get_llama_proxy),
 ) -> llama_cpp.ChatCompletion:
     exclude = {
@@ -382,12 +480,19 @@ async def create_chat_completion(
                 inner_send_chan=send_chan,
                 iterator=iterator(),
             ),
+            sep="\n",
+            ping_message_factory=_ping_message_factory,
         )
     else:
         return iterator_or_completion
 
 
-@router.get("/v1/models", summary="Models", dependencies=[Depends(authenticate)])
+@router.get(
+    "/v1/models",
+    summary="Models",
+    dependencies=[Depends(authenticate)],
+    tags=[openai_v1_tag],
+)
 async def get_models(
     llama_proxy: LlamaProxy = Depends(get_llama_proxy),
 ) -> ModelList:
@@ -403,3 +508,51 @@ async def get_models(
             for model_alias in llama_proxy
         ],
     }
+
+
+extras_tag = "Extras"
+
+
+@router.post(
+    "/extras/tokenize",
+    summary="Tokenize",
+    dependencies=[Depends(authenticate)],
+    tags=[extras_tag],
+)
+async def tokenize(
+    body: TokenizeInputRequest,
+    llama_proxy: LlamaProxy = Depends(get_llama_proxy),
+) -> TokenizeInputResponse:
+    tokens = llama_proxy(body.model).tokenize(body.input.encode("utf-8"), special=True)
+
+    return TokenizeInputResponse(tokens=tokens)
+
+
+@router.post(
+    "/extras/tokenize/count",
+    summary="Tokenize Count",
+    dependencies=[Depends(authenticate)],
+    tags=[extras_tag],
+)
+async def count_query_tokens(
+    body: TokenizeInputRequest,
+    llama_proxy: LlamaProxy = Depends(get_llama_proxy),
+) -> TokenizeInputCountResponse:
+    tokens = llama_proxy(body.model).tokenize(body.input.encode("utf-8"), special=True)
+
+    return TokenizeInputCountResponse(count=len(tokens))
+
+
+@router.post(
+    "/extras/detokenize",
+    summary="Detokenize",
+    dependencies=[Depends(authenticate)],
+    tags=[extras_tag],
+)
+async def detokenize(
+    body: DetokenizeInputRequest,
+    llama_proxy: LlamaProxy = Depends(get_llama_proxy),
+) -> DetokenizeInputResponse:
+    text = llama_proxy(body.model).detokenize(body.tokens).decode("utf-8")
+
+    return DetokenizeInputResponse(text=text)

@@ -1,0 +1,87 @@
+name: Build Wheels (Metal)
+
+on: workflow_dispatch
+
+permissions:
+  contents: write
+
+jobs:
+  define_matrix:
+    name: Define Build Matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Define Job Output
+        id: set-matrix
+        run: |
+          $matrix = @{
+              'os' = @('macos-11', 'macos-12', 'macos-13')
+              'pyver' = @('3.10', '3.11', '3.12')
+          }
+
+          $matrixOut = ConvertTo-Json $matrix -Compress
+          Write-Output ('matrix=' + $matrixOut) >> $env:GITHUB_OUTPUT
+
+  build_wheels:
+    name: ${{ matrix.os }} Python ${{ matrix.pyver }}
+    needs: define_matrix
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix: ${{ fromJSON(needs.define_matrix.outputs.matrix) }}
+    env:
+      OSVER: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.pyver }}
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install build wheel cmake
+
+      - name: Build Wheel
+        run: |
+          XCODE15PATH="/Applications/Xcode_15.0.app/Contents/Developer"
+          XCODE15BINPATH="${XCODE15PATH}/Toolchains/XcodeDefault.xctoolchain/usr/bin"
+          export CMAKE_ARGS="-DLLAMA_NATIVE=off -DLLAMA_METAL=on"
+          [[ "$OSVER" == "macos-13" ]] && export CC="${XCODE15BINPATH}/cc" && export CXX="${XCODE15BINPATH}/c++" && export MACOSX_DEPLOYMENT_TARGET="13.0"
+          [[ "$OSVER" == "macos-12" ]] && export MACOSX_DEPLOYMENT_TARGET="12.0"
+          [[ "$OSVER" == "macos-11" ]] && export MACOSX_DEPLOYMENT_TARGET="11.0"
+
+          export CMAKE_OSX_ARCHITECTURES="arm64" && export ARCHFLAGS="-arch arm64"
+          VERBOSE=1 python -m build --wheel
+
+          if [[ "$OSVER" == "macos-13" ]]; then
+            export SDKROOT="${XCODE15PATH}/Platforms/MacOSX.platform/Developer/SDKs/MacOSX14.0.sdk"
+            export MACOSX_DEPLOYMENT_TARGET="14.0"
+            VERBOSE=1 python -m build --wheel
+          fi
+
+          for file in ./dist/*.whl; do cp "$file" "${file/arm64.whl/aarch64.whl}"; done
+
+          export CMAKE_OSX_ARCHITECTURES="x86_64" && export CMAKE_ARGS="-DLLAMA_NATIVE=off -DLLAMA_AVX=off -DLLAMA_AVX2=off -DLLAMA_FMA=off -DLLAMA_F16C=off -DLLAMA_METAL=on" && export ARCHFLAGS="-arch x86_64"
+          VERBOSE=1 python -m build --wheel
+
+          if [[ "$OSVER" == "macos-13" ]]; then
+            export SDKROOT="${XCODE15PATH}/Platforms/MacOSX.platform/Developer/SDKs/MacOSX14.0.sdk"
+            export MACOSX_DEPLOYMENT_TARGET="14.0"
+            VERBOSE=1 python -m build --wheel
+          fi
+
+      - uses: softprops/action-gh-release@v1
+        with:
+          files: dist/*
+          # set release name to <tag>-metal
+          tag_name: ${{ github.ref_name }}-metal
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

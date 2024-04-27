@@ -5,6 +5,8 @@ import json
 from typing import Dict, Optional, Union, List
 
 import llama_cpp
+import llama_cpp.llama_speculative as llama_speculative
+import llama_cpp.llama_tokenizer as llama_tokenizer
 
 from llama_cpp.server.settings import ModelSettings
 
@@ -86,10 +88,20 @@ class LlamaProxy:
             assert (
                 settings.hf_tokenizer_config_path is not None
             ), "hf_tokenizer_config_path must be set for hf-tokenizer-config"
-            chat_handler = (
-                llama_cpp.llama_chat_format.hf_tokenizer_config_to_chat_completion_handler(
-                    json.load(open(settings.hf_tokenizer_config_path))
-                )
+            chat_handler = llama_cpp.llama_chat_format.hf_tokenizer_config_to_chat_completion_handler(
+                json.load(open(settings.hf_tokenizer_config_path))
+            )
+
+        tokenizer: Optional[llama_cpp.BaseLlamaTokenizer] = None
+        if settings.hf_pretrained_model_name_or_path is not None:
+            tokenizer = llama_tokenizer.LlamaHFTokenizer.from_pretrained(
+                settings.hf_pretrained_model_name_or_path
+            )
+
+        draft_model = None
+        if settings.draft_model is not None:
+            draft_model = llama_speculative.LlamaPromptLookupDecoding(
+                num_pred_tokens=settings.draft_model_num_pred_tokens
             )
 
         kv_overrides: Optional[Dict[str, Union[bool, int, float]]] = None
@@ -109,8 +121,22 @@ class LlamaProxy:
                     else:
                         raise ValueError(f"Unknown value type {value_type}")
 
-        _model = llama_cpp.Llama(
-            model_path=settings.model,
+        import functools
+
+        kwargs = {}
+
+        if settings.hf_model_repo_id is not None:
+            create_fn = functools.partial(
+                llama_cpp.Llama.from_pretrained,
+                repo_id=settings.hf_model_repo_id,
+                filename=settings.model,
+            )
+        else:
+            create_fn = llama_cpp.Llama
+            kwargs["model_path"] = settings.model
+
+        _model = create_fn(
+            **kwargs,
             # Model Params
             n_gpu_layers=settings.n_gpu_layers,
             main_gpu=settings.main_gpu,
@@ -147,6 +173,13 @@ class LlamaProxy:
             # Chat Format Params
             chat_format=settings.chat_format,
             chat_handler=chat_handler,
+            # Speculative Decoding
+            draft_model=draft_model,
+            # KV Cache Quantization
+            type_k=settings.type_k,
+            type_v=settings.type_v,
+            # Tokenizer
+            tokenizer=tokenizer,
             # Misc
             verbose=settings.verbose,
         )

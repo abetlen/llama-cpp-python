@@ -1,9 +1,32 @@
 import json
 
+import jinja2
+
 from llama_cpp import (
     ChatCompletionRequestUserMessage,
 )
+import llama_cpp.llama_types as llama_types
+import llama_cpp.llama_chat_format as llama_chat_format
+
 from llama_cpp.llama_chat_format import hf_tokenizer_config_to_chat_formatter
+
+def test_mistral_instruct():
+    chat_template = "{{ bos_token }}{% for message in messages %}{% if (message['role'] == 'user') != (loop.index0 % 2 == 0) %}{{ raise_exception('Conversation roles must alternate user/assistant/user/assistant/...') }}{% endif %}{% if message['role'] == 'user' %}{{ '[INST] ' + message['content'] + ' [/INST]' }}{% elif message['role'] == 'assistant' %}{{ message['content'] + eos_token}}{% else %}{{ raise_exception('Only user and assistant roles are supported!') }}{% endif %}{% endfor %}"
+    chat_formatter = jinja2.Template(chat_template)
+    messages = [
+        llama_types.ChatCompletionRequestUserMessage(role="user", content="Instruction"),
+        llama_types.ChatCompletionRequestAssistantMessage(role="assistant", content="Model answer"),
+        llama_types.ChatCompletionRequestUserMessage(role="user", content="Follow-up instruction"),
+    ]
+    response = llama_chat_format.format_mistral_instruct(
+        messages=messages,
+    )
+    reference = chat_formatter.render(
+        messages=messages,
+        bos_token="<s>",
+        eos_token="</s>",
+    )
+    assert response.prompt == reference
 
 
 mistral_7b_tokenizer_config = """{

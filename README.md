@@ -6,6 +6,7 @@
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/llama-cpp-python)](https://pypi.org/project/llama-cpp-python/)
 [![PyPI - License](https://img.shields.io/pypi/l/llama-cpp-python)](https://pypi.org/project/llama-cpp-python/)
 [![PyPI - Downloads](https://img.shields.io/pypi/dm/llama-cpp-python)](https://pypi.org/project/llama-cpp-python/)
+[![Github All Releases](https://img.shields.io/github/downloads/abetlen/llama-cpp-python/total.svg?label=Github%20Downloads)]()
 
 Simple Python bindings for **@ggerganov's** [`llama.cpp`](https://github.com/ggerganov/llama.cpp) library.
 This package provides:
@@ -23,61 +24,127 @@ This package provides:
 
 Documentation is available at [https://llama-cpp-python.readthedocs.io/en/latest](https://llama-cpp-python.readthedocs.io/en/latest).
 
-
-
-
 ## Installation
 
-`llama-cpp-python` can be installed directly from PyPI as a source distribution by running:
+Requirements:
+
+  - Python 3.8+
+  - C compiler
+      - Linux: gcc or clang
+      - Windows: Visual Studio or MinGW
+      - MacOS: Xcode
+
+To install the package, run:
 
 ```bash
 pip install llama-cpp-python
 ```
 
-This will build `llama.cpp` from source using cmake and your system's c compiler (required) and install the library alongside this python package.
+This will also build `llama.cpp` from source and install it alongside this python package.
 
-If you run into issues during installation add the `--verbose` flag to the `pip install` command to see the full cmake build log.
+If this fails, add `--verbose` to the `pip install` see the full cmake build log.
 
+**Pre-built Wheel (New)**
 
-### Installation with Specific Hardware Acceleration (BLAS, CUDA, Metal, etc)
-
-The default pip install behaviour is to build `llama.cpp` for CPU only on Linux and Windows and use Metal on MacOS.
-
-`llama.cpp` supports a number of hardware acceleration backends depending including OpenBLAS, cuBLAS, CLBlast, HIPBLAS, and Metal.
-See the [llama.cpp README](https://github.com/ggerganov/llama.cpp#build) for a full list of supported backends.
-
-All of these backends are supported by `llama-cpp-python` and can be enabled by setting the `CMAKE_ARGS` environment variable before installing.
-
-On Linux and Mac you set the `CMAKE_ARGS` like this:
+It is also possible to install a pre-built wheel with basic CPU support.
 
 ```bash
-CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS" pip install llama-cpp-python
+pip install llama-cpp-python \
+  --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
 ```
 
-On Windows you can set the `CMAKE_ARGS` like this:
+### Installation Configuration
 
-```ps
+`llama.cpp` supports a number of hardware acceleration backends to speed up inference as well as backend specific options. See the [llama.cpp README](https://github.com/ggerganov/llama.cpp#build) for a full list.
+
+All `llama.cpp` cmake build options can be set via the `CMAKE_ARGS` environment variable or via the `--config-settings / -C` cli flag during installation.
+
+<details open>
+<summary>Environment Variables</summary>
+
+```bash
+# Linux and Mac
+CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS" \
+  pip install llama-cpp-python
+```
+
+```powershell
+# Windows
 $env:CMAKE_ARGS = "-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS"
 pip install llama-cpp-python
 ```
+</details>
 
-#### OpenBLAS
+<details>
+<summary>CLI / requirements.txt</summary>
 
-To install with OpenBLAS, set the `LLAMA_BLAS and LLAMA_BLAS_VENDOR` environment variables before installing:
+They can also be set via `pip install -C / --config-settings` command and saved to a `requirements.txt` file:
+
+```bash
+pip install --upgrade pip # ensure pip is up to date
+pip install llama-cpp-python \
+  -C cmake.args="-DLLAMA_BLAS=ON;-DLLAMA_BLAS_VENDOR=OpenBLAS"
+```
+
+```txt
+# requirements.txt
+
+llama-cpp-python -C cmake.args="-DLLAMA_BLAS=ON;-DLLAMA_BLAS_VENDOR=OpenBLAS"
+```
+
+</details>
+
+### Supported Backends
+
+Below are some common backends, their build commands and any additional environment variables required.
+
+<details open>
+<summary>OpenBLAS (CPU)</summary>
+
+To install with OpenBLAS, set the `LLAMA_BLAS` and `LLAMA_BLAS_VENDOR` environment variables before installing:
 
 ```bash
 CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS" pip install llama-cpp-python
 ```
+</details>
 
-#### cuBLAS
+<details>
+<summary>CUDA</summary>
 
-To install with cuBLAS, set the `LLAMA_CUBLAS=1` environment variable before installing:
+To install with CUDA support, set the `LLAMA_CUDA=on` environment variable before installing:
 
 ```bash
-CMAKE_ARGS="-DLLAMA_CUBLAS=on" pip install llama-cpp-python
+CMAKE_ARGS="-DLLAMA_CUDA=on" pip install llama-cpp-python
 ```
 
-#### Metal
+**Pre-built Wheel (New)**
+
+It is also possible to install a pre-built wheel with CUDA support. As long as your system meets some requirements:
+
+- CUDA Version is 12.1, 12.2 or 12.3
+- Python Version is 3.10, 3.11 or 3.12
+
+```bash
+pip install llama-cpp-python \
+  --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/<cuda-version>
+```
+
+Where `<cuda-version>` is one of the following:
+- `cu121`: CUDA 12.1
+- `cu122`: CUDA 12.2
+- `cu123`: CUDA 12.3
+
+For example, to install the CUDA 12.1 wheel:
+
+```bash
+pip install llama-cpp-python \
+  --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121
+```
+
+</details>
+
+<details>
+<summary>Metal</summary>
 
 To install with Metal (MPS), set the `LLAMA_METAL=on` environment variable before installing:
 
@@ -85,15 +152,33 @@ To install with Metal (MPS), set the `LLAMA_METAL=on` environment variable befor
 CMAKE_ARGS="-DLLAMA_METAL=on" pip install llama-cpp-python
 ```
 
-#### CLBlast
+**Pre-built Wheel (New)**
 
-To install with CLBlast, set the `LLAMA_CLBLAST=1` environment variable before installing:
+It is also possible to install a pre-built wheel with Metal support. As long as your system meets some requirements:
+
+- MacOS Version is 11.0 or later
+- Python Version is 3.10, 3.11 or 3.12
+
+```bash
+pip install llama-cpp-python \
+  --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/metal
+```
+
+</details>
+<details>
+
+<summary>CLBlast (OpenCL)</summary>
+
+To install with CLBlast, set the `LLAMA_CLBLAST=on` environment variable before installing:
 
 ```bash
 CMAKE_ARGS="-DLLAMA_CLBLAST=on" pip install llama-cpp-python
 ```
 
-#### hipBLAS
+</details>
+
+<details>
+<summary>hipBLAS (ROCm)</summary>
 
 To install with hipBLAS / ROCm support for AMD cards, set the `LLAMA_HIPBLAS=on` environment variable before installing:
 
@@ -101,22 +186,62 @@ To install with hipBLAS / ROCm support for AMD cards, set the `LLAMA_HIPBLAS=on`
 CMAKE_ARGS="-DLLAMA_HIPBLAS=on" pip install llama-cpp-python
 ```
 
+</details>
+
+<details>
+<summary>Vulkan</summary>
+
+To install with Vulkan support, set the `LLAMA_VULKAN=on` environment variable before installing:
+
+```bash
+CMAKE_ARGS="-DLLAMA_VULKAN=on" pip install llama-cpp-python
+```
+
+</details>
+
+<details>
+<summary>Kompute</summary>
+
+To install with Kompute support, set the `LLAMA_KOMPUTE=on` environment variable before installing:
+
+```bash
+CMAKE_ARGS="-DLLAMA_KOMPUTE=on" pip install llama-cpp-python
+```
+</details>
+
+<details>
+<summary>SYCL</summary>
+
+To install with SYCL support, set the `LLAMA_SYCL=on` environment variable before installing:
+
+```bash
+source /opt/intel/oneapi/setvars.sh   
+CMAKE_ARGS="-DLLAMA_SYCL=on -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx" pip install llama-cpp-python
+```
+</details>
+
+
 ### Windows Notes
+
+<details>
+<summary>Error: Can't find 'nmake' or 'CMAKE_C_COMPILER'</summary>
 
 If you run into issues where it complains it can't find `'nmake'` `'?'` or CMAKE_C_COMPILER, you can extract w64devkit as [mentioned in llama.cpp repo](https://github.com/ggerganov/llama.cpp#openblas) and add those manually to CMAKE_ARGS before running `pip` install:
 
 ```ps
 $env:CMAKE_GENERATOR = "MinGW Makefiles"
-$env:CMAKE_ARGS = "-DLLAMA_OPENBLAS=on -DCMAKE_C_COMPILER=C:/w64devkit/bin/gcc.exe -DCMAKE_CXX_COMPILER=C:/w64devkit/bin/g++.exe" 
+$env:CMAKE_ARGS = "-DLLAMA_OPENBLAS=on -DCMAKE_C_COMPILER=C:/w64devkit/bin/gcc.exe -DCMAKE_CXX_COMPILER=C:/w64devkit/bin/g++.exe"
 ```
 
 See the above instructions and set `CMAKE_ARGS` to the BLAS backend you want to use.
+</details>
 
 ### MacOS Notes
 
 Detailed MacOS Metal GPU install documentation is available at [docs/install/macos.md](https://llama-cpp-python.readthedocs.io/en/latest/install/macos/)
 
-#### M1 Mac Performance Issue
+<details>
+<summary>M1 Mac Performance Issue</summary>
 
 Note: If you are using Apple Silicon (M1) Mac, make sure you have installed a version of Python that supports arm64 architecture. For example:
 
@@ -126,24 +251,21 @@ bash Miniforge3-MacOSX-arm64.sh
 ```
 
 Otherwise, while installing it will build the llama.cpp x86 version which will be 10x slower on Apple Silicon (M1) Mac.
+</details>
 
-#### M Series Mac Error: `(mach-o file, but is an incompatible architecture (have 'x86_64', need 'arm64'))`
+<details>
+<summary>M Series Mac Error: `(mach-o file, but is an incompatible architecture (have 'x86_64', need 'arm64'))`</summary>
 
 Try installing with
 
 ```bash
 CMAKE_ARGS="-DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_APPLE_SILICON_PROCESSOR=arm64 -DLLAMA_METAL=on" pip install --upgrade --verbose --force-reinstall --no-cache-dir llama-cpp-python
 ```
+</details>
 
 ### Upgrading and Reinstalling
 
-To upgrade or rebuild `llama-cpp-python` add the following flags to ensure that the package is rebuilt correctly:
-
-```bash
-pip install llama-cpp-python  --upgrade --force-reinstall --no-cache-dir
-```
-
-This will ensure that all source files are re-built with the most recently set `CMAKE_ARGS` flags.
+To upgrade and rebuild `llama-cpp-python` add `--upgrade --force-reinstall --no-cache-dir` flags to the `pip install` command to ensure the package is rebuilt from source.
 
 ## High-level API
 
@@ -157,7 +279,7 @@ Below is a short example demonstrating how to use the high-level API to for basi
 >>> from llama_cpp import Llama
 >>> llm = Llama(
       model_path="./models/7B/llama-model.gguf",
-      # n_gpu_layers=-1, # Uncomment to use GPU acceleration 
+      # n_gpu_layers=-1, # Uncomment to use GPU acceleration
       # seed=1337, # Uncomment to set a specific seed
       # n_ctx=2048, # Uncomment to increase the context window
 )
@@ -191,11 +313,35 @@ Below is a short example demonstrating how to use the high-level API to for basi
 
 Text completion is available through the [`__call__`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.__call__) and [`create_completion`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.create_completion) methods of the [`Llama`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama) class.
 
+### Pulling models from Hugging Face Hub
+
+You can download `Llama` models in `gguf` format directly from Hugging Face using the [`from_pretrained`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.from_pretrained) method.
+You'll need to install the `huggingface-hub` package to use this feature (`pip install huggingface-hub`).
+
+```python
+llm = Llama.from_pretrained(
+    repo_id="Qwen/Qwen1.5-0.5B-Chat-GGUF",
+    filename="*q8_0.gguf",
+    verbose=False
+)
+```
+
+By default [`from_pretrained`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.from_pretrained) will download the model to the huggingface cache directory, you can then manage installed model files with the [`huggingface-cli`](https://huggingface.co/docs/huggingface_hub/en/guides/cli) tool.
+
 ### Chat Completion
 
 The high-level API also provides a simple interface for chat completion.
 
-Note that `chat_format` option must be set for the particular model you are using.
+Chat completion requires that the model knows how to format the messages into a single prompt.
+The `Llama` class does this using pre-registered chat formats (ie. `chatml`, `llama-2`, `gemma`, etc) or by providing a custom chat handler object.
+
+The model will will format the messages into a single prompt using the following order of precedence:
+  - Use the `chat_handler` if provided
+  - Use the `chat_format` if provided
+  - Use the `tokenizer.chat_template` from the `gguf` model's metadata (should work for most new models, older models may not have this)
+  - else, fallback to the `llama-2` chat format
+
+Set `verbose=True` to see the selected chat format.
 
 ```python
 >>> from llama_cpp import Llama
@@ -216,23 +362,75 @@ Note that `chat_format` option must be set for the particular model you are usin
 
 Chat completion is available through the [`create_chat_completion`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.create_chat_completion) method of the [`Llama`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama) class.
 
-### Function Calling
+For OpenAI API v1 compatibility, you use the [`create_chat_completion_openai_v1`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.create_chat_completion_openai_v1) method which will return pydantic models instead of dicts.
 
-The high-level API also provides a simple interface for function calling.
 
-Note that the only model that supports full function calling at this time is "functionary".
-The gguf-converted files for this model can be found here: [functionary-7b-v1](https://huggingface.co/abetlen/functionary-7b-v1-GGUF)
+### JSON and JSON Schema Mode
 
+To constrain chat responses to only valid JSON or a specific JSON Schema use the `response_format` argument in [`create_chat_completion`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.create_chat_completion).
+
+#### JSON Mode
+
+The following example will constrain the response to valid JSON strings only.
 
 ```python
 >>> from llama_cpp import Llama
->>> llm = Llama(model_path="path/to/functionary/llama-model.gguf", chat_format="functionary")
+>>> llm = Llama(model_path="path/to/model.gguf", chat_format="chatml")
+>>> llm.create_chat_completion(
+    messages=[
+        {
+            "role": "system",
+            "content": "You are a helpful assistant that outputs in JSON.",
+        },
+        {"role": "user", "content": "Who won the world series in 2020"},
+    ],
+    response_format={
+        "type": "json_object",
+    },
+    temperature=0.7,
+)
+```
+
+#### JSON Schema Mode
+
+To constrain the response further to a specific JSON Schema add the schema to the `schema` property of the `response_format` argument.
+
+```python
+>>> from llama_cpp import Llama
+>>> llm = Llama(model_path="path/to/model.gguf", chat_format="chatml")
+>>> llm.create_chat_completion(
+    messages=[
+        {
+            "role": "system",
+            "content": "You are a helpful assistant that outputs in JSON.",
+        },
+        {"role": "user", "content": "Who won the world series in 2020"},
+    ],
+    response_format={
+        "type": "json_object",
+        "schema": {
+            "type": "object",
+            "properties": {"team_name": {"type": "string"}},
+            "required": ["team_name"],
+        },
+    },
+    temperature=0.7,
+)
+```
+
+### Function Calling
+
+The high-level API supports OpenAI compatible function and tool calling. This is possible through the `functionary` pre-trained models chat format or through the generic `chatml-function-calling` chat format.
+
+```python
+>>> from llama_cpp import Llama
+>>> llm = Llama(model_path="path/to/chatml/llama-model.gguf", chat_format="chatml-function-calling")
 >>> llm.create_chat_completion(
       messages = [
         {
           "role": "system",
           "content": "A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. The assistant calls functions with appropriate input when necessary"
-          
+
         },
         {
           "role": "user",
@@ -260,17 +458,35 @@ The gguf-converted files for this model can be found here: [functionary-7b-v1](h
           }
         }
       }],
-      tool_choice=[{
+      tool_choice={
         "type": "function",
         "function": {
           "name": "UserDetail"
         }
-      }]
+      }
 )
 ```
 
-### Multi-modal Models
+<details>
+<summary>Functionary v2</summary>
 
+The various gguf-converted files for this set of models can be found [here](https://huggingface.co/meetkai). Functionary is able to intelligently call functions and also analyze any provided function outputs to generate coherent responses. All v2 models of functionary supports **parallel function calling**. You can provide either `functionary-v1` or `functionary-v2` for the `chat_format` when initializing the Llama class.
+
+Due to discrepancies between llama.cpp and HuggingFace's tokenizers, it is required to provide HF Tokenizer for functionary. The `LlamaHFTokenizer` class can be initialized and passed into the Llama class. This will override the default llama.cpp tokenizer used in Llama class. The tokenizer files are already included in the respective HF repositories hosting the gguf files.
+
+```python
+>>> from llama_cpp import Llama
+>>> from llama_cpp.llama_tokenizer import LlamaHFTokenizer
+>>> llm = Llama.from_pretrained(
+  repo_id="meetkai/functionary-small-v2.2-GGUF",
+  filename="functionary-small-v2.2.q4_0.gguf",
+  chat_format="functionary-v2",
+  tokenizer=LlamaHFTokenizer.from_pretrained("meetkai/functionary-small-v2.2-GGUF")
+)
+```
+</details>
+
+### Multi-modal Models
 
 `llama-cpp-python` supports the llava1.5 family of multi-modal models which allow the language model to
 read information from both text and images.
@@ -307,6 +523,78 @@ Then you'll need to use a custom chat handler to load the clip model and process
 )
 ```
 
+<details>
+<summary>Loading a Local Image</summary>
+
+Images can be passed as base64 encoded data URIs. The following example demonstrates how to do this.
+
+```python
+import base64
+
+def image_to_base64_data_uri(file_path):
+    with open(file_path, "rb") as img_file:
+        base64_data = base64.b64encode(img_file.read()).decode('utf-8')
+        return f"data:image/png;base64,{base64_data}"
+
+# Replace 'file_path.png' with the actual path to your PNG file
+file_path = 'file_path.png'
+data_uri = image_to_base64_data_uri(file_path)
+
+messages = [
+    {"role": "system", "content": "You are an assistant who perfectly describes images."},
+    {
+        "role": "user",
+        "content": [
+            {"type": "image_url", "image_url": {"url": data_uri }},
+            {"type" : "text", "text": "Describe this image in detail please."}
+        ]
+    }
+]
+
+```
+
+</details>
+
+### Speculative Decoding
+
+`llama-cpp-python` supports speculative decoding which allows the model to generate completions based on a draft model.
+
+The fastest way to use speculative decoding is through the `LlamaPromptLookupDecoding` class.
+
+Just pass this as a draft model to the `Llama` class during initialization.
+
+```python
+from llama_cpp import Llama
+from llama_cpp.llama_speculative import LlamaPromptLookupDecoding
+
+llama = Llama(
+    model_path="path/to/model.gguf",
+    draft_model=LlamaPromptLookupDecoding(num_pred_tokens=10) # num_pred_tokens is the number of tokens to predict 10 is the default and generally good for gpu, 2 performs better for cpu-only machines.
+)
+```
+
+### Embeddings
+
+To generate text embeddings use [`create_embedding`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.create_embedding) or [`embed`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.embed). Note that you must pass `embedding=True` to the constructor upon model creation for these to work properly.
+
+```python
+import llama_cpp
+
+llm = llama_cpp.Llama(model_path="path/to/model.gguf", embedding=True)
+
+embeddings = llm.create_embedding("Hello, world!")
+
+# or create multiple embeddings at once
+
+embeddings = llm.create_embedding(["Hello, world!", "Goodbye, world!"])
+```
+
+There are two primary notions of embeddings in a Transformer-style model: *token level* and *sequence level*. Sequence level embeddings are produced by "pooling" token level embeddings together, usually by averaging them or using the first token.
+
+Models that are explicitly geared towards embeddings will usually return sequence level embeddings by default, one for each input string. Non-embedding models such as those designed for text generation will typically return only token level embeddings, one for each token in each sequence. Thus the dimensionality of the return type will be one higher for token level embeddings.
+
+It is possible to control pooling behavior in some cases using the `pooling_type` flag on model creation. You can ensure token level embeddings from any model using `LLAMA_POOLING_TYPE_NONE`. The reverse, getting a generation oriented model to yield sequence level embeddings is currently not possible, but you can always do the pooling manually.
+
 ### Adjusting the Context Window
 
 The context window of the Llama models determines the maximum number of tokens that can be processed at once. By default, this is set to 512 tokens, but can be adjusted based on your requirements.
@@ -317,7 +605,6 @@ For instance, if you want to work with larger contexts, you can expand the conte
 llm = Llama(model_path="./models/7B/llama-model.gguf", n_ctx=2048)
 ```
 
-
 ## OpenAI Compatible Web Server
 
 `llama-cpp-python` offers a web server which aims to act as a drop-in replacement for the OpenAI API.
@@ -326,14 +613,14 @@ This allows you to use llama.cpp compatible models with any OpenAI compatible cl
 To install the server package and get started:
 
 ```bash
-pip install llama-cpp-python[server]
+pip install 'llama-cpp-python[server]'
 python3 -m llama_cpp.server --model models/7B/llama-model.gguf
 ```
 
 Similar to Hardware Acceleration section above, you can also install with GPU (cuBLAS) support like this:
 
 ```bash
-CMAKE_ARGS="-DLLAMA_CUBLAS=on" FORCE_CMAKE=1 pip install llama-cpp-python[server]
+CMAKE_ARGS="-DLLAMA_CUDA=on" FORCE_CMAKE=1 pip install 'llama-cpp-python[server]'
 python3 -m llama_cpp.server --model models/7B/llama-model.gguf --n_gpu_layers 35
 ```
 
@@ -351,6 +638,12 @@ python3 -m llama_cpp.server --model models/7B/llama-model.gguf --chat_format cha
 That will format the prompt according to how model expects it. You can find the prompt format in the model card.
 For possible options, see [llama_cpp/llama_chat_format.py](llama_cpp/llama_chat_format.py) and look for lines starting with "@register_chat_format".
 
+If you have `huggingface-hub` installed, you can also use the `--hf_model_repo_id` flag to load a model from the Hugging Face Hub.
+
+```bash
+python3 -m llama_cpp.server --hf_model_repo_id Qwen/Qwen1.5-0.5B-Chat-GGUF --model '*q8_0.gguf'
+```
+
 ### Web Server Features
 
 - [Local Copilot replacement](https://llama-cpp-python.readthedocs.io/en/latest/server/#code-completion)
@@ -365,7 +658,8 @@ A Docker image is available on [GHCR](https://ghcr.io/abetlen/llama-cpp-python).
 ```bash
 docker run --rm -it -p 8000:8000 -v /path/to/models:/models -e MODEL=/models/llama-model.gguf ghcr.io/abetlen/llama-cpp-python:latest
 ```
-[Docker on termux (requires root)](https://gist.github.com/FreddieOliveira/efe850df7ff3951cb62d74bd770dce27) is currently the only known way to run this on phones, see [termux support issue](https://github.com/abetlen/llama-cpp-python/issues/389) 
+
+[Docker on termux (requires root)](https://gist.github.com/FreddieOliveira/efe850df7ff3951cb62d74bd770dce27) is currently the only known way to run this on phones, see [termux support issue](https://github.com/abetlen/llama-cpp-python/issues/389)
 
 ## Low-level API
 
@@ -379,7 +673,7 @@ Below is a short example demonstrating how to use the low-level API to tokenize 
 ```python
 >>> import llama_cpp
 >>> import ctypes
->>> llama_cpp.llama_backend_init(numa=False) # Must be called once at the start of each program
+>>> llama_cpp.llama_backend_init(False) # Must be called once at the start of each program
 >>> params = llama_cpp.llama_context_default_params()
 # use bytes for char * params
 >>> model = llama_cpp.llama_load_model_from_file(b"./models/7b/llama-model.gguf", params)
@@ -387,12 +681,11 @@ Below is a short example demonstrating how to use the low-level API to tokenize 
 >>> max_tokens = params.n_ctx
 # use ctypes arrays for array params
 >>> tokens = (llama_cpp.llama_token * int(max_tokens))()
->>> n_tokens = llama_cpp.llama_tokenize(ctx, b"Q: Name the planets in the solar system? A: ", tokens, max_tokens, add_bos=llama_cpp.c_bool(True))
+>>> n_tokens = llama_cpp.llama_tokenize(ctx, b"Q: Name the planets in the solar system? A: ", tokens, max_tokens, llama_cpp.c_bool(True))
 >>> llama_cpp.llama_free(ctx)
 ```
 
 Check out the [examples folder](examples/low_level_api) for more examples of using the low-level API.
-
 
 ## Documentation
 

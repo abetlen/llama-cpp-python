@@ -17,6 +17,11 @@ if (LLAMA_BUILD)
         set(LLAMA_FMA "Off" CACHE BOOL "llama: enable FMA" FORCE)
         set(LLAMA_F16C "Off" CACHE BOOL "llama: enable F16C" FORCE)
     endif()
+
+    if (APPLE)
+        set(LLAMA_METAL_EMBED_LIBRARY "On" CACHE BOOL "llama: embed metal library" FORCE)
+    endif()
+
     add_subdirectory(vendor/llama.cpp)
     install(
         TARGETS llama 
@@ -46,6 +51,14 @@ if (LLAMA_BUILD)
     )
 
     if (LLAVA_BUILD)
+        if (LLAMA_CUBLAS)
+            add_compile_definitions(GGML_USE_CUBLAS)
+        endif()
+
+        if (LLAMA_METAL)
+            add_compile_definitions(GGML_USE_METAL)
+        endif()
+
         # Building llava
         add_subdirectory(vendor/llama.cpp/examples/llava)
         set_target_properties(llava_shared PROPERTIES OUTPUT_NAME "llava")
