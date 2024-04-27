@@ -6,6 +6,8 @@ import ctypes
 import dataclasses
 import random
 import string
+
+from contextlib import ExitStack
 from typing import Any, Dict, Iterator, List, Literal, Optional, Tuple, Union, Protocol, cast
 
 import jinja2
@@ -2149,42 +2151,70 @@ def functionary_v1_v2_chat_handler(
 
 
 class Llava15ChatHandler:
-    _clip_free = None
+    DEFAULT_SYSTEM_MESSAGE =  "A chat between a curious human and an artificial intelligence assistant.  The assistant gives helpful, detailed, and polite answers to the human's questions."
+
+    CHAT_FORMAT = (
+        "{% for message in messages %}"
+        "{% if message.role == 'system' %}"
+        "{{ message.content }}"
+        "{% endif %}"
+        "{% if message.role == 'user' %}"
+        "{% if message.content is string %}"
+        "\nUSER: {{ message.content }}"
+        "{% elif message.content is iterable %}"
+        "\nUSER: "
+        "{% for content in message.content %}"
+        "{% if content.type == 'text' %}"
+        "{{ content.text }}"
+        "{% endif %}"
+        "{% if content.type == 'image_url' and content.image_url is string %}"
+        "{{ content.image_url }}"
+        "{% endif %}"
+        "{% if content.type == 'image_url' and content.image_url is mapping %}"
+        "{{ content.image_url.url }}"
+        "{% endif %}"
+        "{% endfor %}"
+        "{% endif %}"
+        "{% endif %}"
+        "{% if message.role == 'assistant' and message.content is not none %}"
+        "\nASSISTANT: {{ message.content }}"
+        "{% endif %}"
+        "{% endfor %}"
+        "{% if add_generation_prompt %}"
+        "\nASSISTANT: "
+        "{% endif %}"
+    )
 
     def __init__(self, clip_model_path: str, verbose: bool = False):
         import llama_cpp.llava_cpp as llava_cpp
 
-        self._llava_cpp = llava_cpp
         self.clip_model_path = clip_model_path
         self.verbose = verbose
-        self._clip_free = self._llava_cpp._libllava.clip_free  # type: ignore
+
+        self._llava_cpp = llava_cpp # TODO: Fix
+        self._exit_stack = ExitStack()
 
         if not os.path.exists(clip_model_path):
             raise ValueError(f"Clip model path does not exist: {clip_model_path}")
 
         with suppress_stdout_stderr(disable=self.verbose):
-            self.clip_ctx = self._llava_cpp.clip_model_load(
+            clip_ctx = self._llava_cpp.clip_model_load(
                 self.clip_model_path.encode(), 0
             )
 
-    def __del__(self):
-        with suppress_stdout_stderr(disable=self.verbose):
-            if self.clip_ctx is not None and self._clip_free is not None:
-                self._clip_free(self.clip_ctx)
-                self.clip_ctx = None
+            if clip_ctx is None:
+                raise ValueError(f"Failed to load clip model: {clip_model_path}")
+            
+            self.clip_ctx = clip_ctx
+
+            def clip_free():
+                with suppress_stdout_stderr(disable=self.verbose):
+                    self._llava_cpp.clip_free(self.clip_ctx)
+            
+            self._exit_stack.callback(clip_free)
 
     def load_image(self, image_url: str) -> bytes:
-        if image_url.startswith("data:"):
-            import base64
-
-            image_bytes = base64.b64decode(image_url.split(",")[1])
-            return image_bytes
-        else:
-            import urllib.request
-
-            with urllib.request.urlopen(image_url) as f:
-                image_bytes = f.read()
-                return image_bytes
+        return self._load_image(image_url)
 
     def __call__(
         self,
@@ -2221,91 +2251,65 @@ class Llava15ChatHandler:
         llama_types.CreateChatCompletionResponse,
         Iterator[llama_types.CreateChatCompletionStreamResponse],
     ]:
+        from contextlib import ExitStack    
         assert (
             llama.context_params.logits_all is True
         )  # BUG: logits_all=True is required for llava
         assert self.clip_ctx is not None
+
         system_prompt = _get_system_message(messages)
-        system_prompt = (
-            system_prompt
-            if system_prompt != ""
-            else "A chat between a curious human and an artificial intelligence assistant.  The assistant gives helpful, detailed, and polite answers to the human's questions."
-        )
-        user_role = "\nUSER:"
-        assistant_role = "\nASSISTANT:"
+        if system_prompt == "":
+            messages = [llama_types.ChatCompletionRequestSystemMessage(role="system", content=self.DEFAULT_SYSTEM_MESSAGE)] + messages
+
+        image_urls = self.get_image_urls(messages)
+        template = jinja2.Template(self.CHAT_FORMAT)
+        text = template.render(messages=messages, add_generation_prompt=True)
+        split_text = self.split_text_on_image_urls(text, image_urls)
+
+        # Evaluate prompt
         llama.reset()
-        llama.eval(llama.tokenize(system_prompt.encode("utf8"), add_bos=True))
-        for message in messages:
-            if message["role"] == "user" and message["content"] is not None:
-                if isinstance(message["content"], str):
-                    llama.eval(
-                        llama.tokenize(
-                            f"{user_role} {message['content']}".encode("utf8"),
-                            add_bos=False,
+        for i, (type_, value) in enumerate(split_text):
+            if type_ == "text":
+                tokens = llama.tokenize(value.encode("utf8"), add_bos=i == 0)
+                if llama.n_tokens + len(tokens) > llama.n_ctx():
+                    raise ValueError("Prompt exceeds n_ctx") # TODO: Fix
+                llama.eval(tokens)
+            else:
+                image_bytes = self.load_image(value)
+                exit_stack = ExitStack()
+                with suppress_stdout_stderr(disable=self.verbose):
+                    embed = (
+                        self._llava_cpp.llava_image_embed_make_with_bytes(
+                            self.clip_ctx,
+                            llama.context_params.n_threads_batch,
+                            (ctypes.c_uint8 * len(image_bytes)).from_buffer(bytearray(image_bytes)),
+                            len(image_bytes),
                         )
                     )
-                else:
-                    assert isinstance(message["content"], list)
-                    llama.eval(
-                        llama.tokenize(f"{user_role} ".encode("utf8"), add_bos=False)
+                    def free_embed():
+                        with suppress_stdout_stderr(disable=self.verbose):
+                            self._llava_cpp.llava_image_embed_free(embed)
+                    exit_stack.callback(free_embed)
+                if llama.n_tokens + embed.contents.n_image_pos > llama.n_ctx():
+                    raise ValueError("Prompt exceeds n_ctx") # TODO: Fix
+                n_past = ctypes.c_int(llama.n_tokens)
+                n_past_p = ctypes.pointer(n_past)
+                with suppress_stdout_stderr(disable=self.verbose):
+                    self._llava_cpp.llava_eval_image_embed(
+                        llama.ctx,
+                        embed,
+                        llama.n_batch,
+                        n_past_p,
                     )
-                    for content in message["content"]:
-                        if content["type"] == "text":
-                            llama.eval(
-                                llama.tokenize(
-                                    f"{content['text']}".encode("utf8"), add_bos=False
-                                )
-                            )
-                        if content["type"] == "image_url":
-                            image_bytes = (
-                                self.load_image(content["image_url"]["url"])
-                                if isinstance(content["image_url"], dict)
-                                else self.load_image(content["image_url"])
-                            )
-                            import array
+                llama.n_tokens = n_past.value
 
-                            data_array = array.array("B", image_bytes)
-                            c_ubyte_ptr = (
-                                ctypes.c_ubyte * len(data_array)
-                            ).from_buffer(data_array)
-                            with suppress_stdout_stderr(disable=self.verbose):
-                                embed = (
-                                    self._llava_cpp.llava_image_embed_make_with_bytes(
-                                        self.clip_ctx,
-                                        llama.context_params.n_threads,
-                                        c_ubyte_ptr,
-                                        len(image_bytes),
-                                    )
-                                )
-                            try:
-                                n_past = ctypes.c_int(llama.n_tokens)
-                                n_past_p = ctypes.pointer(n_past)
-                                with suppress_stdout_stderr(disable=self.verbose):
-                                    self._llava_cpp.llava_eval_image_embed(
-                                        llama.ctx,
-                                        embed,
-                                        llama.n_batch,
-                                        n_past_p,
-                                    )
-                                assert llama.n_ctx() >= n_past.value
-                                llama.n_tokens = n_past.value
-                            finally:
-                                with suppress_stdout_stderr(disable=self.verbose):
-                                    self._llava_cpp.llava_image_embed_free(embed)
-            if message["role"] == "assistant" and message["content"] is not None:
-                llama.eval(
-                    llama.tokenize(
-                        f"ASSISTANT: {message['content']}".encode("utf8"), add_bos=False
-                    )
-                )
-                assert llama.n_ctx() >= llama.n_tokens
-        llama.eval(llama.tokenize(f"{assistant_role}".encode("utf8"), add_bos=False))
-        assert llama.n_ctx() >= llama.n_tokens
-
+        # Get prompt tokens to avoid a cache miss
         prompt = llama.input_ids[: llama.n_tokens].tolist()
 
         if response_format is not None and response_format["type"] == "json_object":
             grammar = _grammar_for_response_format(response_format)
+
+        # TODO: Add function call support
 
         return _convert_completion_to_chat(
             llama.create_completion(
@@ -2331,6 +2335,64 @@ class Llava15ChatHandler:
             ),
             stream=stream,
         )
+
+    @staticmethod
+    def _load_image(image_url: str) -> bytes:
+        # TODO: Add Pillow support for other image formats beyond (jpg, png)
+        if image_url.startswith("data:"):
+            import base64
+
+            image_bytes = base64.b64decode(image_url.split(",")[1])
+            return image_bytes
+        else:
+            import urllib.request
+
+            with urllib.request.urlopen(image_url) as f:
+                image_bytes = f.read()
+                return image_bytes
+
+    @staticmethod
+    def get_image_urls(messages: List[llama_types.ChatCompletionRequestMessage]):
+        image_urls: List[str] = []
+        for message in messages:
+            if message["role"] == "user":
+                if message["content"] is None:
+                    continue
+                for content in message["content"]:
+                    if isinstance(content, dict) and "type" in content:
+                        if content["type"] == "image_url":
+                            if (
+                                isinstance(content["image_url"], dict)
+                                and "url" in content["image_url"]
+                            ):
+                                image_urls.append(content["image_url"]["url"])
+                            else:
+                                image_urls.append(content["image_url"])
+        return image_urls
+
+    @staticmethod
+    def split_text_on_image_urls(text: str, image_urls: List[str]):
+        def find_first(s: str, substrs: List[str]):
+            for i, substr in enumerate(substrs):
+                pos = s.find(substr)
+                if pos != -1:
+                    return pos, i
+            return None, None
+
+        split_text: List[Tuple[Literal["text", "image_url"], str]] = []
+        remaining = text
+        while remaining:
+            # Find first image_url
+            pos, i = find_first(remaining, image_urls)
+            if pos is not None and i is not None:
+                if pos > 0:
+                    split_text.append(("text", remaining[:pos]))
+                split_text.append(("image_url", image_urls[i]))
+                remaining = remaining[pos + len(image_urls[i]) :]
+            else:
+                split_text.append(("text", remaining))
+                remaining = ""
+        return split_text
 
     @classmethod
     def from_pretrained(
@@ -2414,6 +2476,7 @@ class Llava15ChatHandler:
             clip_model_path=model_path,
             **kwargs,
         )
+
 
 @register_chat_completion_handler("chatml-function-calling")
 def chatml_function_calling(
