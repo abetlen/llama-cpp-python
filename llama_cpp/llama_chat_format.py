@@ -2479,27 +2479,27 @@ class Llava15ChatHandler:
 
 class MoondreamChatHanlder(Llava15ChatHandler):
     # Chat Format:
-    # <image>\n\nQuestion: {prompt}\n\nAnswer:
+    # f"<image>\n\n{chat_history}Question: {question}\n\nAnswer:"
     CHAT_FORMAT = (
         "{% for message in messages %}"
         "{% if message.role == 'user' %}"
         "{% if message.content is iterable %}"
         "{% for content in message.content %}"
         "{% if content.type == 'image_url' %}"
-        "{{ content.image_url }}"
+        "{{ content.image_url }}\n\n"
         "{% endif %}"
         "{% if content.type == 'text' %}"
-        "Question: {{ content.text }}"
+        "Question: {{ content.text }}\n\n"
         "{% endif %}"
         "{% endfor %}"
         "{% endif %}"
         "{% endif %}"
         "{% if message.role == 'assistant' %}"
-        "Answer: {{ message.content }}"
+        "Answer:{{ message.content }}"
         "{% endif %}"
         "{% endfor %}"
         "{% if add_generation_prompt %}"
-        "Answer: "
+        "Answer:"
         "{% endif %}"
     )
 
