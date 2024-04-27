@@ -2485,6 +2485,8 @@ class MoondreamChatHanlder(Llava15ChatHandler):
         "{% if message.role == 'user' %}"
         "{% if message.content is iterable %}"
         "{% for content in message.content %}"
+
+        # <image>
         "{% if content.type == 'image_url' %}"
         "{% if content.image_url is string %}"
         "{{ content.image_url }}\n\n"
@@ -2493,16 +2495,28 @@ class MoondreamChatHanlder(Llava15ChatHandler):
         "{{ content.image_url.url }}\n\n"
         "{% endif %}"
         "{% endif %}"
+
+        # Question:
         "{% if content.type == 'text' %}"
         "Question: {{ content.text }}\n\n"
         "{% endif %}"
         "{% endfor %}"
         "{% endif %}"
+
+        # Question:
+        "{% if message.content is string %}"
+        "Question: {{ message.content }}\n\n"
         "{% endif %}"
+
+        "{% endif %}"
+
+        # Answer:
         "{% if message.role == 'assistant' %}"
         "Answer:{{ message.content }}\n\n"
         "{% endif %}"
         "{% endfor %}"
+
+        # Generation prompt
         "{% if add_generation_prompt %}"
         "Answer:"
         "{% endif %}"
