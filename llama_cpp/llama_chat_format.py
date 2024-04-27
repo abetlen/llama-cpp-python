@@ -2477,6 +2477,32 @@ class Llava15ChatHandler:
             **kwargs,
         )
 
+class MoondreamChatHanlder(Llava15ChatHandler):
+    # Chat Format:
+    # <image>\n\nQuestion: {prompt}\n\nAnswer:
+    CHAT_FORMAT = (
+        "{% for message in messages %}"
+        "{% if message.role == 'user' %}"
+        "{% if message.content is iterable %}"
+        "{% for content in message.content %}"
+        "{% if content.type == 'image_url' %}"
+        "{{ content.image_url }}"
+        "{% endif %}"
+        "{% if content.type == 'text' %}"
+        "Question: {{ content.text }}"
+        "{% endif %}"
+        "{% endfor %}"
+        "{% endif %}"
+        "{% endif %}"
+        "{% if message.role == 'assistant' %}"
+        "Answer: {{ message.content }}"
+        "{% endif %}"
+        "{% endfor %}"
+        "{% if add_generation_prompt %}"
+        "Answer: "
+        "{% endif %}"
+    )
+
 
 @register_chat_completion_handler("chatml-function-calling")
 def chatml_function_calling(
