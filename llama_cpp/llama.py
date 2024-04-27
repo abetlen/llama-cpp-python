@@ -940,17 +940,17 @@ class Llama:
 
         completion_id: str = f"cmpl-{str(uuid.uuid4())}"
         created: int = int(time.time())
-        prefix_token_id: Optional[int] = self.metadata.get("tokenizer.ggml.prefix_token_id")
-        middle_token_id: Optional[int] = self.metadata.get("tokenizer.ggml.middle_token_id")
-        suffix_token_id: Optional[int] = self.metadata.get("tokenizer.ggml.suffix_token_id")
+        prefix_token_id: int = int(self.metadata.get("tokenizer.ggml.prefix_token_id", self.token_prefix()))
+        middle_token_id: int = int(self.metadata.get("tokenizer.ggml.middle_token_id", self.token_middle()))
+        suffix_token_id: int = int(self.metadata.get("tokenizer.ggml.suffix_token_id", self.token_suffix()))
         # If prompt is empty, initialize completion with BOS token to avoid
         # detokenization including a space at the beginning of the completion
         completion_tokens: List[int] = [] if len(prompt) > 0 else [self.token_bos()]
         # Add blank space to start of prompt to match OG llama tokenizer
         prompt_tokens: List[int] = (
             (
-                [int(prefix_token_id)]
-                if prefix_token_id and suffix is not None
+                [prefix_token_id]
+                if prefix_token_id >= 0 and suffix is not None
                 else []
             )
             +
@@ -965,8 +965,8 @@ class Llama:
             )
             +
             (
-                [int(suffix_token_id)]
-                if suffix_token_id and suffix is not None
+                [suffix_token_id]
+                if suffix_token_id >= 0 and suffix is not None
                 else []
             )
             +
@@ -977,8 +977,8 @@ class Llama:
             )
             +
             (
-                [int(middle_token_id)]
-                if middle_token_id and suffix is not None
+                [middle_token_id]
+                if middle_token_id >= 0 and suffix is not None
                 else []
             )
         )
@@ -1360,7 +1360,7 @@ class Llama:
         if echo:
             text_str = prompt + text_str
 
-        if not suffix_token_id and suffix is not None:
+        if suffix_token_id < 0 and suffix is not None:
             text_str = text_str + suffix
 
         logprobs_or_none: Optional[CompletionLogprobs] = None
