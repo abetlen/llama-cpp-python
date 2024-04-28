@@ -2539,6 +2539,56 @@ class Llava15ChatHandler:
             **kwargs,
         )
 
+class ObsidianChatHandler(Llava15ChatHandler):
+    # Prompt Format
+    # The model followed ChatML format. However, with ### as the seperator
+
+    # <|im_start|>user
+    # What is this sign about?\n<image>
+    # ###
+    # <|im_start|>assistant
+    # The sign is about bullying, and it is placed on a black background with a red background.
+    # ###
+
+    CHAT_FORMAT = (
+        "{% for message in messages %}"
+        # System message
+        "{% if message.role == 'system' %}"
+        "<|im_start|>system\n"
+        "{{ message.content }}\n"
+        "###\n"
+        "{% endif %}"
+        # User message
+        "{% if message.role == 'user' %}"
+        "<|im_start|>user\n"
+        "{% if message.content is string %}"
+        "{{ message.content }}"
+        "{% endif %}"
+        "{% if message.content is iterable %}"
+        "{% for content in message.content %}"
+        "{% if content.type == 'text' %}"
+        "{{ content.text }}"
+        "{% endif %}"
+        "{% if content.type == 'image_url' %}"
+        "{{ content.image_url }}"
+        "{% endif %}"
+        "{% endfor %}"
+        "{% endif %}"
+        "###\n"
+        "{% endif %}"
+        # Assistant message
+        "{% if message.role == 'assistant' %}"
+        "<|im_start|>assistant\n"
+        "{{ message.content }}"
+        "###\n"
+        "{% endif %}"
+        "{% endfor %}"
+        # Generation prompt
+        "{% if add_generation_prompt %}"
+        "<|im_start|>assistant\n"
+        "{% endif %}"
+    )
+
 class MoondreamChatHanlder(Llava15ChatHandler):
     # Chat Format:
     # f"<image>\n\n{chat_history}Question: {question}\n\nAnswer:"
