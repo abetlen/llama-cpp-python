@@ -484,6 +484,8 @@ Due to discrepancies between llama.cpp and HuggingFace's tokenizers, it is requi
   tokenizer=LlamaHFTokenizer.from_pretrained("meetkai/functionary-small-v2.2-GGUF")
 )
 ```
+
+**NOTE**: There is no need to provide the default system messages used in Functionary as they are added automatically in the Functionary chat handler. Thus, the messages should contain just the chat messages and/or system messages that provide additional context for the model (e.g.: datetime, etc.).
 </details>
 
 ### Multi-modal Models
