@@ -2584,6 +2584,57 @@ class MoondreamChatHanlder(Llava15ChatHandler):
         "{% endif %}"
     )
 
+class Llava16ChatHandler(Llava15ChatHandler):
+    DEFAULT_SYSTEM_MESSAGE = "A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human's questions. "
+
+    # Example prompt
+    # "A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human's questions. USER: <image>\nWhat is shown in this image? ASSISTANT:"
+
+    CHAT_FORMAT = (
+        "{% for message in messages %}"
+        "{% if message.role == 'system' %}"
+        "{{ message.content }}"
+        "{% endif %}"
+        "{% if message.role == 'user' %}"
+        "{% if message.content is iterable %}"
+        "{% for content in message.content %}"
+
+        # <image>
+        "{% if content.type == 'image_url' %}"
+        "{% if content.image_url is string %}"
+        "{{ content.image_url }}\n"
+        "{% endif %}"
+        "{% if content.image_url is mapping %}"
+        "{{ content.image_url.url }}\n"
+        "{% endif %}"
+        "{% endif %}"
+
+        # Question:
+        "{% if content.type == 'text' %}"
+        "{{ content.text }}"
+        "{% endif %}"
+        "{% endfor %}"
+        "{% endif %}"
+        
+        # Question:
+        "{% if message.content is string %}"
+        "{{ message.content }}"
+        "{% endif %}"
+
+        "{% endif %}"
+
+        # Answer:
+        "{% if message.role == 'assistant' %}"
+        "{{ message.content }}"
+        "{% endif %}"
+        "{% endfor %}"
+
+        # Generation prompt
+        "{% if add_generation_prompt %}"
+        "Answer:"
+        "{% endif %}"
+    )
+
 
 @register_chat_completion_handler("chatml-function-calling")
 def chatml_function_calling(
