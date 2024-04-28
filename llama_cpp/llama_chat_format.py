@@ -2193,6 +2193,8 @@ class Llava15ChatHandler:
 
         self._llava_cpp = llava_cpp # TODO: Fix
         self._exit_stack = ExitStack()
+        self._last_image_embed: Optional[llava_cpp.CtypesPointer[llava_cpp.llava_image_embed]] = None
+        self._last_image_hash: Optional[int] = None
 
         if not os.path.exists(clip_model_path):
             raise ValueError(f"Clip model path does not exist: {clip_model_path}")
@@ -2212,6 +2214,14 @@ class Llava15ChatHandler:
                     self._llava_cpp.clip_free(self.clip_ctx)
             
             self._exit_stack.callback(clip_free)
+        
+        def last_image_embed_free():
+            with suppress_stdout_stderr(disable=self.verbose):
+                if self._last_image_embed is not None:
+                    self._llava_cpp.llava_image_embed_free(self._last_image_embed)
+                    self._last_image_embed = None
+
+        self._exit_stack.callback(last_image_embed_free)
 
     def load_image(self, image_url: str) -> bytes:
         return self._load_image(image_url)
@@ -2270,6 +2280,22 @@ class Llava15ChatHandler:
         text = template.render(messages=messages, add_generation_prompt=True)
         split_text = self.split_text_on_image_urls(text, image_urls)
 
+        def embed_image_bytes(image_bytes: bytes):
+            if self._last_image_embed is not None and self._last_image_hash is not None and hash(image_bytes) == self._last_image_hash:
+                return self._last_image_embed
+            with suppress_stdout_stderr(disable=self.verbose):
+                embed = (
+                    self._llava_cpp.llava_image_embed_make_with_bytes(
+                        self.clip_ctx,
+                        llama.context_params.n_threads_batch,
+                        (ctypes.c_uint8 * len(image_bytes)).from_buffer(bytearray(image_bytes)),
+                        len(image_bytes),
+                    )
+                )
+                self._last_image_embed = embed
+                self._last_image_hash = hash(image_bytes)
+                return embed
+
         # Evaluate prompt
         llama.reset()
         for i, (type_, value) in enumerate(split_text):
@@ -2280,20 +2306,7 @@ class Llava15ChatHandler:
                 llama.eval(tokens)
             else:
                 image_bytes = self.load_image(value)
-                exit_stack = ExitStack()
-                with suppress_stdout_stderr(disable=self.verbose):
-                    embed = (
-                        self._llava_cpp.llava_image_embed_make_with_bytes(
-                            self.clip_ctx,
-                            llama.context_params.n_threads_batch,
-                            (ctypes.c_uint8 * len(image_bytes)).from_buffer(bytearray(image_bytes)),
-                            len(image_bytes),
-                        )
-                    )
-                    def free_embed():
-                        with suppress_stdout_stderr(disable=self.verbose):
-                            self._llava_cpp.llava_image_embed_free(embed)
-                    exit_stack.callback(free_embed)
+                embed = embed_image_bytes(image_bytes)
                 if llama.n_tokens + embed.contents.n_image_pos > llama.n_ctx():
                     raise ValueError("Prompt exceeds n_ctx") # TODO: Fix
                 n_past = ctypes.c_int(llama.n_tokens)
