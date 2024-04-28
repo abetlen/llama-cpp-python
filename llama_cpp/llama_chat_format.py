@@ -2635,6 +2635,54 @@ class Llava16ChatHandler(Llava15ChatHandler):
         "{% endif %}"
     )
 
+class NanoLlavaChatHandler(Llava15ChatHandler):
+    # Prompt Format
+    # The model follow the ChatML standard, however, without \n at the end of <|im_end|>:
+
+    # <|im_start|>system
+    # Answer the question<|im_end|><|im_start|>user
+    # <image>
+    # What is the picture about?<|im_end|><|im_start|>assistant
+
+    CHAT_FORMAT = (
+        "{% for message in messages %}"
+        # System message
+        "{% if message.role == 'system' %}"
+        "<|im_start|>system\n"
+        "{{ message.content }}"
+        "<|im_end|>"
+        "{% endif %}"
+        # User message
+        "{% if message.role == 'user' %}"
+        "<|im_start|>user\n"
+        "{% if message.content is string %}"
+        "{{ message.content }}"
+        "{% endif %}"
+        "{% if message.content is iterable %}"
+        "{% for content in message.content %}"
+        "{% if content.type == 'text' %}"
+        "{{ content.text }}"
+        "{% endif %}"
+        "{% if content.type == 'image_url' %}"
+        "{{ content.image_url }}"
+        "{% endif %}"
+        "{% endfor %}"
+        "{% endif %}"
+        "<|im_end|>"
+        "{% endif %}"
+        # Assistant message
+        "{% if message.role == 'assistant' %}"
+        "<|im_start|>assistant\n"
+        "{{ message.content }}"
+        "<|im_end|>"
+        "{% endif %}"
+        "{% endfor %}"
+        # Generation prompt
+        "{% if add_generation_prompt %}"
+        "<|im_start|>assistant\n"
+        "{% endif %}"
+    )
+
 
 @register_chat_completion_handler("chatml-function-calling")
 def chatml_function_calling(
