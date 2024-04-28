@@ -52,7 +52,7 @@ jobs:
           python-version: ${{ matrix.pyver }}
 
       - name: Setup Mamba
-        uses: conda-incubator/setup-miniconda@v2.2.0
+        uses: conda-incubator/setup-miniconda@v3.0.4
         with:
           activate-environment: "build"
           python-version: ${{ matrix.pyver }}
