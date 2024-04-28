@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.65]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@46e12c4692a37bdd31a0432fc5153d7d22bc7f72
+- feat: Allow for possibly non-pooled embeddings by @iamlemec in #1380
+
 ## [0.2.64]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@4e96a812b3ce7322a29a3008db2ed73d9087b176
