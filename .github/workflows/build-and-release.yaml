@@ -19,7 +19,7 @@ jobs:
           submodules: "recursive"
 
       # Used to host cibuildwheel
-      - uses: actions/setup-python@v3
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.8"
 
@@ -78,7 +78,7 @@ jobs:
       - uses: actions/checkout@v3
         with:
           submodules: "recursive"
-      - uses: actions/setup-python@v3
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.8"
       - name: Install dependencies
