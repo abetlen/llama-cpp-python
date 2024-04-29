@@ -102,7 +102,7 @@ jobs:
         with:
           name: artifact
           path: dist
-      - uses: softprops/action-gh-release@v1
+      - uses: softprops/action-gh-release@v2
         with:
           files: dist/*
         env:
