@@ -62,13 +62,12 @@ jobs:
           CIBW_ARCHS: "aarch64"
           CIBW_BUILD: "cp38-* cp39-* cp310-* cp311-* cp312-*"
         with:
-          output-dir: wheelhouse/
+          output-dir: wheelhouse
 
       - name: Upload wheels as artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: wheels-${{ matrix.version }}
-          path: wheelhouse/*.whl
+          path: ./wheelhouse/*.whl
 
   build_sdist:
     name: Build source distribution
