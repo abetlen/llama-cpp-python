@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.67]
+
+- fix: Ensure image renders before text in chat formats regardless of message content order by @abetlen in 3489ef09d3775f4a87fb7114f619e8ba9cb6b656
+- fix(ci): Fix bug in use of upload-artifact failing to merge multiple artifacts into a single release by @abetlen in d03f15bb73a1d520970357b702a9e7d4cc2a7a62
+
 ## [0.2.66]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@8843a98c2ba97a25e93319a104f9ddfaf83ce4c4
