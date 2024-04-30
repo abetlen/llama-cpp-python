@@ -2175,12 +2175,11 @@ class Llava15ChatHandler:
         "{% if message.role == 'user' %}"
         "{% if message.content is string %}"
         "\nUSER: {{ message.content }}"
-        "{% elif message.content is iterable %}"
-        "\nUSER: "
-        "{% for content in message.content %}"
-        "{% if content.type == 'text' %}"
-        "{{ content.text }}"
         "{% endif %}"
+        "{% if message.content is iterable %}"
+        "\nUSER: "
+
+        "{% for content in message.content %}"
         "{% if content.type == 'image_url' and content.image_url is string %}"
         "{{ content.image_url }}"
         "{% endif %}"
@@ -2188,6 +2187,13 @@ class Llava15ChatHandler:
         "{{ content.image_url.url }}"
         "{% endif %}"
         "{% endfor %}"
+
+        "{% for content in message.content %}"
+        "{% if content.type == 'text' %}"
+        "{{ content.text }}"
+        "{% endif %}"
+        "{% endfor %}"
+
         "{% endif %}"
         "{% endif %}"
         "{% if message.role == 'assistant' and message.content is not none %}"
@@ -2575,14 +2581,22 @@ class ObsidianChatHandler(Llava15ChatHandler):
         "{{ message.content }}"
         "{% endif %}"
         "{% if message.content is iterable %}"
+
+        "{% for content in message.content %}"
+        "{% if content.type == 'image_url' and content.image_url is string %}"
+        "{{ content.image_url }}"
+        "{% endif %}"
+        "{% if content.type == 'image_url' and content.image_url is mapping %}"
+        "{{ content.image_url.url }}"
+        "{% endif %}"
+        "{% endfor %}"
+
         "{% for content in message.content %}"
         "{% if content.type == 'text' %}"
         "{{ content.text }}"
         "{% endif %}"
-        "{% if content.type == 'image_url' %}"
-        "{{ content.image_url }}"
-        "{% endif %}"
         "{% endfor %}"
+
         "{% endif %}"
         "###\n"
         "{% endif %}"
@@ -2606,9 +2620,9 @@ class MoondreamChatHandler(Llava15ChatHandler):
         "{% for message in messages %}"
         "{% if message.role == 'user' %}"
         "{% if message.content is iterable %}"
-        "{% for content in message.content %}"
 
         # <image>
+        "{% for content in message.content %}"
         "{% if content.type == 'image_url' %}"
         "{% if content.image_url is string %}"
         "{{ content.image_url }}\n\n"
@@ -2617,12 +2631,15 @@ class MoondreamChatHandler(Llava15ChatHandler):
         "{{ content.image_url.url }}\n\n"
         "{% endif %}"
         "{% endif %}"
+        "{% endfor %}"
 
         # Question:
+        "{% for content in message.content %}"
         "{% if content.type == 'text' %}"
         "Question: {{ content.text }}\n\n"
         "{% endif %}"
         "{% endfor %}"
+
         "{% endif %}"
 
         # Question:
@@ -2657,9 +2674,9 @@ class Llava16ChatHandler(Llava15ChatHandler):
         "{% endif %}"
         "{% if message.role == 'user' %}"
         "{% if message.content is iterable %}"
-        "{% for content in message.content %}"
 
         # <image>
+        "{% for content in message.content %}"
         "{% if content.type == 'image_url' %}"
         "{% if content.image_url is string %}"
         "{{ content.image_url }}\n"
@@ -2668,12 +2685,15 @@ class Llava16ChatHandler(Llava15ChatHandler):
         "{{ content.image_url.url }}\n"
         "{% endif %}"
         "{% endif %}"
+        "{% endfor %}"
 
         # Question:
+        "{% for content in message.content %}"
         "{% if content.type == 'text' %}"
         "{{ content.text }}"
         "{% endif %}"
         "{% endfor %}"
+
         "{% endif %}"
         
         # Question:
@@ -2719,14 +2739,22 @@ class NanoLlavaChatHandler(Llava15ChatHandler):
         "{{ message.content }}"
         "{% endif %}"
         "{% if message.content is iterable %}"
+
+        "{% for content in message.content %}"
+        "{% if content.type == 'image_url' and content.image_url is string %}"
+        "{{ content.image_url }}"
+        "{% endif %}"
+        "{% if content.type == 'image_url' and content.image_url is mapping %}"
+        "{{ content.image_url.url }}"
+        "{% endif %}"
+        "{% endfor %}"
+
         "{% for content in message.content %}"
         "{% if content.type == 'text' %}"
         "{{ content.text }}"
         "{% endif %}"
-        "{% if content.type == 'image_url' %}"
-        "{{ content.image_url }}"
-        "{% endif %}"
         "{% endfor %}"
+
         "{% endif %}"
         "<|im_end|>"
         "{% endif %}"
