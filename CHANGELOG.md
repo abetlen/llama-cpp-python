@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.68]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@
+- feat: Add option to enable flash_attn to Lllama params and ModelSettings by @abetlen in 22d77eefd2edaf0148f53374d0cac74d0e25d06e
+- fix(ci): Fix build-and-release.yaml by @Smartappli in #1413
+
 ## [0.2.67]
 
 - fix: Ensure image renders before text in chat formats regardless of message content order by @abetlen in 3489ef09d3775f4a87fb7114f619e8ba9cb6b656
