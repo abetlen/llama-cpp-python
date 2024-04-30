@@ -96,6 +96,9 @@ class ModelSettings(BaseSettings):
     offload_kqv: bool = Field(
         default=True, description="Whether to offload kqv to the GPU."
     )
+    flash_attn: bool = Field(
+        default=False, description="Whether to use flash attention."
+    )
     # Sampling Params
     last_n_tokens_size: int = Field(
         default=64,
