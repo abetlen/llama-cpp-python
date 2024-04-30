@@ -14,12 +14,12 @@ jobs:
         os: [ubuntu-20.04, windows-2019, macos-11]
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: "recursive"
 
       # Used to host cibuildwheel
-      - uses: actions/setup-python@v3
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.8"
 
@@ -37,7 +37,7 @@ jobs:
           package-dir: .
           output-dir: wheelhouse
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           path: ./wheelhouse/*.whl
 
@@ -62,23 +62,22 @@ jobs:
           CIBW_ARCHS: "aarch64"
           CIBW_BUILD: "cp38-* cp39-* cp310-* cp311-* cp312-*"
         with:
-          output-dir: wheelhouse/
+          output-dir: wheelhouse
 
       - name: Upload wheels as artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.version }}
-          path: wheelhouse/*.whl
+          path: ./wheelhouse/*.whl
 
   build_sdist:
     name: Build source distribution
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: "recursive"
-      - uses: actions/setup-python@v3
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.8"
       - name: Install dependencies
@@ -88,7 +87,7 @@ jobs:
       - name: Build source distribution
         run: |
           python -m build --sdist
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           path: ./dist/*.tar.gz
 
@@ -102,7 +101,7 @@ jobs:
         with:
           name: artifact
           path: dist
-      - uses: softprops/action-gh-release@v1
+      - uses: softprops/action-gh-release@v2
         with:
           files: dist/*
         env:
