@@ -517,8 +517,8 @@ Then you'll need to use a custom chat handler to load the clip model and process
         {
             "role": "user",
             "content": [
-                {"type": "image_url", "image_url": {"url": "https://.../image.png"}},
-                {"type" : "text", "text": "Describe this image in detail please."}
+                {"type" : "text", "text": "What's in this image?"},
+                {"type": "image_url", "image_url": {"url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg" } }
             ]
         }
     ]
@@ -542,12 +542,12 @@ You can also pull the model from the Hugging Face Hub using the `from_pretrained
 )
 >>> llm.create_chat_completion(
     messages = [
-        {"role": "system", "content": "You are an assistant who perfectly describes images."},
         {
             "role": "user",
             "content": [
-                {"type": "image_url", "image_url": {"url": "https://.../image.png"}},
-                {"type" : "text", "text": "Describe this image in detail please."}
+                {"type" : "text", "text": "What's in this image?"},
+                {"type": "image_url", "image_url": {"url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg" } }
+
             ]
         }
     ]
