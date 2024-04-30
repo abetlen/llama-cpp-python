@@ -2599,7 +2599,7 @@ class ObsidianChatHandler(Llava15ChatHandler):
         "{% endif %}"
     )
 
-class MoondreamChatHanlder(Llava15ChatHandler):
+class MoondreamChatHandler(Llava15ChatHandler):
     # Chat Format:
     # f"<image>\n\n{chat_history}Question: {question}\n\nAnswer:"
     CHAT_FORMAT = (
