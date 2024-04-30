@@ -23,7 +23,7 @@ jobs:
               'os' = @('ubuntu-20.04', 'windows-latest')
               'pyver' = @("3.10", "3.11", "3.12")
               'cuda' = @("12.1.1", "12.2.2", "12.3.2", "12.4.1")
-              'releasetag' = @("basic", "AVX", "AVX512")
+              'releasetag' = @("basic", "AVX", "AVX2", "AVX512")
           }
 
           $matrixOut = ConvertTo-Json $matrix -Compress
@@ -121,11 +121,12 @@ jobs:
           python -m build --wheel
           # write the build tag to the output
           Write-Output "CUDA_VERSION=$cudaVersion" >> $env:GITHUB_ENV
+          Write-Output "AVX_VERSION=$env:AVXVER" >> $env:GITHUB_ENV
 
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*
           # Set tag_name to <tag>-cu<cuda_version>
-          tag_name: ${{ github.ref_name }}-cu${{ env.CUDA_VERSION }}-${{ env:AVXVER }}
+          tag_name: ${{ github.ref_name }}-cu${{ env.CUDA_VERSION }}-${{ env.AVX_VERSION }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
