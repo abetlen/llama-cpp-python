@@ -529,19 +529,22 @@ Then you'll need to use a custom chat handler to load the clip model and process
 You can also pull the model from the Hugging Face Hub using the `from_pretrained` method.
 
 ```python
->>> from llama_cpp import Llama
->>> from llama_cpp.llama_chat_format import MoondreamChatHandler
->>> chat_handler = MoondreamChatHandler.from_pretrained(
+from llama_cpp import Llama
+from llama_cpp.llama_chat_format import MoondreamChatHandler
+
+chat_handler = MoondreamChatHandler.from_pretrained(
   repo_id="vikhyatk/moondream2",
   filename="*mmproj*",
 )
->>> llm = Llama.from_pretrained(
-  repo_id="vikhyatk/moondream2"
+
+llm = Llama.from_pretrained(
+  repo_id="vikhyatk/moondream2",
   filename="*text-model*",
   chat_handler=chat_handler,
   n_ctx=2048, # n_ctx should be increased to accomodate the image embedding
 )
->>> llm.create_chat_completion(
+
+respoonse = llm.create_chat_completion(
     messages = [
         {
             "role": "user",
@@ -553,6 +556,7 @@ You can also pull the model from the Hugging Face Hub using the `from_pretrained
         }
     ]
 )
+print(response["choices"][0]["text"])
 ```
 
 **Note**: Multi-modal models also support tool calling and JSON mode.
