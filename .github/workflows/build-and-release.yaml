@@ -39,7 +39,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: wheels
+          name: wheels-${{ matrix.os }}
           path: ./wheelhouse/*.whl
 
   build_wheels_arm64:
