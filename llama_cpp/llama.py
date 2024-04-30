@@ -971,7 +971,7 @@ class Llama:
             )
             +
             (
-                self.tokenize(suffix.encode("utf-8"), special=True)
+                self.tokenize(suffix.encode("utf-8"), add_bos=False, special=True)
                 if suffix
                 else []
             )
