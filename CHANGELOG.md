@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.66]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@8843a98c2ba97a25e93319a104f9ddfaf83ce4c4
+- feat: Generic Chat Formats, Tool Calling, and Huggingface Pull Support for Multimodal Models (Obsidian, LLaVA1.6, Moondream) by @abetlen in #1147
+- ci(fix): Workflow actions updates and fix arm64 wheels not included in release by @Smartappli in #1392
+- ci: Add support for pre-built cuda 12.4.1 wheels by @Smartappli in #1388
+- feat: Add support for str type kv_overrides by @abetlen in a411612b385cef100d76145da1fbd02a7b7cc894
+- fix: Functionary bug fixes by @jeffrey-fong in #1385
+- examples: fix quantize example by @iyubondyrev in #1387
+- ci: Update dependabot.yml by @Smartappli in #1391
+
 ## [0.2.65]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@46e12c4692a37bdd31a0432fc5153d7d22bc7f72
