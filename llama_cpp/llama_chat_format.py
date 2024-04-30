@@ -2279,7 +2279,6 @@ class Llava15ChatHandler:
         llama_types.CreateChatCompletionResponse,
         Iterator[llama_types.CreateChatCompletionStreamResponse],
     ]:
-        from contextlib import ExitStack    
         assert (
             llama.context_params.logits_all is True
         )  # BUG: logits_all=True is required for llava
