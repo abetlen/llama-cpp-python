@@ -23,7 +23,7 @@ jobs:
               'os' = @('ubuntu-20.04', 'windows-latest')
               'pyver' = @("3.10", "3.11", "3.12")
               'cuda' = @("12.1.1", "12.2.2", "12.3.2", "12.4.1")
-              'releasetag' = @("basic")
+              'releasetag' = @("basic", "AVX", "AVX512")
           }
 
           $matrixOut = ConvertTo-Json $matrix -Compress
@@ -126,6 +126,6 @@ jobs:
         with:
           files: dist/*
           # Set tag_name to <tag>-cu<cuda_version>
-          tag_name: ${{ github.ref_name }}-cu${{ env.CUDA_VERSION }}
+          tag_name: ${{ github.ref_name }}-cu${{ env.CUDA_VERSION }}-${{ env:AVXVER }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
