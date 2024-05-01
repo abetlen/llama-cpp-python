@@ -34,7 +34,7 @@ jobs:
           CIBW_BUILD_FRONTEND: "build"
           # disable repair
           CIBW_REPAIR_WHEEL_COMMAND: ""
-          CIBW_ENVIRONMENT: CMAKE_ARGS = '-DLLAMA_CUBLAS=on -DLLAMA_AVX=off -DLLAMA_AVX2=off -DLLAMA_FMA=off -DLLAMA_F16C=off'
+          CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_CUBLAS=on -DLLAMA_AVX=off -DLLAMA_AVX2=off -DLLAMA_FMA=off -DLLAMA_F16C=off'
         with:
           package-dir: .
           output-dir: wheelhouse
@@ -72,7 +72,7 @@ jobs:
           CIBW_BUILD_FRONTEND: "build"
           # disable repair
           CIBW_REPAIR_WHEEL_COMMAND: ""
-          CIBW_ENVIRONMENT: CMAKE_ARGS = '-DLLAMA_CUBLAS=on -DLLAMA_AVX2=off -DLLAMA_FMA=off -DLLAMA_F16C=off'
+          CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_CUBLAS=on -DLLAMA_AVX2=off -DLLAMA_FMA=off -DLLAMA_F16C=off'
         with:
           package-dir: .
           output-dir: wheelhouse
