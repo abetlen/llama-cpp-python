@@ -2073,12 +2073,12 @@ def functionary_v1_v2_chat_handler(
                         ],
                     )
             # Yield tool_call/function_call stop message
-            yield {
-                "id": "chat" + chunk["id"],
-                "object": "chat.completion.chunk",
-                "created": chunk["created"],
-                "model": chunk["model"],
-                "choices": [
+            yield llama_types.CreateChatCompletionStreamResponse(
+                id="chat" + chunk["id"],
+                object="chat.completion.chunk",
+                created=chunk["created"],
+                model=chunk["model"],
+                choices=[
                     {
                         "index": 0,
                         "finish_reason": "tool_calls" if tools is not None else "function_call",
@@ -2088,7 +2088,7 @@ def functionary_v1_v2_chat_handler(
                         },
                     }
                 ],
-            }
+            )
         # If "auto" or no tool_choice/function_call
         elif isinstance(function_call, str) and function_call == "auto":
             tool_index = 0
@@ -2108,12 +2108,12 @@ def functionary_v1_v2_chat_handler(
                 if function_name == "all":
                     prompt += "all\n<|content|>"
                     # Yield the first empty message for content
-                    yield {
-                        "id": "chat" + chunk_id,
-                        "model": chunk["model"],
-                        "created": chunk_created,
-                        "object": "chat.completion.chunk",
-                        "choices": [
+                    yield llama_types.CreateChatCompletionStreamResponse(
+                        id="chat" + chunk_id,
+                        model=chunk["model"],
+                        created=chunk_created,
+                        object="chat.completion.chunk",
+                        choices=[
                             {
                                 "index": 0,
                                 "delta": {"role": "assistant", "content": ""},
@@ -2121,7 +2121,7 @@ def functionary_v1_v2_chat_handler(
                                 "finish_reason": None,
                             }
                         ],
-                    }
+                    )
                 else:
                     prompt += f"{function_name}\n<|content|>"
                     grammar = get_grammar(function_name)
@@ -2221,12 +2221,12 @@ def functionary_v1_v2_chat_handler(
                         prompt += f"{cleaned_completion_text}\n<|from|>assistant\n<|recipient|>"
                     else:
                         # Yield stop message
-                        yield {
-                            "id": "chat" + chunk_id,
-                            "model": chunk["model"],
-                            "created": chunk_created,
-                            "object": "chat.completion.chunk",
-                            "choices": [
+                        yield llama_types.CreateChatCompletionStreamResponse(
+                            id="chat" + chunk_id,
+                            model=chunk["model"],
+                            created=chunk_created,
+                            object="chat.completion.chunk",
+                            choices=[
                                 {
                                     "index": 0,
                                     "delta": {},
@@ -2234,7 +2234,7 @@ def functionary_v1_v2_chat_handler(
                                     "finish_reason": "stop",
                                 }
                             ],
-                        }
+                        )
                         break
                 else:
                     # Check whether the model wants to generate another turn
@@ -2284,25 +2284,22 @@ def functionary_v1_v2_chat_handler(
                         tool_index += 1
                     else:
                         # Yield tool_call/function_call stop message
-                        yield {
-                            "id": "chat" + chunk_id,
-                            "object": "chat.completion.chunk",
-                            "created": chunk_created,
-                            "model": chunk["model"],
-                            "choices": [
+                        yield llama_types.CreateChatCompletionStreamResponse(
+                            id="chat" + chunk_id,
+                            object="chat.completion.chunk",
+                            created=chunk_created,
+                            model=chunk["model"],
+                            choices=[
                                 {
                                     "index": 0,
                                     "finish_reason": "tool_calls" if tools is not None else "function_call",
                                     "logprobs": None,
                                     "delta": {
-                                        "role": None,
-                                        "content": None,
-                                        "function_call": None,
-                                        "tool_calls": None,
+                                        "role": None, "content": None, "function_call": None, "tool_calls": None
                                     },
                                 }
                             ],
-                        }
+                        )
                         break
         
     if stream is not False:
