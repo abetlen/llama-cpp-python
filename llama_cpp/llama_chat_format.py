@@ -1894,6 +1894,8 @@ def functionary_v1_v2_chat_handler(
         function_call = (
             tool_choice if isinstance(tool_choice, str) else tool_choice["function"]
         )
+    elif function_call is not None:
+        pass
     else:
         function_call = "auto"
 
@@ -1996,51 +1998,56 @@ def functionary_v1_v2_chat_handler(
     function_calls, function_bodies = [], []
     completion_tokens = 0
     
-    def generate_streaming(function_call, prompt):
+    def generate_streaming(tools, functions, function_call, prompt):
+        assert version == "v2", "Streaming for v1 is not supported"
+        
+        chunk_id, chunk_created = None, None
+        
         # If tool_choice/function_call is provided
         if isinstance(function_call, dict):
             prompt += f"{function_call['name']}\n{CONTENT_TOKEN}"
             grammar = get_grammar(function_call["name"])
             stops = [STOP_TOKEN, FROM_TOKEN]
+            tool_id = "".join([random.choice(string.ascii_letters + string.digits) for _ in range(24)])
             completion = create_completion(prompt=prompt, stop=stops, grammar=grammar)
             completion_text = ""
             for chunk in completion:
-                yield llama_types.CreateChatCompletionStreamResponse(
-                    id="chat" + chunk["id"],
-                    object="chat.completion.chunk",
-                    created=chunk["created"],
-                    model=chunk["model"],
-                    choices=[
-                        {
-                            "index": 0,
-                            "logprobs": chunk["choices"][0]["logprobs"],
-                            "delta": {
-                                "role": None,
-                                "content": None,
-                                "tool_calls": [
-                                    {
-                                        "index": 0,
-                                        "id": "call_"
-                                            + "".join(
-                                                [
-                                                    random.choice(string.ascii_letters + string.digits)
-                                                    for _ in range(24)
-                                                ]
-                                            ),
-                                        "type": "function",
-                                        "function": {
-                                            "name": None,
-                                            "arguments": chunk["choices"][0]["text"].rstrip(),
-                                        },
-                                    }
-                                ],
-                            },
-                        }
-                    ],
-                )
+                if tools is not None:
+                    func_call_dict = {
+                        "tool_calls": [
+                            {
+                                "index": 0,
+                                "id": "call_" + tool_id,
+                                "type": "function",
+                                "function": {
+                                    "name": None,
+                                    "arguments": chunk["choices"][0]["text"].rstrip(),
+                                },
+                            }
+                        ]
+                    }
+                else:
+                    func_call_dict = {"function_call": {"name": None, "arguments": chunk["choices"][0]["text"].rstrip()}}
+                if len(chunk["choices"][0]["text"].rstrip()) > 0:
+                    yield llama_types.CreateChatCompletionStreamResponse(
+                        id="chat" + chunk["id"],
+                        object="chat.completion.chunk",
+                        created=chunk["created"],
+                        model=chunk["model"],
+                        choices=[
+                            {
+                                "index": 0,
+                                "logprobs": chunk["choices"][0]["logprobs"],
+                                "delta": {
+                                    "role": None,
+                                    "content": None,
+                                    **func_call_dict,
+                                },
+                            }
+                        ],
+                    )
         # If "auto" or no tool_choice/function_call
         elif isinstance(function_call, str) and function_call == "auto":
-            chunk_id, chunk_created = None, None
             tool_index = 0
             while True:
                 # Generate function name first
@@ -2076,6 +2083,19 @@ def functionary_v1_v2_chat_handler(
                     prompt += f"{function_name}\n<|content|>"
                     grammar = get_grammar(function_name)
                     tool_id = "".join([random.choice(string.ascii_letters + string.digits) for _ in range(24)])
+                    if tools is not None:
+                        func_call_dict = {
+                            "tool_calls": [
+                                {
+                                    "index": tool_index,
+                                    "id": "call_" + tool_id,
+                                    "type": "function",
+                                    "function": {"name": function_name, "arguments": ""},
+                                }
+                            ]
+                        }
+                    else:
+                        func_call_dict = {"function_call": {"name": function_name, "arguments": ""}}
                     # Stream function name
                     yield llama_types.CreateChatCompletionStreamResponse(
                         id="chat" + chunk_id,
@@ -2089,13 +2109,7 @@ def functionary_v1_v2_chat_handler(
                                 "delta": {
                                     "role": "assistant",
                                     "content": None,
-                                    "tool_calls": [
-                                        {
-                                            "index": tool_index,
-                                            "id": "call_" + tool_id,
-                                            "type": "function",
-                                            "function": {"name": function_name, "arguments": ""},
-                                        }]
+                                    **func_call_dict,
                                 },
                             }
                         ],
@@ -2165,22 +2179,16 @@ def functionary_v1_v2_chat_handler(
                     else:
                         # Yield stop message
                         yield {
-                            "id": "chat" + chunk["id"],
+                            "id": "chat" + chunk_id,
                             "model": chunk["model"],
                             "created": chunk_created,
                             "object": "chat.completion.chunk",
                             "choices": [
                                 {
                                     "index": 0,
-                                    "delta": (
-                                        {
-                                            "content": chunk["choices"][0]["text"],
-                                        }
-                                        if chunk["choices"][0]["finish_reason"] is None
-                                        else {}
-                                    ),
-                                    "logprobs": chunk["choices"][0]["logprobs"],
-                                    "finish_reason": chunk["choices"][0]["finish_reason"],
+                                    "delta": {},
+                                    "logprobs": None,
+                                    "finish_reason": "stop",
                                 }
                             ],
                         }
@@ -2191,6 +2199,22 @@ def functionary_v1_v2_chat_handler(
                     for chunk in completion:
                         completion_text += chunk["choices"][0]["text"]
                         if len(chunk["choices"][0]["text"].rstrip()) > 0:
+                            if tools is not None:
+                                func_call_dict = {
+                                    "tool_calls": [
+                                        {
+                                            "index": tool_index,
+                                            "id": "call_" + tool_id,
+                                            "type": "function",
+                                            "function": {
+                                                "name": None,
+                                                "arguments": chunk["choices"][0]["text"].rstrip(),
+                                            },
+                                        }
+                                    ]
+                                }
+                            else:
+                                func_call_dict = {"function_call": {"name": None, "arguments": chunk["choices"][0]["text"].rstrip()}}
                             yield llama_types.CreateChatCompletionStreamResponse(
                                 id="chat" + chunk_id,
                                 object="chat.completion.chunk",
@@ -2203,17 +2227,7 @@ def functionary_v1_v2_chat_handler(
                                         "delta": {
                                             "role": None,
                                             "content": None,
-                                            "tool_calls": [
-                                                {
-                                                    "index": tool_index,
-                                                    "id": "call_" + tool_id,
-                                                    "type": "function",
-                                                    "function": {
-                                                        "name": None,
-                                                        "arguments": chunk["choices"][0]["text"].rstrip(),
-                                                    },
-                                                }
-                                            ],
+                                            **func_call_dict,
                                         },
                                     }
                                 ],
@@ -2235,7 +2249,7 @@ def functionary_v1_v2_chat_handler(
                             "choices": [
                                 {
                                     "index": 0,
-                                    "finish_reason": "tool_calls",
+                                    "finish_reason": "tool_calls" if tools is not None else "function_call",
                                     "logprobs": None,
                                     "delta": {
                                         "role": None,
@@ -2249,7 +2263,9 @@ def functionary_v1_v2_chat_handler(
                         break
         
     if stream is not False:
-        return generate_streaming(function_call=function_call, prompt=prompt)
+        return generate_streaming(
+            tools=tools, functions=functions, function_call=function_call, prompt=prompt
+        )
     else:
         if version == "v1":
             # If no or "auto" tool_choice/function_call
