@@ -2279,7 +2279,7 @@ def functionary_v1_v2_chat_handler(
                     grammar = None
                     completion = create_completion(prompt=prompt, stop=stops, grammar=grammar)
                     completion_text += "".join([chunk["choices"][0]["text"] for chunk in completion])
-                    if "<|from|> assistant" in completion_text or "<|from|>assistant" in completion_text:
+                    if ("<|from|> assistant" in completion_text or "<|from|>assistant" in completion_text) and tools is not None:
                         prompt += "\n<|from|>assistant\n<|recipient|>"
                         tool_index += 1
                     else:
