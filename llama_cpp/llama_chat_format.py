@@ -2011,7 +2011,33 @@ def functionary_v1_v2_chat_handler(
             tool_id = "".join([random.choice(string.ascii_letters + string.digits) for _ in range(24)])
             completion = create_completion(prompt=prompt, stop=stops, grammar=grammar)
             completion_text = ""
+            first = True
             for chunk in completion:
+                # Yield the tool/function name first
+                if first:
+                    if tools is not None:
+                        func_call_dict = {
+                            "tool_calls": [
+                                {
+                                    "index": 0,
+                                    "id": "call_" + tool_id,
+                                    "type": "function",
+                                    "function": {"name": function_call["name"], "arguments": ""},
+                                }
+                            ]
+                        }
+                    else:
+                        func_call_dict = {"function_call": {"name": function_call["name"], "arguments": ""}}
+                    yield llama_types.CreateChatCompletionStreamResponse(
+                        id="chat" + chunk["id"],
+                        object="chat.completion.chunk",
+                        created=chunk["created"],
+                        model=chunk["model"],
+                        choices=[
+                            {"index": 0, "logprobs": None, "delta": {"role": None, "content": None, **func_call_dict}}
+                        ],
+                    )
+                    first = False
                 if tools is not None:
                     func_call_dict = {
                         "tool_calls": [
@@ -2046,6 +2072,23 @@ def functionary_v1_v2_chat_handler(
                             }
                         ],
                     )
+            # Yield tool_call/function_call stop message
+            yield {
+                "id": "chat" + chunk["id"],
+                "object": "chat.completion.chunk",
+                "created": chunk["created"],
+                "model": chunk["model"],
+                "choices": [
+                    {
+                        "index": 0,
+                        "finish_reason": "tool_calls" if tools is not None else "function_call",
+                        "logprobs": None,
+                        "delta": {
+                            "role": None, "content": None, "function_call": None, "tool_calls": None
+                        },
+                    }
+                ],
+            }
         # If "auto" or no tool_choice/function_call
         elif isinstance(function_call, str) and function_call == "auto":
             tool_index = 0
@@ -2240,7 +2283,7 @@ def functionary_v1_v2_chat_handler(
                         prompt += "\n<|from|>assistant\n<|recipient|>"
                         tool_index += 1
                     else:
-                        # Yield tool_call stop message
+                        # Yield tool_call/function_call stop message
                         yield {
                             "id": "chat" + chunk_id,
                             "object": "chat.completion.chunk",
