@@ -31,7 +31,6 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.17.0
         env:
-          CIBW_BUILD_FRONTEND: "build"
           # disable repair
           CIBW_REPAIR_WHEEL_COMMAND: ""
           CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_CUBLAS=on -DLLAMA_AVX=off -DLLAMA_AVX2=off -DLLAMA_FMA=off -DLLAMA_F16C=off'
@@ -69,7 +68,6 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.17.0
         env:
-          CIBW_BUILD_FRONTEND: "build"
           # disable repair
           CIBW_REPAIR_WHEEL_COMMAND: ""
           CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_CUBLAS=on -DLLAMA_AVX2=off -DLLAMA_FMA=off -DLLAMA_F16C=off'
@@ -107,7 +105,6 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.17.0
         env:
-          CIBW_BUILD_FRONTEND: "build"
           # disable repair
           CIBW_REPAIR_WHEEL_COMMAND: ""
           CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_CUBLAS=on'
