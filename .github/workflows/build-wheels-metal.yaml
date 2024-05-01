@@ -20,8 +20,8 @@ jobs:
         id: set-matrix
         run: |
           $matrix = @{
-              'os' = @('macos-11', 'macos-12', 'macos-13')
-              'pyver' = @('3.10', '3.11', '3.12')
+              'os' = @('macos-12', 'macos-13', 'macos-14')
+              'pyver' = @('3.9', '3.10', '3.11', '3.12')
           }
 
           $matrixOut = ConvertTo-Json $matrix -Compress
