@@ -2205,7 +2205,7 @@ class Llava15ChatHandler:
         "{% endif %}"
     )
 
-    def __init__(self, clip_model_path: str, verbose: bool = False):
+    def __init__(self, clip_model_path: str, verbose: bool = True):
         import llama_cpp.llava_cpp as llava_cpp
 
         self.clip_model_path = clip_model_path
