@@ -42,117 +42,6 @@ jobs:
         with:
           name: wheels-${{ matrix.os }}
           path: ./wheelhouse/*.whl
-          
-  build_wheels_avx:
-    name: Build wheels on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-20.04, windows-2019, macos-12]
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: "recursive"
-
-      # Used to host cibuildwheel
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.9"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e .[all]
-
-      - name: Build wheels
-        uses: pypa/cibuildwheel@v2.17.0
-        env:
-          # disable repair
-          CIBW_REPAIR_WHEEL_COMMAND: ""
-          CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS -DLLAMA_AVX2=off -DLLAMA_FMA=off -DLLAMA_F16C=off'
-        with:
-          package-dir: .
-          output-dir: wheelhouse
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: wheels-avx${{ matrix.os }}
-          path: ./wheelhouse/*.whl
-
-  build_wheels_avx2:
-    name: Build wheels on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-20.04, windows-2019, macos-12]
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: "recursive"
-
-      # Used to host cibuildwheel
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.9"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e .[all]
-
-      - name: Build wheels
-        uses: pypa/cibuildwheel@v2.17.0
-        env:
-          # disable repair
-          CIBW_REPAIR_WHEEL_COMMAND: ""
-          CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS'
-        with:
-          package-dir: .
-          output-dir: wheelhouse
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: wheels-avx2-${{ matrix.os }}
-          path: ./wheelhouse/*.whl
-
-  build_wheels_avx512:
-    name: Build wheels on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-20.04, windows-2019, macos-12]
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: "recursive"
-
-      # Used to host cibuildwheel
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.9"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e .[all]
-
-      - name: Build wheels
-        uses: pypa/cibuildwheel@v2.17.0
-        env:
-          # disable repair
-          CIBW_REPAIR_WHEEL_COMMAND: ""
-          CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS -DLLAMA_AVX512=on'
-        with:
-          package-dir: .
-          output-dir: wheelhouse
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: wheels-avx512-${{ matrix.os }}
-          path: ./wheelhouse/*.whl
 
   build_wheels_arm64:
     name: Build arm64 wheels
@@ -173,7 +62,7 @@ jobs:
           CIBW_SKIP: "*musllinux* pp*"
           CIBW_REPAIR_WHEEL_COMMAND: ""
           CIBW_ARCHS: "aarch64"
-          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-*"
+          CIBW_BUILD: "cp3(9,10,11,12)-*"
         with:
           output-dir: wheelhouse
 
@@ -208,7 +97,7 @@ jobs:
 
   release:
     name: Release
-    needs: [build_wheels, build_wheels_avx, build_wheels_avx2, build_wheels_avx512, build_wheels_arm64, build_sdist]
+    needs: [build_wheels, build_wheels_arm64, build_sdist]
     runs-on: ubuntu-latest
 
     steps:
@@ -220,5 +109,122 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build_wheels_avx:
+    name: Build wheels on ${{ matrix.os }} - AVX
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-20.04, windows-2019, macos-12]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
+
+      # Used to host cibuildwheel
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[all]
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.17.0
+        env:
+          # disable repair
+          CIBW_REPAIR_WHEEL_COMMAND: ""
+          CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS -DLLAMA_AVX2=off -DLLAMA_FMA=off -DLLAMA_F16C=off'
+        with:
+          package-dir: .
+          output-dir: wheelhouse_avx
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: wheelhouse_avx/*
+          tag_name: ${{ github.ref_name }}-avx
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build_wheels_avx2:
+    name: Build wheels on ${{ matrix.os }} - AVX2
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-20.04, windows-2019, macos-12]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
+
+      # Used to host cibuildwheel
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[all]
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.17.0
+        env:
+          # disable repair
+          CIBW_REPAIR_WHEEL_COMMAND: ""
+          CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS'
+        with:
+          package-dir: .
+          output-dir: wheelhouse_avx2
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: wheelhouse_avx2/*
+          tag_name: ${{ github.ref_name }}-avx2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build_wheels_avx512:
+    name: Build wheels on ${{ matrix.os }} - AVX512
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-20.04, windows-2019, macos-12]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
+
+      # Used to host cibuildwheel
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[all]
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.17.0
+        env:
+          # disable repair
+          CIBW_REPAIR_WHEEL_COMMAND: ""
+          CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS -DLLAMA_AVX512=on'
+        with:
+          package-dir: .
+          output-dir: wheelhouse_avx512
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: wheelhouse_avx512/*
+          tag_name: ${{ github.ref_name }}-avx512
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
