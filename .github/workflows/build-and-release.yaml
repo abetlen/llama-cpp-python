@@ -33,7 +33,7 @@ jobs:
         env:
           # disable repair
           CIBW_REPAIR_WHEEL_COMMAND: ""
-          CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_CUBLAS=on -DLLAMA_AVX=off -DLLAMA_AVX2=off -DLLAMA_FMA=off -DLLAMA_F16C=off'
+          CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS -DLLAMA_AVX=off -DLLAMA_AVX2=off -DLLAMA_FMA=off -DLLAMA_F16C=off'
         with:
           package-dir: .
           output-dir: wheelhouse
@@ -70,7 +70,7 @@ jobs:
         env:
           # disable repair
           CIBW_REPAIR_WHEEL_COMMAND: ""
-          CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_CUBLAS=on -DLLAMA_AVX2=off -DLLAMA_FMA=off -DLLAMA_F16C=off'
+          CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS -DLLAMA_AVX2=off -DLLAMA_FMA=off -DLLAMA_F16C=off'
         with:
           package-dir: .
           output-dir: wheelhouse
@@ -107,7 +107,7 @@ jobs:
         env:
           # disable repair
           CIBW_REPAIR_WHEEL_COMMAND: ""
-          CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_CUBLAS=on'
+          CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS'
         with:
           package-dir: .
           output-dir: wheelhouse
@@ -144,7 +144,7 @@ jobs:
         env:
           # disable repair
           CIBW_REPAIR_WHEEL_COMMAND: ""
-          CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_CUBLAS=on -DLLAMA_AVX512=on'
+          CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS -DLLAMA_AVX512=on'
         with:
           package-dir: .
           output-dir: wheelhouse
