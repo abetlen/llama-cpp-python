@@ -147,7 +147,7 @@ jobs:
         env:
           # disable repair
           CIBW_REPAIR_WHEEL_COMMAND: ""
-          CIBW_ENVIRONMENT: CMAKE_ARGS = '-DLLAMA_CUBLAS=on -DLLAMA_AVX512=on'
+          CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_CUBLAS=on -DLLAMA_AVX512=on'
         with:
           package-dir: .
           output-dir: wheelhouse
