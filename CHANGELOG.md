@@ -7,9 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.69]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@6ecf3189e00a1e8e737a78b6d10e1d7006e050a2
+- feat: Add llama-3-vision-alpha chat format by @abetlen in 31b1d95a6c19f5b615a3286069f181a415f872e8
+- fix: Change default verbose value of verbose in image chat format handlers to True to match Llama by @abetlen in 4f01c452b6c738dc56eacac3758119b12c57ea94
+- fix: Suppress all logs when verbose=False, use hardcoded fileno's to work in colab notebooks by @abetlen in f116175a5a7c84569c88cad231855c1e6e59ff6e
+- fix: UTF-8 handling with grammars by @jsoma in #1415
+
 ## [0.2.68]
 
-- feat: Update llama.cpp to ggerganov/llama.cpp@
+- feat: Update llama.cpp to ggerganov/llama.cpp@77e15bec6217a39be59b9cc83d6b9afb6b0d8167
 - feat: Add option to enable flash_attn to Lllama params and ModelSettings by @abetlen in 22d77eefd2edaf0148f53374d0cac74d0e25d06e
 - fix(ci): Fix build-and-release.yaml by @Smartappli in #1413
 
