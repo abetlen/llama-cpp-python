@@ -26,11 +26,11 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install .[all] -v
+          python -m pip install --upgrade pip
+          python -m pip install .[all] -v
       - name: Test with pytest
         run: |
-          python3 -m pytest
+          python -m pytest
 
   build-windows:
 
@@ -49,11 +49,11 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install .[all] -v
+          python -m pip install --upgrade pip
+          python -m pip install .[all] -v
       - name: Test with pytest
         run: |
-          python3 -m pytest
+          python -m pytest
 
   build-macos:
 
@@ -72,11 +72,11 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install .[all] --verbose
+          python -m pip install --upgrade pip
+          python -m pip install .[all] --verbose
       - name: Test with pytest
         run: |
-          python3 -m pytest
+          python -m pytest
 
   # build-linux-opencl:
 
@@ -98,11 +98,11 @@ jobs:
   #         sudo apt-get install -y --no-install-recommends llvm intel-oneapi-runtime-opencl intel-oneapi-runtime-compilers libclblast-dev
   #     - name: Install dependencies
   #       run: |
-  #         python3 -m pip install --upgrade pip
-  #         CMAKE_ARGS="-DLLAMA_CLBLAST=on" python3 -m pip install .[all] --verbose
+  #         python -m pip install --upgrade pip
+  #         CMAKE_ARGS="-DLLAMA_CLBLAST=on" python -m pip install .[all] --verbose
   #     - name: Test with pytest
   #       run: |
-  #         python3 -m pytest
+  #         python -m pytest
 
 
   build-macos-metal:
@@ -119,8 +119,8 @@ jobs:
           python-version: "3.9"
       - name: Install dependencies
         run: |
-          python3 -m pip install --upgrade pip
-          CMAKE_ARGS="-DLLAMA_METAL=on" python3 -m pip install .[all] --verbose
+          python -m pip install --upgrade pip
+          CMAKE_ARGS="-DLLAMA_METAL=on" python -m pip install .[all] --verbose
       - name: Test with pytest
         run: |
-          python3 -m pytest
+          python -m pytest
