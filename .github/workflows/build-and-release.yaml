@@ -34,7 +34,7 @@ jobs:
           # disable repair
           CIBW_REPAIR_WHEEL_COMMAND: ""
           CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS -DLLAMA_AVX=off -DLLAMA_AVX2=off -DLLAMA_FMA=off -DLLAMA_F16C=off'
-          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-* pp39-* pp310-* pp311-* pp312-*"
+          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-* pp39-* pp310-*"
         with:
           package-dir: .
           output-dir: wheelhouse
@@ -143,7 +143,7 @@ jobs:
           # disable repair
           CIBW_REPAIR_WHEEL_COMMAND: ""
           CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS -DLLAMA_AVX2=off -DLLAMA_FMA=off -DLLAMA_F16C=off'
-          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-* pp39-* pp310-* pp311-* pp312-*"
+          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-* pp39-* pp310-*"
         with:
           package-dir: .
           output-dir: wheelhouse_avx
@@ -184,7 +184,7 @@ jobs:
           # disable repair
           CIBW_REPAIR_WHEEL_COMMAND: ""
           CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS'
-          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-* pp39-* pp310-* pp311-* pp312-*"
+          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-* pp39-* pp310-*"
         with:
           package-dir: .
           output-dir: wheelhouse_avx2
@@ -225,7 +225,7 @@ jobs:
           # disable repair 
           CIBW_REPAIR_WHEEL_COMMAND: ""
           CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS -DLLAMA_AVX512=on'
-          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-* pp39-* pp310-* pp311-* pp312-*"
+          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-* pp39-* pp310-*"
         with:
           package-dir: .
           output-dir: wheelhouse_avx512
