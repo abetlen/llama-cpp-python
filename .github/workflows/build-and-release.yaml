@@ -31,8 +31,8 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.17.0
         env:
-          # disable repair
           CIBW_SKIP: "*-win32 *-manylinux_i686"
+          # disable repair
           CIBW_REPAIR_WHEEL_COMMAND: ""
           CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS -DLLAMA_AVX=off -DLLAMA_AVX2=off -DLLAMA_FMA=off -DLLAMA_F16C=off'
         with:
@@ -61,6 +61,7 @@ jobs:
         uses: pypa/cibuildwheel@v2.17.0
         env:
           CIBW_SKIP: "*musllinux* pp*"
+          # disable repair
           CIBW_REPAIR_WHEEL_COMMAND: ""
           CIBW_ARCHS: "aarch64"
           CIBW_BUILD: "cp38-* cp39-* cp310-* cp311-* cp312-*"
@@ -138,8 +139,8 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.17.0
         env:
-          # disable repair
           CIBW_SKIP: "*-win32 *-manylinux_i686"
+          # disable repair
           CIBW_REPAIR_WHEEL_COMMAND: ""
           CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS -DLLAMA_AVX2=off -DLLAMA_FMA=off -DLLAMA_F16C=off'
         with:
@@ -178,8 +179,8 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.17.0
         env:
-          # disable repair
           CIBW_SKIP: "*-win32 *-manylinux_i686"
+          # disable repair
           CIBW_REPAIR_WHEEL_COMMAND: ""
           CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS'
         with:
@@ -218,8 +219,8 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.17.0
         env:
-          # disable repair
           CIBW_SKIP: "*-win32 *-manylinux_i686"
+          # disable repair 
           CIBW_REPAIR_WHEEL_COMMAND: ""
           CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS -DLLAMA_AVX512=on'
         with:
