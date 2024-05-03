@@ -116,7 +116,7 @@ jobs:
           #  $env:CMAKE_ARGS = $env:CMAKE_ARGS + ' -DLLAMA_AVX512=on'
           # }
           # if ($env:AVXVER -eq 'basic') {
-          # $env:CMAKE_ARGS = $env:CMAKE_ARGS + ' -DLLAMA_AVX=off -DLLAMA_AVX2=off -DLLAMA_FMA=off -DLLAMA_F16C=off'
+          #  $env:CMAKE_ARGS = $env:CMAKE_ARGS + ' -DLLAMA_AVX=off -DLLAMA_AVX2=off -DLLAMA_FMA=off -DLLAMA_F16C=off'
           # }
           python -m build --wheel
           # write the build tag to the output
