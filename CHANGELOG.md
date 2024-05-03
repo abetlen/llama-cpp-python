@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.69]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@6ecf3189e00a1e8e737a78b6d10e1d7006e050a2
+- feat: Add llama-3-vision-alpha chat format by @abetlen in 31b1d95a6c19f5b615a3286069f181a415f872e8
+- fix: Change default verbose value of verbose in image chat format handlers to True to match Llama by @abetlen in 4f01c452b6c738dc56eacac3758119b12c57ea94
+- fix: Suppress all logs when verbose=False, use hardcoded fileno's to work in colab notebooks by @abetlen in f116175a5a7c84569c88cad231855c1e6e59ff6e
+- fix: UTF-8 handling with grammars by @jsoma in #1415
+
+## [0.2.68]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@77e15bec6217a39be59b9cc83d6b9afb6b0d8167
+- feat: Add option to enable flash_attn to Lllama params and ModelSettings by @abetlen in 22d77eefd2edaf0148f53374d0cac74d0e25d06e
+- fix(ci): Fix build-and-release.yaml by @Smartappli in #1413
+
+## [0.2.67]
+
+- fix: Ensure image renders before text in chat formats regardless of message content order by @abetlen in 3489ef09d3775f4a87fb7114f619e8ba9cb6b656
+- fix(ci): Fix bug in use of upload-artifact failing to merge multiple artifacts into a single release by @abetlen in d03f15bb73a1d520970357b702a9e7d4cc2a7a62
+
+## [0.2.66]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@8843a98c2ba97a25e93319a104f9ddfaf83ce4c4
+- feat: Generic Chat Formats, Tool Calling, and Huggingface Pull Support for Multimodal Models (Obsidian, LLaVA1.6, Moondream) by @abetlen in #1147
+- ci(fix): Workflow actions updates and fix arm64 wheels not included in release by @Smartappli in #1392
+- ci: Add support for pre-built cuda 12.4.1 wheels by @Smartappli in #1388
+- feat: Add support for str type kv_overrides by @abetlen in a411612b385cef100d76145da1fbd02a7b7cc894
+- fix: Functionary bug fixes by @jeffrey-fong in #1385
+- examples: fix quantize example by @iyubondyrev in #1387
+- ci: Update dependabot.yml by @Smartappli in #1391
+
 ## [0.2.65]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@46e12c4692a37bdd31a0432fc5153d7d22bc7f72
