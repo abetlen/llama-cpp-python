@@ -262,7 +262,12 @@ class Llama:
                         raise ValueError(f"Value for {k} is too long: {v}")
                     v_bytes = v_bytes.ljust(128, b"\0")
                     self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_TYPE_STR
-                    self._kv_overrides_array[i].value.str_value[:128] = v_bytes
+                    # copy min(v_bytes, 128) to str_value
+                    ctypes.memmove(
+                        self._kv_overrides_array[i].value.str_value,
+                        v_bytes,
+                        min(len(v_bytes), 128),
+                    )
                 else:
                     raise ValueError(f"Unknown value type for {k}: {v}")
 
