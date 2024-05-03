@@ -1,33 +1,10 @@
-"""Example FastAPI server for llama.cpp.
-
-To run this example:
-
-```bash
-pip install fastapi uvicorn sse-starlette pydantic-settings
-export MODEL=../models/7B/...
-```
-
-Then run:
-```
-uvicorn llama_cpp.server.app:create_app --reload
-```
-
-or
-
-```
-python3 -m llama_cpp.server
-```
-
-Then visit http://localhost:8000/docs to see the interactive API docs.
-
-"""
 from __future__ import annotations
 
 import os
 import sys
 import argparse
 
-import uvicorn
+import hypercorn.asyncio
 
 from llama_cpp.server.app import create_app
 from llama_cpp.server.settings import (
@@ -84,13 +61,11 @@ def main():
         server_settings=server_settings,
         model_settings=model_settings,
     )
-    uvicorn.run(
-        app,
-        host=os.getenv("HOST", server_settings.host),
-        port=int(os.getenv("PORT", server_settings.port)),
-        ssl_keyfile=server_settings.ssl_keyfile,
-        ssl_certfile=server_settings.ssl_certfile,
-    )
+    config = hypercorn.Config()
+    config.bind = [f"{os.getenv('HOST', server_settings.host)}:{int(os.getenv('PORT', server_settings.port))}"]
+    config.ssl_keyfile = server_settings.ssl_keyfile
+    config.ssl_certfile = server_settings.ssl_certfile
+    hypercorn.asyncio.serve(app, config)
 
 
 if __name__ == "__main__":
