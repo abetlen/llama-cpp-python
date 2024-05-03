@@ -242,6 +242,7 @@ class LlamaProxy:
             logits_all=settings.logits_all,
             embedding=settings.embedding,
             offload_kqv=settings.offload_kqv,
+            flash_attn=settings.flash_attn,
             # Sampling Params
             last_n_tokens_size=settings.last_n_tokens_size,
             # LoRA Params
