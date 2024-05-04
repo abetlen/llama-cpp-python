@@ -104,6 +104,7 @@ jobs:
           # disable repair
           CIBW_REPAIR_WHEEL_COMMAND: ""
           CIBW_ARCHS: "aarch64"
+          CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS'
           CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-*"
         with:
           output-dir: wheelhouse
