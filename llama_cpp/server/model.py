@@ -140,6 +140,20 @@ class LlamaProxy:
                 chat_handler = llama_cpp.llama_chat_format.NanoLlavaChatHandler(
                     clip_model_path=settings.clip_model_path, verbose=settings.verbose
                 )
+        elif settings.chat_format == "llama-3-vision-alpha":
+            assert settings.clip_model_path is not None, "clip model not found"
+            if settings.hf_model_repo_id is not None:
+                chat_handler = (
+                    llama_cpp.llama_chat_format.Llama3VisionAlpha.from_pretrained(
+                        repo_id=settings.hf_model_repo_id,
+                        filename=settings.clip_model_path,
+                        verbose=settings.verbose,
+                    )
+                )
+            else:
+                chat_handler = llama_cpp.llama_chat_format.Llama3VisionAlpha(
+                    clip_model_path=settings.clip_model_path, verbose=settings.verbose
+                )
         elif settings.chat_format == "hf-autotokenizer":
             assert (
                 settings.hf_pretrained_model_name_or_path is not None
@@ -228,6 +242,7 @@ class LlamaProxy:
             logits_all=settings.logits_all,
             embedding=settings.embedding,
             offload_kqv=settings.offload_kqv,
+            flash_attn=settings.flash_attn,
             # Sampling Params
             last_n_tokens_size=settings.last_n_tokens_size,
             # LoRA Params
