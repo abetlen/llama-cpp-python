@@ -203,7 +203,7 @@ class _LlamaModel:
         # NOTE: Llama1 models automatically added a space at the start of the prompt
         # this line removes a leading space if the first token is a beginning of sentence token
         return (
-            output[1:] if len(tokens) > 0 and tokens[0] == self.token_bos() else output
+            output[1:] if len(tokens) > 0 and tokens[0] == self.token_bos() and output[0:1] == b' ' else output
         )
 
     # Extra
