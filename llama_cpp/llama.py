@@ -50,6 +50,7 @@ from ._internals import (
     _LlamaTokenDataArray,  # type: ignore
     _LlamaSamplingParams,  # type: ignore
     _LlamaSamplingContext,  # type: ignore
+    _normalize_embedding,  # type: ignore
 )
 from ._logger import set_verbose
 from ._utils import suppress_stdout_stderr
@@ -72,7 +73,7 @@ class Llama:
         vocab_only: bool = False,
         use_mmap: bool = True,
         use_mlock: bool = False,
-        kv_overrides: Optional[Dict[str, Union[bool, int, float]]] = None,
+        kv_overrides: Optional[Dict[str, Union[bool, int, float, str]]] = None,
         # Context Params
         seed: int = llama_cpp.LLAMA_DEFAULT_SEED,
         n_ctx: int = 512,
@@ -91,6 +92,7 @@ class Llama:
         logits_all: bool = False,
         embedding: bool = False,
         offload_kqv: bool = True,
+        flash_attn: bool = False,
         # Sampling Params
         last_n_tokens_size: int = 64,
         # LoRA Params
@@ -167,6 +169,7 @@ class Llama:
             logits_all: Return logits for all tokens, not just the last token. Must be True for completion to return logprobs.
             embedding: Embedding mode only.
             offload_kqv: Offload K, Q, V to GPU.
+            flash_attn: Use flash attention.
             last_n_tokens_size: Maximum number of tokens to keep in the last_n_tokens deque.
             lora_base: Optional path to base model, useful if using a quantized base model and you want to apply LoRA to an f16 model.
             lora_path: Path to a LoRA file to apply to the model.
@@ -253,6 +256,18 @@ class Llama:
                 elif isinstance(v, float):
                     self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_TYPE_FLOAT
                     self._kv_overrides_array[i].value.float_value = v
+                elif isinstance(v, str): # type: ignore
+                    v_bytes = v.encode("utf-8")
+                    if len(v_bytes) > 128: # TODO: Make this a constant
+                        raise ValueError(f"Value for {k} is too long: {v}")
+                    v_bytes = v_bytes.ljust(128, b"\0")
+                    self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_TYPE_STR
+                    # copy min(v_bytes, 128) to str_value
+                    ctypes.memmove(
+                        self._kv_overrides_array[i].value.str_value,
+                        v_bytes,
+                        min(len(v_bytes), 128),
+                    )
                 else:
                     raise ValueError(f"Unknown value type for {k}: {v}")
 
@@ -302,6 +317,7 @@ class Llama:
         )  # Must be set to True for speculative decoding
         self.context_params.embeddings = embedding # TODO: Rename to embeddings
         self.context_params.offload_kqv = offload_kqv
+        self.context_params.flash_attn = flash_attn
         #  KV cache quantization
         if type_k is not None:
             self.context_params.type_k = type_k
@@ -760,7 +776,7 @@ class Llama:
         input = input if isinstance(input, list) else [input]
 
         # get numeric embeddings
-        embeds: List[List[float]]
+        embeds: Union[List[List[float]], List[List[List[float]]]]
         total_tokens: int
         embeds, total_tokens = self.embed(input, return_count=True)  # type: ignore
 
@@ -787,7 +803,7 @@ class Llama:
     def embed(
         self,
         input: Union[str, List[str]],
-        normalize: bool = True,
+        normalize: bool = False,
         truncate: bool = True,
         return_count: bool = False,
     ):
@@ -802,6 +818,10 @@ class Llama:
         assert self._ctx.ctx is not None
         n_embd = self.n_embd()
         n_batch = self.n_batch
+
+        # get pooling information
+        pooling_type = self.pooling_type()
+        logits_all = pooling_type == llama_cpp.LLAMA_POOLING_TYPE_NONE
 
         if self.context_params.embeddings == False:
             raise RuntimeError(
@@ -820,29 +840,37 @@ class Llama:
         self._batch.reset()
 
         # decode and fetch embeddings
-        data: List[List[float]] = []
+        data: Union[List[List[float]], List[List[List[float]]]] = []
 
-        def decode_batch(n_seq: int):
+        def decode_batch(seq_sizes: List[int]):
             assert self._ctx.ctx is not None
             llama_cpp.llama_kv_cache_clear(self._ctx.ctx)
             self._ctx.decode(self._batch)
             self._batch.reset()
 
             # store embeddings
-            for i in range(n_seq):
-                ptr = llama_cpp.llama_get_embeddings_seq(
-                    self._ctx.ctx, i
-                )
-                if not ptr:
-                    raise RuntimeError("Failed to get embeddings from sequence pooling type is not set")
-                embedding: List[float] = ptr[:n_embd]
-                if normalize:
-                    norm = float(np.linalg.norm(embedding))
-                    embedding = [v / norm for v in embedding]
-                data.append(embedding)
+            if pooling_type == llama_cpp.LLAMA_POOLING_TYPE_NONE:
+                pos: int = 0
+                for i, size in enumerate(seq_sizes):
+                    ptr = llama_cpp.llama_get_embeddings(self._ctx.ctx)
+                    embedding: List[List[float]] = [
+                        ptr[pos + j * n_embd : pos + (j + 1) * n_embd] for j in range(size)
+                    ]
+                    if normalize:
+                        embedding = [_normalize_embedding(e) for e in embedding]
+                    data.append(embedding)
+                    pos += size
+            else:
+                for i in range(len(seq_sizes)):
+                    ptr = llama_cpp.llama_get_embeddings_seq(self._ctx.ctx, i)
+                    embedding: List[float] = ptr[:n_embd]
+                    if normalize:
+                        embedding = _normalize_embedding(embedding)
+                    data.append(embedding)
 
         # init state
         total_tokens = 0
+        s_batch = []
         t_batch = 0
         p_batch = 0
 
@@ -863,17 +891,21 @@ class Llama:
 
             # time to eval batch
             if t_batch + n_tokens > n_batch:
-                decode_batch(p_batch)
+                decode_batch(s_batch)
+                s_batch = []
                 t_batch = 0
                 p_batch = 0
 
             # add to batch
-            self._batch.add_sequence(tokens, p_batch, False)
+            self._batch.add_sequence(tokens, p_batch, logits_all)
+
+            # update batch stats
+            s_batch.append(n_tokens)
             t_batch += n_tokens
             p_batch += 1
 
         # hanlde last batch
-        decode_batch(p_batch)
+        decode_batch(s_batch)
 
         if self.verbose:
             llama_cpp.llama_print_timings(self._ctx.ctx)
@@ -1750,6 +1782,7 @@ class Llama:
             logits_all=self.context_params.logits_all,
             embedding=self.context_params.embeddings,
             offload_kqv=self.context_params.offload_kqv,
+            flash_attn=self.context_params.flash_attn,
             # Sampling Params
             last_n_tokens_size=self.last_n_tokens_size,
             # LoRA Params
@@ -1844,6 +1877,10 @@ class Llama:
     def token_nl(self) -> int:
         """Return the newline token."""
         return self._model.token_nl()
+
+    def pooling_type(self) -> str:
+        """Return the pooling type."""
+        return self._ctx.pooling_type()
 
     @staticmethod
     def logits_to_logprobs(

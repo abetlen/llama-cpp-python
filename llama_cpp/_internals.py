@@ -15,6 +15,7 @@ import numpy.typing as npt
 
 from .llama_types import *
 from .llama_grammar import LlamaGrammar
+from ._utils import suppress_stdout_stderr
 
 import llama_cpp.llama_cpp as llama_cpp
 
@@ -47,9 +48,10 @@ class _LlamaModel:
         if not os.path.exists(path_model):
             raise ValueError(f"Model path does not exist: {path_model}")
 
-        self.model = llama_cpp.llama_load_model_from_file(
-            self.path_model.encode("utf-8"), self.params
-        )
+        with suppress_stdout_stderr(disable=verbose):
+            self.model = llama_cpp.llama_load_model_from_file(
+                self.path_model.encode("utf-8"), self.params
+            )
 
         if self.model is None:
             raise ValueError(f"Failed to load model from file: {path_model}")
@@ -272,6 +274,10 @@ class _LlamaContext:
     def n_ctx(self) -> int:
         assert self.ctx is not None
         return llama_cpp.llama_n_ctx(self.ctx)
+
+    def pooling_type(self) -> int:
+        assert self.ctx is not None
+        return llama_cpp.llama_pooling_type(self.ctx)
 
     def kv_cache_clear(self):
         assert self.ctx is not None
@@ -639,6 +645,16 @@ def _should_add_bos(model: _LlamaModel) -> bool:
         return add_bos != 0
     else:
         return llama_cpp.llama_vocab_type(model.model) == llama_cpp.LLAMA_VOCAB_TYPE_SPM
+
+
+# Embedding functions
+
+
+def _normalize_embedding(embedding):
+    norm = float(np.linalg.norm(embedding))
+    if norm == 0.0:
+        return embedding
+    return [v / norm for v in embedding]
 
 
 # Python wrappers over common/sampling structs
