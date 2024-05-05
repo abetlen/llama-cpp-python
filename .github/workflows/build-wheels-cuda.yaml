@@ -20,7 +20,7 @@ jobs:
         id: set-matrix
         run: |
           $matrix = @{
-              'os' = @('ubuntu-20.04', 'windows-latest')
+              'os' = @('ubuntu-latest', 'windows-latest')
               'pyver' = @("3.9", "3.10", "3.11", "3.12")
               'cuda' = @("12.1.1", "12.2.2", "12.3.2", "12.4.1")
               'releasetag' = @("basic")
@@ -110,7 +110,7 @@ jobs:
           $env:CMAKE_ARGS = '-DLLAMA_CUBLAS=on -DCMAKE_CUDA_ARCHITECTURES=all'
           $env:CMAKE_ARGS = "-DLLAMA_CUDA_FORCE_MMQ=ON $env:CMAKE_ARGS"
           # if ($env:AVXVER -eq 'AVX') {
-          #  $env:CMAKE_ARGS = $env:CMAKE_ARGS + ' -DLLAMA_AVX2=off -DLLAMA_FMA=off -DLLAMA_F16C=off'
+          $env:CMAKE_ARGS = $env:CMAKE_ARGS + ' -DLLAMA_AVX2=off -DLLAMA_FMA=off -DLLAMA_F16C=off'
           # }
           # if ($env:AVXVER -eq 'AVX512') {
           #  $env:CMAKE_ARGS = $env:CMAKE_ARGS + ' -DLLAMA_AVX512=on'
