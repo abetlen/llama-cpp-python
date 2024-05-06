@@ -258,8 +258,8 @@ class ChatCompletionToolFunction(TypedDict):
 
 
 class ChatCompletionTool(TypedDict):
-    type: Literal["function"]
-    function: ChatCompletionToolFunction
+    type: Literal["function", "code_interpreter"]
+    function: NotRequired[ChatCompletionToolFunction]
 
 
 class ChatCompletionNamedToolChoiceFunction(TypedDict):
