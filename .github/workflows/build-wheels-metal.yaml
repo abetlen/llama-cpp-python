@@ -41,7 +41,7 @@ jobs:
         with:
           submodules: "recursive"
 
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.pyver }}
 
@@ -78,7 +78,7 @@ jobs:
             VERBOSE=1 python -m build --wheel
           fi
 
-      - uses: softprops/action-gh-release@v1
+      - uses: softprops/action-gh-release@v2
         with:
           files: dist/*
           # set release name to <tag>-metal

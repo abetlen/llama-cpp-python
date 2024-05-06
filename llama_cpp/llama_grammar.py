@@ -556,17 +556,11 @@ def add_rule(
 # }
 def decode_utf8(src: const_char_p) -> Tuple[int, const_char_p]:
     """Decodes a UTF-8 character from the source string."""
-    lookup = (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 4)
-    first_byte = ord(src[0])  # type: int
-    highbits = first_byte >> 4  # type: int
-    len = lookup[highbits]  # type: int
-    mask = (1 << (8 - len)) - 1  # type: int
-    value = first_byte & mask  # type: int
-    end = src + len  # type: const_char_p # may overrun!
-    pos = src + 1  # type: const_char_p
-    while pos < end and pos[0]:
-        value = (value << 6) + (ord(pos[0]) & 0x3F)
-        pos += 1
+    # Get the codepoint of the first character
+    value = ord(src[0])
+    # Move the pointer ahead one character
+    pos = src + 1
+
     return value, pos
 
 

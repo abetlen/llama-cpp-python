@@ -15,6 +15,7 @@ import numpy.typing as npt
 
 from .llama_types import *
 from .llama_grammar import LlamaGrammar
+from ._utils import suppress_stdout_stderr
 
 import llama_cpp.llama_cpp as llama_cpp
 
@@ -47,9 +48,10 @@ class _LlamaModel:
         if not os.path.exists(path_model):
             raise ValueError(f"Model path does not exist: {path_model}")
 
-        self.model = llama_cpp.llama_load_model_from_file(
-            self.path_model.encode("utf-8"), self.params
-        )
+        with suppress_stdout_stderr(disable=verbose):
+            self.model = llama_cpp.llama_load_model_from_file(
+                self.path_model.encode("utf-8"), self.params
+            )
 
         if self.model is None:
             raise ValueError(f"Failed to load model from file: {path_model}")
@@ -201,7 +203,7 @@ class _LlamaModel:
         # NOTE: Llama1 models automatically added a space at the start of the prompt
         # this line removes a leading space if the first token is a beginning of sentence token
         return (
-            output[1:] if len(tokens) > 0 and tokens[0] == self.token_bos() else output
+            output[1:] if len(tokens) > 0 and tokens[0] == self.token_bos() and output[0:1] == b' ' else output
         )
 
     # Extra
