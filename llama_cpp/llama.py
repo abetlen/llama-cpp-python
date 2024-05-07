@@ -956,7 +956,7 @@ class Llama:
             +
             (
                 (
-                    self.tokenize(prompt.encode("utf-8"), special=True)
+                    self.tokenize(prompt.encode("utf-8"), add_bos=(prefix_token_id < 0), special=(prefix_token_id < 0))
                     if prompt != ""
                     else [self.token_bos()]
                 )
@@ -971,7 +971,7 @@ class Llama:
             )
             +
             (
-                self.tokenize(suffix.encode("utf-8"), add_bos=False, special=True)
+                self.tokenize(suffix.encode("utf-8"), add_bos=False, special=(suffix_token_id < 0))
                 if suffix
                 else []
             )
