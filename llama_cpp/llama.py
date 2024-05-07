@@ -965,14 +965,16 @@ class Llama:
             )
             +
             (
-                [suffix_token_id]
+                (
+                    [suffix_token_id]
+                    +
+                    (
+                        self.tokenize(suffix.encode("utf-8"), add_bos=False, special=False)
+                        if suffix
+                        else []
+                    )
+                )
                 if suffix_token_id >= 0 and suffix is not None
-                else []
-            )
-            +
-            (
-                self.tokenize(suffix.encode("utf-8"), add_bos=False, special=(suffix_token_id < 0))
-                if suffix
                 else []
             )
             +
