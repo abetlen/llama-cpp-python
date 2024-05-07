@@ -20,7 +20,7 @@ jobs:
           submodules: "recursive"
 
       - name: Set up Python 3.9
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: 3.9
 
@@ -37,7 +37,7 @@ jobs:
             --add-binary "/home/runner/work/llama-cpp-python/llama-cpp-python/llama_cpp/libllava.so:./llama_cpp/"
 
       - name: upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: llama-server
           path: |
