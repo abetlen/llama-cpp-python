@@ -17,7 +17,9 @@ max_tokens_field = Field(
 )
 
 min_tokens_field = Field(
-    default=0, ge=0, description="The minimum number of tokens to generate. It may return fewer tokens if another condition is met (e.g. max_tokens, stop)."
+    default=0,
+    ge=0,
+    description="The minimum number of tokens to generate. It may return fewer tokens if another condition is met (e.g. max_tokens, stop).",
 )
 
 temperature_field = Field(

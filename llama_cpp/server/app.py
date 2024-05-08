@@ -290,9 +290,9 @@ async def create_completion(
         kwargs["grammar"] = llama_cpp.LlamaGrammar.from_string(body.grammar)
 
     if body.min_tokens is not None:
-        _min_tokens_logits_processor = llama_cpp.LogitsProcessorList([
-            llama_cpp.MinTokensLogitsProcessor(body.min_tokens, llama.token_eos())
-        ])
+        _min_tokens_logits_processor = llama_cpp.LogitsProcessorList(
+            [llama_cpp.MinTokensLogitsProcessor(body.min_tokens, llama.token_eos())]
+        )
         if "logits_processor" not in kwargs:
             kwargs["logits_processor"] = _min_tokens_logits_processor
         else:
@@ -470,9 +470,9 @@ async def create_chat_completion(
         kwargs["grammar"] = llama_cpp.LlamaGrammar.from_string(body.grammar)
 
     if body.min_tokens is not None:
-        _min_tokens_logits_processor = llama_cpp.LogitsProcessorList([
-            llama_cpp.MinTokensLogitsProcessor(body.min_tokens, llama.token_eos())
-        ])
+        _min_tokens_logits_processor = llama_cpp.LogitsProcessorList(
+            [llama_cpp.MinTokensLogitsProcessor(body.min_tokens, llama.token_eos())]
+        )
         if "logits_processor" not in kwargs:
             kwargs["logits_processor"] = _min_tokens_logits_processor
         else:
