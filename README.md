@@ -516,7 +516,7 @@ chat_handler = Llava15ChatHandler(clip_model_path="path/to/llava/mmproj.bin")
 llm = Llama(
   model_path="./path/to/llava/llama-model.gguf",
   chat_handler=chat_handler,
-  n_ctx=2048, # n_ctx should be increased to accomodate the image embedding
+  n_ctx=2048, # n_ctx should be increased to accommodate the image embedding
 )
 llm.create_chat_completion(
     messages = [
@@ -547,7 +547,7 @@ llm = Llama.from_pretrained(
   repo_id="vikhyatk/moondream2",
   filename="*text-model*",
   chat_handler=chat_handler,
-  n_ctx=2048, # n_ctx should be increased to accomodate the image embedding
+  n_ctx=2048, # n_ctx should be increased to accommodate the image embedding
 )
 
 respoonse = llm.create_chat_completion(
