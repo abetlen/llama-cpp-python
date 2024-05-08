@@ -31,12 +31,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Setup Pages
-        uses: actions/configure-pages@v4
+        uses: actions/configure-pages@v5
       - name: Build
         run: |
           ./scripts/releases-to-pep-503.sh index/whl/cpu '^[v]?[0-9]+\.[0-9]+\.[0-9]+$'
           ./scripts/releases-to-pep-503.sh index/whl/cu121 '^[v]?[0-9]+\.[0-9]+\.[0-9]+-cu121$'
           ./scripts/releases-to-pep-503.sh index/whl/cu122 '^[v]?[0-9]+\.[0-9]+\.[0-9]+-cu122$'
+          ./scripts/releases-to-pep-503.sh index/whl/cu123 '^[v]?[0-9]+\.[0-9]+\.[0-9]+-cu123$'
+          ./scripts/releases-to-pep-503.sh index/whl/cu124 '^[v]?[0-9]+\.[0-9]+\.[0-9]+-cu124$'
           ./scripts/releases-to-pep-503.sh index/whl/metal '^[v]?[0-9]+\.[0-9]+\.[0-9]+-metal$'
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

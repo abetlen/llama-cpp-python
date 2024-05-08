@@ -132,6 +132,7 @@ def create_app(
         middleware=middleware,
         title="🦙 llama.cpp Python API",
         version=llama_cpp.__version__,
+        root_path=server_settings.root_path,
     )
     app.add_middleware(
         CORSMiddleware,

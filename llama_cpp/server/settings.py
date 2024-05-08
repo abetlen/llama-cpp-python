@@ -96,6 +96,9 @@ class ModelSettings(BaseSettings):
     offload_kqv: bool = Field(
         default=True, description="Whether to offload kqv to the GPU."
     )
+    flash_attn: bool = Field(
+        default=False, description="Whether to use flash attention."
+    )
     # Sampling Params
     last_n_tokens_size: int = Field(
         default=64,
@@ -211,6 +214,10 @@ class ServerSettings(BaseSettings):
     disable_ping_events: bool = Field(
         default=False,
         description="Disable EventSource pings (may be needed for some clients).",
+    )
+    root_path: str = Field(
+        default="",
+        description="The root path for the server. Useful when running behind a reverse proxy.",
     )
 
 

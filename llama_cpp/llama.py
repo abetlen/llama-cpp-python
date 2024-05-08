@@ -73,7 +73,7 @@ class Llama:
         vocab_only: bool = False,
         use_mmap: bool = True,
         use_mlock: bool = False,
-        kv_overrides: Optional[Dict[str, Union[bool, int, float]]] = None,
+        kv_overrides: Optional[Dict[str, Union[bool, int, float, str]]] = None,
         # Context Params
         seed: int = llama_cpp.LLAMA_DEFAULT_SEED,
         n_ctx: int = 512,
@@ -92,6 +92,7 @@ class Llama:
         logits_all: bool = False,
         embedding: bool = False,
         offload_kqv: bool = True,
+        flash_attn: bool = False,
         # Sampling Params
         last_n_tokens_size: int = 64,
         # LoRA Params
@@ -168,6 +169,7 @@ class Llama:
             logits_all: Return logits for all tokens, not just the last token. Must be True for completion to return logprobs.
             embedding: Embedding mode only.
             offload_kqv: Offload K, Q, V to GPU.
+            flash_attn: Use flash attention.
             last_n_tokens_size: Maximum number of tokens to keep in the last_n_tokens deque.
             lora_base: Optional path to base model, useful if using a quantized base model and you want to apply LoRA to an f16 model.
             lora_path: Path to a LoRA file to apply to the model.
@@ -254,6 +256,18 @@ class Llama:
                 elif isinstance(v, float):
                     self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_TYPE_FLOAT
                     self._kv_overrides_array[i].value.float_value = v
+                elif isinstance(v, str): # type: ignore
+                    v_bytes = v.encode("utf-8")
+                    if len(v_bytes) > 128: # TODO: Make this a constant
+                        raise ValueError(f"Value for {k} is too long: {v}")
+                    v_bytes = v_bytes.ljust(128, b"\0")
+                    self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_TYPE_STR
+                    # copy min(v_bytes, 128) to str_value
+                    ctypes.memmove(
+                        self._kv_overrides_array[i].value.str_value,
+                        v_bytes,
+                        min(len(v_bytes), 128),
+                    )
                 else:
                     raise ValueError(f"Unknown value type for {k}: {v}")
 
@@ -303,6 +317,7 @@ class Llama:
         )  # Must be set to True for speculative decoding
         self.context_params.embeddings = embedding # TODO: Rename to embeddings
         self.context_params.offload_kqv = offload_kqv
+        self.context_params.flash_attn = flash_attn
         #  KV cache quantization
         if type_k is not None:
             self.context_params.type_k = type_k
@@ -436,7 +451,7 @@ class Llama:
         if self.chat_format is None and self.chat_handler is None:
             self.chat_format = "llama-2"
             if self.verbose:
-                print(f"Using fallback chat format: {chat_format}", file=sys.stderr)
+                print(f"Using fallback chat format: {self.chat_format}", file=sys.stderr)
 
     @property
     def ctx(self) -> llama_cpp.llama_context_p:
@@ -1802,6 +1817,7 @@ class Llama:
             logits_all=self.context_params.logits_all,
             embedding=self.context_params.embeddings,
             offload_kqv=self.context_params.offload_kqv,
+            flash_attn=self.context_params.flash_attn,
             # Sampling Params
             last_n_tokens_size=self.last_n_tokens_size,
             # LoRA Params

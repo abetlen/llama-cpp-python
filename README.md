@@ -121,7 +121,7 @@ CMAKE_ARGS="-DLLAMA_CUDA=on" pip install llama-cpp-python
 
 It is also possible to install a pre-built wheel with CUDA support. As long as your system meets some requirements:
 
-- CUDA Version is 12.1, 12.2 or 12.3
+- CUDA Version is 12.1, 12.2, 12.3, or 12.4
 - Python Version is 3.10, 3.11 or 3.12
 
 ```bash
@@ -133,6 +133,7 @@ Where `<cuda-version>` is one of the following:
 - `cu121`: CUDA 12.1
 - `cu122`: CUDA 12.2
 - `cu123`: CUDA 12.3
+- `cu124`: CUDA 12.4
 
 For example, to install the CUDA 12.1 wheel:
 
@@ -276,20 +277,26 @@ The high-level API provides a simple managed interface through the [`Llama`](htt
 Below is a short example demonstrating how to use the high-level API to for basic text completion:
 
 ```python
->>> from llama_cpp import Llama
->>> llm = Llama(
+from llama_cpp import Llama
+
+llm = Llama(
       model_path="./models/7B/llama-model.gguf",
       # n_gpu_layers=-1, # Uncomment to use GPU acceleration
       # seed=1337, # Uncomment to set a specific seed
       # n_ctx=2048, # Uncomment to increase the context window
 )
->>> output = llm(
+output = llm(
       "Q: Name the planets in the solar system? A: ", # Prompt
       max_tokens=32, # Generate up to 32 tokens, set to None to generate up to the end of the context window
       stop=["Q:", "\n"], # Stop generating just before the model would generate a new question
       echo=True # Echo the prompt back in the output
 ) # Generate a completion, can also call create_completion
->>> print(output)
+print(output)
+```
+
+By default `llama-cpp-python` generates completions in an OpenAI compatible format:
+
+```python
 {
   "id": "cmpl-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
   "object": "text_completion",
@@ -344,12 +351,12 @@ The model will will format the messages into a single prompt using the following
 Set `verbose=True` to see the selected chat format.
 
 ```python
->>> from llama_cpp import Llama
->>> llm = Llama(
+from llama_cpp import Llama
+llm = Llama(
       model_path="path/to/llama-2/llama-model.gguf",
       chat_format="llama-2"
 )
->>> llm.create_chat_completion(
+llm.create_chat_completion(
       messages = [
           {"role": "system", "content": "You are an assistant who perfectly describes images."},
           {
@@ -374,9 +381,9 @@ To constrain chat responses to only valid JSON or a specific JSON Schema use the
 The following example will constrain the response to valid JSON strings only.
 
 ```python
->>> from llama_cpp import Llama
->>> llm = Llama(model_path="path/to/model.gguf", chat_format="chatml")
->>> llm.create_chat_completion(
+from llama_cpp import Llama
+llm = Llama(model_path="path/to/model.gguf", chat_format="chatml")
+llm.create_chat_completion(
     messages=[
         {
             "role": "system",
@@ -396,9 +403,9 @@ The following example will constrain the response to valid JSON strings only.
 To constrain the response further to a specific JSON Schema add the schema to the `schema` property of the `response_format` argument.
 
 ```python
->>> from llama_cpp import Llama
->>> llm = Llama(model_path="path/to/model.gguf", chat_format="chatml")
->>> llm.create_chat_completion(
+from llama_cpp import Llama
+llm = Llama(model_path="path/to/model.gguf", chat_format="chatml")
+llm.create_chat_completion(
     messages=[
         {
             "role": "system",
@@ -423,9 +430,9 @@ To constrain the response further to a specific JSON Schema add the schema to th
 The high-level API supports OpenAI compatible function and tool calling. This is possible through the `functionary` pre-trained models chat format or through the generic `chatml-function-calling` chat format.
 
 ```python
->>> from llama_cpp import Llama
->>> llm = Llama(model_path="path/to/chatml/llama-model.gguf", chat_format="chatml-function-calling")
->>> llm.create_chat_completion(
+from llama_cpp import Llama
+llm = Llama(model_path="path/to/chatml/llama-model.gguf", chat_format="chatml-function-calling")
+llm.create_chat_completion(
       messages = [
         {
           "role": "system",
@@ -475,53 +482,90 @@ The various gguf-converted files for this set of models can be found [here](http
 Due to discrepancies between llama.cpp and HuggingFace's tokenizers, it is required to provide HF Tokenizer for functionary. The `LlamaHFTokenizer` class can be initialized and passed into the Llama class. This will override the default llama.cpp tokenizer used in Llama class. The tokenizer files are already included in the respective HF repositories hosting the gguf files.
 
 ```python
->>> from llama_cpp import Llama
->>> from llama_cpp.llama_tokenizer import LlamaHFTokenizer
->>> llm = Llama.from_pretrained(
+from llama_cpp import Llama
+from llama_cpp.llama_tokenizer import LlamaHFTokenizer
+llm = Llama.from_pretrained(
   repo_id="meetkai/functionary-small-v2.2-GGUF",
   filename="functionary-small-v2.2.q4_0.gguf",
   chat_format="functionary-v2",
   tokenizer=LlamaHFTokenizer.from_pretrained("meetkai/functionary-small-v2.2-GGUF")
 )
 ```
+
+**NOTE**: There is no need to provide the default system messages used in Functionary as they are added automatically in the Functionary chat handler. Thus, the messages should contain just the chat messages and/or system messages that provide additional context for the model (e.g.: datetime, etc.).
 </details>
 
 ### Multi-modal Models
 
-`llama-cpp-python` supports the llava1.5 family of multi-modal models which allow the language model to
-read information from both text and images.
+`llama-cpp-python` supports such as llava1.5 which allow the language model to read information from both text and images.
 
 You'll first need to download one of the available multi-modal models in GGUF format:
 
 - [llava-v1.5-7b](https://huggingface.co/mys/ggml_llava-v1.5-7b)
 - [llava-v1.5-13b](https://huggingface.co/mys/ggml_llava-v1.5-13b)
 - [bakllava-1-7b](https://huggingface.co/mys/ggml_bakllava-1)
+- [llava-v1.6-34b](https://huggingface.co/cjpais/llava-v1.6-34B-gguf)
+- [moondream2](https://huggingface.co/vikhyatk/moondream2)
 
 Then you'll need to use a custom chat handler to load the clip model and process the chat messages and images.
 
 ```python
->>> from llama_cpp import Llama
->>> from llama_cpp.llama_chat_format import Llava15ChatHandler
->>> chat_handler = Llava15ChatHandler(clip_model_path="path/to/llava/mmproj.bin")
->>> llm = Llama(
+from llama_cpp import Llama
+from llama_cpp.llama_chat_format import Llava15ChatHandler
+chat_handler = Llava15ChatHandler(clip_model_path="path/to/llava/mmproj.bin")
+llm = Llama(
   model_path="./path/to/llava/llama-model.gguf",
   chat_handler=chat_handler,
-  n_ctx=2048, # n_ctx should be increased to accomodate the image embedding
-  logits_all=True,# needed to make llava work
+  n_ctx=2048, # n_ctx should be increased to accommodate the image embedding
 )
->>> llm.create_chat_completion(
+llm.create_chat_completion(
     messages = [
         {"role": "system", "content": "You are an assistant who perfectly describes images."},
         {
             "role": "user",
             "content": [
-                {"type": "image_url", "image_url": {"url": "https://.../image.png"}},
-                {"type" : "text", "text": "Describe this image in detail please."}
+                {"type" : "text", "text": "What's in this image?"},
+                {"type": "image_url", "image_url": {"url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg" } }
             ]
         }
     ]
 )
 ```
+
+You can also pull the model from the Hugging Face Hub using the `from_pretrained` method.
+
+```python
+from llama_cpp import Llama
+from llama_cpp.llama_chat_format import MoondreamChatHandler
+
+chat_handler = MoondreamChatHandler.from_pretrained(
+  repo_id="vikhyatk/moondream2",
+  filename="*mmproj*",
+)
+
+llm = Llama.from_pretrained(
+  repo_id="vikhyatk/moondream2",
+  filename="*text-model*",
+  chat_handler=chat_handler,
+  n_ctx=2048, # n_ctx should be increased to accommodate the image embedding
+)
+
+respoonse = llm.create_chat_completion(
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type" : "text", "text": "What's in this image?"},
+                {"type": "image_url", "image_url": {"url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg" } }
+
+            ]
+        }
+    ]
+)
+print(response["choices"][0]["text"])
+```
+
+**Note**: Multi-modal models also support tool calling and JSON mode.
 
 <details>
 <summary>Loading a Local Image</summary>
@@ -671,18 +715,18 @@ The entire low-level API can be found in [llama_cpp/llama_cpp.py](https://github
 Below is a short example demonstrating how to use the low-level API to tokenize a prompt:
 
 ```python
->>> import llama_cpp
->>> import ctypes
->>> llama_cpp.llama_backend_init(False) # Must be called once at the start of each program
->>> params = llama_cpp.llama_context_default_params()
+import llama_cpp
+import ctypes
+llama_cpp.llama_backend_init(False) # Must be called once at the start of each program
+params = llama_cpp.llama_context_default_params()
 # use bytes for char * params
->>> model = llama_cpp.llama_load_model_from_file(b"./models/7b/llama-model.gguf", params)
->>> ctx = llama_cpp.llama_new_context_with_model(model, params)
->>> max_tokens = params.n_ctx
+model = llama_cpp.llama_load_model_from_file(b"./models/7b/llama-model.gguf", params)
+ctx = llama_cpp.llama_new_context_with_model(model, params)
+max_tokens = params.n_ctx
 # use ctypes arrays for array params
->>> tokens = (llama_cpp.llama_token * int(max_tokens))()
->>> n_tokens = llama_cpp.llama_tokenize(ctx, b"Q: Name the planets in the solar system? A: ", tokens, max_tokens, llama_cpp.c_bool(True))
->>> llama_cpp.llama_free(ctx)
+tokens = (llama_cpp.llama_token * int(max_tokens))()
+n_tokens = llama_cpp.llama_tokenize(ctx, b"Q: Name the planets in the solar system? A: ", tokens, max_tokens, llama_cpp.c_bool(True))
+llama_cpp.llama_free(ctx)
 ```
 
 Check out the [examples folder](examples/low_level_api) for more examples of using the low-level API.
