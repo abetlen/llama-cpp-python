@@ -378,6 +378,7 @@ class Llama:
 
         self.chat_format = chat_format
         self.chat_handler = chat_handler
+        self.chat_handlers = {}
 
         self.draft_model = draft_model
 
@@ -425,14 +426,12 @@ class Llama:
             print(f"Available chat formats from metadata: {', '.join(template_choices.keys())}", file=sys.stderr)
 
         for name, template in template_choices.items():
-            register = llama_chat_format.register_chat_format(name)
-
-            register(llama_chat_format.Jinja2ChatFormatter(
+            self.chat_handlers[name] = llama_chat_format.Jinja2ChatFormatter(
                 template=template,
                 eos_token=eos_token,
                 bos_token=bos_token,
                 stop_token_ids=[eos_token_id],
-            ))
+            ).to_chat_handler()
 
         if (
             self.chat_format is None
@@ -1726,7 +1725,7 @@ class Llama:
         Returns:
             Generated chat completion or a stream of chat completion chunks.
         """
-        handler = self.chat_handler or llama_chat_format.get_chat_completion_handler(
+        handler = self.chat_handler or self.chat_handlers.get(self.chat_format) or llama_chat_format.get_chat_completion_handler(
             self.chat_format
         )
         return handler(
