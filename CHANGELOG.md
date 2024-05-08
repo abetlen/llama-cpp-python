@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.70]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@
+- feat: fill-in-middle support by @CISC in #1386
+- fix: adding missing args in create_completion for functionary chat handler by @skalade in #1430
+- docs: update README.md @eltociear in #1432
+- fix: chat_format log where auto-detected format prints None by @balvisio in #1434
+- feat(server): Add support for setting root_path by @abetlen in 0318702cdc860999ee70f277425edbbfe0e60419
+- feat(ci): Add docker checks and check deps more frequently by @Smartappli in #1426
+- fix: detokenization case where first token does not start with a leading space by @noamgat in #1375
+- feat: Implement streaming for Functionary v2 + Bug fixes by @jeffrey-fong in #1419
+- fix: Use memmove to copy str_value kv_override by @abetlen in 9f7a85571ae80d3b6ddbd3e1bae407b9f1e3448a
+- feat(server): Remove temperature bounds checks for server by @abetlen in 0a454bebe67d12a446981eb16028c168ca5faa81
+- fix(server): Propagate flash_attn to model load by @dthuerck in #1424
+
 ## [0.2.69]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@6ecf3189e00a1e8e737a78b6d10e1d7006e050a2
