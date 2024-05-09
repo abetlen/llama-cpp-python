@@ -2603,13 +2603,23 @@ class Llava15ChatHandler:
 
         image_urls = self.get_image_urls(messages)
         template = jinja2.Template(self.CHAT_FORMAT)
-        text = template.render(messages=messages, add_generation_prompt=True)
+        text = template.render(
+            messages=messages,
+            add_generation_prompt=True,
+            eos_token=llama.detokenize([llama.token_eos()]),
+            bos_token=llama.detokenize([llama.token_bos()]),
+        )
         split_text = self.split_text_on_image_urls(text, image_urls)
 
         def embed_image_bytes(image_bytes: bytes):
             if self._last_image_embed is not None and self._last_image_hash is not None and hash(image_bytes) == self._last_image_hash:
                 return self._last_image_embed
             with suppress_stdout_stderr(disable=self.verbose):
+                # Free the previous image embed
+                if self._last_image_embed is not None:
+                    self._llava_cpp.llava_image_embed_free(self._last_image_embed)
+                    self._last_image_embed = None
+                    self._last_image_hash = None
                 embed = (
                     self._llava_cpp.llava_image_embed_make_with_bytes(
                         self.clip_ctx,
@@ -2624,9 +2634,9 @@ class Llava15ChatHandler:
 
         # Evaluate prompt
         llama.reset()
-        for i, (type_, value) in enumerate(split_text):
+        for type_, value in split_text:
             if type_ == "text":
-                tokens = llama.tokenize(value.encode("utf8"), add_bos=i == 0)
+                tokens = llama.tokenize(value.encode("utf8"), add_bos=False, special=True)
                 if llama.n_tokens + len(tokens) > llama.n_ctx():
                     raise ValueError("Prompt exceeds n_ctx") # TODO: Fix
                 llama.eval(tokens)
@@ -2644,6 +2654,8 @@ class Llava15ChatHandler:
                         llama.n_batch,
                         n_past_p,
                     )
+                # Required to avoid issues with hf tokenizer
+                llama.input_ids[llama.n_tokens : n_past.value] = -1
                 llama.n_tokens = n_past.value
 
         # Get prompt tokens to avoid a cache miss
@@ -3033,6 +3045,7 @@ class NanoLlavaChatHandler(Llava15ChatHandler):
     # Answer the question<|im_end|><|im_start|>user
     # <image>
     # What is the picture about?<|im_end|><|im_start|>assistant
+    DEFAULT_SYSTEM_MESSAGE = "Answer the question"
 
     CHAT_FORMAT = (
         "{% for message in messages %}"
