@@ -1016,6 +1016,10 @@ class Llama:
         )
         model_name: str = model if model is not None else self.model_path
 
+        # User or template may have added an unwanted extra BOS
+        if prompt_tokens[:2] == [self.token_bos()] * 2:
+            del prompt_tokens[0]
+
         # NOTE: This likely doesn't work correctly for the first token in the prompt
         # because of the extra space added to the start of the prompt_tokens
         if logit_bias is not None:
