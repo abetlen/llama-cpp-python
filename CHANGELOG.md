@@ -7,9 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.71]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@911b3900dded9a1cfe0f0e41b82c7a29baf3a217
+- fix: Make leading bos_token optional for image chat formats, fix nanollava system message by @abetlen in 77122638b4153e31d9f277b3d905c2900b536632
+- fix: free last image embed in llava chat handler by @abetlen in 3757328b703b2cd32dcbd5853271e3a8c8599fe7
+
 ## [0.2.70]
 
-- feat: Update llama.cpp to ggerganov/llama.cpp@
+- feat: Update llama.cpp to ggerganov/llama.cpp@c0e6fbf8c380718102bd25fcb8d2e55f8f9480d1
 - feat: fill-in-middle support by @CISC in #1386
 - fix: adding missing args in create_completion for functionary chat handler by @skalade in #1430
 - docs: update README.md @eltociear in #1432
