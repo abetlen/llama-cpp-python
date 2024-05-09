@@ -215,6 +215,10 @@ class ServerSettings(BaseSettings):
         default=False,
         description="Disable EventSource pings (may be needed for some clients).",
     )
+    root_path: str = Field(
+        default="",
+        description="The root path for the server. Useful when running behind a reverse proxy.",
+    )
 
 
 class Settings(ServerSettings, ModelSettings):
