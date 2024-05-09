@@ -2615,6 +2615,11 @@ class Llava15ChatHandler:
             if self._last_image_embed is not None and self._last_image_hash is not None and hash(image_bytes) == self._last_image_hash:
                 return self._last_image_embed
             with suppress_stdout_stderr(disable=self.verbose):
+                # Free the previous image embed
+                if self._last_image_embed is not None:
+                    self._llava_cpp.llava_image_embed_free(self._last_image_embed)
+                    self._last_image_embed = None
+                    self._last_image_hash = None
                 embed = (
                     self._llava_cpp.llava_image_embed_make_with_bytes(
                         self.clip_ctx,
