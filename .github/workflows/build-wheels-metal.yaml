@@ -73,11 +73,11 @@ jobs:
           # export CMAKE_OSX_ARCHITECTURES="x86_64" && export CMAKE_ARGS="-DLLAMA_NATIVE=off -DLLAMA_AVX=off -DLLAMA_AVX2=off -DLLAMA_FMA=off -DLLAMA_F16C=off -DLLAMA_METAL=on" && export ARCHFLAGS="-arch x86_64"
           # VERBOSE=1 python -m build --wheel
 
-          if [[ "$OSVER" == "macos-13" ]]; then
-            export SDKROOT="${XCODE15PATH}/Platforms/MacOSX.platform/Developer/SDKs/MacOSX14.0.sdk"
-            export MACOSX_DEPLOYMENT_TARGET="14.0"
-            VERBOSE=1 python -m build --wheel
-          fi
+          # if [[ "$OSVER" == "macos-13" ]]; then
+          #  export SDKROOT="${XCODE15PATH}/Platforms/MacOSX.platform/Developer/SDKs/MacOSX14.0.sdk"
+          #  export MACOSX_DEPLOYMENT_TARGET="14.0"
+          #  VERBOSE=1 python -m build --wheel
+          # fi
 
       - uses: softprops/action-gh-release@v2
         with:
