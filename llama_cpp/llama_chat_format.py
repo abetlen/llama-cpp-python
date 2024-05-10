@@ -193,6 +193,7 @@ class Jinja2ChatFormatter(ChatFormatter):
         self.stop_token_ids = set(stop_token_ids) if stop_token_ids is not None else None
 
         self._environment = ImmutableSandboxedEnvironment(
+            loader=jinja2.BaseLoader(),
             trim_blocks=True,
             lstrip_blocks=True,
         ).from_string(self.template)
