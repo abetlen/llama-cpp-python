@@ -11,6 +11,7 @@ from contextlib import ExitStack
 from typing import Any, Dict, Iterator, List, Literal, Optional, Tuple, Union, Protocol, cast
 
 import jinja2
+from jinja2.sandbox import ImmutableSandboxedEnvironment
 
 import numpy as np
 import numpy.typing as npt
@@ -191,7 +192,7 @@ class Jinja2ChatFormatter(ChatFormatter):
         self.add_generation_prompt = add_generation_prompt
         self.stop_token_ids = set(stop_token_ids) if stop_token_ids is not None else None
 
-        self._environment = jinja2.Environment(
+        self._environment = ImmutableSandboxedEnvironment(
             loader=jinja2.BaseLoader(),
             trim_blocks=True,
             lstrip_blocks=True,
