@@ -547,7 +547,7 @@ def chat_formatter_to_chat_completion_handler(
             tools=tools,
             tool_choice=tool_choice,
         )
-        prompt = result.prompt
+        prompt = llama.tokenize(result.prompt.encode("utf-8"), add_bos=False, special=True)
         if result.stop is not None:
             stop = [] if stop is None else [stop] if isinstance(stop, str) else stop
             rstop = result.stop if isinstance(result.stop, list) else [result.stop]
@@ -958,7 +958,7 @@ def format_alpaca(
     _sep2 = "</s>"
     system_message = _get_system_message(messages)
     _messages = _map_roles(messages, _roles)
-    _prompt = _format_add_colon_two(system_message, _messages, _sep, _sep2)
+    _prompt = "<s>" + _format_add_colon_two(system_message, _messages, _sep, _sep2)
     return ChatFormatterResponse(prompt=_prompt)
 
 
@@ -991,7 +991,7 @@ def format(
     system_message = _system_message
     _messages = _map_roles(messages, _roles)
     _messages.append((_roles["assistant"], None))
-    _prompt = _format_add_colon_two(system_message, _messages, _sep, _sep2)
+    _prompt = "<s>" + _format_add_colon_two(system_message, _messages, _sep, _sep2)
     return ChatFormatterResponse(prompt=_prompt)
 
 
@@ -1007,7 +1007,7 @@ def format_oasst_llama(
     system_message = _system_template.format(system_message=system_message)
     _messages = _map_roles(messages, _roles)
     _messages.append((_roles["assistant"], None))
-    _prompt = _format_no_colon_single(system_message, _messages, _sep)
+    _prompt = "<s>" + _format_no_colon_single(system_message, _messages, _sep)
     return ChatFormatterResponse(prompt=_prompt)
 
 
@@ -1187,7 +1187,7 @@ def format_zephyr(
     _sep = "</s>"
     _messages = _map_roles(messages, _roles)
     _messages.append((_roles["assistant"], None))
-    _prompt = _format_chatml(system_message, _messages, _sep)
+    _prompt = "<s>" + _format_chatml(system_message, _messages, _sep)
     return ChatFormatterResponse(prompt=_prompt, stop=_sep)
 
 
@@ -1262,7 +1262,7 @@ def format_chatglm3(
     _sep = "</s>"
     _messages = _map_roles(messages, _roles)
     _messages.append((_roles["assistant"], None))
-    _prompt = _format_chatglm3(system_message, _messages, _sep)
+    _prompt = "<s>" + _format_chatglm3(system_message, _messages, _sep)
     return ChatFormatterResponse(prompt=_prompt, stop=_sep)
 
 
