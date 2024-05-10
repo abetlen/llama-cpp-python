@@ -1016,7 +1016,7 @@ class Llama:
         )
         model_name: str = model if model is not None else self.model_path
 
-        # User or template may have added an unwanted extra BOS
+        # User may have added an unwanted extra BOS
         if prompt_tokens[:2] == [self.token_bos()] * 2:
             del prompt_tokens[0]
 
