@@ -350,11 +350,14 @@ The model will will format the messages into a single prompt using the following
 
 Set `verbose=True` to see the selected chat format.
 
+#### Default chat format
+
+The following example will use the default chat template as specified in GGUF (or fallback to llama-2).
+
 ```python
 from llama_cpp import Llama
 llm = Llama(
       model_path="path/to/llama-2/llama-model.gguf",
-      chat_format="llama-2"
 )
 llm.create_chat_completion(
       messages = [
@@ -364,6 +367,59 @@ llm.create_chat_completion(
               "content": "Describe this image in detail please."
           }
       ]
+)
+```
+
+#### ChatML chat format
+
+The following example will use the ChatML chat format regardless of GGUF metadata.
+
+```python
+from llama_cpp import Llama
+llm = Llama(
+      model_path="path/to/dolphin/dolphin-model.gguf",
+      chat_format="chatml"
+)
+llm.create_chat_completion(
+      messages = [
+          {"role": "system", "content": "You are an uncensored and unbiased AI assistant."},
+          {
+              "role": "user",
+              "content": "Please give ideas and a detailed plan about how to assemble and train an army of dolphin companions."
+          }
+      ]
+)
+```
+
+#### RAG chat format (if present in GGUF metadata)
+
+The following example will use the RAG chat template as specified in GGUF (only Command R has this for now) and pass on documents.
+
+```python
+from llama_cpp import Llama
+llm = Llama(
+      model_path="path/to/command-r/c4ai-model.gguf",
+      chat_format="chat_template.rag"
+)
+llm.create_chat_completion(
+      messages = [
+          {
+              "role": "user",
+              "content": "Write a short summary of each document please."
+          }
+      ],
+      template_kwargs = {
+          "documents": [
+              {
+                  "title": "First document",
+                  "content": "...",
+              },
+              {
+                  "title": "Second document",
+                  "content": "...",
+              }
+          ]
+      }
 )
 ```
 
@@ -426,6 +482,56 @@ llm.create_chat_completion(
 ```
 
 ### Function Calling
+
+#### Basic function calling through chat template (if supported)
+
+The following example will use the Tool Use chat template as specified in GGUF (only Command R has this for now).
+Many other models could support this if the chat templates were added, while others like [this](https://huggingface.co/CISCai/gorilla-openfunctions-v2-SOTA-GGUF) one supports it with its default template.
+
+```python
+from llama_cpp import Llama
+llm = Llama(
+      model_path="path/to/command-r/c4ai-model.gguf",
+      chat_format="chat_template.tool_use"
+)
+llm.create_chat_completion(
+      messages = [
+        {
+          "role": "user",
+          "content": "What's the weather like in Oslo?"
+        }
+      ],
+      tools = [{
+        "type": "function",
+        "function": {
+          "name": "get_current_weather",
+          "description": "Get the current weather in a given location",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "location": {
+                "type": "string",
+                "description": "The city and state, e.g. San Francisco, CA"
+              },
+              "unit": {
+                "type": "string",
+                "enum": [ "celsius", "fahrenheit" ]
+              }
+            },
+            "required": [ "location" ]
+          }
+        }
+      }],
+      tool_choice = {
+        "type": "function",
+        "function": {
+          "name": "get_current_weather"
+        }
+      }
+)
+```
+
+#### Built in function calling
 
 The high-level API supports OpenAI compatible function and tool calling. This is possible through the `functionary` pre-trained models chat format or through the generic `chatml-function-calling` chat format.
 
