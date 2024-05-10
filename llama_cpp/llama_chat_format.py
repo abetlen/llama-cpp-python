@@ -11,6 +11,7 @@ from contextlib import ExitStack
 from typing import Any, Dict, Iterator, List, Literal, Optional, Tuple, Union, Protocol, cast
 
 import jinja2
+from jinja2.sandbox import ImmutableSandboxedEnvironment
 
 import numpy as np
 import numpy.typing as npt
@@ -191,7 +192,7 @@ class Jinja2ChatFormatter(ChatFormatter):
         self.add_generation_prompt = add_generation_prompt
         self.stop_token_ids = set(stop_token_ids) if stop_token_ids is not None else None
 
-        self._environment = jinja2.Environment(
+        self._environment = ImmutableSandboxedEnvironment(
             loader=jinja2.BaseLoader(),
             trim_blocks=True,
             lstrip_blocks=True,
@@ -684,8 +685,7 @@ def hf_tokenizer_config_to_chat_formatter(
     assert isinstance(tokenizer_config["eos_token"], str)
     eos_token = tokenizer_config["eos_token"]
 
-    env = jinja2.Environment(
-        loader=jinja2.BaseLoader(),
+    env = ImmutableSandboxedEnvironment(
         trim_blocks=True,
         lstrip_blocks=True,
     ).from_string(chat_template)
@@ -2602,7 +2602,10 @@ class Llava15ChatHandler:
             messages = [llama_types.ChatCompletionRequestSystemMessage(role="system", content=self.DEFAULT_SYSTEM_MESSAGE)] + messages
 
         image_urls = self.get_image_urls(messages)
-        template = jinja2.Template(self.CHAT_FORMAT)
+        template = ImmutableSandboxedEnvironment(
+            trim_blocks=True,
+            lstrip_blocks=True,
+        ).from_string(self.CHAT_FORMAT)
         text = template.render(
             messages=messages,
             add_generation_prompt=True,
@@ -2634,6 +2637,7 @@ class Llava15ChatHandler:
 
         # Evaluate prompt
         llama.reset()
+        llama._ctx.kv_cache_clear()
         for type_, value in split_text:
             if type_ == "text":
                 tokens = llama.tokenize(value.encode("utf8"), add_bos=False, special=True)
@@ -3241,8 +3245,7 @@ def chatml_function_calling(
         "{% endfor %}"
         "{% if add_generation_prompt %}<|im_start|>assistant\n{% endif %}"
     )
-    template_renderer = jinja2.Environment(
-        loader=jinja2.BaseLoader(),
+    template_renderer = ImmutableSandboxedEnvironment(
         autoescape=jinja2.select_autoescape(["html", "xml"]),
         undefined=jinja2.StrictUndefined,
     ).from_string(function_calling_template)

@@ -51,8 +51,9 @@ if (LLAMA_BUILD)
     )
 
     if (LLAVA_BUILD)
-        if (LLAMA_CUBLAS)
+        if (LLAMA_CUBLAS OR LLAMA_CUDA)
             add_compile_definitions(GGML_USE_CUBLAS)
+            add_compile_definitions(GGML_USE_CUDA)
         endif()
 
         if (LLAMA_METAL)
