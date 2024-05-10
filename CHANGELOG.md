@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.72]
+
+- fix(security): Remote Code Execution by Server-Side Template Injection in Model Metadata by @retr0reg in b454f40a9a1787b2b5659cd2cb00819d983185df
+- fix(security): Update remaining jinja chat templates to use immutable sandbox by @CISC in #1441
+
 ## [0.2.71]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@911b3900dded9a1cfe0f0e41b82c7a29baf3a217
