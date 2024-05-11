@@ -34,9 +34,10 @@ jobs:
         env:
           # disable repair
           CIBW_REPAIR_WHEEL_COMMAND: ""
+          CIBW_PLATFORM: "macos"
           CIBW_ARCHS: "arm64"
           CIBW_ENVIRONMENT: CMAKE_ARGS="-DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_APPLE_SILICON_PROCESSOR=arm64 -DLLAMA_METAL=on"
-          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-* pp39-* pp310-*"
+          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-*"
         with:
           package-dir: .
           output-dir: wheelhouse
