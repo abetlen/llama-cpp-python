@@ -34,18 +34,17 @@ jobs:
         env:
           # disable repair
           CIBW_REPAIR_WHEEL_COMMAND: ""
-          CIBW_PLATFORM: "macos"
           CIBW_ARCHS: "arm64"
           CIBW_ENVIRONMENT: CMAKE_ARGS="-DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_APPLE_SILICON_PROCESSOR=arm64 -DLLAMA_METAL=on"
           CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-*"
         with:
           package-dir: .
-          output-dir: wheelhouse
+          output-dir: wheelhouse2
 
       - uses: actions/upload-artifact@v4
         with:
           name: wheels-mac_${{ matrix.os }}
-          path: ./wheelhouse/*.whl
+          path: ./wheelhouse2/*.whl
 
   release:
     name: Release
@@ -56,17 +55,11 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           merge-multiple: true
-          path: dist
-
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          path: dist2
           
       - uses: softprops/action-gh-release@v2
         with:
-          files: dist/*
+          files: dist2/*
           # set release name to <tag>-metal
           tag_name: ${{ github.ref_name }}-metal
         env:
