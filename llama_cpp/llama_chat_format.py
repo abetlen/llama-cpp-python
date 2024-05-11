@@ -548,11 +548,7 @@ def chat_formatter_to_chat_completion_handler(
             tools=tools,
             tool_choice=tool_choice,
         )
-
-        prompt = [llama.token_bos()] if not result.added_special and llama._model.add_bos_token() != 0 else []
-        prompt += llama.tokenize(result.prompt.encode("utf-8"), add_bos=False, special=True)
-        prompt += [llama.token_eos()] if not result.added_special and llama._model.vocab_type() == 1 and llama._model.add_eos_token() != 0 else []
-
+        prompt += llama.tokenize(result.prompt.encode("utf-8"), add_bos=not result.added_special, special=True)
         if result.stop is not None:
             stop = [] if stop is None else [stop] if isinstance(stop, str) else stop
             rstop = result.stop if isinstance(result.stop, list) else [result.stop]
