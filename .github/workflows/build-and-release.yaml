@@ -75,7 +75,7 @@ jobs:
           # disable repair
           CIBW_REPAIR_WHEEL_COMMAND: ""
           CIBW_PLATFORM: "macos"
-          CIBW_ARCHS: "arm64"
+          CIBW_ARCHS: "x86_64"
           CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_AVX=off -DLLAMA_AVX2=off -DLLAMA_FMA=off -DLLAMA_F16C=off'
           CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-* pp39-* pp310-*"
         with:
