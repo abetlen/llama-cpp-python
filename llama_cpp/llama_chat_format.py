@@ -1187,7 +1187,7 @@ def format_zephyr(
     _sep = "</s>"
     _messages = _map_roles(messages, _roles)
     _messages.append((_roles["assistant"], None))
-    _prompt = "<s>" + _format_chatml(system_message, _messages, _sep)
+    _prompt = _format_chatml(system_message, _messages, _sep)
     return ChatFormatterResponse(prompt=_prompt, stop=_sep)
 
 
@@ -1262,7 +1262,7 @@ def format_chatglm3(
     _sep = "</s>"
     _messages = _map_roles(messages, _roles)
     _messages.append((_roles["assistant"], None))
-    _prompt = "<s>" + _format_chatglm3(system_message, _messages, _sep)
+    _prompt = _format_chatglm3(system_message, _messages, _sep)
     return ChatFormatterResponse(prompt=_prompt, stop=_sep)
 
 
@@ -1280,7 +1280,7 @@ def format_openchat(
     _sep = "<|end_of_turn|>"
     _messages = _map_roles(messages, _roles)
     _messages.append((_roles["assistant"], None))
-    _prompt = _format_chatml(system_message, _messages, _sep)
+    _prompt = "<s>" + _format_chatml(system_message, _messages, _sep)
     return ChatFormatterResponse(prompt=_prompt, stop=_sep)
 
 
