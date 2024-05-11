@@ -159,6 +159,7 @@ class ChatFormatterResponse:
     prompt: str
     stop: Optional[Union[str, List[str]]] = None
     stopping_criteria: Optional[llama.StoppingCriteriaList] = None
+    added_special: bool = False
 
 
 class ChatFormatter(Protocol):
@@ -231,7 +232,7 @@ class Jinja2ChatFormatter(ChatFormatter):
                 return tokens[-1] in self.stop_token_ids
             stopping_criteria = llama.StoppingCriteriaList([stop_on_last_token])
 
-        return ChatFormatterResponse(prompt=prompt, stop=[self.eos_token], stopping_criteria=stopping_criteria)
+        return ChatFormatterResponse(prompt=prompt, stop=[self.eos_token], stopping_criteria=stopping_criteria, added_special=True)
 
     def to_chat_handler(self) -> LlamaChatCompletionHandler:
         return chat_formatter_to_chat_completion_handler(self)
@@ -547,7 +548,11 @@ def chat_formatter_to_chat_completion_handler(
             tools=tools,
             tool_choice=tool_choice,
         )
-        prompt = llama.tokenize(result.prompt.encode("utf-8"), add_bos=False, special=True)
+
+        prompt = [llama.token_bos()] if not result.added_special and llama._model.add_bos_token() != 0 else []
+        prompt += llama.tokenize(result.prompt.encode("utf-8"), add_bos=False, special=True)
+        prompt += [llama.token_eos()] if not result.added_special and llama._model.vocab_type() == 1 and llama._model.add_eos_token() != 0 else []
+
         if result.stop is not None:
             stop = [] if stop is None else [stop] if isinstance(stop, str) else stop
             rstop = result.stop if isinstance(result.stop, list) else [result.stop]
@@ -654,7 +659,7 @@ def hf_autotokenizer_to_chat_formatter(
         prompt: str = tokenizer.apply_chat_template(messages, tokenize=False)  # type: ignore
         assert isinstance(prompt, str)
         # Return formatted prompt and eos token by default
-        return ChatFormatterResponse(prompt=prompt, stop=tokenizer.eos_token)
+        return ChatFormatterResponse(prompt=prompt, stop=tokenizer.eos_token, added_special=True)
 
     return format_autotokenizer
 
@@ -708,7 +713,7 @@ def hf_tokenizer_config_to_chat_formatter(
             bos_token=bos_token,
             eos_token=eos_token,
         )
-        return ChatFormatterResponse(prompt=prompt, stop=[eos_token, bos_token])
+        return ChatFormatterResponse(prompt=prompt, stop=[eos_token, bos_token], added_special=True)
 
     return format_tokenizer_config
 
@@ -918,7 +923,7 @@ def format_llama2(
     messages: List[llama_types.ChatCompletionRequestMessage],
     **kwargs: Any,
 ) -> ChatFormatterResponse:
-    _system_template = "<s>[INST] <<SYS>>\n{system_message}\n<</SYS>>"
+    _system_template = "[INST] <<SYS>>\n{system_message}\n<</SYS>>"
     _roles = dict(user="<s>[INST]", assistant="[/INST]")
     _messages = _map_roles(messages, _roles)
     system_message = _get_system_message(messages)
@@ -940,11 +945,10 @@ def format_llama3(
         user="<|start_header_id|>user<|end_header_id|>\n\n",
         assistant="<|start_header_id|>assistant<|end_header_id|>\n\n",
     )
-    _begin_token = "<|begin_of_text|>"
     _sep = "<|eot_id|>"
     _messages = _map_roles(messages, _roles)
     _messages.append((_roles["assistant"], None))
-    _prompt = _format_no_colon_single(_begin_token, _messages, _sep)
+    _prompt = _format_no_colon_single("", _messages, _sep)
     return ChatFormatterResponse(prompt=_prompt, stop=_sep)
 
 
@@ -958,7 +962,7 @@ def format_alpaca(
     _sep2 = "</s>"
     system_message = _get_system_message(messages)
     _messages = _map_roles(messages, _roles)
-    _prompt = "<s>" + _format_add_colon_two(system_message, _messages, _sep, _sep2)
+    _prompt = _format_add_colon_two(system_message, _messages, _sep, _sep2)
     return ChatFormatterResponse(prompt=_prompt)
 
 
@@ -991,7 +995,7 @@ def format(
     system_message = _system_message
     _messages = _map_roles(messages, _roles)
     _messages.append((_roles["assistant"], None))
-    _prompt = "<s>" + _format_add_colon_two(system_message, _messages, _sep, _sep2)
+    _prompt = _format_add_colon_two(system_message, _messages, _sep, _sep2)
     return ChatFormatterResponse(prompt=_prompt)
 
 
@@ -1007,7 +1011,7 @@ def format_oasst_llama(
     system_message = _system_template.format(system_message=system_message)
     _messages = _map_roles(messages, _roles)
     _messages.append((_roles["assistant"], None))
-    _prompt = "<s>" + _format_no_colon_single(system_message, _messages, _sep)
+    _prompt = _format_no_colon_single(system_message, _messages, _sep)
     return ChatFormatterResponse(prompt=_prompt)
 
 
@@ -1229,10 +1233,9 @@ def format_mistral_instruct(
     messages: List[llama_types.ChatCompletionRequestMessage],
     **kwargs: Any,
 ) -> ChatFormatterResponse:
-    bos = "<s>"
     eos = "</s>"
     stop = eos
-    prompt = bos
+    prompt = ""
     for message in messages:
         if (
             message["role"] == "user"
@@ -1280,7 +1283,7 @@ def format_openchat(
     _sep = "<|end_of_turn|>"
     _messages = _map_roles(messages, _roles)
     _messages.append((_roles["assistant"], None))
-    _prompt = "<s>" + _format_chatml(system_message, _messages, _sep)
+    _prompt = _format_chatml(system_message, _messages, _sep)
     return ChatFormatterResponse(prompt=_prompt, stop=_sep)
 
 
