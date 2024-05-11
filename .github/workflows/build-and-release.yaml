@@ -45,7 +45,7 @@ jobs:
         with:
           name: wheels-${{ matrix.os }}
           path: ./wheelhouse/*.whl
-
+          
   build_wheels_mac:
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -72,9 +72,9 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.17.0
         env:
+          CIBW_ARCHS: "auto64"
           # disable repair
           CIBW_REPAIR_WHEEL_COMMAND: ""
-          CIBW_ARCHS_MACOS: "x86_64"
           CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_AVX=off -DLLAMA_AVX2=off -DLLAMA_FMA=off -DLLAMA_F16C=off'
           CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-* pp39-* pp310-*"
         with:
