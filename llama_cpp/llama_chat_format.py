@@ -2637,6 +2637,7 @@ class Llava15ChatHandler:
 
         # Evaluate prompt
         llama.reset()
+        llama._ctx.kv_cache_clear()
         for type_, value in split_text:
             if type_ == "text":
                 tokens = llama.tokenize(value.encode("utf8"), add_bos=False, special=True)
