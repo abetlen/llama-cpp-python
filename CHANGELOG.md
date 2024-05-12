@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.74]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@b228aba91ac2cd9eb90e9d423ba1d0d20e0117e2
+- fix: Enable CUDA backend for llava by @abetlen in 7f59856fa6f3e23f07e12fc15aeb9359dc6c3bb4
+- docs: Fix typo in README.md by @yupbank in #1444
+
 ## [0.2.73]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@25c6e82e7a1ad25a42b0894e87d9b5c557409516
