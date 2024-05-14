@@ -378,6 +378,7 @@ class Llama:
 
         self.chat_format = chat_format
         self.chat_handler = chat_handler
+        self._chat_handlers: Dict[str, llama_chat_format.LlamaChatCompletionHandler] = {}
 
         self.draft_model = draft_model
 
@@ -409,10 +410,33 @@ class Llama:
         if self.verbose:
             print(f"Model metadata: {self.metadata}", file=sys.stderr)
 
+        eos_token_id = self.token_eos()
+        bos_token_id = self.token_bos()
+
+        eos_token = self._model.token_get_text(eos_token_id)
+        bos_token = self._model.token_get_text(bos_token_id)
+
+        # Unfortunately the llama.cpp API does not return metadata arrays, so we can't get template names from tokenizer.chat_templates
+        template_choices = dict((name[10:], template) for name, template in self.metadata.items() if name.startswith("tokenizer.chat_template."))
+
+        if "tokenizer.chat_template" in self.metadata:
+            template_choices["chat_template.default"] = self.metadata["tokenizer.chat_template"]
+
+        if self.verbose and template_choices:
+            print(f"Available chat formats from metadata: {', '.join(template_choices.keys())}", file=sys.stderr)
+
+        for name, template in template_choices.items():
+            self._chat_handlers[name] = llama_chat_format.Jinja2ChatFormatter(
+                template=template,
+                eos_token=eos_token,
+                bos_token=bos_token,
+                stop_token_ids=[eos_token_id],
+            ).to_chat_handler()
+
         if (
             self.chat_format is None
             and self.chat_handler is None
-            and "tokenizer.chat_template" in self.metadata
+            and "chat_template.default" in template_choices
         ):
             chat_format = llama_chat_format.guess_chat_format_from_gguf_metadata(
                 self.metadata
@@ -423,35 +447,17 @@ class Llama:
                 if self.verbose:
                     print(f"Guessed chat format: {chat_format}", file=sys.stderr)
             else:
-                template = self.metadata["tokenizer.chat_template"]
-                try:
-                    eos_token_id = int(self.metadata["tokenizer.ggml.eos_token_id"])
-                except:
-                    eos_token_id = self.token_eos()
-                try:
-                    bos_token_id = int(self.metadata["tokenizer.ggml.bos_token_id"])
-                except:
-                    bos_token_id = self.token_bos()
-
-                eos_token = self._model.token_get_text(eos_token_id)
-                bos_token = self._model.token_get_text(bos_token_id)
-
                 if self.verbose:
-                    print(f"Using gguf chat template: {template}", file=sys.stderr)
+                    print(f"Using gguf chat template: {template_choices['chat_template.default']}", file=sys.stderr)
                     print(f"Using chat eos_token: {eos_token}", file=sys.stderr)
                     print(f"Using chat bos_token: {bos_token}", file=sys.stderr)
 
-                self.chat_handler = llama_chat_format.Jinja2ChatFormatter(
-                    template=template,
-                    eos_token=eos_token,
-                    bos_token=bos_token,
-                    stop_token_ids=[eos_token_id],
-                ).to_chat_handler()
+                self.chat_format = "chat_template.default"
 
         if self.chat_format is None and self.chat_handler is None:
             self.chat_format = "llama-2"
             if self.verbose:
-                print(f"Using fallback chat format: {chat_format}", file=sys.stderr)
+                print(f"Using fallback chat format: {self.chat_format}", file=sys.stderr)
 
     @property
     def ctx(self) -> llama_cpp.llama_context_p:
@@ -955,18 +961,53 @@ class Llama:
 
         completion_id: str = f"cmpl-{str(uuid.uuid4())}"
         created: int = int(time.time())
+        prefix_token_id: int = self._model.token_prefix()
+        middle_token_id: int = self._model.token_middle()
+        suffix_token_id: int = self._model.token_suffix()
         # If prompt is empty, initialize completion with BOS token to avoid
         # detokenization including a space at the beginning of the completion
         completion_tokens: List[int] = [] if len(prompt) > 0 else [self.token_bos()]
         # Add blank space to start of prompt to match OG llama tokenizer
         prompt_tokens: List[int] = (
             (
-                self.tokenize(prompt.encode("utf-8"), special=True)
-                if prompt != ""
-                else [self.token_bos()]
+                [prefix_token_id]
+                if prefix_token_id >= 0 and suffix is not None
+                else []
             )
-            if isinstance(prompt, str)
-            else prompt
+            +
+            (
+                (
+                    self.tokenize(prompt.encode("utf-8"), add_bos=(prefix_token_id < 0 or suffix is None), special=(prefix_token_id < 0 or suffix is None))
+                    if prompt != ""
+                    else (
+                        []
+                        if prefix_token_id >= 0 and suffix is not None
+                        else [self.token_bos()]
+                    )
+                )
+                if isinstance(prompt, str)
+                else prompt
+            )
+            +
+            (
+                (
+                    [suffix_token_id]
+                    +
+                    (
+                        self.tokenize(suffix.encode("utf-8"), add_bos=False, special=False)
+                        if suffix
+                        else []
+                    )
+                )
+                if suffix_token_id >= 0 and suffix is not None
+                else []
+            )
+            +
+            (
+                [middle_token_id]
+                if middle_token_id >= 0 and suffix is not None
+                else []
+            )
         )
         text: bytes = b""
         returned_tokens: int = 0
@@ -1346,7 +1387,7 @@ class Llama:
         if echo:
             text_str = prompt + text_str
 
-        if suffix is not None:
+        if suffix_token_id < 0 and suffix is not None:
             text_str = text_str + suffix
 
         logprobs_or_none: Optional[CompletionLogprobs] = None
@@ -1684,7 +1725,7 @@ class Llama:
         Returns:
             Generated chat completion or a stream of chat completion chunks.
         """
-        handler = self.chat_handler or llama_chat_format.get_chat_completion_handler(
+        handler = self.chat_handler or self._chat_handlers.get(self.chat_format) or llama_chat_format.get_chat_completion_handler(
             self.chat_format
         )
         return handler(
@@ -2043,3 +2084,19 @@ class StoppingCriteriaList(List[StoppingCriteria]):
         self, input_ids: npt.NDArray[np.intc], logits: npt.NDArray[np.single]
     ) -> bool:
         return any([stopping_criteria(input_ids, logits) for stopping_criteria in self])
+
+
+class MinTokensLogitsProcessor(LogitsProcessor):
+    def __init__(self, min_tokens: int, token_eos: int):
+        self.min_tokens = min_tokens
+        self.token_eos = token_eos
+        self.prompt_tokens = None
+
+    def __call__(
+        self, input_ids: npt.NDArray[np.intc], scores: npt.NDArray[np.single]
+    ) -> npt.NDArray[np.single]:
+        if self.prompt_tokens is None:
+            self.prompt_tokens = len(input_ids)
+        if len(input_ids) - self.prompt_tokens < self.min_tokens:
+            scores[self.token_eos] = -np.inf
+        return scores

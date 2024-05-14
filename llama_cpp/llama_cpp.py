@@ -296,6 +296,9 @@ LLAMA_VOCAB_TYPE_WPM = 3
 #     LLAMA_VOCAB_PRE_TYPE_GPT2           = 7,
 #     LLAMA_VOCAB_PRE_TYPE_REFACT         = 8,
 #     LLAMA_VOCAB_PRE_TYPE_COMMAND_R      = 9,
+#     LLAMA_VOCAB_PRE_TYPE_QWEN2          = 10,
+#     LLAMA_VOCAB_PRE_TYPE_OLMO           = 11,
+#     LLAMA_VOCAB_PRE_TYPE_DBRX           = 12,
 # };
 LLAMA_VOCAB_PRE_TYPE_DEFAULT = 0
 LLAMA_VOCAB_PRE_TYPE_LLAMA3 = 1
@@ -307,6 +310,9 @@ LLAMA_VOCAB_PRE_TYPE_STARCODER = 6
 LLAMA_VOCAB_PRE_TYPE_GPT2 = 7
 LLAMA_VOCAB_PRE_TYPE_REFACT = 8
 LLAMA_VOCAB_PRE_TYPE_COMMAND_R = 9
+LLAMA_VOCAB_PRE_TYPE_QWEN2 = 10
+LLAMA_VOCAB_PRE_TYPE_OLMO = 11
+LLAMA_VOCAB_PRE_TYPE_DBRX = 12
 
 
 # // note: these values should be synchronized with ggml_rope
@@ -375,6 +381,7 @@ LLAMA_TOKEN_TYPE_BYTE = 6
 #     LLAMA_FTYPE_MOSTLY_IQ2_M         = 29, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_IQ4_XS        = 30, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_IQ1_M         = 31, // except 1d tensors
+#     LLAMA_FTYPE_MOSTLY_BF16          = 32, // except 1d tensors
 
 #     LLAMA_FTYPE_GUESSED = 1024, // not specified in the model file
 # };
@@ -407,6 +414,8 @@ LLAMA_FTYPE_MOSTLY_IQ3_M = 27
 LLAMA_FTYPE_MOSTLY_IQ2_S = 28
 LLAMA_FTYPE_MOSTLY_IQ2_M = 29
 LLAMA_FTYPE_MOSTLY_IQ4_XS = 30
+LLAMA_FTYPE_MOSTLY_IQ1_M = 31
+LLAMA_FTYPE_MOSTLY_BF16 = 32
 LLAMA_FTYPE_GUESSED = 1024
 
 # enum llama_rope_scaling_type {
@@ -639,6 +648,9 @@ class llama_model_kv_override(ctypes.Structure):
 #     // proportion of the model (layers or rows) to offload to each GPU, size: llama_max_devices()
 #     const float * tensor_split;
 
+#     // comma separated list of RPC servers to use for offloading
+#     const char * rpc_servers;
+
 #     // Called with a progress value between 0.0 and 1.0. Pass NULL to disable.
 #     // If the provided progress_callback returns true, model loading continues.
 #     // If it returns false, model loading is immediately aborted.
@@ -665,6 +677,7 @@ class llama_model_params(ctypes.Structure):
         split_mode (int): how to split the model across multiple GPUs
         main_gpu (int): the GPU that is used for the entire model. main_gpu interpretation depends on split_mode: LLAMA_SPLIT_NONE: the GPU that is used for the entire model LLAMA_SPLIT_ROW: the GPU that is used for small tensors and intermediate results LLAMA_SPLIT_LAYER: ignored
         tensor_split (ctypes.Array[ctypes.ctypes.c_float]): proportion of the model (layers or rows) to offload to each GPU, size: llama_max_devices()
+        rpc_servers (ctypes.c_char_p): comma separated list of RPC servers to use for offloading
         progress_callback (llama_progress_callback): called with a progress value between 0.0 and 1.0. Pass NULL to disable. If the provided progress_callback returns true, model loading continues. If it returns false, model loading is immediately aborted.
         progress_callback_user_data (ctypes.ctypes.c_void_p): context pointer passed to the progress callback
         kv_overrides (ctypes.Array[llama_model_kv_override]): override key-value pairs of the model meta data
@@ -678,6 +691,7 @@ class llama_model_params(ctypes.Structure):
         split_mode: int
         main_gpu: int
         tensor_split: CtypesArray[ctypes.c_float]
+        rpc_servers: ctypes.c_char_p
         progress_callback: Callable[[float, ctypes.c_void_p], bool]
         progress_callback_user_data: ctypes.c_void_p
         kv_overrides: CtypesArray[llama_model_kv_override]
@@ -691,6 +705,7 @@ class llama_model_params(ctypes.Structure):
         ("split_mode", ctypes.c_int),
         ("main_gpu", ctypes.c_int32),
         ("tensor_split", ctypes.POINTER(ctypes.c_float)),
+        ("rpc_servers", ctypes.c_char_p),
         ("progress_callback", llama_progress_callback),
         ("progress_callback_user_data", ctypes.c_void_p),
         ("kv_overrides", ctypes.POINTER(llama_model_kv_override)),

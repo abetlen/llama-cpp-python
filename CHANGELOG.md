@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.74]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@b228aba91ac2cd9eb90e9d423ba1d0d20e0117e2
+- fix: Enable CUDA backend for llava by @abetlen in 7f59856fa6f3e23f07e12fc15aeb9359dc6c3bb4
+- docs: Fix typo in README.md by @yupbank in #1444
+
+## [0.2.73]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@25c6e82e7a1ad25a42b0894e87d9b5c557409516
+- fix: Clear kv cache at beginning of image chat formats to avoid bug when image is evaluated first by @abetlen in ac55d0a175115d1e719672ce1cb1bec776c738b1
+
+## [0.2.72]
+
+- fix(security): Remote Code Execution by Server-Side Template Injection in Model Metadata by @retr0reg in b454f40a9a1787b2b5659cd2cb00819d983185df
+- fix(security): Update remaining jinja chat templates to use immutable sandbox by @CISC in #1441
+
+## [0.2.71]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@911b3900dded9a1cfe0f0e41b82c7a29baf3a217
+- fix: Make leading bos_token optional for image chat formats, fix nanollava system message by @abetlen in 77122638b4153e31d9f277b3d905c2900b536632
+- fix: free last image embed in llava chat handler by @abetlen in 3757328b703b2cd32dcbd5853271e3a8c8599fe7
+
+## [0.2.70]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@c0e6fbf8c380718102bd25fcb8d2e55f8f9480d1
+- feat: fill-in-middle support by @CISC in #1386
+- fix: adding missing args in create_completion for functionary chat handler by @skalade in #1430
+- docs: update README.md @eltociear in #1432
+- fix: chat_format log where auto-detected format prints None by @balvisio in #1434
+- feat(server): Add support for setting root_path by @abetlen in 0318702cdc860999ee70f277425edbbfe0e60419
+- feat(ci): Add docker checks and check deps more frequently by @Smartappli in #1426
+- fix: detokenization case where first token does not start with a leading space by @noamgat in #1375
+- feat: Implement streaming for Functionary v2 + Bug fixes by @jeffrey-fong in #1419
+- fix: Use memmove to copy str_value kv_override by @abetlen in 9f7a85571ae80d3b6ddbd3e1bae407b9f1e3448a
+- feat(server): Remove temperature bounds checks for server by @abetlen in 0a454bebe67d12a446981eb16028c168ca5faa81
+- fix(server): Propagate flash_attn to model load by @dthuerck in #1424
+
 ## [0.2.69]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@6ecf3189e00a1e8e737a78b6d10e1d7006e050a2

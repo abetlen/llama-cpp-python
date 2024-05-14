@@ -11,6 +11,7 @@ from contextlib import ExitStack
 from typing import Any, Dict, Iterator, List, Literal, Optional, Tuple, Union, Protocol, cast
 
 import jinja2
+from jinja2.sandbox import ImmutableSandboxedEnvironment
 
 import numpy as np
 import numpy.typing as npt
@@ -194,7 +195,7 @@ class Jinja2ChatFormatter(ChatFormatter):
         self.add_generation_prompt = add_generation_prompt
         self.stop_token_ids = set(stop_token_ids) if stop_token_ids is not None else None
 
-        self._environment = jinja2.Environment(
+        self._environment = ImmutableSandboxedEnvironment(
             loader=jinja2.BaseLoader(),
             trim_blocks=True,
             lstrip_blocks=True,
@@ -687,8 +688,7 @@ def hf_tokenizer_config_to_chat_formatter(
     assert isinstance(tokenizer_config["eos_token"], str)
     eos_token = tokenizer_config["eos_token"]
 
-    env = jinja2.Environment(
-        loader=jinja2.BaseLoader(),
+    env = ImmutableSandboxedEnvironment(
         trim_blocks=True,
         lstrip_blocks=True,
     ).from_string(chat_template)
@@ -2349,7 +2349,7 @@ def functionary_v1_v2_chat_handler(
                 prompt = prompt
                 stops = ["\n", END_ASSISTANT_TOKEN]
 
-            completion = create_completion(stop=stops)
+            completion = create_completion(prompt=prompt, stop=stops, grammar=grammar)
             completion_text = completion["choices"][0]["text"]
             completion_tokens += completion["usage"]["completion_tokens"]
             
@@ -2376,7 +2376,7 @@ def functionary_v1_v2_chat_handler(
                     completion_text.split(START_FUNCTION_CALL_TOKEN)[-1][:-1].strip()
                 )
                 grammar = get_grammar(function_calls[-1])
-                completion = create_completion(stop=END_FUNCTION_CALL_TOKEN)
+                completion = create_completion(prompt=prompt, stop=END_FUNCTION_CALL_TOKEN, grammar=grammar)
                 completion_tokens += completion["usage"]["completion_tokens"]
                 function_bodies.append(completion["choices"][0]["text"].strip())
             # If the prompt involves a function call, just append generated parameters to function_bodies
@@ -2390,7 +2390,7 @@ def functionary_v1_v2_chat_handler(
                 function_calls.append(function_call)
                 grammar = get_grammar(function_call)
                 stops = [STOP_TOKEN, FROM_TOKEN]
-                completion = create_completion(stop=stops)
+                completion = create_completion(prompt=prompt, stop=stops, grammar=grammar)
                 completion_text = completion["choices"][0]["text"]
                 completion_tokens += completion["usage"]["completion_tokens"]
                 function_bodies.append(completion_text.strip())
@@ -2400,7 +2400,7 @@ def functionary_v1_v2_chat_handler(
                     # Generate function name first
                     grammar = None
                     stops = CONTENT_TOKEN
-                    completion = create_completion(stop=stops)
+                    completion = create_completion(prompt=prompt, stop=stops, grammar=grammar)
                     completion_text = completion["choices"][0]["text"]
                     completion_tokens += completion["usage"]["completion_tokens"]
                     function_name = completion_text.strip()
@@ -2413,7 +2413,7 @@ def functionary_v1_v2_chat_handler(
                         grammar = get_grammar(function_call)
                     # Generate content
                     stops = [RECIPIENT_TOKEN, STOP_TOKEN]
-                    completion = create_completion(stop=stops)
+                    completion = create_completion(prompt=prompt, stop=stops, grammar=grammar)
                     completion_text = completion["choices"][0]["text"]
                     completion_tokens += completion["usage"]["completion_tokens"]
                     if function_name == "all":
@@ -2440,7 +2440,7 @@ def functionary_v1_v2_chat_handler(
                         # Check whether the model wants to generate another turn
                         prompt += completion_text.strip()
                         grammar = None
-                        completion = create_completion(stop=stops)
+                        completion = create_completion(prompt=prompt, stop=stops, grammar=grammar)
                         completion_tokens += completion["usage"]["completion_tokens"]
                         if "<|from|> assistant" in completion["choices"][0]["text"] or "<|from|>assistant" in completion["choices"][0]["text"]:
                             prompt += "\n<|from|>assistant\n<|recipient|>"
@@ -2629,14 +2629,27 @@ class Llava15ChatHandler:
             messages = [llama_types.ChatCompletionRequestSystemMessage(role="system", content=self.DEFAULT_SYSTEM_MESSAGE)] + messages
 
         image_urls = self.get_image_urls(messages)
-        template = jinja2.Template(self.CHAT_FORMAT)
-        text = template.render(messages=messages, add_generation_prompt=True)
+        template = ImmutableSandboxedEnvironment(
+            trim_blocks=True,
+            lstrip_blocks=True,
+        ).from_string(self.CHAT_FORMAT)
+        text = template.render(
+            messages=messages,
+            add_generation_prompt=True,
+            eos_token=llama.detokenize([llama.token_eos()]),
+            bos_token=llama.detokenize([llama.token_bos()]),
+        )
         split_text = self.split_text_on_image_urls(text, image_urls)
 
         def embed_image_bytes(image_bytes: bytes):
             if self._last_image_embed is not None and self._last_image_hash is not None and hash(image_bytes) == self._last_image_hash:
                 return self._last_image_embed
             with suppress_stdout_stderr(disable=self.verbose):
+                # Free the previous image embed
+                if self._last_image_embed is not None:
+                    self._llava_cpp.llava_image_embed_free(self._last_image_embed)
+                    self._last_image_embed = None
+                    self._last_image_hash = None
                 embed = (
                     self._llava_cpp.llava_image_embed_make_with_bytes(
                         self.clip_ctx,
@@ -2651,9 +2664,10 @@ class Llava15ChatHandler:
 
         # Evaluate prompt
         llama.reset()
-        for i, (type_, value) in enumerate(split_text):
+        llama._ctx.kv_cache_clear()
+        for type_, value in split_text:
             if type_ == "text":
-                tokens = llama.tokenize(value.encode("utf8"), add_bos=i == 0)
+                tokens = llama.tokenize(value.encode("utf8"), add_bos=False, special=True)
                 if llama.n_tokens + len(tokens) > llama.n_ctx():
                     raise ValueError("Prompt exceeds n_ctx") # TODO: Fix
                 llama.eval(tokens)
@@ -2671,6 +2685,8 @@ class Llava15ChatHandler:
                         llama.n_batch,
                         n_past_p,
                     )
+                # Required to avoid issues with hf tokenizer
+                llama.input_ids[llama.n_tokens : n_past.value] = -1
                 llama.n_tokens = n_past.value
 
         # Get prompt tokens to avoid a cache miss
@@ -3060,6 +3076,7 @@ class NanoLlavaChatHandler(Llava15ChatHandler):
     # Answer the question<|im_end|><|im_start|>user
     # <image>
     # What is the picture about?<|im_end|><|im_start|>assistant
+    DEFAULT_SYSTEM_MESSAGE = "Answer the question"
 
     CHAT_FORMAT = (
         "{% for message in messages %}"
@@ -3255,8 +3272,7 @@ def chatml_function_calling(
         "{% endfor %}"
         "{% if add_generation_prompt %}<|im_start|>assistant\n{% endif %}"
     )
-    template_renderer = jinja2.Environment(
-        loader=jinja2.BaseLoader(),
+    template_renderer = ImmutableSandboxedEnvironment(
         autoescape=jinja2.select_autoescape(["html", "xml"]),
         undefined=jinja2.StrictUndefined,
     ).from_string(function_calling_template)
