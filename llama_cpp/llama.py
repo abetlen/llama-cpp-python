@@ -2084,3 +2084,19 @@ class StoppingCriteriaList(List[StoppingCriteria]):
         self, input_ids: npt.NDArray[np.intc], logits: npt.NDArray[np.single]
     ) -> bool:
         return any([stopping_criteria(input_ids, logits) for stopping_criteria in self])
+
+
+class MinTokensLogitsProcessor(LogitsProcessor):
+    def __init__(self, min_tokens: int, token_eos: int):
+        self.min_tokens = min_tokens
+        self.token_eos = token_eos
+        self.prompt_tokens = None
+
+    def __call__(
+        self, input_ids: npt.NDArray[np.intc], scores: npt.NDArray[np.single]
+    ) -> npt.NDArray[np.single]:
+        if self.prompt_tokens is None:
+            self.prompt_tokens = len(input_ids)
+        if len(input_ids) - self.prompt_tokens < self.min_tokens:
+            scores[self.token_eos] = -np.inf
+        return scores
