@@ -12,6 +12,7 @@ from typing import Any, Dict, Iterator, List, Literal, Optional, Tuple, Union, P
 
 import jinja2
 from jinja2.sandbox import ImmutableSandboxedEnvironment
+from jinja2.sandbox import SandboxedEnvironment
 
 import numpy as np
 import numpy.typing as npt
@@ -192,7 +193,8 @@ class Jinja2ChatFormatter(ChatFormatter):
         self.add_generation_prompt = add_generation_prompt
         self.stop_token_ids = set(stop_token_ids) if stop_token_ids is not None else None
 
-        self._environment = ImmutableSandboxedEnvironment(
+        # Use SandboxedEnvironment instead of the regular Environment
+        self._environment = SandboxedEnvironment(
             loader=jinja2.BaseLoader(),
             trim_blocks=True,
             lstrip_blocks=True,
@@ -203,9 +205,9 @@ class Jinja2ChatFormatter(ChatFormatter):
         *,
         messages: List[llama_types.ChatCompletionRequestMessage],
         functions: Optional[List[llama_types.ChatCompletionFunction]] = None,
-        function_call: Optional[llama_types.ChatCompletionRequestFunctionCall] = None,
+        function_call: Optional[List[llama_types.ChatCompletionRequestFunctionCall]] = None,
         tools: Optional[List[llama_types.ChatCompletionTool]] = None,
-        tool_choice: Optional[llama_types.ChatCompletionToolChoiceOption] = None,
+        tool_choice: Optional[List[llama_types.ChatCompletionToolChoiceOption]] = None,
         **kwargs: Any,
     ) -> ChatFormatterResponse:
         def raise_exception(message: str):
@@ -222,16 +224,6 @@ class Jinja2ChatFormatter(ChatFormatter):
             tools=tools,
             tool_choice=tool_choice,
         )
-
-        stopping_criteria = None
-        if self.stop_token_ids is not None:
-            def stop_on_last_token(
-                    tokens: npt.NDArray[np.intc],
-                    logits: npt.NDArray[np.single]
-            ) -> bool:
-                return tokens[-1] in self.stop_token_ids
-            stopping_criteria = llama.StoppingCriteriaList([stop_on_last_token])
-
         return ChatFormatterResponse(prompt=prompt, stop=[self.eos_token], stopping_criteria=stopping_criteria)
 
     def to_chat_handler(self) -> LlamaChatCompletionHandler:
