@@ -413,8 +413,8 @@ class Llama:
         eos_token_id = self.token_eos()
         bos_token_id = self.token_bos()
 
-        eos_token = self._model.token_get_text(eos_token_id)
-        bos_token = self._model.token_get_text(bos_token_id)
+        eos_token = self._model.token_get_text(eos_token_id) if eos_token_id != -1 else ""
+        bos_token = self._model.token_get_text(bos_token_id) if bos_token_id != -1 else ""
 
         # Unfortunately the llama.cpp API does not return metadata arrays, so we can't get template names from tokenizer.chat_templates
         template_choices = dict((name[10:], template) for name, template in self.metadata.items() if name.startswith("tokenizer.chat_template."))
