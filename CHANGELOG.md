@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.75]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@13ad16af1231ab2d245d35df3295bcfa23de1305
+- fix: segfault for models without eos / bos tokens by @abetlen in d99a6ba607a4885fb00e63e967964aa41bdbbbcb
+- feat: add MinTokensLogitProcessor and min_tokens argument to server by @twaka in #1333
+- misc: Remove unnecessary metadata lookups by @CISC in #1448
+
 ## [0.2.74]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@b228aba91ac2cd9eb90e9d423ba1d0d20e0117e2
