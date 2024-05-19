@@ -1401,7 +1401,7 @@ class Llama:
 
             if echo:
                 # Remove leading BOS token if exists
-		all_tokens = prompt_tokens[1 if prompt_tokens[0] == self.token_bos() else 0:] + completion_tokens
+                all_tokens = prompt_tokens[1 if prompt_tokens[0] == self.token_bos() else 0:] + completion_tokens
             else:
                 all_tokens = completion_tokens
 
