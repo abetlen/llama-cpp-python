@@ -1016,9 +1016,8 @@ class Llama:
         )
         model_name: str = model if model is not None else self.model_path
 
-        # User may have added an unwanted extra BOS
         if prompt_tokens[:2] == [self.token_bos()] * 2:
-            del prompt_tokens[0]
+            print(f'*** WARNING: Detected duplicate leading "{self._model.token_get_text(self.token_bos())}" in prompt, this will likely reduce response quality, consider removing it...', file=sys.stderr)
 
         # NOTE: This likely doesn't work correctly for the first token in the prompt
         # because of the extra space added to the start of the prompt_tokens
