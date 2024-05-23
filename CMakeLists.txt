@@ -7,7 +7,6 @@ option(LLAVA_BUILD "Build llava shared library and install alongside python pack
 
 if (LLAMA_BUILD)
     set(BUILD_SHARED_LIBS "On")
-    set(LLAMA_RPC "On" CACHE BOOL "llama: use RPC" FORCE)
 
     # Building llama
     if (APPLE AND NOT CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
