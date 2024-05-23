@@ -531,6 +531,63 @@ llm.create_chat_completion(
 )
 ```
 
+Another model that supports function calling with its default template is [this](https://huggingface.co/CISCai/Mistral-7B-Instruct-v0.3-SOTA-GGUF) one, with full tool_calls support:
+
+```python
+from llama_cpp import Llama
+llm = Llama(
+      model_path="path/to/mistral/mistral-v3-model.gguf"
+)
+llm.create_chat_completion(
+      messages = [
+        {
+          "role": "user",
+          "content": "What's the weather like in Oslo?"
+        },
+        { # The tool_calls is from the response to the above with tool_choice specified
+          "role": "assistant",
+          "content": None,
+          "tool_calls": [
+            {
+              "id": "call__0_get_current_weather_cmpl-...",
+              "type": "function",
+              "function": {
+                "name": "get_current_weather",
+                "arguments": '{ "location": "Oslo, NO" ,"unit": "celsius"} '
+              }
+            }
+          ]
+        },
+        { # The tool_call_id is from tool_calls and content is the result from the function call you made
+          "role": "tool",
+          "content": 20,
+          "tool_call_id": "call__0_get_current_weather_cmpl-..."
+        }
+      ],
+      tools=[{
+        "type": "function",
+        "function": {
+          "name": "get_current_weather",
+          "description": "Get the current weather in a given location",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "location": {
+                "type": "string",
+                "description": "The city and state, e.g. San Francisco, CA"
+              },
+              "unit": {
+                "type": "string",
+                "enum": [ "celsius", "fahrenheit" ]
+              }
+            },
+            "required": [ "location" ]
+          }
+        }
+      }]
+)
+```
+
 #### Built in function calling
 
 The high-level API supports OpenAI compatible function and tool calling. This is possible through the `functionary` pre-trained models chat format or through the generic `chatml-function-calling` chat format.
