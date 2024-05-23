@@ -562,12 +562,12 @@ class Llama:
             if self.context_params.logits_all:
                 rows = n_tokens
                 cols = self._n_vocab
-                logits = self._ctx.get_logits()[: rows * cols]
+                logits = np.ctypeslib.as_array(self._ctx.get_logits(), shape=(rows * cols, ))
                 self.scores[n_past : n_past + n_tokens, :].reshape(-1)[: :] = logits
             else:
                 rows = 1
                 cols = self._n_vocab
-                logits = self._ctx.get_logits()[: rows * cols]
+                logits = np.ctypeslib.as_array(self._ctx.get_logits(), shape=(rows * cols, ))
                 self.scores[n_past + n_tokens - 1, :].reshape(-1)[: :] = logits
             # Update n_tokens
             self.n_tokens += n_tokens
