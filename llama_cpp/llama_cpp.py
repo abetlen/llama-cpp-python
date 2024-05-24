@@ -2265,6 +2265,22 @@ def llama_set_n_threads(
     ...
 
 
+# // Get the number of threads used for generation of a single token.
+# LLAMA_API uint32_t llama_n_threads(struct llama_context * ctx);
+@ctypes_function("llama_n_threads", [llama_context_p_ctypes], ctypes.c_uint32)
+def llama_n_threads(ctx: llama_context_p, /) -> int:
+    """Get the number of threads used for generation of a single token"""
+    ...
+
+
+# // Get the number of threads used for prompt and batch processing (multiple token).
+# LLAMA_API uint32_t llama_n_threads_batch(struct llama_context * ctx);
+@ctypes_function("llama_n_threads_batch", [llama_context_p_ctypes], ctypes.c_uint32)
+def llama_n_threads_batch(ctx: llama_context_p, /) -> int:
+    """Get the number of threads used for prompt and batch processing (multiple token)"""
+    ...
+
+
 # // Set whether to use causal attention or not
 # // If set to true, the model will only attend to the past tokens
 # LLAMA_API void llama_set_causal_attn(struct llama_context * ctx, bool causal_attn);
