@@ -507,8 +507,8 @@ Below are the supported multi-modal models and their respective chat handlers (P
 | [llava-v1.5-13b](https://huggingface.co/mys/ggml_llava-v1.5-13b) | `Llava15ChatHandler` | `llava-1-5` |
 | [llava-v1.6-34b](https://huggingface.co/cjpais/llava-v1.6-34B-gguf) | `Llava16ChatHandler` | `llava-1-6` |
 | [moondream2](https://huggingface.co/vikhyatk/moondream2) | `MoondreamChatHandler` | `moondream2` |
-| [nanollava](https://huggingface.co/abetlen/nanollava) | `NanollavaChatHandler` | `nanollava` |
-| [llama-3-vision-alpha](https://huggingface.co/abetlen/llama-3-vision-alpha) | `Llama3VisionAlphaChatHandler` | `llama-3-vision-alpha` |
+| [nanollava](https://huggingface.co/abetlen/nanollava-gguf) | `NanollavaChatHandler` | `nanollava` |
+| [llama-3-vision-alpha](https://huggingface.co/abetlen/llama-3-vision-alpha-gguf) | `Llama3VisionAlphaChatHandler` | `llama-3-vision-alpha` |
 
 Then you'll need to use a custom chat handler to load the clip model and process the chat messages and images.
 
