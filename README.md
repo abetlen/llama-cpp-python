@@ -486,7 +486,7 @@ llm.create_chat_completion(
 #### Basic function calling through chat template (if supported)
 
 The following example will use the Tool Use chat template as specified in GGUF (only Command R has this for now).
-Many other models could support this if the chat templates were added, while others like [this](https://huggingface.co/CISCai/gorilla-openfunctions-v2-SOTA-GGUF) one supports it with its default template.
+Many other models could support this if the chat templates were added, while others like [this](https://huggingface.co/CISCai/gorilla-openfunctions-v2-SOTA-GGUF) one and [this](https://huggingface.co/CISCai/Mistral-7B-Instruct-v0.3-SOTA-GGUF) one supports it with its default template.
 
 ```python
 from llama_cpp import Llama
@@ -531,7 +531,63 @@ llm.create_chat_completion(
 )
 ```
 
-Another model that supports function calling with its default template is [this](https://huggingface.co/CISCai/Mistral-7B-Instruct-v0.3-SOTA-GGUF) one, with full tool_calls support:
+If you need to do more advanced parsing of the tool response, f.ex. if you expect multiple/parallel tool calls try using `grammar` instead of `tool_choice`:
+
+```python
+from llama_cpp import Llama
+from llama_cpp.llama_grammar import LlamaGrammar
+import json
+llm = Llama(
+      model_path="path/to/gorilla/openfunctions-v2-model.gguf"
+)
+response = llm.create_chat_completion(
+      messages = [
+        {
+          "role": "user",
+          "content": "What's the weather like in Oslo and Stockholm?"
+        }
+      ],
+      tools = [{
+        "type": "function",
+        "function": {
+          "name": "get_current_weather",
+          "description": "Get the current weather in a given location",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "location": {
+                "type": "string",
+                "description": "The city and state, e.g. San Francisco, CA"
+              },
+              "unit": {
+                "type": "string",
+                "enum": [ "celsius", "fahrenheit" ]
+              }
+            },
+            "required": [ "location" ]
+          }
+        }
+      }],
+      grammar = LlamaGrammar.from_json_schema(json.dumps({
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [ "name", "arguments" ],
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "arguments": {
+              "type": "object"
+            }
+          }
+        }
+      }))
+)
+json.loads(response["choices"][0]["text"])
+```
+
+Here's an example of a full function calling round-trip:
 
 ```python
 from llama_cpp import Llama
