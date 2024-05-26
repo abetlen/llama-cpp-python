@@ -192,11 +192,12 @@ class Jinja2ChatFormatter(ChatFormatter):
         self.add_generation_prompt = add_generation_prompt
         self.stop_token_ids = set(stop_token_ids) if stop_token_ids is not None else None
 
-        self._environment = ImmutableSandboxedEnvironment(
-            loader=jinja2.BaseLoader(),
+        environment = ImmutableSandboxedEnvironment(
             trim_blocks=True,
             lstrip_blocks=True,
-        ).from_string(self.template)
+        )
+        environment.policies['json.dumps_kwargs']['ensure_ascii'] = False
+        self._environment = environment.from_string(self.template)
 
     def __call__(
         self,
