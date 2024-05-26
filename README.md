@@ -616,7 +616,7 @@ llm.create_chat_completion(
         },
         { # The tool_call_id is from tool_calls and content is the result from the function call you made
           "role": "tool",
-          "content": 20,
+          "content": "20",
           "tool_call_id": "call__0_get_current_weather_cmpl-..."
         }
       ],
