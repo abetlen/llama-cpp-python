@@ -971,7 +971,7 @@ class Llama:
         prefix_token_id: int = self._model.token_prefix()
         middle_token_id: int = self._model.token_middle()
         suffix_token_id: int = self._model.token_suffix()
-        add_space_prefix: bool = self.metadata.get("tokenizer.ggml.add_space_prefix", True)
+        add_space_prefix: bool = self.metadata.get("tokenizer.ggml.add_space_prefix", "true") == "true"
         bos_tokens: List[int] = [self.token_bos()] if not (isinstance(prompt, list) and suffix is None) and self._model.add_bos_token() != 0 else []
         eos_tokens: List[int] = [self.token_eos()] if not (isinstance(prompt, list) and suffix is None) and self._model.add_eos_token() == 1 else []
 
