@@ -971,6 +971,8 @@ class Llama:
         prefix_token_id: int = self._model.token_prefix()
         middle_token_id: int = self._model.token_middle()
         suffix_token_id: int = self._model.token_suffix()
+        bos_tokens: List[int] = [self.token_bos()] if self._model.add_bos_token() == 1 else []
+        eos_tokens: List[int] = [self.token_eos()] if self._model.add_eos_token() == 1 else []
         # If prompt is empty, initialize completion with BOS token to avoid
         # detokenization including a space at the beginning of the completion
         completion_tokens: List[int] = [] if len(prompt) > 0 else [self.token_bos()]
@@ -984,13 +986,9 @@ class Llama:
             +
             (
                 (
-                    self.tokenize(prompt.encode("utf-8"), add_bos=(prefix_token_id < 0 or suffix is None), special=(prefix_token_id < 0 or suffix is None))
+                    self.tokenize(prompt.encode("utf-8"), add_bos=False, special=(prefix_token_id < 0 or suffix is None))
                     if prompt != ""
-                    else (
-                        []
-                        if prefix_token_id >= 0 and suffix is not None
-                        else [self.token_bos()]
-                    )
+                    else []
                 )
                 if isinstance(prompt, str)
                 else prompt
@@ -1014,7 +1012,7 @@ class Llama:
             if middle_token_id >= 0 and suffix is not None
             else []
         )
-        prompt_tokens: List[int] = (suffix_tokens + prefix_tokens + middle_tokens) if self.spm_infill else (prefix_tokens + suffix_tokens + middle_tokens)
+        prompt_tokens: List[int] = bos_tokens + ((suffix_tokens + prefix_tokens + middle_tokens) if self.spm_infill else (prefix_tokens + suffix_tokens + middle_tokens)) + eos_tokens
         text: bytes = b""
         returned_tokens: int = 0
         stop = (
