@@ -1016,7 +1016,7 @@ class Llama:
             if middle_token_id >= 0 and suffix is not None
             else []
         )
-        prompt_tokens: List[int] = (suffix_tokens + prefix_tokens + middle_tokens) if spm_infill else (prefix_tokens + suffix_tokens + middle_tokens)
+        prompt_tokens: List[int] = (suffix_tokens + prefix_tokens + middle_tokens) if self.spm_infill else (prefix_tokens + suffix_tokens + middle_tokens)
         text: bytes = b""
         returned_tokens: int = 0
         stop = (
