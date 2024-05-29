@@ -971,7 +971,7 @@ class Llama:
         prefix_token_id: int = self._model.token_prefix()
         middle_token_id: int = self._model.token_middle()
         suffix_token_id: int = self._model.token_suffix()
-        bos_tokens: List[int] = [self.token_bos()] if self._model.add_bos_token() == 1 else []
+        bos_tokens: List[int] = [self.token_bos()] if self._model.add_bos_token() != 0 else []
         eos_tokens: List[int] = [self.token_eos()] if self._model.add_eos_token() == 1 else []
         # If prompt is empty, initialize completion with BOS token to avoid
         # detokenization including a space at the beginning of the completion
