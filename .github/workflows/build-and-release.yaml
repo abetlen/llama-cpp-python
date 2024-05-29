@@ -70,7 +70,7 @@ jobs:
           python -m pip install -e .[all]
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.17.0
+        uses: pypa/cibuildwheel@v2.18.1
         env:
           CIBW_ARCHS: "auto64"
           # disable repair
@@ -182,7 +182,7 @@ jobs:
           python -m pip install -e .[all]
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.17.0
+        uses: pypa/cibuildwheel@v2.18.1
         env:
           CIBW_ARCHS: "auto"
           # disable repair
@@ -224,7 +224,7 @@ jobs:
           python -m pip install -e .[all]
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.17.0
+        uses: pypa/cibuildwheel@v2.18.1
         env:
           CIBW_ARCHS: "auto64"
           # disable repair
@@ -266,7 +266,7 @@ jobs:
           python -m pip install -e .[all]
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.17.0
+        uses: pypa/cibuildwheel@v2.18.1
         env:
           CIBW_ARCHS: "auto64"
           # disable repair 
