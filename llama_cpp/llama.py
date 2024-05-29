@@ -971,8 +971,16 @@ class Llama:
         prefix_token_id: int = self._model.token_prefix()
         middle_token_id: int = self._model.token_middle()
         suffix_token_id: int = self._model.token_suffix()
+        add_space_prefix: bool = self.metadata.get("tokenizer.ggml.add_space_prefix", True)
         bos_tokens: List[int] = [self.token_bos()] if not (isinstance(prompt, list) and suffix is None) and self._model.add_bos_token() != 0 else []
         eos_tokens: List[int] = [self.token_eos()] if not (isinstance(prompt, list) and suffix is None) and self._model.add_eos_token() == 1 else []
+
+        suffix_space_prefix: int = 0
+        # Tokenizer hack to remove leading space
+        if add_space_prefix and suffix_token_id >= 0 and suffix:
+            suffix = "☺" + suffix
+            suffix_space_prefix = 2
+
         # If prompt is empty, initialize completion with BOS token to avoid
         # detokenization including a space at the beginning of the completion
         completion_tokens: List[int] = [] if len(prompt) > 0 else [self.token_bos()]
@@ -999,7 +1007,7 @@ class Llama:
                 [suffix_token_id]
                 +
                 (
-                    self.tokenize(suffix.encode("utf-8"), add_bos=False, special=False)
+                    self.tokenize(suffix.encode("utf-8"), add_bos=False, special=False)[suffix_space_prefix:]
                     if suffix
                     else []
                 )
