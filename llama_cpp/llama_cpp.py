@@ -613,17 +613,17 @@ LLAMA_KV_OVERRIDE_TYPE_STR = 3
 # };
 class llama_model_kv_override_value(ctypes.Union):
     _fields_ = [
-        ("int_value", ctypes.c_int64),
-        ("float_value", ctypes.c_double),
-        ("bool_value", ctypes.c_bool),
-        ("str_value", ctypes.c_char * 128),
+        ("val_i64", ctypes.c_int64),
+        ("val_f64", ctypes.c_double),
+        ("val_bool", ctypes.c_bool),
+        ("val_str", ctypes.c_char * 128),
     ]
 
     if TYPE_CHECKING:
-        int_value: int
-        float_value: float
-        bool_value: bool
-        str_value: bytes
+        val_i64: int
+        val_f64: float
+        val_bool: bool
+        val_str: bytes
 
 
 class llama_model_kv_override(ctypes.Structure):
