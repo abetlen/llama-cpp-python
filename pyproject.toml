@@ -32,10 +32,10 @@ classifiers = [
 server = [
     "hypercorn>=0.17.0",
     "fastapi>=0.111.0",
-    "pydantic-settings>=2.0.1",
-    "sse-starlette>=1.6.1",
+    "pydantic-settings>=2.2.1",
+    "sse-starlette>=2.1.0",
     "starlette-context>=0.3.6,<0.4",
-    "PyYAML>=5.1",
+    "PyYAML>=6.0",
 ]
 test = [
     "pytest>=7.4.0",
