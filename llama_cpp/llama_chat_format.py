@@ -3098,7 +3098,7 @@ class NanoLlavaChatHandler(Llava15ChatHandler):
         "{% endif %}"
     )
 
-class Llama3VisionAlpha(Llava15ChatHandler):
+class Llama3VisionAlphaChatHandler(Llava15ChatHandler):
     # question = "<image>" + q
 
     # prompt = f"<|start_header_id|>user<|end_header_id|>\n\n{question}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
@@ -3159,6 +3159,10 @@ class Llama3VisionAlpha(Llava15ChatHandler):
         "{% endif %}"
     )
 
+# alias
+Llama3VisionAlpha = Llama3VisionAlphaChatHandler
+
+
 @register_chat_completion_handler("chatml-function-calling")
 def chatml_function_calling(
     llama: llama.Llama,
@@ -3193,7 +3197,6 @@ def chatml_function_calling(
     llama_types.CreateChatCompletionResponse,
     Iterator[llama_types.CreateChatCompletionStreamResponse],
 ]:
-    print(logprobs)
     function_calling_template = (
         "{% for message in messages %}"
         "<|im_start|>{{ message.role }}\n"
