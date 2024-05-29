@@ -196,7 +196,7 @@ class Jinja2ChatFormatter(ChatFormatter):
             trim_blocks=True,
             lstrip_blocks=True,
         )
-        environment.policies['json.dumps_kwargs']['ensure_ascii'] = False
+        environment.filters["tojson"] = lambda x: json.dumps(x, ensure_ascii=False)
         self._environment = environment.from_string(self.template)
 
     def __call__(
