@@ -6,6 +6,7 @@ import uuid
 import time
 import json
 import ctypes
+import typing
 import fnmatch
 import multiprocessing
 
@@ -249,13 +250,13 @@ class Llama:
                 self._kv_overrides_array[i].key = k.encode("utf-8")
                 if isinstance(v, bool):
                     self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_TYPE_BOOL
-                    self._kv_overrides_array[i].value.bool_value = v
+                    self._kv_overrides_array[i].value.val_bool = v
                 elif isinstance(v, int):
                     self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_TYPE_INT
-                    self._kv_overrides_array[i].value.int_value = v
+                    self._kv_overrides_array[i].value.val_i64 = v
                 elif isinstance(v, float):
                     self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_TYPE_FLOAT
-                    self._kv_overrides_array[i].value.float_value = v
+                    self._kv_overrides_array[i].value.val_f64 = v
                 elif isinstance(v, str): # type: ignore
                     v_bytes = v.encode("utf-8")
                     if len(v_bytes) > 128: # TODO: Make this a constant
@@ -263,10 +264,12 @@ class Llama:
                     v_bytes = v_bytes.ljust(128, b"\0")
                     self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_TYPE_STR
                     # copy min(v_bytes, 128) to str_value
+                    address = typing.cast(int, ctypes.addressof(self._kv_overrides_array[i].value) + llama_cpp.llama_model_kv_override_value.val_str.offset)
+                    buffer_start = ctypes.cast(address, ctypes.POINTER(ctypes.c_char))
                     ctypes.memmove(
-                        self._kv_overrides_array[i].value.str_value,
+                        buffer_start,
                         v_bytes,
-                        min(len(v_bytes), 128),
+                        128,
                     )
                 else:
                     raise ValueError(f"Unknown value type for {k}: {v}")
