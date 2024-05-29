@@ -113,6 +113,7 @@ class Llama:
         type_k: Optional[int] = None,
         type_v: Optional[int] = None,
         # Misc
+        spm_infill: bool = False,
         verbose: bool = True,
         # Extra Params
         **kwargs,  # type: ignore
@@ -182,6 +183,7 @@ class Llama:
             verbose: Print verbose output to stderr.
             type_k: KV cache data type for K (default: f16)
             type_v: KV cache data type for V (default: f16)
+            spm_infill: Use Suffix/Prefix/Middle pattern for infill (instead of Prefix/Suffix/Middle) as some models prefer this.
 
         Raises:
             ValueError: If the model path does not exist.
@@ -334,6 +336,8 @@ class Llama:
         self.lora_base = lora_base
         self.lora_scale = lora_scale
         self.lora_path = lora_path
+
+        self.spm_infill = spm_infill
 
         if not os.path.exists(model_path):
             raise ValueError(f"Model path does not exist: {model_path}")
@@ -971,7 +975,7 @@ class Llama:
         # detokenization including a space at the beginning of the completion
         completion_tokens: List[int] = [] if len(prompt) > 0 else [self.token_bos()]
         # Add blank space to start of prompt to match OG llama tokenizer
-        prompt_tokens: List[int] = (
+        prefix_tokens: List[int] = (
             (
                 [prefix_token_id]
                 if prefix_token_id >= 0 and suffix is not None
@@ -991,7 +995,8 @@ class Llama:
                 if isinstance(prompt, str)
                 else prompt
             )
-            +
+        )
+        suffix_tokens: List[int] = (
             (
                 (
                     [suffix_token_id]
@@ -1005,13 +1010,13 @@ class Llama:
                 if suffix_token_id >= 0 and suffix is not None
                 else []
             )
-            +
-            (
-                [middle_token_id]
-                if middle_token_id >= 0 and suffix is not None
-                else []
-            )
         )
+        middle_tokens: List[int] = (
+            [middle_token_id]
+            if middle_token_id >= 0 and suffix is not None
+            else []
+        )
+        prompt_tokens: List[int] = (suffix_tokens + prefix_tokens + middle_tokens) if spm_infill else (prefix_tokens + suffix_tokens + middle_tokens)
         text: bytes = b""
         returned_tokens: int = 0
         stop = (
@@ -1844,6 +1849,7 @@ class Llama:
             type_k=self.context_params.type_k,
             type_v=self.context_params.type_v,
             # Misc
+            spm_infill=self.spm_infill,
             verbose=self.verbose,
         )
 
