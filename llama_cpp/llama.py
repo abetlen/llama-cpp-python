@@ -968,11 +968,12 @@ class Llama:
 
         completion_id: str = f"cmpl-{str(uuid.uuid4())}"
         created: int = int(time.time())
+        bos_token_id: int = self.token_bos()
         prefix_token_id: int = self._model.token_prefix()
         middle_token_id: int = self._model.token_middle()
         suffix_token_id: int = self._model.token_suffix()
         add_space_prefix: bool = self.metadata.get("tokenizer.ggml.add_space_prefix", "true") == "true"
-        bos_tokens: List[int] = [self.token_bos()] if not (isinstance(prompt, list) and suffix is None) and self._model.add_bos_token() != 0 else []
+        bos_tokens: List[int] = [bos_token_id] if not (isinstance(prompt, list) and suffix is None) and self._model.add_bos_token() != 0 and bos_token_id >= 0 else []
         eos_tokens: List[int] = [self.token_eos()] if not (isinstance(prompt, list) and suffix is None) and self._model.add_eos_token() == 1 else []
 
         suffix_space_prefix: int = 0
@@ -983,7 +984,7 @@ class Llama:
 
         # If prompt is empty, initialize completion with BOS token to avoid
         # detokenization including a space at the beginning of the completion
-        completion_tokens: List[int] = [] if len(prompt) > 0 else [self.token_bos()]
+        completion_tokens: List[int] = [] if len(prompt) > 0 else [bos_token_id]
         # Add blank space to start of prompt to match OG llama tokenizer
         prefix_tokens: List[int] = (
             (
@@ -1171,7 +1172,7 @@ class Llama:
                     # not sure how to handle this branch when dealing
                     # with CJK output, so keep it unchanged
                     for token in remaining_tokens:
-                        if token == self.token_bos():
+                        if token == bos_token_id:
                             continue
                         token_end_position += len(self.detokenize([token], prev_tokens=prompt_tokens + completion_tokens[:returned_tokens]))
                         # Check if stop sequence is in the token
@@ -1298,7 +1299,7 @@ class Llama:
 
                 logprobs_or_none: Optional[CompletionLogprobs] = None
                 if logprobs is not None:
-                    if token == self.token_bos():
+                    if token == bos_token_id:
                         continue
                     token_str = self.detokenize([token]).decode(
                         "utf-8", errors="ignore"
@@ -1426,7 +1427,7 @@ class Llama:
             for idx, (token, token_str, logprobs_token) in enumerate(
                 zip(all_tokens, all_token_strs, all_logprobs)
             ):
-                if token == self.token_bos():
+                if token == bos_token_id:
                     continue
                 text_offsets.append(
                     text_offset
