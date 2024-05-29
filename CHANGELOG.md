@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.76]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@0df0aa8e43c3378975269a51f9b876c8692e70da
+- feat: Improve Llama.eval performance by avoiding list conversion by @thoughtp0lice in #1476
+- example: LLM inference with Ray Serve by @rgerganov in #1465
+
 ## [0.2.75]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@13ad16af1231ab2d245d35df3295bcfa23de1305
