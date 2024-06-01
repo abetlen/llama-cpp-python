@@ -41,7 +41,7 @@ if (LLAMA_BUILD)
         RESOURCE DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
     )
     # Workaround for Windows + CUDA https://github.com/abetlen/llama-cpp-python/issues/563
-    if (NOT LLAMA_HIPBLAS)
+    if (WIN32 AND (LLAMA_CUDA OR LLAMA_CUBLAS))
         install(
             FILES $<TARGET_RUNTIME_DLLS:llama>
             DESTINATION ${SKBUILD_PLATLIB_DIR}/llama_cpp
