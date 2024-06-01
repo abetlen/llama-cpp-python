@@ -300,6 +300,7 @@ LLAMA_VOCAB_TYPE_WPM = 3
 #     LLAMA_VOCAB_PRE_TYPE_QWEN2          = 11,
 #     LLAMA_VOCAB_PRE_TYPE_OLMO           = 12,
 #     LLAMA_VOCAB_PRE_TYPE_DBRX           = 13,
+#     LLAMA_VOCAB_PRE_TYPE_SMAUG          = 14,
 # };
 LLAMA_VOCAB_PRE_TYPE_DEFAULT = 0
 LLAMA_VOCAB_PRE_TYPE_LLAMA3 = 1
@@ -315,6 +316,7 @@ LLAMA_VOCAB_PRE_TYPE_STABLELM2 = 10
 LLAMA_VOCAB_PRE_TYPE_QWEN2 = 11
 LLAMA_VOCAB_PRE_TYPE_OLMO = 12
 LLAMA_VOCAB_PRE_TYPE_DBRX = 13
+LLAMA_VOCAB_PRE_TYPE_SMAUG = 14
 
 
 # // note: these values should be synchronized with ggml_rope
@@ -611,17 +613,17 @@ LLAMA_KV_OVERRIDE_TYPE_STR = 3
 # };
 class llama_model_kv_override_value(ctypes.Union):
     _fields_ = [
-        ("int_value", ctypes.c_int64),
-        ("float_value", ctypes.c_double),
-        ("bool_value", ctypes.c_bool),
-        ("str_value", ctypes.c_char * 128),
+        ("val_i64", ctypes.c_int64),
+        ("val_f64", ctypes.c_double),
+        ("val_bool", ctypes.c_bool),
+        ("val_str", ctypes.c_char * 128),
     ]
 
     if TYPE_CHECKING:
-        int_value: int
-        float_value: float
-        bool_value: bool
-        str_value: bytes
+        val_i64: int
+        val_f64: float
+        val_bool: bool
+        val_str: bytes
 
 
 class llama_model_kv_override(ctypes.Structure):
@@ -718,6 +720,8 @@ class llama_model_params(ctypes.Structure):
     ]
 
 
+# // NOTE: changing the default values of parameters marked as [EXPERIMENTAL] may cause crashes or incorrect results in certain configurations
+# //       https://github.com/ggerganov/llama.cpp/pull/7544
 # struct llama_context_params {
 #     uint32_t seed;              // RNG seed, -1 for random
 #     uint32_t n_ctx;             // text context, 0 = from model
@@ -744,15 +748,14 @@ class llama_model_params(ctypes.Structure):
 #     ggml_backend_sched_eval_callback cb_eval;
 #     void * cb_eval_user_data;
 
-#     enum ggml_type type_k; // data type for K cache
-#     enum ggml_type type_v; // data type for V cache
+#     enum ggml_type type_k; // data type for K cache [EXPERIMENTAL]
+#     enum ggml_type type_v; // data type for V cache [EXPERIMENTAL]
 
 #     // Keep the booleans together to avoid misalignment during copy-by-value.
 #     bool logits_all;  // the llama_decode() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
 #     bool embeddings;  // if true, extract embeddings (together with logits)
 #     bool offload_kqv; // whether to offload the KQV ops (including the KV cache) to GPU
-#     bool flash_attn;  // whether to use flash attention
-
+#     bool flash_attn;  // whether to use flash attention [EXPERIMENTAL]
 
 #     // Abort callback
 #     // if it returns true, execution of llama_decode() will be aborted
@@ -2451,6 +2454,16 @@ def llama_token_get_type(
 )
 def llama_token_is_eog(model: llama_model_p, token: Union[llama_token, int], /) -> bool:
     """Check if the token is supposed to end generation (end-of-generation, eg. EOS, EOT, etc.)"""
+    ...
+
+
+# // Identify if Token Id is a control token or a render-able token
+# LLAMA_API bool llama_token_is_control(const struct llama_model * model, llama_token token);
+@ctypes_function(
+    "llama_token_is_control", [llama_model_p_ctypes, llama_token], ctypes.c_bool
+)
+def llama_token_is_control(model: llama_model_p, token: Union[llama_token, int], /) -> bool:
+    """Identify if Token Id is a control token or a render-able token"""
     ...
 
 
