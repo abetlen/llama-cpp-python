@@ -356,7 +356,7 @@ def _convert_completion_to_chat_function(
                     "type": "function",
                     "function": {
                         "name": tool_name,
-                        "arguments": json.dumps(function_arguments),
+                        "arguments": json.dumps(function_arguments, ensure_ascii=False),
                     },
                 }
                 if stream:
