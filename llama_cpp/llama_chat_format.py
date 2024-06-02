@@ -333,7 +333,7 @@ def _convert_completion_to_chat_function(
     def _completion_text_to_tool_calls(
         tool_name: str,
         completion_text: str,
-        completion_id: str
+        completion_id: str,
         stream: bool,
     ) -> Union[
         llama_types.ChatCompletionMessageToolCalls, List[llama_types.ChatCompletionMessageToolCallChunk]
