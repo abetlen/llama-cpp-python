@@ -30,7 +30,7 @@ classifiers = [
 
 [project.optional-dependencies]
 server = [
-    "hypercorn>=0.17.0",
+    "hypercorn>=0.17.3",
     "fastapi>=0.111.0",
     "pydantic-settings>=2.2.1",
     "sse-starlette>=2.1.0",
