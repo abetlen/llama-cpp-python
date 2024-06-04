@@ -1410,8 +1410,8 @@ class Llama:
             top_logprobs: List[Optional[Dict[str, float]]] = []
 
             if echo:
-                # Remove leading BOS token
-                all_tokens = prompt_tokens[1:] + completion_tokens
+                # Remove leading BOS token if exists
+                all_tokens = prompt_tokens[1 if prompt_tokens[0] == self.token_bos() else 0:] + completion_tokens
             else:
                 all_tokens = completion_tokens
 
