@@ -296,9 +296,11 @@ LLAMA_VOCAB_TYPE_WPM = 3
 #     LLAMA_VOCAB_PRE_TYPE_GPT2           = 7,
 #     LLAMA_VOCAB_PRE_TYPE_REFACT         = 8,
 #     LLAMA_VOCAB_PRE_TYPE_COMMAND_R      = 9,
-#     LLAMA_VOCAB_PRE_TYPE_QWEN2          = 10,
-#     LLAMA_VOCAB_PRE_TYPE_OLMO           = 11,
-#     LLAMA_VOCAB_PRE_TYPE_DBRX           = 12,
+#     LLAMA_VOCAB_PRE_TYPE_STABLELM2      = 10,
+#     LLAMA_VOCAB_PRE_TYPE_QWEN2          = 11,
+#     LLAMA_VOCAB_PRE_TYPE_OLMO           = 12,
+#     LLAMA_VOCAB_PRE_TYPE_DBRX           = 13,
+#     LLAMA_VOCAB_PRE_TYPE_SMAUG          = 14,
 # };
 LLAMA_VOCAB_PRE_TYPE_DEFAULT = 0
 LLAMA_VOCAB_PRE_TYPE_LLAMA3 = 1
@@ -310,9 +312,11 @@ LLAMA_VOCAB_PRE_TYPE_STARCODER = 6
 LLAMA_VOCAB_PRE_TYPE_GPT2 = 7
 LLAMA_VOCAB_PRE_TYPE_REFACT = 8
 LLAMA_VOCAB_PRE_TYPE_COMMAND_R = 9
-LLAMA_VOCAB_PRE_TYPE_QWEN2 = 10
-LLAMA_VOCAB_PRE_TYPE_OLMO = 11
-LLAMA_VOCAB_PRE_TYPE_DBRX = 12
+LLAMA_VOCAB_PRE_TYPE_STABLELM2 = 10
+LLAMA_VOCAB_PRE_TYPE_QWEN2 = 11
+LLAMA_VOCAB_PRE_TYPE_OLMO = 12
+LLAMA_VOCAB_PRE_TYPE_DBRX = 13
+LLAMA_VOCAB_PRE_TYPE_SMAUG = 14
 
 
 # // note: these values should be synchronized with ggml_rope
@@ -609,17 +613,17 @@ LLAMA_KV_OVERRIDE_TYPE_STR = 3
 # };
 class llama_model_kv_override_value(ctypes.Union):
     _fields_ = [
-        ("int_value", ctypes.c_int64),
-        ("float_value", ctypes.c_double),
-        ("bool_value", ctypes.c_bool),
-        ("str_value", ctypes.c_char * 128),
+        ("val_i64", ctypes.c_int64),
+        ("val_f64", ctypes.c_double),
+        ("val_bool", ctypes.c_bool),
+        ("val_str", ctypes.c_char * 128),
     ]
 
     if TYPE_CHECKING:
-        int_value: int
-        float_value: float
-        bool_value: bool
-        str_value: bytes
+        val_i64: int
+        val_f64: float
+        val_bool: bool
+        val_str: bytes
 
 
 class llama_model_kv_override(ctypes.Structure):
@@ -648,6 +652,9 @@ class llama_model_kv_override(ctypes.Structure):
 #     // proportion of the model (layers or rows) to offload to each GPU, size: llama_max_devices()
 #     const float * tensor_split;
 
+#     // comma separated list of RPC servers to use for offloading
+#     const char * rpc_servers;
+
 #     // Called with a progress value between 0.0 and 1.0. Pass NULL to disable.
 #     // If the provided progress_callback returns true, model loading continues.
 #     // If it returns false, model loading is immediately aborted.
@@ -674,6 +681,7 @@ class llama_model_params(ctypes.Structure):
         split_mode (int): how to split the model across multiple GPUs
         main_gpu (int): the GPU that is used for the entire model. main_gpu interpretation depends on split_mode: LLAMA_SPLIT_NONE: the GPU that is used for the entire model LLAMA_SPLIT_ROW: the GPU that is used for small tensors and intermediate results LLAMA_SPLIT_LAYER: ignored
         tensor_split (ctypes.Array[ctypes.ctypes.c_float]): proportion of the model (layers or rows) to offload to each GPU, size: llama_max_devices()
+        rpc_servers (ctypes.c_char_p): comma separated list of RPC servers to use for offloading
         progress_callback (llama_progress_callback): called with a progress value between 0.0 and 1.0. Pass NULL to disable. If the provided progress_callback returns true, model loading continues. If it returns false, model loading is immediately aborted.
         progress_callback_user_data (ctypes.ctypes.c_void_p): context pointer passed to the progress callback
         kv_overrides (ctypes.Array[llama_model_kv_override]): override key-value pairs of the model meta data
@@ -687,6 +695,7 @@ class llama_model_params(ctypes.Structure):
         split_mode: int
         main_gpu: int
         tensor_split: CtypesArray[ctypes.c_float]
+        rpc_servers: ctypes.c_char_p
         progress_callback: Callable[[float, ctypes.c_void_p], bool]
         progress_callback_user_data: ctypes.c_void_p
         kv_overrides: CtypesArray[llama_model_kv_override]
@@ -700,6 +709,7 @@ class llama_model_params(ctypes.Structure):
         ("split_mode", ctypes.c_int),
         ("main_gpu", ctypes.c_int32),
         ("tensor_split", ctypes.POINTER(ctypes.c_float)),
+        ("rpc_servers", ctypes.c_char_p),
         ("progress_callback", llama_progress_callback),
         ("progress_callback_user_data", ctypes.c_void_p),
         ("kv_overrides", ctypes.POINTER(llama_model_kv_override)),
@@ -710,6 +720,8 @@ class llama_model_params(ctypes.Structure):
     ]
 
 
+# // NOTE: changing the default values of parameters marked as [EXPERIMENTAL] may cause crashes or incorrect results in certain configurations
+# //       https://github.com/ggerganov/llama.cpp/pull/7544
 # struct llama_context_params {
 #     uint32_t seed;              // RNG seed, -1 for random
 #     uint32_t n_ctx;             // text context, 0 = from model
@@ -736,15 +748,14 @@ class llama_model_params(ctypes.Structure):
 #     ggml_backend_sched_eval_callback cb_eval;
 #     void * cb_eval_user_data;
 
-#     enum ggml_type type_k; // data type for K cache
-#     enum ggml_type type_v; // data type for V cache
+#     enum ggml_type type_k; // data type for K cache [EXPERIMENTAL]
+#     enum ggml_type type_v; // data type for V cache [EXPERIMENTAL]
 
 #     // Keep the booleans together to avoid misalignment during copy-by-value.
 #     bool logits_all;  // the llama_decode() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
 #     bool embeddings;  // if true, extract embeddings (together with logits)
 #     bool offload_kqv; // whether to offload the KQV ops (including the KV cache) to GPU
-#     bool flash_attn;  // whether to use flash attention
-
+#     bool flash_attn;  // whether to use flash attention [EXPERIMENTAL]
 
 #     // Abort callback
 #     // if it returns true, execution of llama_decode() will be aborted
@@ -1222,12 +1233,12 @@ def llama_n_seq_max(ctx: llama_context_p, /) -> int: ...
 def llama_pooling_type(ctx: llama_context_p, /) -> int: ...
 
 
-# LLAMA_API enum llama_vocab_type   llama_vocab_type  (const struct llama_model   * model);
+# LLAMA_API enum llama_vocab_type   llama_vocab_type  (const struct llama_model * model);
 @ctypes_function("llama_vocab_type", [llama_model_p_ctypes], ctypes.c_int)
 def llama_vocab_type(model: llama_model_p, /) -> int: ...
 
 
-# LLAMA_API enum llama_rope_type    llama_rope_type   (const struct llama_model   * model);
+# LLAMA_API enum llama_rope_type    llama_rope_type   (const struct llama_model * model);
 @ctypes_function("llama_rope_type", [llama_model_p_ctypes], ctypes.c_int)
 def llama_rope_type(model: llama_model_p, /) -> int: ...
 
@@ -2257,6 +2268,22 @@ def llama_set_n_threads(
     ...
 
 
+# // Get the number of threads used for generation of a single token.
+# LLAMA_API uint32_t llama_n_threads(struct llama_context * ctx);
+@ctypes_function("llama_n_threads", [llama_context_p_ctypes], ctypes.c_uint32)
+def llama_n_threads(ctx: llama_context_p, /) -> int:
+    """Get the number of threads used for generation of a single token"""
+    ...
+
+
+# // Get the number of threads used for prompt and batch processing (multiple token).
+# LLAMA_API uint32_t llama_n_threads_batch(struct llama_context * ctx);
+@ctypes_function("llama_n_threads_batch", [llama_context_p_ctypes], ctypes.c_uint32)
+def llama_n_threads_batch(ctx: llama_context_p, /) -> int:
+    """Get the number of threads used for prompt and batch processing (multiple token)"""
+    ...
+
+
 # // Set whether to use causal attention or not
 # // If set to true, the model will only attend to the past tokens
 # LLAMA_API void llama_set_causal_attn(struct llama_context * ctx, bool causal_attn);
@@ -2427,6 +2454,16 @@ def llama_token_get_type(
 )
 def llama_token_is_eog(model: llama_model_p, token: Union[llama_token, int], /) -> bool:
     """Check if the token is supposed to end generation (end-of-generation, eg. EOS, EOT, etc.)"""
+    ...
+
+
+# // Identify if Token Id is a control token or a render-able token
+# LLAMA_API bool llama_token_is_control(const struct llama_model * model, llama_token token);
+@ctypes_function(
+    "llama_token_is_control", [llama_model_p_ctypes, llama_token], ctypes.c_bool
+)
+def llama_token_is_control(model: llama_model_p, token: Union[llama_token, int], /) -> bool:
+    """Identify if Token Id is a control token or a render-able token"""
     ...
 
 

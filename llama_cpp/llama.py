@@ -6,6 +6,7 @@ import uuid
 import time
 import json
 import ctypes
+import typing
 import fnmatch
 import multiprocessing
 
@@ -249,13 +250,13 @@ class Llama:
                 self._kv_overrides_array[i].key = k.encode("utf-8")
                 if isinstance(v, bool):
                     self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_TYPE_BOOL
-                    self._kv_overrides_array[i].value.bool_value = v
+                    self._kv_overrides_array[i].value.val_bool = v
                 elif isinstance(v, int):
                     self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_TYPE_INT
-                    self._kv_overrides_array[i].value.int_value = v
+                    self._kv_overrides_array[i].value.val_i64 = v
                 elif isinstance(v, float):
                     self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_TYPE_FLOAT
-                    self._kv_overrides_array[i].value.float_value = v
+                    self._kv_overrides_array[i].value.val_f64 = v
                 elif isinstance(v, str): # type: ignore
                     v_bytes = v.encode("utf-8")
                     if len(v_bytes) > 128: # TODO: Make this a constant
@@ -263,10 +264,12 @@ class Llama:
                     v_bytes = v_bytes.ljust(128, b"\0")
                     self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_TYPE_STR
                     # copy min(v_bytes, 128) to str_value
+                    address = typing.cast(int, ctypes.addressof(self._kv_overrides_array[i].value) + llama_cpp.llama_model_kv_override_value.val_str.offset)
+                    buffer_start = ctypes.cast(address, ctypes.POINTER(ctypes.c_char))
                     ctypes.memmove(
-                        self._kv_overrides_array[i].value.str_value,
+                        buffer_start,
                         v_bytes,
-                        min(len(v_bytes), 128),
+                        128,
                     )
                 else:
                     raise ValueError(f"Unknown value type for {k}: {v}")
@@ -410,11 +413,11 @@ class Llama:
         if self.verbose:
             print(f"Model metadata: {self.metadata}", file=sys.stderr)
 
-        eos_token_id = int(self.metadata.get("tokenizer.ggml.eos_token_id", self.token_eos()))
-        bos_token_id = int(self.metadata.get("tokenizer.ggml.bos_token_id", self.token_bos()))
+        eos_token_id = self.token_eos()
+        bos_token_id = self.token_bos()
 
-        eos_token = self._model.token_get_text(eos_token_id)
-        bos_token = self._model.token_get_text(bos_token_id)
+        eos_token = self._model.token_get_text(eos_token_id) if eos_token_id != -1 else ""
+        bos_token = self._model.token_get_text(bos_token_id) if bos_token_id != -1 else ""
 
         # Unfortunately the llama.cpp API does not return metadata arrays, so we can't get template names from tokenizer.chat_templates
         template_choices = dict((name[10:], template) for name, template in self.metadata.items() if name.startswith("tokenizer.chat_template."))
@@ -562,12 +565,12 @@ class Llama:
             if self.context_params.logits_all:
                 rows = n_tokens
                 cols = self._n_vocab
-                logits = self._ctx.get_logits()[: rows * cols]
+                logits = np.ctypeslib.as_array(self._ctx.get_logits(), shape=(rows * cols, ))
                 self.scores[n_past : n_past + n_tokens, :].reshape(-1)[: :] = logits
             else:
                 rows = 1
                 cols = self._n_vocab
-                logits = self._ctx.get_logits()[: rows * cols]
+                logits = np.ctypeslib.as_array(self._ctx.get_logits(), shape=(rows * cols, ))
                 self.scores[n_past + n_tokens - 1, :].reshape(-1)[: :] = logits
             # Update n_tokens
             self.n_tokens += n_tokens
@@ -961,9 +964,9 @@ class Llama:
 
         completion_id: str = f"cmpl-{str(uuid.uuid4())}"
         created: int = int(time.time())
-        prefix_token_id: int = int(self.metadata.get("tokenizer.ggml.prefix_token_id", self._model.token_prefix()))
-        middle_token_id: int = int(self.metadata.get("tokenizer.ggml.middle_token_id", self._model.token_middle()))
-        suffix_token_id: int = int(self.metadata.get("tokenizer.ggml.suffix_token_id", self._model.token_suffix()))
+        prefix_token_id: int = self._model.token_prefix()
+        middle_token_id: int = self._model.token_middle()
+        suffix_token_id: int = self._model.token_suffix()
         # If prompt is empty, initialize completion with BOS token to avoid
         # detokenization including a space at the beginning of the completion
         completion_tokens: List[int] = [] if len(prompt) > 0 else [self.token_bos()]
@@ -2087,3 +2090,19 @@ class StoppingCriteriaList(List[StoppingCriteria]):
         self, input_ids: npt.NDArray[np.intc], logits: npt.NDArray[np.single]
     ) -> bool:
         return any([stopping_criteria(input_ids, logits) for stopping_criteria in self])
+
+
+class MinTokensLogitsProcessor(LogitsProcessor):
+    def __init__(self, min_tokens: int, token_eos: int):
+        self.min_tokens = min_tokens
+        self.token_eos = token_eos
+        self.prompt_tokens = None
+
+    def __call__(
+        self, input_ids: npt.NDArray[np.intc], scores: npt.NDArray[np.single]
+    ) -> npt.NDArray[np.single]:
+        if self.prompt_tokens is None:
+            self.prompt_tokens = len(input_ids)
+        if len(input_ids) - self.prompt_tokens < self.min_tokens:
+            scores[self.token_eos] = -np.inf
+        return scores

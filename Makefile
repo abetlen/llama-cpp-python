@@ -13,10 +13,16 @@ build:
 	python3 -m pip install --verbose -e .
 
 build.debug:
-	CMAKE_ARGS="-DCMAKE_BUILD_TYPE=Debug" python3 -m pip install --verbose --config-settings=cmake.verbose=true --config-settings=logging.level=INFO --config-settings=install.strip=false  --editable .
+	python3 -m pip install \
+		--verbose \
+		--config-settings=cmake.verbose=true \
+		--config-settings=logging.level=INFO \
+		--config-settings=install.strip=false  \
+		--config-settings=cmake.args="-DCMAKE_BUILD_TYPE=Debug;-DCMAKE_C_FLAGS='-ggdb -O0';-DCMAKE_CXX_FLAGS='-ggdb -O0'" \
+		--editable .
 
 build.cuda:
-	CMAKE_ARGS="-DLLAMA_CUBLAS=on" python3 -m pip install --verbose -e .
+	CMAKE_ARGS="-DLLAMA_CUDA=on" python3 -m pip install --verbose -e .
 
 build.opencl:
 	CMAKE_ARGS="-DLLAMA_CLBLAST=on" python3 -m pip install --verbose -e .

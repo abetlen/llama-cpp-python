@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.77]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@bde7cd3cd949c1a85d3a199498ac98e78039d46f
+- fix: string value kv_overrides by @abetlen in df45a4b3fe46e72664bda87301b318210c6d4782
+- fix: Fix typo in Llama3VisionAlphaChatHandler by @abetlen in 165b4dc6c188f8fda2fc616154e111f710484eba
+- fix: Use numpy recarray for candidates data, fixes bug with temp < 0 by @abetlen in af3ed503e9ce60fe6b5365031abad4176a3536b3
+fix: Disable Windows+CUDA workaround when compiling for HIPBLAS by Engininja2 in #1493
+
+## [0.2.76]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@0df0aa8e43c3378975269a51f9b876c8692e70da
+- feat: Improve Llama.eval performance by avoiding list conversion by @thoughtp0lice in #1476
+- example: LLM inference with Ray Serve by @rgerganov in #1465
+
+## [0.2.75]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@13ad16af1231ab2d245d35df3295bcfa23de1305
+- fix: segfault for models without eos / bos tokens by @abetlen in d99a6ba607a4885fb00e63e967964aa41bdbbbcb
+- feat: add MinTokensLogitProcessor and min_tokens argument to server by @twaka in #1333
+- misc: Remove unnecessary metadata lookups by @CISC in #1448
+
+## [0.2.74]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@b228aba91ac2cd9eb90e9d423ba1d0d20e0117e2
+- fix: Enable CUDA backend for llava by @abetlen in 7f59856fa6f3e23f07e12fc15aeb9359dc6c3bb4
+- docs: Fix typo in README.md by @yupbank in #1444
+
+## [0.2.73]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@25c6e82e7a1ad25a42b0894e87d9b5c557409516
+- fix: Clear kv cache at beginning of image chat formats to avoid bug when image is evaluated first by @abetlen in ac55d0a175115d1e719672ce1cb1bec776c738b1
+
+## [0.2.72]
+
+- fix(security): Remote Code Execution by Server-Side Template Injection in Model Metadata by @retr0reg in b454f40a9a1787b2b5659cd2cb00819d983185df
+- fix(security): Update remaining jinja chat templates to use immutable sandbox by @CISC in #1441
+
 ## [0.2.71]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@911b3900dded9a1cfe0f0e41b82c7a29baf3a217
