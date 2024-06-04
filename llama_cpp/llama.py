@@ -8,6 +8,7 @@ import json
 import ctypes
 import typing
 import fnmatch
+import warnings
 import multiprocessing
 
 from typing import (
@@ -1018,6 +1019,12 @@ class Llama:
             stop if isinstance(stop, list) else [stop] if isinstance(stop, str) else []
         )
         model_name: str = model if model is not None else self.model_path
+
+        if prompt_tokens[:2] == [self.token_bos()] * 2:
+            warnings.warn(
+                f'Detected duplicate leading "{self._model.token_get_text(self.token_bos())}" in prompt, this will likely reduce response quality, consider removing it...',
+                RuntimeWarning,
+            )
 
         # NOTE: This likely doesn't work correctly for the first token in the prompt
         # because of the extra space added to the start of the prompt_tokens
