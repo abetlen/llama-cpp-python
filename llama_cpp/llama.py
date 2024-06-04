@@ -222,7 +222,11 @@ class Llama:
         )  # 0x7FFFFFFF is INT32 max, will be auto set to all layers
         self.model_params.split_mode = split_mode
         self.model_params.main_gpu = main_gpu
-        self.model_params.rpc_servers = rpc_servers.encode('utf-8')
+        if rpc_servers is not None:
+            self.model_params.rpc_servers = rpc_servers.encode('utf-8')
+            self._rpc_servers = rpc_servers
+        else:
+            self._rpc_servers = None
         self.tensor_split = tensor_split
         self._c_tensor_split = None
         if self.tensor_split is not None:
