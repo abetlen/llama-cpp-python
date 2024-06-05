@@ -977,12 +977,20 @@ class Llama:
         completion_id: str = f"cmpl-{str(uuid.uuid4())}"
         created: int = int(time.time())
         bos_token_id: int = self.token_bos()
+        cls_token_id: int = self._model.token_cls()
+        sep_token_id: int = self._model.token_sep()
         prefix_token_id: int = self._model.token_prefix()
         middle_token_id: int = self._model.token_middle()
         suffix_token_id: int = self._model.token_suffix()
         add_space_prefix: bool = self.metadata.get("tokenizer.ggml.add_space_prefix", "true") == "true"
         bos_tokens: List[int] = [bos_token_id] if not (isinstance(prompt, list) and suffix is None) and self._model.add_bos_token() != 0 and bos_token_id >= 0 else []
         eos_tokens: List[int] = [self.token_eos()] if not (isinstance(prompt, list) and suffix is None) and self._model.add_eos_token() == 1 else []
+
+        if cls_token_id != -1:
+            bos_tokens = [cls_token_id]
+
+        if sep_token_id != -1:
+            eos_tokens = [sep_token_id]
 
         suffix_space_prefix: int = 0
         # Tokenizer hack to remove leading space
