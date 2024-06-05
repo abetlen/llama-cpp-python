@@ -983,14 +983,14 @@ class Llama:
         middle_token_id: int = self._model.token_middle()
         suffix_token_id: int = self._model.token_suffix()
         add_space_prefix: bool = self.metadata.get("tokenizer.ggml.add_space_prefix", "true") == "true"
-        bos_tokens: List[int] = [bos_token_id] if not (isinstance(prompt, list) and suffix is None) and self._model.add_bos_token() != 0 and bos_token_id >= 0 else []
-        eos_tokens: List[int] = [self.token_eos()] if not (isinstance(prompt, list) and suffix is None) and self._model.add_eos_token() == 1 else []
+        bos_tokens: List[int] = [cls_token_id if cls_token_id != -1 else bos_token_id]
+        eos_tokens: List[int] = [sep_token_id if sep_token_id != -1 else self.token_eos()]
 
-        if cls_token_id != -1:
-            bos_tokens = [cls_token_id]
+        if (isinstance(prompt, list) and suffix is None) or self._model.add_bos_token() == 0 or bos_tokens[:1] == [-1]:
+            bos_tokens = []
 
-        if sep_token_id != -1:
-            eos_tokens = [sep_token_id]
+        if (isinstance(prompt, list) and suffix is None) or (self._model.add_eos_token() != 1 and sep_token_id == -1):
+            eos_tokens = []
 
         suffix_space_prefix: int = 0
         # Tokenizer hack to remove leading space
