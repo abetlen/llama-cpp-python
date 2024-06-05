@@ -486,9 +486,9 @@ llm.create_chat_completion(
 ```
 
 <details>
-<summary>Functionary v2</summary>
+<summary>Functionary</summary>
 
-The various gguf-converted files for this set of models can be found [here](https://huggingface.co/meetkai). Functionary is able to intelligently call functions and also analyze any provided function outputs to generate coherent responses. All v2 models of functionary supports **parallel function calling**. You can provide either `functionary-v1` or `functionary-v2` for the `chat_format` when initializing the Llama class.
+The various gguf-converted files for this set of models can be found [here](https://huggingface.co/meetkai). Functionary is able to intelligently call functions and also analyze any provided function outputs to generate coherent responses. All v2 models of functionary supports **parallel function calling**. You can provide `functionary` for the `chat_format` when initializing the Llama class.
 
 Due to discrepancies between llama.cpp and HuggingFace's tokenizers, it is required to provide HF Tokenizer for functionary. The `LlamaHFTokenizer` class can be initialized and passed into the Llama class. This will override the default llama.cpp tokenizer used in Llama class. The tokenizer files are already included in the respective HF repositories hosting the gguf files.
 
@@ -496,10 +496,10 @@ Due to discrepancies between llama.cpp and HuggingFace's tokenizers, it is requi
 from llama_cpp import Llama
 from llama_cpp.llama_tokenizer import LlamaHFTokenizer
 llm = Llama.from_pretrained(
-  repo_id="meetkai/functionary-small-v2.2-GGUF",
-  filename="functionary-small-v2.2.q4_0.gguf",
-  chat_format="functionary-v2",
-  tokenizer=LlamaHFTokenizer.from_pretrained("meetkai/functionary-small-v2.2-GGUF")
+  repo_id="meetkai/functionary-small-v2.5-GGUF",
+  filename="functionary-small-v2.5.Q4_0.gguf",
+  chat_format="functionary",
+  tokenizer=LlamaHFTokenizer.from_pretrained("meetkai/functionary-small-v2.5-GGUF")
 )
 ```
 
