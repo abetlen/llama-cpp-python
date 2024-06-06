@@ -6,7 +6,9 @@ import uuid
 import time
 import json
 import ctypes
+import typing
 import fnmatch
+import warnings
 import multiprocessing
 
 from typing import (
@@ -70,6 +72,7 @@ class Llama:
         split_mode: int = llama_cpp.LLAMA_SPLIT_MODE_LAYER,
         main_gpu: int = 0,
         tensor_split: Optional[List[float]] = None,
+        rpc_servers: Optional[str] = None,
         vocab_only: bool = False,
         use_mmap: bool = True,
         use_mlock: bool = False,
@@ -148,6 +151,7 @@ class Llama:
             split_mode: How to split the model across GPUs. See llama_cpp.LLAMA_SPLIT_* for options.
             main_gpu: main_gpu interpretation depends on split_mode: LLAMA_SPLIT_NONE: the GPU that is used for the entire model. LLAMA_SPLIT_ROW: the GPU that is used for small tensors and intermediate results. LLAMA_SPLIT_LAYER: ignored
             tensor_split: How split tensors should be distributed across GPUs. If None, the model is not split.
+            rpc_servers: Comma separated list of RPC servers to use for offloading
             vocab_only: Only load the vocabulary no weights.
             use_mmap: Use mmap if possible.
             use_mlock: Force the system to keep the model in RAM.
@@ -219,6 +223,11 @@ class Llama:
         )  # 0x7FFFFFFF is INT32 max, will be auto set to all layers
         self.model_params.split_mode = split_mode
         self.model_params.main_gpu = main_gpu
+        if rpc_servers is not None:
+            self.model_params.rpc_servers = rpc_servers.encode('utf-8')
+            self._rpc_servers = rpc_servers
+        else:
+            self._rpc_servers = None
         self.tensor_split = tensor_split
         self._c_tensor_split = None
         if self.tensor_split is not None:
@@ -249,13 +258,13 @@ class Llama:
                 self._kv_overrides_array[i].key = k.encode("utf-8")
                 if isinstance(v, bool):
                     self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_TYPE_BOOL
-                    self._kv_overrides_array[i].value.bool_value = v
+                    self._kv_overrides_array[i].value.val_bool = v
                 elif isinstance(v, int):
                     self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_TYPE_INT
-                    self._kv_overrides_array[i].value.int_value = v
+                    self._kv_overrides_array[i].value.val_i64 = v
                 elif isinstance(v, float):
                     self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_TYPE_FLOAT
-                    self._kv_overrides_array[i].value.float_value = v
+                    self._kv_overrides_array[i].value.val_f64 = v
                 elif isinstance(v, str): # type: ignore
                     v_bytes = v.encode("utf-8")
                     if len(v_bytes) > 128: # TODO: Make this a constant
@@ -263,10 +272,12 @@ class Llama:
                     v_bytes = v_bytes.ljust(128, b"\0")
                     self._kv_overrides_array[i].tag = llama_cpp.LLAMA_KV_OVERRIDE_TYPE_STR
                     # copy min(v_bytes, 128) to str_value
+                    address = typing.cast(int, ctypes.addressof(self._kv_overrides_array[i].value) + llama_cpp.llama_model_kv_override_value.val_str.offset)
+                    buffer_start = ctypes.cast(address, ctypes.POINTER(ctypes.c_char))
                     ctypes.memmove(
-                        self._kv_overrides_array[i].value.str_value,
+                        buffer_start,
                         v_bytes,
-                        min(len(v_bytes), 128),
+                        128,
                     )
                 else:
                     raise ValueError(f"Unknown value type for {k}: {v}")
@@ -562,12 +573,12 @@ class Llama:
             if self.context_params.logits_all:
                 rows = n_tokens
                 cols = self._n_vocab
-                logits = self._ctx.get_logits()[: rows * cols]
+                logits = np.ctypeslib.as_array(self._ctx.get_logits(), shape=(rows * cols, ))
                 self.scores[n_past : n_past + n_tokens, :].reshape(-1)[: :] = logits
             else:
                 rows = 1
                 cols = self._n_vocab
-                logits = self._ctx.get_logits()[: rows * cols]
+                logits = np.ctypeslib.as_array(self._ctx.get_logits(), shape=(rows * cols, ))
                 self.scores[n_past + n_tokens - 1, :].reshape(-1)[: :] = logits
             # Update n_tokens
             self.n_tokens += n_tokens
@@ -1016,6 +1027,12 @@ class Llama:
         )
         model_name: str = model if model is not None else self.model_path
 
+        if prompt_tokens[:2] == [self.token_bos()] * 2:
+            warnings.warn(
+                f'Detected duplicate leading "{self._model.token_get_text(self.token_bos())}" in prompt, this will likely reduce response quality, consider removing it...',
+                RuntimeWarning,
+            )
+
         # NOTE: This likely doesn't work correctly for the first token in the prompt
         # because of the extra space added to the start of the prompt_tokens
         if logit_bias is not None:
@@ -1400,8 +1417,8 @@ class Llama:
             top_logprobs: List[Optional[Dict[str, float]]] = []
 
             if echo:
-                # Remove leading BOS token
-                all_tokens = prompt_tokens[1:] + completion_tokens
+                # Remove leading BOS token if exists
+                all_tokens = prompt_tokens[1 if prompt_tokens[0] == self.token_bos() else 0:] + completion_tokens
             else:
                 all_tokens = completion_tokens
 
