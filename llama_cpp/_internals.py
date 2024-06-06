@@ -128,10 +128,6 @@ class _LlamaModel:
         assert self.model is not None
         return llama_cpp.llama_token_get_score(self.model, token)
 
-    def token_get_type(self, token: int) -> int:
-        assert self.model is not None
-        return llama_cpp.llama_token_get_type(self.model, token)
-
     # Special tokens
 
     def token_bos(self) -> int:

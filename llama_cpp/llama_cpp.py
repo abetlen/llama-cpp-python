@@ -2438,15 +2438,6 @@ def llama_token_get_score(
 ) -> float: ...
 
 
-# LLAMA_API enum llama_token_type llama_token_get_type(const struct llama_model * model, llama_token token);
-@ctypes_function(
-    "llama_token_get_type", [llama_model_p_ctypes, llama_token], ctypes.c_int
-)
-def llama_token_get_type(
-    model: llama_model_p, token: Union[llama_token, int], /
-) -> int: ...
-
-
 # // Check if the token is supposed to end generation (end-of-generation, eg. EOS, EOT, etc.)
 # LLAMA_API bool llama_token_is_eog(const struct llama_model * model, llama_token token);
 @ctypes_function(
@@ -3198,104 +3189,6 @@ def llama_grammar_accept_token(
     """Accepts the sampled token into the grammar"""
     ...
 
-
-# //
-# // Beam search
-# //
-
-# struct llama_beam_view {
-#     const llama_token * tokens;
-
-
-#     size_t n_tokens;
-#     float  p;        // Cumulative beam probability (renormalized relative to all beams)
-#     bool   eob;      // Callback should set this to true when a beam is at end-of-beam.
-# };
-class llama_beam_view(ctypes.Structure):
-    if TYPE_CHECKING:
-        tokens: CtypesArray[llama_token]
-        n_tokens: int
-        p: float
-        eob: bool
-
-    _fields_ = [
-        ("tokens", llama_token_p),
-        ("n_tokens", ctypes.c_size_t),
-        ("p", ctypes.c_float),
-        ("eob", ctypes.c_bool),
-    ]
-
-
-# // Passed to beam_search_callback function.
-# // Whenever 0 < common_prefix_length, this number of tokens should be copied from any of the beams
-# // (e.g. beams[0]) as they will be removed (shifted) from all beams in all subsequent callbacks.
-# // These pointers are valid only during the synchronous callback, so should not be saved.
-# struct llama_beams_state {
-#     struct llama_beam_view * beam_views;
-#     size_t n_beams;               // Number of elements in beam_views[].
-#     size_t common_prefix_length;  // Current max length of prefix tokens shared by all beams.
-#     bool   last_call;             // True iff this is the last callback invocation.
-# };
-class llama_beams_state(ctypes.Structure):
-    if TYPE_CHECKING:
-        beam_views: CtypesArray[llama_beam_view]
-        n_beams: int
-        common_prefix_length: int
-        last_call: bool
-
-    _fields_ = [
-        ("beam_views", ctypes.POINTER(llama_beam_view)),
-        ("n_beams", ctypes.c_size_t),
-        ("common_prefix_length", ctypes.c_size_t),
-        ("last_call", ctypes.c_bool),
-    ]
-
-
-# // Type of pointer to the beam_search_callback function.
-# // void* callback_data is any custom data passed to llama_beam_search, that is subsequently
-# // passed back to beam_search_callback. This avoids having to use global variables in the callback.
-# typedef void (*llama_beam_search_callback_fn_t)(void * callback_data, struct llama_beams_state);
-llama_beam_search_callback_fn_t = ctypes.CFUNCTYPE(
-    None, ctypes.c_void_p, llama_beams_state
-)
-
-
-# /// @details Deterministically returns entire sentence constructed by a beam search.
-# /// @param ctx Pointer to the llama_context.
-# /// @param callback Invoked for each iteration of the beam_search loop, passing in beams_state.
-# /// @param callback_data A pointer that is simply passed back to callback.
-# /// @param n_beams Number of beams to use.
-# /// @param n_past Number of tokens already evaluated.
-# /// @param n_predict Maximum number of tokens to predict. EOS may occur earlier.
-# /// @param n_threads Number of threads as passed to llama_eval().
-# LLAMA_API void llama_beam_search(
-#                struct llama_context * ctx,
-#     llama_beam_search_callback_fn_t   callback,
-#                                void * callback_data,
-#                              size_t   n_beams,
-#                             int32_t   n_past,
-#                             int32_t   n_predict);
-@ctypes_function(
-    "llama_beam_search",
-    [
-        llama_context_p_ctypes,
-        llama_beam_search_callback_fn_t,
-        ctypes.c_void_p,
-        ctypes.c_size_t,
-        ctypes.c_int32,
-        ctypes.c_int32,
-    ],
-    None,
-)
-def llama_beam_search(
-    ctx: llama_context_p,
-    callback: CtypesFuncPointer,
-    callback_data: ctypes.c_void_p,
-    n_beams: Union[ctypes.c_size_t, int],
-    n_past: Union[ctypes.c_int, int],
-    n_predict: Union[ctypes.c_int, int],
-    /,
-): ...
 
 
 # /// @details Build a split GGUF final path for this chunk.
