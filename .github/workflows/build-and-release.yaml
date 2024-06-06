@@ -11,7 +11,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-20.04, windows-2019, macos-11]
 
     steps:
       - uses: actions/checkout@v4
@@ -21,8 +21,7 @@ jobs:
       # Used to host cibuildwheel
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-          cache: 'pip'
+          python-version: "3.8"
 
       - name: Install dependencies
         run: |
@@ -32,11 +31,8 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.18.1
         env:
-          CIBW_ARCHS: "auto32"
           # disable repair
           CIBW_REPAIR_WHEEL_COMMAND: ""
-          CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_AVX=off -DLLAMA_AVX2=off -DLLAMA_FMA=off -DLLAMA_F16C=off'
-          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-* pp39-* pp310-*"
         with:
           package-dir: .
           output-dir: wheelhouse
@@ -44,46 +40,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: wheels-${{ matrix.os }}
-          path: ./wheelhouse/*.whl
-          
-  build_wheels_mac:
-    name: Build wheels on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [macos-13]
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: "recursive"
-
-      # Used to host cibuildwheel
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: 'pip'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e .[all]
-
-      - name: Build wheels
-        uses: pypa/cibuildwheel@v2.18.1
-        env:
-          CIBW_ARCHS: "auto64"
-          # disable repair
-          CIBW_REPAIR_WHEEL_COMMAND: ""
-          CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_AVX=off -DLLAMA_AVX2=off -DLLAMA_FMA=off -DLLAMA_F16C=off'
-          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-* pp39-* pp310-*"
-        with:
-          package-dir: .
-          output-dir: wheelhouse
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: wheels-mac_${{ matrix.os }}
           path: ./wheelhouse/*.whl
 
   build_wheels_arm64:
@@ -103,11 +59,9 @@ jobs:
         uses: pypa/cibuildwheel@v2.18.1
         env:
           CIBW_SKIP: "*musllinux* pp*"
-          # disable repair
           CIBW_REPAIR_WHEEL_COMMAND: ""
           CIBW_ARCHS: "aarch64"
-          CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS'
-          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-*"
+          CIBW_BUILD: "cp38-* cp39-* cp310-* cp311-* cp312-*"
         with:
           output-dir: wheelhouse
 
@@ -127,8 +81,7 @@ jobs:
           submodules: "recursive"
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-          cache: 'pip'
+          python-version: "3.8"
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip build
@@ -143,7 +96,7 @@ jobs:
 
   release:
     name: Release
-    needs: [build_wheels, build_wheels_mac, build_wheels_arm64, build_sdist]
+    needs: [build_wheels, build_wheels_arm64, build_sdist]
     runs-on: ubuntu-latest
 
     steps:
@@ -155,131 +108,5 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  build_wheels_avx:
-    name: Build wheels on ${{ matrix.os }} - AVX
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: "recursive"
-
-      # Used to host cibuildwheel
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: 'pip'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e .[all]
-
-      - name: Build wheels
-        uses: pypa/cibuildwheel@v2.18.1
-        env:
-          CIBW_ARCHS: "auto"
-          # disable repair
-          CIBW_REPAIR_WHEEL_COMMAND: ""
-          CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS -DLLAMA_AVX2=off -DLLAMA_FMA=off -DLLAMA_F16C=off'
-          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-* pp39-* pp310-*"
-        with:
-          package-dir: .
-          output-dir: wheelhouse_avx
-
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: wheelhouse_avx/*
-          tag_name: ${{ github.ref_name }}-avx
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  build_wheels_avx2:
-    name: Build wheels on ${{ matrix.os }} - AVX2
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: "recursive"
-
-      # Used to host cibuildwheel
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: 'pip'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e .[all]
-
-      - name: Build wheels
-        uses: pypa/cibuildwheel@v2.18.1
-        env:
-          CIBW_ARCHS: "auto64"
-          # disable repair
-          CIBW_REPAIR_WHEEL_COMMAND: ""
-          CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS'
-          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-* pp39-* pp310-*"
-        with:
-          package-dir: .
-          output-dir: wheelhouse_avx2
-
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: wheelhouse_avx2/*
-          tag_name: ${{ github.ref_name }}-avx2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  build_wheels_avx512:
-    name: Build wheels on ${{ matrix.os }} - AVX512
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: "recursive"
-
-      # Used to host cibuildwheel
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: 'pip'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e .[all]
-
-      - name: Build wheels
-        uses: pypa/cibuildwheel@v2.18.1
-        env:
-          CIBW_ARCHS: "auto64"
-          # disable repair 
-          CIBW_REPAIR_WHEEL_COMMAND: ""
-          CIBW_ENVIRONMENT: CMAKE_ARGS='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS -DLLAMA_AVX512=on'
-          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-* pp39-* pp310-*"
-        with:
-          package-dir: .
-          output-dir: wheelhouse_avx512
-
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: wheelhouse_avx512/*
-          tag_name: ${{ github.ref_name }}-avx512
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
