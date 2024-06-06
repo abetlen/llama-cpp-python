@@ -56,7 +56,10 @@ class _LlamaModel:
         if self.model is None:
             raise ValueError(f"Failed to load model from file: {path_model}")
 
-    def __del__(self):
+    def __del__(self) -> None:
+        self.close()
+
+    def close(self) -> None:
         if self.model is not None and self._llama_free_model is not None:
             self._llama_free_model(self.model)
             self.model = None

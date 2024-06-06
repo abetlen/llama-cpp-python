@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import os
 import sys
 import uuid
@@ -10,6 +11,7 @@ import typing
 import fnmatch
 import warnings
 import multiprocessing
+from types import TracebackType
 
 from typing import (
     List,
@@ -21,6 +23,7 @@ from typing import (
     Deque,
     Callable,
     Dict,
+    Type,
 )
 from collections import deque
 from pathlib import Path
@@ -58,7 +61,7 @@ from ._logger import set_verbose
 from ._utils import suppress_stdout_stderr
 
 
-class Llama:
+class Llama(contextlib.AbstractContextManager):
     """High-level Python wrapper for a llama.cpp model."""
 
     __backend_initialized = False
@@ -1939,6 +1942,18 @@ class Llama:
     def pooling_type(self) -> str:
         """Return the pooling type."""
         return self._ctx.pooling_type()
+
+    def close(self) -> None:
+        """Explicitly free the model from memory."""
+        self._model.close()
+
+    def __exit__(
+        self,
+        __exc_type: Optional[Type[BaseException]],
+        __exc_value: Optional[BaseException],
+        __traceback: Optional[TracebackType]
+    ) -> Optional[bool]:
+        return self.close()
 
     @staticmethod
     def logits_to_logprobs(
