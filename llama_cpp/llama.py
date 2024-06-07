@@ -349,9 +349,11 @@ class Llama(contextlib.AbstractContextManager):
         if not os.path.exists(model_path):
             raise ValueError(f"Model path does not exist: {model_path}")
 
-        self._model = _LlamaModel(
+        self._stack = contextlib.ExitStack()
+
+        self._model = self._stack.enter_context(_LlamaModel(
             path_model=self.model_path, params=self.model_params, verbose=self.verbose
-        )
+        ))
 
         # Override tokenizer
         self.tokenizer_ = tokenizer or LlamaTokenizer(self)
@@ -363,18 +365,18 @@ class Llama(contextlib.AbstractContextManager):
             self.context_params.n_ctx = self._model.n_ctx_train()
             self.context_params.n_batch = self.n_batch
 
-        self._ctx = _LlamaContext(
+        self._ctx = self._stack.enter_context(_LlamaContext(
             model=self._model,
             params=self.context_params,
             verbose=self.verbose,
-        )
+        ))
 
-        self._batch = _LlamaBatch(
+        self._batch = self._stack.enter_context(_LlamaBatch(
             n_tokens=self.n_batch,
             embd=0,
             n_seq_max=self.context_params.n_ctx,
             verbose=self.verbose,
-        )
+        ))
 
         if self.lora_path:
             if self._model.apply_lora_from_file(
@@ -1945,15 +1947,15 @@ class Llama(contextlib.AbstractContextManager):
 
     def close(self) -> None:
         """Explicitly free the model from memory."""
-        self._model.close()
+        self._stack.close()
 
     def __exit__(
         self,
-        __exc_type: Optional[Type[BaseException]],
-        __exc_value: Optional[BaseException],
-        __traceback: Optional[TracebackType]
+        exc_type: Optional[Type[BaseException]],
+        exc_value: Optional[BaseException],
+        traceback: Optional[TracebackType]
     ) -> Optional[bool]:
-        return self.close()
+        return self._stack.__exit__(exc_type, exc_value, traceback)
 
     @staticmethod
     def logits_to_logprobs(
