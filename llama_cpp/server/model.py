@@ -226,6 +226,7 @@ class LlamaProxy:
             use_mmap=settings.use_mmap,
             use_mlock=settings.use_mlock,
             kv_overrides=kv_overrides,
+            rpc_servers=settings.rpc_servers,
             # Context Params
             seed=settings.seed,
             n_ctx=settings.n_ctx,
