@@ -408,18 +408,16 @@ llm.create_chat_completion(
               "content": "Write a short summary of each document please."
           }
       ],
-      template_kwargs = {
-          "documents": [
-              {
-                  "title": "First document",
-                  "content": "...",
-              },
-              {
-                  "title": "Second document",
-                  "content": "...",
-              }
-          ]
-      }
+      documents = [
+          {
+              "title": "First document",
+              "content": "...",
+          },
+          {
+              "title": "Second document",
+              "content": "...",
+          }
+      ]
 )
 ```
 
