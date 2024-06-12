@@ -29,5 +29,5 @@ if unwanted_response_suffix and response_stripped[-unwanted_response_length:] ==
     response = response_stripped[:-unwanted_response_length]
     filtered = True
 
-print(f"Fill-in-Middle completion{' (filtered)' if filtered else ''}:\n\n{args.prompt}\033[32m{response}\033[0m{args.suffix}")
+print(f"Fill-in-Middle completion{' (filtered)' if filtered else ''}:\n\n{args.prompt}\033[32m{response}\033[{'33' if filtered else '0'}m{args.suffix}\033[0m")
 
