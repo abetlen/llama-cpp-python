@@ -205,6 +205,7 @@ class Jinja2ChatFormatter(ChatFormatter):
         function_call: Optional[llama_types.ChatCompletionRequestFunctionCall] = None,
         tools: Optional[List[llama_types.ChatCompletionTool]] = None,
         tool_choice: Optional[llama_types.ChatCompletionToolChoiceOption] = None,
+        documents: Optional[List[Dict[str, str]]] = None,
         template_kwargs: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ) -> ChatFormatterResponse:
@@ -224,6 +225,7 @@ class Jinja2ChatFormatter(ChatFormatter):
             function_call=function_call,
             tools=tools,
             tool_choice=tool_choice,
+            documents=documents,
             **template_kwargs,
         )
 
@@ -540,6 +542,7 @@ def chat_formatter_to_chat_completion_handler(
         logit_bias: Optional[Dict[str, float]] = None,
         logprobs: Optional[bool] = None,
         top_logprobs: Optional[int] = None,
+        documents: Optional[List[Dict[str, str]]] = None,
         template_kwargs: Optional[Dict[str, Any]] = None,
         **kwargs,  # type: ignore
     ) -> Union[
@@ -552,6 +555,7 @@ def chat_formatter_to_chat_completion_handler(
             function_call=function_call,
             tools=tools,
             tool_choice=tool_choice,
+            documents=documents,
             template_kwargs=template_kwargs,
         )
         prompt = result.prompt
