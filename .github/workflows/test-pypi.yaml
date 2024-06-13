@@ -19,7 +19,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install --verbose llama-cpp-python[all]
+          python -m pip install uv
+          python -m uv pip install --verbose llama-cpp-python[all]
       - name: Test with pytest
         run: |
           python -c "import llama_cpp"
@@ -40,7 +41,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install --verbose llama-cpp-python[all]
+          python -m pip install uv
+          python -m uv pip install --verbose llama-cpp-python[all]
       - name: Test with pytest
         run: |
           python -c "import llama_cpp"
@@ -61,7 +63,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install --verbose llama-cpp-python[all]
+          python -m pip install uv
+          python -m pip uv install --verbose llama-cpp-python[all]
       - name: Test with pytest
         run: |
           python -c "import llama_cpp"
