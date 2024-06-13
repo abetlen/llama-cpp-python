@@ -115,6 +115,7 @@ class Llama:
         type_k: Optional[int] = None,
         type_v: Optional[int] = None,
         # Misc
+        spm_infill: bool = False,
         verbose: bool = True,
         # Extra Params
         **kwargs,  # type: ignore
@@ -185,6 +186,7 @@ class Llama:
             verbose: Print verbose output to stderr.
             type_k: KV cache data type for K (default: f16)
             type_v: KV cache data type for V (default: f16)
+            spm_infill: Use Suffix/Prefix/Middle pattern for infill (instead of Prefix/Suffix/Middle) as some models prefer this.
 
         Raises:
             ValueError: If the model path does not exist.
@@ -342,6 +344,8 @@ class Llama:
         self.lora_base = lora_base
         self.lora_scale = lora_scale
         self.lora_path = lora_path
+
+        self.spm_infill = spm_infill
 
         if not os.path.exists(model_path):
             raise ValueError(f"Model path does not exist: {model_path}")
@@ -972,14 +976,33 @@ class Llama:
 
         completion_id: str = f"cmpl-{str(uuid.uuid4())}"
         created: int = int(time.time())
+        bos_token_id: int = self.token_bos()
+        cls_token_id: int = self._model.token_cls()
+        sep_token_id: int = self._model.token_sep()
         prefix_token_id: int = self._model.token_prefix()
         middle_token_id: int = self._model.token_middle()
         suffix_token_id: int = self._model.token_suffix()
+        add_space_prefix: bool = self.metadata.get("tokenizer.ggml.add_space_prefix", "true") == "true"
+        bos_tokens: List[int] = [cls_token_id if cls_token_id != -1 else bos_token_id]
+        eos_tokens: List[int] = [sep_token_id if sep_token_id != -1 else self.token_eos()]
+
+        if (isinstance(prompt, list) and suffix is None) or self._model.add_bos_token() == 0 or bos_tokens[:1] == [-1]:
+            bos_tokens = []
+
+        if (isinstance(prompt, list) and suffix is None) or (self._model.add_eos_token() != 1 and sep_token_id == -1):
+            eos_tokens = []
+
+        suffix_space_prefix: int = 0
+        # Tokenizer hack to remove leading space
+        if add_space_prefix and suffix_token_id >= 0 and suffix:
+            suffix = "☺" + suffix
+            suffix_space_prefix = 2
+
         # If prompt is empty, initialize completion with BOS token to avoid
         # detokenization including a space at the beginning of the completion
-        completion_tokens: List[int] = [] if len(prompt) > 0 else [self.token_bos()]
+        completion_tokens: List[int] = [] if len(prompt) > 0 else [bos_token_id]
         # Add blank space to start of prompt to match OG llama tokenizer
-        prompt_tokens: List[int] = (
+        prefix_tokens: List[int] = (
             (
                 [prefix_token_id]
                 if prefix_token_id >= 0 and suffix is not None
@@ -988,38 +1011,33 @@ class Llama:
             +
             (
                 (
-                    self.tokenize(prompt.encode("utf-8"), add_bos=(prefix_token_id < 0 or suffix is None), special=(prefix_token_id < 0 or suffix is None))
+                    self.tokenize(prompt.encode("utf-8"), add_bos=False, special=(prefix_token_id < 0 or suffix is None))
                     if prompt != ""
-                    else (
-                        []
-                        if prefix_token_id >= 0 and suffix is not None
-                        else [self.token_bos()]
-                    )
+                    else []
                 )
                 if isinstance(prompt, str)
                 else prompt
             )
-            +
-            (
-                (
-                    [suffix_token_id]
-                    +
-                    (
-                        self.tokenize(suffix.encode("utf-8"), add_bos=False, special=False)
-                        if suffix
-                        else []
-                    )
-                )
-                if suffix_token_id >= 0 and suffix is not None
-                else []
-            )
-            +
-            (
-                [middle_token_id]
-                if middle_token_id >= 0 and suffix is not None
-                else []
-            )
         )
+        suffix_tokens: List[int] = (
+            (
+                [suffix_token_id]
+                +
+                (
+                    self.tokenize(suffix.encode("utf-8"), add_bos=False, special=False)[suffix_space_prefix:]
+                    if suffix
+                    else []
+                )
+            )
+            if suffix_token_id >= 0 and suffix is not None
+            else []
+        )
+        middle_tokens: List[int] = (
+            [middle_token_id]
+            if middle_token_id >= 0 and suffix is not None
+            else []
+        )
+        prompt_tokens: List[int] = bos_tokens + ((suffix_tokens + prefix_tokens + middle_tokens) if self.spm_infill else (prefix_tokens + suffix_tokens + middle_tokens)) + eos_tokens
         text: bytes = b""
         returned_tokens: int = 0
         stop = (
@@ -1176,7 +1194,7 @@ class Llama:
                     # not sure how to handle this branch when dealing
                     # with CJK output, so keep it unchanged
                     for token in remaining_tokens:
-                        if token == self.token_bos():
+                        if token == bos_token_id:
                             continue
                         token_end_position += len(self.detokenize([token], prev_tokens=prompt_tokens + completion_tokens[:returned_tokens]))
                         # Check if stop sequence is in the token
@@ -1303,7 +1321,7 @@ class Llama:
 
                 logprobs_or_none: Optional[CompletionLogprobs] = None
                 if logprobs is not None:
-                    if token == self.token_bos():
+                    if token == bos_token_id:
                         continue
                     token_str = self.detokenize([token]).decode(
                         "utf-8", errors="ignore"
@@ -1431,7 +1449,7 @@ class Llama:
             for idx, (token, token_str, logprobs_token) in enumerate(
                 zip(all_tokens, all_token_strs, all_logprobs)
             ):
-                if token == self.token_bos():
+                if token == bos_token_id:
                     continue
                 text_offsets.append(
                     text_offset
@@ -1858,6 +1876,7 @@ class Llama:
             type_k=self.context_params.type_k,
             type_v=self.context_params.type_v,
             # Misc
+            spm_infill=self.spm_infill,
             verbose=self.verbose,
         )
 
