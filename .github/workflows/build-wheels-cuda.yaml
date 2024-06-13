@@ -20,8 +20,8 @@ jobs:
         id: set-matrix
         run: |
           $matrix = @{
-              'os' = @('ubuntu-20.04', 'windows-latest')
-              'pyver' = @("3.10", "3.11", "3.12")
+              'os' = @('ubuntu-latest', 'windows-latest')
+              'pyver' = @("3.9", "3.10", "3.11", "3.12")
               'cuda' = @("12.1.1", "12.2.2", "12.3.2", "12.4.1")
               'releasetag' = @("basic")
           }
@@ -50,6 +50,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.pyver }}
+          cache: 'pip'
 
       - name: Setup Mamba
         uses: conda-incubator/setup-miniconda@v3.0.4
@@ -109,15 +110,15 @@ jobs:
           $env:VERBOSE = '1'
           $env:CMAKE_ARGS = '-DLLAMA_CUBLAS=on -DCMAKE_CUDA_ARCHITECTURES=all'
           $env:CMAKE_ARGS = "-DLLAMA_CUDA_FORCE_MMQ=ON $env:CMAKE_ARGS"
-          if ($env:AVXVER -eq 'AVX') {
-            $env:CMAKE_ARGS = $env:CMAKE_ARGS + ' -DLLAMA_AVX2=off -DLLAMA_FMA=off -DLLAMA_F16C=off'
-          }
-          if ($env:AVXVER -eq 'AVX512') {
-            $env:CMAKE_ARGS = $env:CMAKE_ARGS + ' -DLLAMA_AVX512=on'
-          }
-          if ($env:AVXVER -eq 'basic') {
-            $env:CMAKE_ARGS = $env:CMAKE_ARGS + ' -DLLAMA_AVX=off -DLLAMA_AVX2=off -DLLAMA_FMA=off -DLLAMA_F16C=off'
-          }
+          # if ($env:AVXVER -eq 'AVX') {
+          $env:CMAKE_ARGS = $env:CMAKE_ARGS + ' -DLLAMA_AVX2=off -DLLAMA_FMA=off -DLLAMA_F16C=off'
+          # }
+          # if ($env:AVXVER -eq 'AVX512') {
+          #  $env:CMAKE_ARGS = $env:CMAKE_ARGS + ' -DLLAMA_AVX512=on'
+          # }
+          # if ($env:AVXVER -eq 'basic') {
+          #  $env:CMAKE_ARGS = $env:CMAKE_ARGS + ' -DLLAMA_AVX=off -DLLAMA_AVX2=off -DLLAMA_FMA=off -DLLAMA_F16C=off'
+          # }
           python -m build --wheel
           # write the build tag to the output
           Write-Output "CUDA_VERSION=$cudaVersion" >> $env:GITHUB_ENV
