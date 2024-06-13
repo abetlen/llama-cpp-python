@@ -35,9 +35,6 @@ jobs:
       - name: Build
         run: |
           ./scripts/releases-to-pep-503.sh index/whl/cpu '^[v]?[0-9]+\.[0-9]+\.[0-9]+$'
-          ./scripts/releases-to-pep-503.sh index/whl/cpu_avx '^[v]?[0-9]+\.[0-9]+\.[0-9]+-avx$'
-          ./scripts/releases-to-pep-503.sh index/whl/cpu_avx2 '^[v]?[0-9]+\.[0-9]+\.[0-9]+-avx2$'
-          ./scripts/releases-to-pep-503.sh index/whl/cpu_avx512 '^[v]?[0-9]+\.[0-9]+\.[0-9]+-avx512$'          
           ./scripts/releases-to-pep-503.sh index/whl/cu121 '^[v]?[0-9]+\.[0-9]+\.[0-9]+-cu121$'
           ./scripts/releases-to-pep-503.sh index/whl/cu122 '^[v]?[0-9]+\.[0-9]+\.[0-9]+-cu122$'
           ./scripts/releases-to-pep-503.sh index/whl/cu123 '^[v]?[0-9]+\.[0-9]+\.[0-9]+-cu123$'
