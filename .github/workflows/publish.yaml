@@ -20,7 +20,8 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip build
-        python -m pip install -e .[all]
+        python -m pip install uv
+        python -m uv pip install -e .[all]
     - name: Build source distribution
       run: |
         python -m build --sdist
