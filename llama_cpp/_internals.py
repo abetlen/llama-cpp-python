@@ -1,17 +1,15 @@
 from __future__ import annotations
 
-import contextlib
 import os
 import ctypes
-from types import TracebackType
 
 from typing import (
     List,
     Optional,
     Sequence,
-    Type,
 )
 from dataclasses import dataclass, field
+from contextlib import ExitStack
 
 import numpy as np
 import numpy.typing as npt
@@ -26,12 +24,9 @@ import llama_cpp.llama_cpp as llama_cpp
 # Python wrappers over llama.h structs
 
 
-class _LlamaModel(contextlib.AbstractContextManager):
+class _LlamaModel:
     """Intermediate Python wrapper for a llama.cpp llama_model.
     NOTE: For stability it's recommended you use the Llama class instead."""
-
-    _llama_free_model = None
-    # NOTE: this must be "saved" here to avoid exceptions when calling __del__
 
     def __init__(
         self,
@@ -43,8 +38,7 @@ class _LlamaModel(contextlib.AbstractContextManager):
         self.path_model = path_model
         self.params = params
         self.verbose = verbose
-
-        self._llama_free_model = llama_cpp._lib.llama_free_model  # type: ignore
+        self._exit_stack = ExitStack()
 
         self.model = None
 
@@ -59,21 +53,16 @@ class _LlamaModel(contextlib.AbstractContextManager):
         if self.model is None:
             raise ValueError(f"Failed to load model from file: {path_model}")
 
-    def __del__(self) -> None:
-        self.close()
-
-    def __exit__(
-        self,
-        __exc_type: Optional[Type[BaseException]],
-        __exc_value: Optional[BaseException],
-        __traceback: Optional[TracebackType]
-    ) -> Optional[bool]:
-        return self.close()
-
-    def close(self) -> None:
-        if self.model is not None and self._llama_free_model is not None:
-            self._llama_free_model(self.model)
+        def free_model():
+            if self.model is None:
+                return
+            llama_cpp.llama_free_model(self.model)
             self.model = None
+
+        self._exit_stack.callback(free_model)
+
+    def close(self):
+        self._exit_stack.close()
 
     def vocab_type(self) -> int:
         assert self.model is not None
@@ -267,11 +256,9 @@ class _LlamaModel(contextlib.AbstractContextManager):
         return llama_cpp.llama_model_default_params()
 
 
-class _LlamaContext(contextlib.AbstractContextManager):
+class _LlamaContext:
     """Intermediate Python wrapper for a llama.cpp llama_context.
     NOTE: For stability it's recommended you use the Llama class instead."""
-
-    _llama_free = None
 
     def __init__(
         self,
@@ -283,34 +270,27 @@ class _LlamaContext(contextlib.AbstractContextManager):
         self.model = model
         self.params = params
         self.verbose = verbose
+        self._exit_stack = ExitStack()
 
-        self._llama_free = llama_cpp._lib.llama_free  # type: ignore
         self.ctx = None
 
         assert self.model.model is not None
 
-        self.ctx = llama_cpp.llama_new_context_with_model(
-            self.model.model, self.params
-        )
+        self.ctx = llama_cpp.llama_new_context_with_model(self.model.model, self.params)
 
         if self.ctx is None:
             raise ValueError("Failed to create llama_context")
 
-    def __del__(self) -> None:
-        self.close()
-
-    def __exit__(
-        self,
-        __exc_type: Optional[Type[BaseException]],
-        __exc_value: Optional[BaseException],
-        __traceback: Optional[TracebackType]
-    ) -> Optional[bool]:
-        return self.close()
-
-    def close(self) -> None:
-        if self.ctx is not None and self._llama_free is not None:
-            self._llama_free(self.ctx)
+        def free_ctx():
+            if self.ctx is None:
+                return
+            llama_cpp.llama_free(self.ctx)
             self.ctx = None
+
+        self._exit_stack.callback(free_ctx)
+
+    def close(self):
+        self._exit_stack.close()
 
     def n_ctx(self) -> int:
         assert self.ctx is not None
@@ -525,9 +505,7 @@ class _LlamaContext(contextlib.AbstractContextManager):
         return llama_cpp.llama_context_default_params()
 
 
-class _LlamaBatch(contextlib.AbstractContextManager):
-    _llama_batch_free = None
-
+class _LlamaBatch:
     def __init__(
         self, *, n_tokens: int, embd: int, n_seq_max: int, verbose: bool = True
     ):
@@ -535,29 +513,23 @@ class _LlamaBatch(contextlib.AbstractContextManager):
         self.embd = embd
         self.n_seq_max = n_seq_max
         self.verbose = verbose
-
-        self._llama_batch_free = llama_cpp._lib.llama_batch_free  # type: ignore
+        self._exit_stack = ExitStack()
 
         self.batch = None
         self.batch = llama_cpp.llama_batch_init(
             self._n_tokens, self.embd, self.n_seq_max
         )
 
-    def __del__(self) -> None:
-        self.close()
-
-    def __exit__(
-        self,
-        __exc_type: Optional[Type[BaseException]],
-        __exc_value: Optional[BaseException],
-        __traceback: Optional[TracebackType]
-    ) -> Optional[bool]:
-        return self.close()
-
-    def close(self) -> None:
-        if self.batch is not None and self._llama_batch_free is not None:
-            self._llama_batch_free(self.batch)
+        def free_batch():
+            if self.batch is None:
+                return
+            llama_cpp.llama_batch_free(self.batch)
             self.batch = None
+
+        self._exit_stack.callback(free_batch)
+
+    def close(self):
+        self._exit_stack.close()
 
     def n_tokens(self) -> int:
         assert self.batch is not None
