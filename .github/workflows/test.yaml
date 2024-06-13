@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
 
     steps:
       - uses: actions/checkout@v4
@@ -24,20 +24,21 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          cache: 'pip'
       - name: Install dependencies
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install .[all] -v
+          python -m pip install --upgrade pip
+          python -m pip install .[all] -v
       - name: Test with pytest
         run: |
-          python3 -m pytest
+          python -m pytest
 
   build-windows:
 
     runs-on: windows-latest
     strategy:
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
 
     steps:
       - uses: actions/checkout@v4
@@ -47,20 +48,21 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          cache: 'pip'
       - name: Install dependencies
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install .[all] -v
+          python -m pip install --upgrade pip
+          python -m pip install .[all] -v
       - name: Test with pytest
         run: |
-          python3 -m pytest
+          python -m pytest
 
   build-macos:
 
-    runs-on: macos-13
+    runs-on: macos-latest
     strategy:
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
 
     steps:
       - uses: actions/checkout@v4
@@ -70,13 +72,14 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          cache: 'pip'
       - name: Install dependencies
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install .[all] --verbose
+          python -m pip install --upgrade pip
+          python -m pip install .[all] --verbose
       - name: Test with pytest
         run: |
-          python3 -m pytest
+          python -m pytest
 
   # build-linux-opencl:
 
@@ -98,29 +101,29 @@ jobs:
   #         sudo apt-get install -y --no-install-recommends llvm intel-oneapi-runtime-opencl intel-oneapi-runtime-compilers libclblast-dev
   #     - name: Install dependencies
   #       run: |
-  #         python3 -m pip install --upgrade pip
-  #         CMAKE_ARGS="-DLLAMA_CLBLAST=on" python3 -m pip install .[all] --verbose
+  #         python -m pip install --upgrade pip
+  #         CMAKE_ARGS="-DLLAMA_CLBLAST=on" python -m pip install .[all] --verbose
   #     - name: Test with pytest
   #       run: |
-  #         python3 -m pytest
+  #         python -m pytest
 
 
   build-macos-metal:
 
-    runs-on: macos-13
+    runs-on: macos-latest
 
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: "recursive"
-      - name: Set up Python 3.8
+      - name: Set up Python 3.9
         uses: actions/setup-python@v5
         with:
-          python-version: "3.8"
+          python-version: "3.9"
       - name: Install dependencies
         run: |
-          python3 -m pip install --upgrade pip
-          CMAKE_ARGS="-DLLAMA_METAL=on" python3 -m pip install .[all] --verbose
+          python -m pip install --upgrade pip
+          CMAKE_ARGS="-DLLAMA_METAL=on" python -m pip install .[all] --verbose
       - name: Test with pytest
         run: |
-          python3 -m pytest
+          python -m pytest

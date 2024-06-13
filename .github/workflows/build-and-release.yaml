@@ -30,7 +30,7 @@ jobs:
           python -m pip install -e .[all]
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.18.1
+        uses: pypa/cibuildwheel@v2.19.0
         env:
           CIBW_ARCHS: "auto32"
           # disable repair
@@ -100,7 +100,7 @@ jobs:
           platforms: linux/arm64
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.18.1
+        uses: pypa/cibuildwheel@v2.19.0
         env:
           CIBW_SKIP: "*musllinux* pp*"
           # disable repair
