@@ -428,7 +428,15 @@ class Llama:
                 print(f"Failed to load metadata: {e}", file=sys.stderr)
 
         if self.verbose:
-            print(f"Model metadata: {self.metadata}", file=sys.stderr)
+            print("Model metadata:", file=sys.stderr)
+            for k, v in self.metadata.items():
+                # only calculate repr() once as it may be slow for large arrays
+                repr_v = repr(v)
+                if len(repr_v) > 63:
+                    # truncate long values
+                    print(f"  {k}: {repr_v[:60]}...", file=sys.stderr)
+                else:
+                    print(f"  {k}: {repr_v}", file=sys.stderr)
 
         eos_token_id = self.token_eos()
         bos_token_id = self.token_bos()
