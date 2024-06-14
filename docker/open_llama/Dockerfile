@@ -12,7 +12,9 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
     python3 \
     python3-pip \
     ninja-build \
-    build-essential
+    build-essential \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN python3 -m pip install --upgrade pip pytest cmake scikit-build setuptools fastapi uvicorn sse-starlette pydantic-settings starlette-context
 
