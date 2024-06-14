@@ -37,10 +37,12 @@ jobs:
 
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
+        env:
+          RUST_LOG: trace          
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
-          set RUST_LOG=trace && python -m uv pip install -e .[all] --verbose
+          python -m uv pip install -e .[all] --verbose
         shell: cmd          
           
       - name: Test with pytest
@@ -75,11 +77,13 @@ jobs:
 
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
+        env:
+          RUST_LOG: trace          
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
-          set RUST_LOG=trace && python -m uv pip install -e .[all] --verbose
-        shell: cmd       
+          python -m uv pip install -e .[all] --verbose
+        shell: cmd     
           
       - name: Test with pytest
         run: |
@@ -113,10 +117,12 @@ jobs:
 
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
+        env:
+          RUST_LOG: trace          
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
-          set RUST_LOG=trace && python -m uv pip install -e .[all] --verbose
+          python -m uv pip install -e .[all] --verbose
         shell: cmd       
           
       - name: Test with pytest
@@ -174,10 +180,12 @@ jobs:
 
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
+        env:
+          RUST_LOG: trace             
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
-          set RUST_LOG=trace && CMAKE_ARGS="-DLLAMA_METAL=on" python -m uv pip install .[all] --verbose
+          CMAKE_ARGS="-DLLAMA_METAL=on" python -m uv pip install .[all] --verbose
         shell: cmd
           
       - name: Test with pytest
