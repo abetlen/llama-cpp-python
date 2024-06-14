@@ -20,7 +20,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
-          python -m RUST_LOG=trace uv pip install --verbose llama-cpp-python[all] 
+          RUST_LOG=trace python -m uv pip install llama-cpp-python[all] --verbose 
       - name: Test with pytest
         run: |
           python -c "import llama_cpp"
@@ -42,7 +42,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
-          python -m RUST_LOG=trace uv pip install --verbose llama-cpp-python[all] 
+          RUST_LOG=trace python -m uv pip install llama-cpp-python[all] --verbose
       - name: Test with pytest
         run: |
           python -c "import llama_cpp"
@@ -64,7 +64,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
-          python -m RUST_LOG=trace uv pip install --verbose llama-cpp-python[all] 
+          RUST_LOG=trace python -m uv pip install llama-cpp-python[all] --verbose
       - name: Test with pytest
         run: |
           python -c "import llama_cpp"
