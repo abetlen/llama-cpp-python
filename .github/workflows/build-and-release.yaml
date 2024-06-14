@@ -33,10 +33,12 @@ jobs:
 
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
+        env:
+          RUST_LOG: trace        
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
-          set RUST_LOG=trace && python -m uv pip install -e .[all] --verbose
+          python -m uv pip install -e .[all] --verbose
         shell: cmd
 
       - name: Build wheels
@@ -105,10 +107,12 @@ jobs:
 
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
+        env:
+          RUST_LOG: trace        
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
-          set RUST_LOG=trace && python -m uv pip install -e .[all] --verbose
+          python -m uv pip install -e .[all] --verbose
         shell: cmd
           
       - name: Build source distribution
