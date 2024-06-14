@@ -54,7 +54,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
-          python -m RUST_LOG=trace uv pip install --verbose -e .[all]
+          RUST_LOG=trace python -m uv pip install -e .[all] --verbose
       - name: Test with pytest
         run: |
           python -m pytest
@@ -79,7 +79,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
-          python -m RUST_LOG=trace uv pip install --verbose -e .[all]
+          RUST_LOG=trace python -m uv pip install -e .[all] --verbose
       - name: Test with pytest
         run: |
           python -m pytest
@@ -127,7 +127,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
-          python -m CMAKE_ARGS="-DLLAMA_METAL=on" RUST_LOG=trace uv pip install .[all] --verbose
+          CMAKE_ARGS="-DLLAMA_METAL=on" RUST_LOG=trace python -m uv pip install .[all] --verbose
       - name: Test with pytest
         run: |
           python -m pytest
