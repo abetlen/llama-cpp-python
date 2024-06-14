@@ -1,4 +1,4 @@
-FROM python:3-slim-bullseye
+FROM python:3-slim-bookworm
 
 # We need to set the host to 0.0.0.0 to allow outside access
 ENV HOST 0.0.0.0
