@@ -1,5 +1,5 @@
 # Define the image argument and provide a default value
-ARG IMAGE=python:3-slim-bullseye
+ARG IMAGE=python:3-slim-bookworm
 
 # Use the image as specified
 FROM ${IMAGE}
