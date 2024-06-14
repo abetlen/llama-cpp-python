@@ -28,7 +28,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
-          python -m pip uv install -e .[all]
+          python -m RUST_LOG=trace uv pip install --verbose -e .[all]
 
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.19.1
