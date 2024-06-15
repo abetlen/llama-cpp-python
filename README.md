@@ -9,7 +9,7 @@
 [![Github All Releases](https://img.shields.io/github/downloads/abetlen/llama-cpp-python/total.svg?label=Github%20Downloads)]()
 
 Simple Python bindings for **@ggerganov's** [`llama.cpp`](https://github.com/ggerganov/llama.cpp) library.
-This package provides:cud
+This package provides:
 
 - Low-level access to C API via `ctypes` interface.
 - High-level Python API for text completion
