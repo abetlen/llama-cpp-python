@@ -9,7 +9,7 @@
 [![Github All Releases](https://img.shields.io/github/downloads/abetlen/llama-cpp-python/total.svg?label=Github%20Downloads)]()
 
 Simple Python bindings for **@ggerganov's** [`llama.cpp`](https://github.com/ggerganov/llama.cpp) library.
-This package provides:
+This package provides:cud
 
 - Low-level access to C API via `ctypes` interface.
 - High-level Python API for text completion
@@ -121,7 +121,7 @@ CMAKE_ARGS="-DLLAMA_CUDA=on" pip install llama-cpp-python
 
 It is also possible to install a pre-built wheel with CUDA support. As long as your system meets some requirements:
 
-- CUDA Version is 12.1, 12.2, 12.3, or 12.4
+- CUDA Version is 12.1, 12.2, 12.3, 12.4 or 12.5
 - Python Version is 3.10, 3.11 or 3.12
 
 ```bash
@@ -134,6 +134,7 @@ Where `<cuda-version>` is one of the following:
 - `cu122`: CUDA 12.2
 - `cu123`: CUDA 12.3
 - `cu124`: CUDA 12.4
+- `cu124`: CUDA 12.5
 
 For example, to install the CUDA 12.1 wheel:
 
