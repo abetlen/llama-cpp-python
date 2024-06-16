@@ -1,47 +1,43 @@
 from __future__ import annotations
 
-import os
 import json
-
-from threading import Lock
+import os
 from functools import partial
-from typing import Iterator, List, Optional, Union, Dict
-
-import llama_cpp
+from threading import Lock
+from typing import Dict, Iterator, List, Optional, Union
 
 import anyio
 from anyio.streams.memory import MemoryObjectSendStream
-from starlette.concurrency import run_in_threadpool, iterate_in_threadpool
-from fastapi import Depends, FastAPI, APIRouter, Request, HTTPException, status, Body
+from fastapi import APIRouter, Body, Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware import Middleware
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer
-from sse_starlette.sse import EventSourceResponse
-from starlette_context.plugins import RequestIdPlugin  # type: ignore
+from starlette.concurrency import iterate_in_threadpool, run_in_threadpool
 from starlette_context.middleware import RawContextMiddleware
+from starlette_context.plugins import RequestIdPlugin  # type: ignore
 
+import llama_cpp
+from llama_cpp.server.errors import RouteErrorHandler
 from llama_cpp.server.model import (
     LlamaProxy,
 )
 from llama_cpp.server.settings import (
     ConfigFileSettings,
-    Settings,
     ModelSettings,
     ServerSettings,
+    Settings,
 )
 from llama_cpp.server.types import (
+    CreateChatCompletionRequest,
     CreateCompletionRequest,
     CreateEmbeddingRequest,
-    CreateChatCompletionRequest,
-    ModelList,
-    TokenizeInputRequest,
-    TokenizeInputResponse,
-    TokenizeInputCountResponse,
     DetokenizeInputRequest,
     DetokenizeInputResponse,
+    ModelList,
+    TokenizeInputCountResponse,
+    TokenizeInputRequest,
+    TokenizeInputResponse,
 )
-from llama_cpp.server.errors import RouteErrorHandler
-
 
 router = APIRouter(route_class=RouteErrorHandler)
 
@@ -147,7 +143,7 @@ def create_app(
     set_llama_proxy(model_settings=model_settings)
 
     if server_settings.disable_ping_events:
-        set_ping_message_factory(lambda: bytes())
+        set_ping_message_factory(lambda: b"")
 
     return app
 
@@ -240,8 +236,8 @@ openai_v1_tag = "OpenAI V1"
                     "schema": {
                         "type": "string",
                         "title": "Server Side Streaming response, when stream=True. "
-                        + "See SSE format: https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events#Event_stream_format",  # noqa: E501
-                        "example": """data: {... see CreateCompletionResponse ...} \\n\\n data: ... \\n\\n ... data: [DONE]""",
+                        + "See SSE format: https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events#Event_stream_format",
+                        "example": """data: {... see CreateCompletionResponse ...} \\n\\n data: ... \\n\\n ... data: [DONE]""",  # noqa: E501
                     }
                 },
             },
