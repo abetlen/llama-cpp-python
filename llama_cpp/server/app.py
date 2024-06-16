@@ -237,7 +237,7 @@ openai_v1_tag = "OpenAI V1"
                         "type": "string",
                         "title": "Server Side Streaming response, when stream=True. "
                         + "See SSE format: https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events#Event_stream_format",
-                        "example": """data: {... see CreateCompletionResponse ...} \\n\\n data: ... \\n\\n ... data: [DONE]""",  # noqa: E501
+                        "example": """data: {... see CreateCompletionResponse ...} \\n\\n data: ... \\n\\n ... data: [DONE]""",
                     }
                 },
             },
@@ -364,7 +364,7 @@ async def create_embedding(
                     "schema": {
                         "type": "string",
                         "title": "Server Side Streaming response, when stream=True"
-                        + "See SSE format: https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events#Event_stream_format",  # noqa: E501
+                        + "See SSE format: https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events#Event_stream_format",
                         "example": """data: {... see CreateChatCompletionResponse ...} \\n\\n data: ... \\n\\n ... data: [DONE]""",
                     }
                 },
