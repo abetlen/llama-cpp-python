@@ -23,8 +23,6 @@ from fastapi import FastAPI
 
 app = FastAPI()
 
-import openai.types.chat as types
-
 @app.post("/v1/chat/completions")
 def create_chat_completions():
     return {"message": "Hello World"}
