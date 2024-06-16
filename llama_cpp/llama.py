@@ -2003,7 +2003,7 @@ class Llama:
             repo_id: The model repo id.
             filename: A filename or glob pattern to match the model file in the repo.
             local_dir: The local directory to save the model to.
-            local_dir_use_symlinks: Union[bool, Literal[auto]] = "auto",
+            local_dir_use_symlinks: Whether to use symlinks when downloading the model.
             **kwargs: Additional keyword arguments to pass to the Llama constructor.
 
         Returns:
