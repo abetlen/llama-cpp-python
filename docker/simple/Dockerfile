@@ -15,7 +15,7 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
     libopenblas-dev \
     build-essential \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* /tmp/*
 
 RUN mkdir /app
 WORKDIR /app
