@@ -23,12 +23,14 @@ from typing import (
     Sequence,
     Union,
 )
+
 import numpy as np
 import numpy.typing as npt
- 
+
 from llama_cpp import llama_chat_format, llama_cpp
 from llama_cpp.llama_speculative import LlamaDraftModel
 from llama_cpp.llama_types import List
+
 from ._internals import (
     _LlamaBatch,  # type: ignore
     _LlamaContext,  # type: ignore
@@ -1989,7 +1991,7 @@ class Llama:
         repo_id: str,
         filename: Optional[str],
         local_dir: Optional[Union[str, os.PathLike[str]]] = None,
-        local_dir_use_symlinks: Union[bool, Literal["auto"]] = "auto",
+        local_dir_use_symlinks: Union[bool, Literal[auto]] = "auto",
         cache_dir: Optional[Union[str, os.PathLike[str]]] = None,
         **kwargs: Any,
     ) -> Llama:
