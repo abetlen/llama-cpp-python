@@ -1,7 +1,10 @@
 #!/bin/python
-import sys, os, datetime
+import os
+import sys
+
 from common import GptParams
 from low_level_api_chat_cpp import LLaMAInteract
+
 
 def env_or_def(env, default):
 	if (env in os.environ):
@@ -10,7 +13,7 @@ def env_or_def(env, default):
 
 MODEL = env_or_def("MODEL", "./models/llama-13B/ggml-model.bin")
 
-prompt=f"""You run in a loop of Thought, Action, Observation.
+prompt="""You run in a loop of Thought, Action, Observation.
 At the end of the loop either Answer or restate your Thought and Action.
 Use Thought to describe your thoughts about the question you have been asked.
 Use Action to run one of these actions available to you:
