@@ -1,22 +1,23 @@
 from __future__ import annotations
 
-import sys
-import os
 import ctypes
 import functools
+import os
 import pathlib
 
+import sys
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
+    Generic,
     List,
-    Union,
     NewType,
     Optional,
-    TYPE_CHECKING,
     TypeVar,
-    Generic,
+    Union,
 )
+
 from typing_extensions import TypeAlias
 
 
@@ -1635,7 +1636,7 @@ def llama_kv_cache_view_init(
 # // Free a KV cache view. (use only for debugging purposes)
 # LLAMA_API void llama_kv_cache_view_free(struct llama_kv_cache_view * view);
 @ctypes_function("llama_kv_cache_view_free", [llama_kv_cache_view_p], None)
-def llama_kv_cache_view_free(view: "ctypes.pointer[llama_kv_cache_view]", /):  # type: ignore
+def llama_kv_cache_view_free(view: ctypes.pointer[llama_kv_cache_view], /):  # type: ignore
     """Free a KV cache view. (use only for debugging purposes)"""
     ...
 
