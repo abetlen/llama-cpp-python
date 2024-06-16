@@ -1,6 +1,7 @@
 import argparse
 from typing import Any, List, Mapping, Optional
 
+from langchain.llms.base import LLM
 from llama_cpp import Llama
 
 
