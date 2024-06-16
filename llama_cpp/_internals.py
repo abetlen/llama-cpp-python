@@ -2,23 +2,22 @@ from __future__ import annotations
 
 import ctypes
 import os
-
 from contextlib import ExitStack
 from dataclasses import dataclass, field
 from typing import (
-     List,
-     Optional,
-     Sequence,
- )
+    List,
+    Optional,
+    Sequence,
+)
 
 import numpy as np
 import numpy.typing as npt
 
 from llama_cpp import llama_cpp
+
 from ._utils import suppress_stdout_stderr
 from .llama_grammar import LlamaGrammar
 from .llama_types import *
-
 import llama_cpp.llama_cpp as llama_cpp
 
 # Python wrappers over llama.h structs
@@ -366,8 +365,8 @@ class _LlamaContext:
 
     def sample_repetition_penalties(
         self,
-        candidates: "_LlamaTokenDataArray",
-        last_tokens_data: "llama_cpp.Array[llama_cpp.llama_token]",
+        candidates: _LlamaTokenDataArray,
+        last_tokens_data: llama_cpp.Array[llama_cpp.llama_token],
         penalty_last_n: int,
         penalty_repeat: float,
         penalty_freq: float,
