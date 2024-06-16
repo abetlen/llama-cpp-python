@@ -3,10 +3,8 @@ from __future__ import annotations
 import sys
 import time
 import traceback
-
 from re import Match, Pattern, compile
 from typing import Callable, Coroutine, Dict, Optional, Tuple, Union
-
 
 from fastapi import (
     HTTPException,
