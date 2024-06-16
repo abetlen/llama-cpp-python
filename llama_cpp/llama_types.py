@@ -10,7 +10,6 @@ from typing import Any, Dict, List, Optional, Union
  
 from typing_extensions import Literal, NotRequired, TypedDict
 
-
 # NOTE: Defining this correctly using annotations seems to break pydantic validation.
 #       This is a workaround until we can figure out how to do this correctly
 # JsonType = Union[None, int, str, bool, List["JsonType"], Dict[str, "JsonType"]]
