@@ -1,5 +1,4 @@
 import gradio as gr
-
 from openai import OpenAI
 
 client = OpenAI(
