@@ -138,7 +138,7 @@ specified) expect poor results""", file=sys.stderr)
 				self.session_tokens = _session_tokens[:_n_token_count_out]
 				print(f"loaded a session with prompt size of {_n_token_count_out} tokens", file=sys.stderr)
 			else:
-				print(f"session file does not exist, will create", file=sys.stderr)
+				print("session file does not exist, will create", file=sys.stderr)
 
 		# tokenize the prompt
 		self.embd = []
