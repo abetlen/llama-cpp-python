@@ -18,7 +18,6 @@ from llama_cpp import llama_cpp
 from ._utils import suppress_stdout_stderr
 from .llama_grammar import LlamaGrammar
 from .llama_types import *
-import llama_cpp.llama_cpp as llama_cpp
 
 # Python wrappers over llama.h structs
 
