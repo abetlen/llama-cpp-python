@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import abc
 from typing import (
+    Any,
     List,
     Optional,
-    Any,
 )
 
 import llama_cpp
@@ -61,7 +61,7 @@ class LlamaTokenizer(BaseLlamaTokenizer):
         return self.detokenize(tokens).decode("utf-8", errors="ignore")
 
     @classmethod
-    def from_ggml_file(cls, path: str) -> "LlamaTokenizer":
+    def from_ggml_file(cls, path: str) -> LlamaTokenizer:
         return cls(llama_cpp.Llama(model_path=path, vocab_only=True))
 
 
@@ -89,7 +89,7 @@ class LlamaHFTokenizer(BaseLlamaTokenizer):
             return self.hf_tokenizer.decode(tokens).encode("utf-8", errors="ignore")
 
     @classmethod
-    def from_pretrained(cls, pretrained_model_name_or_path: str) -> "LlamaHFTokenizer":
+    def from_pretrained(cls, pretrained_model_name_or_path: str) -> LlamaHFTokenizer:
         try:
             from transformers import AutoTokenizer
         except ImportError:
