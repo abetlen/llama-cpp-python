@@ -221,6 +221,17 @@ CMAKE_ARGS="-DLLAMA_SYCL=on -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx" pi
 ```
 </details>
 
+<details>
+<summary>RPC</summary>
+
+To install with RPC support, set the `LLAMA_RPC=on` environment variable before installing:
+
+```bash
+source /opt/intel/oneapi/setvars.sh   
+CMAKE_ARGS="-DLLAMA_RPC=on" pip install llama-cpp-python
+```
+</details>
+
 
 ### Windows Notes
 
@@ -499,13 +510,16 @@ llm = Llama.from_pretrained(
 
 `llama-cpp-python` supports such as llava1.5 which allow the language model to read information from both text and images.
 
-You'll first need to download one of the available multi-modal models in GGUF format:
+Below are the supported multi-modal models and their respective chat handlers (Python API) and chat formats (Server API).
 
-- [llava-v1.5-7b](https://huggingface.co/mys/ggml_llava-v1.5-7b)
-- [llava-v1.5-13b](https://huggingface.co/mys/ggml_llava-v1.5-13b)
-- [bakllava-1-7b](https://huggingface.co/mys/ggml_bakllava-1)
-- [llava-v1.6-34b](https://huggingface.co/cjpais/llava-v1.6-34B-gguf)
-- [moondream2](https://huggingface.co/vikhyatk/moondream2)
+| Model | `LlamaChatHandler` | `chat_format` |
+|:--- |:--- |:--- |
+| [llava-v1.5-7b](https://huggingface.co/mys/ggml_llava-v1.5-7b) | `Llava15ChatHandler` | `llava-1-5` |
+| [llava-v1.5-13b](https://huggingface.co/mys/ggml_llava-v1.5-13b) | `Llava15ChatHandler` | `llava-1-5` |
+| [llava-v1.6-34b](https://huggingface.co/cjpais/llava-v1.6-34B-gguf) | `Llava16ChatHandler` | `llava-1-6` |
+| [moondream2](https://huggingface.co/vikhyatk/moondream2) | `MoondreamChatHandler` | `moondream2` |
+| [nanollava](https://huggingface.co/abetlen/nanollava-gguf) | `NanollavaChatHandler` | `nanollava` |
+| [llama-3-vision-alpha](https://huggingface.co/abetlen/llama-3-vision-alpha-gguf) | `Llama3VisionAlphaChatHandler` | `llama-3-vision-alpha` |
 
 Then you'll need to use a custom chat handler to load the clip model and process the chat messages and images.
 
