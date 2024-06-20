@@ -166,17 +166,6 @@ pip install llama-cpp-python \
 ```
 
 </details>
-<details>
-
-<summary>CLBlast (OpenCL)</summary>
-
-To install with CLBlast, set the `LLAMA_CLBLAST=on` environment variable before installing:
-
-```bash
-CMAKE_ARGS="-DLLAMA_CLBLAST=on" pip install llama-cpp-python
-```
-
-</details>
 
 <details>
 <summary>hipBLAS (ROCm)</summary>
