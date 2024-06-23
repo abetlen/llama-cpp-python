@@ -132,7 +132,7 @@ specified) expect poor results""", file=sys.stderr)
 					self.params.n_ctx,
 					ctypes.byref(_n_token_count_out)
 				) != 1):
-					print("session file does not exist, will create", file=sys.stderr)
+					print("error: failed to load session file", file=sys.stderr)
 					return
 				_n_token_count_out = _n_token_count_out.value
 				self.session_tokens = _session_tokens[:_n_token_count_out]
