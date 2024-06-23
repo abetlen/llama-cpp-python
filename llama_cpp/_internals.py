@@ -62,6 +62,9 @@ class _LlamaModel:
     def close(self):
         self._exit_stack.close()
 
+    def __del__(self):
+        self.close()
+
     def vocab_type(self) -> int:
         assert self.model is not None
         return llama_cpp.llama_vocab_type(self.model)
@@ -289,6 +292,9 @@ class _LlamaContext:
 
     def close(self):
         self._exit_stack.close()
+
+    def __del__(self):
+        self.close()
 
     def n_ctx(self) -> int:
         assert self.ctx is not None
@@ -528,6 +534,9 @@ class _LlamaBatch:
 
     def close(self):
         self._exit_stack.close()
+
+    def __del__(self):
+        self.close()
 
     def n_tokens(self) -> int:
         assert self.batch is not None
