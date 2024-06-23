@@ -13,7 +13,11 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
     python3-pip \
     ninja-build \
     libopenblas-dev \
-    build-essential
+    build-essential \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+
 
 RUN mkdir /app
 WORKDIR /app
@@ -21,7 +25,9 @@ COPY . /app
 
 RUN python3 -m pip install --upgrade pip
 
-RUN make deps && make build && make clean
+RUN python3 -m pip install --upgrade pip pytest cmake scikit-build setuptools fastapi uvicorn sse-starlette pydantic-settings starlette-context
+
+RUN pip install llama-cpp-python --verbose;
 
 # Set environment variable for the host
 ENV HOST=0.0.0.0
@@ -31,4 +37,4 @@ ENV PORT=8000
 EXPOSE 8000
 
 # Run the server start script
-CMD ["/bin/sh", "/app/docker/simple/run.sh"]
+CMD ["/bin/sh", "/app/run.sh"]
