@@ -207,10 +207,15 @@ class Jinja2ChatFormatter(ChatFormatter):
         function_call: Optional[llama_types.ChatCompletionRequestFunctionCall] = None,
         tools: Optional[List[llama_types.ChatCompletionTool]] = None,
         tool_choice: Optional[llama_types.ChatCompletionToolChoiceOption] = None,
+        documents: Optional[List[Dict[str, str]]] = None,
+        template_kwargs: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ) -> ChatFormatterResponse:
         def raise_exception(message: str):
             raise ValueError(message)
+
+        if template_kwargs is None:
+            template_kwargs = {}
 
         prompt = self._environment.render(
             messages=messages,
@@ -222,6 +227,8 @@ class Jinja2ChatFormatter(ChatFormatter):
             function_call=function_call,
             tools=tools,
             tool_choice=tool_choice,
+            documents=documents,
+            **template_kwargs,
         )
 
         stopping_criteria = None
@@ -537,6 +544,8 @@ def chat_formatter_to_chat_completion_handler(
         logit_bias: Optional[Dict[str, float]] = None,
         logprobs: Optional[bool] = None,
         top_logprobs: Optional[int] = None,
+        documents: Optional[List[Dict[str, str]]] = None,
+        template_kwargs: Optional[Dict[str, Any]] = None,
         **kwargs,  # type: ignore
     ) -> Union[
         llama_types.CreateChatCompletionResponse,
@@ -548,6 +557,8 @@ def chat_formatter_to_chat_completion_handler(
             function_call=function_call,
             tools=tools,
             tool_choice=tool_choice,
+            documents=documents,
+            template_kwargs=template_kwargs,
         )
         prompt = llama.tokenize(result.prompt.encode("utf-8"), add_bos=not result.added_special, special=True)
         if result.stop is not None:
