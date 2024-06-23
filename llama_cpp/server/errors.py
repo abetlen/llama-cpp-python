@@ -84,8 +84,7 @@ class ErrorResponseFormatters:
 
     @staticmethod
     def model_not_found(
-        request: Union["CreateCompletionRequest", "CreateChatCompletionRequest"],
-        match,  # type: Match[str] # type: ignore
+            match,  # type: Match[str] # type: ignore
     ) -> Tuple[int, ErrorResponse]:
         """Formatter for model_not_found error"""
 
