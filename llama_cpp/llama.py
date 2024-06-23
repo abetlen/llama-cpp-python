@@ -1968,6 +1968,9 @@ class Llama:
         """Explicitly free the model from memory."""
         self._stack.close()
 
+    def __del__(self) -> None:
+        self.close()
+
     @staticmethod
     def logits_to_logprobs(
         logits: Union[npt.NDArray[np.single], List], axis: int = -1
