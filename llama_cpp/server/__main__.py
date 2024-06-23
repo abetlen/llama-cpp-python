@@ -74,6 +74,7 @@ def main():
         port=int(os.getenv("PORT", server_settings.port)),
         ssl_keyfile=server_settings.ssl_keyfile,
         ssl_certfile=server_settings.ssl_certfile,
+        limit_concurrency=10
     )
 
 
