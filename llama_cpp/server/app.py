@@ -276,6 +276,7 @@ async def create_completion(
         "logit_bias_type",
         "user",
         "min_tokens",
+        "stream_options",
     }
     kwargs = body.model_dump(exclude=exclude)
 
@@ -285,6 +286,9 @@ async def create_completion(
             if body.logit_bias_type == "tokens"
             else body.logit_bias
         )
+    # Set usage when streaming (if defined)
+    if body.stream_options is not None and body.stream_options.include_usage:
+        kwargs["stream_include_usage"] = body.stream_options.include_usage
 
     if body.grammar is not None:
         kwargs["grammar"] = llama_cpp.LlamaGrammar.from_string(body.grammar)
@@ -456,6 +460,7 @@ async def create_chat_completion(
         "logit_bias_type",
         "user",
         "min_tokens",
+        "stream_options",
     }
     kwargs = body.model_dump(exclude=exclude)
     llama = llama_proxy(body.model)
@@ -465,6 +470,10 @@ async def create_chat_completion(
             if body.logit_bias_type == "tokens"
             else body.logit_bias
         )
+        
+    # Set usage inclusion in stream (if defined)
+    if body.stream_options is not None and body.stream_options.include_usage:        
+        kwargs["stream_include_usage"] = body.stream_options.include_usage
 
     if body.grammar is not None:
         kwargs["grammar"] = llama_cpp.LlamaGrammar.from_string(body.grammar)
