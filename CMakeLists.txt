@@ -72,11 +72,24 @@ if (LLAMA_BUILD)
     add_subdirectory(vendor/llama.cpp)
     llama_cpp_python_install_target(llama)
     llama_cpp_python_install_target(ggml)
+    
     # Workaround for Windows + CUDA https://github.com/abetlen/llama-cpp-python/issues/563
-    if (WIN32 AND (LLAMA_CUDA OR LLAMA_CUBLAS))
+    if (WIN32)
         install(
             FILES $<TARGET_RUNTIME_DLLS:llama>
-            DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
+            DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/lib
+        )
+        install(
+            FILES $<TARGET_RUNTIME_DLLS:llama>
+            DESTINATION ${SKBUILD_PLATLIB_DIR}/llama_cpp/lib
+        )
+        install(
+            FILES $<TARGET_RUNTIME_DLLS:ggml>
+            DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/lib
+        )
+        install(
+            FILES $<TARGET_RUNTIME_DLLS:ggml>
+            DESTINATION ${SKBUILD_PLATLIB_DIR}/llama_cpp/lib
         )
     endif()
 
@@ -98,5 +111,15 @@ if (LLAMA_BUILD)
             set_target_properties(llava_shared PROPERTIES CUDA_ARCHITECTURES OFF)
         endif()
         llama_cpp_python_install_target(llava_shared)
+        if (WIN32)
+            install(
+                FILES $<TARGET_RUNTIME_DLLS:llava_shared>
+                DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/lib
+            )
+            install(
+                FILES $<TARGET_RUNTIME_DLLS:llava_shared>
+                DESTINATION ${SKBUILD_PLATLIB_DIR}/llama_cpp/lib
+            )
+        endif()
     endif()
 endif()
