@@ -27,7 +27,7 @@ if (LLAMA_BUILD)
     # Add the automatically determined parts of the RPATH
     # which point to directories outside the build tree to the install RPATH
     set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
-    set(CMAKE_INSTALL_RPATH "${LLAMA_CPP_PYTHON_INSTALL_DIR}")
+    set(CMAKE_INSTALL_RPATH "$ORIGIN")
 
     # Building llama
     if (APPLE AND NOT CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
