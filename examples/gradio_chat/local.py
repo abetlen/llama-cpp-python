@@ -1,7 +1,7 @@
+import gradio as gr
+
 import llama_cpp
 import llama_cpp.llama_tokenizer
-
-import gradio as gr
 
 llama = llama_cpp.Llama.from_pretrained(
     repo_id="Qwen/Qwen1.5-0.5B-Chat-GGUF",

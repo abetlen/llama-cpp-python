@@ -1,6 +1,6 @@
 import ctypes
-import os
 import multiprocessing
+import os
 
 import llama_cpp
 

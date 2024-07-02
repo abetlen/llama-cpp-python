@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import multiprocessing
-
-from typing import Optional, List, Literal, Union, Dict, cast
-from typing_extensions import Self
+from typing import Dict, List, Literal, Optional, Union, cast
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings
+from typing_extensions import Self
 
 import llama_cpp
 

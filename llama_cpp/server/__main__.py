@@ -23,20 +23,20 @@ Then visit http://localhost:8000/docs to see the interactive API docs.
 """
 from __future__ import annotations
 
+import argparse
 import os
 import sys
-import argparse
 
 import uvicorn
 
 from llama_cpp.server.app import create_app
-from llama_cpp.server.settings import (
-    Settings,
-    ServerSettings,
-    ModelSettings,
-    ConfigFileSettings,
-)
 from llama_cpp.server.cli import add_args_from_model, parse_model_from_args
+from llama_cpp.server.settings import (
+    ConfigFileSettings,
+    ModelSettings,
+    ServerSettings,
+    Settings,
+)
 
 
 def main():
@@ -61,9 +61,10 @@ def main():
             with open(config_file, "rb") as f:
                 # Check if yaml file
                 if config_file.endswith(".yaml") or config_file.endswith(".yml"):
-                    import yaml
                     import json
 
+                    import yaml
+                    
                     config_file_settings = ConfigFileSettings.model_validate_json(
                         json.dumps(yaml.safe_load(f))
                     )

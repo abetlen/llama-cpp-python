@@ -1,13 +1,10 @@
 from __future__ import annotations
 
 import json
-
-from typing import Dict, Optional, Union, List
+from typing import Dict, List, Optional, Union
 
 import llama_cpp
-import llama_cpp.llama_speculative as llama_speculative
-import llama_cpp.llama_tokenizer as llama_tokenizer
-
+from llama_cpp import llama_speculative, llama_tokenizer
 from llama_cpp.server.settings import ModelSettings
 
 
