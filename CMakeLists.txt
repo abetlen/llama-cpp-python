@@ -8,10 +8,12 @@ option(LLAVA_BUILD "Build llava shared library and install alongside python pack
 if(SKBUILD_STATE STREQUAL "editable")
     # Install into the source directory
     # Temporary fix for https://github.com/scikit-build/scikit-build-core/issues/374
-    set(LLAMA_CPP_PYTHON_INSTALL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp)
+    set(LLAMA_CPP_PYTHON_INSTALL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/lib)
 else()
-    set(LLAMA_CPP_PYTHON_INSTALL_DIR ${SKBUILD_PLATLIB_DIR}/llama_cpp)
+    set(LLAMA_CPP_PYTHON_INSTALL_DIR ${SKBUILD_PLATLIB_DIR}/llama_cpp/lib)
 endif()
+
+message(STATUS "LLAMA_CPP_PYTHON_INSTALL_DIR: ${LLAMA_CPP_PYTHON_INSTALL_DIR}")
 
 if (LLAMA_BUILD)
     set(BUILD_SHARED_LIBS "On")
