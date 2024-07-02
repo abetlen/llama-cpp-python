@@ -5,8 +5,27 @@ project(llama_cpp)
 option(LLAMA_BUILD "Build llama.cpp shared library and install alongside python package" ON)
 option(LLAVA_BUILD "Build llava shared library and install alongside python package" ON)
 
+if(SKBUILD_STATE STREQUAL "editable")
+    # Install into the source directory
+    # Temporary fix for https://github.com/scikit-build/scikit-build-core/issues/374
+    set(LLAMA_CPP_PYTHON_INSTALL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp)
+else()
+    set(LLAMA_CPP_PYTHON_INSTALL_DIR ${SKBUILD_PLATLIB_DIR}/llama_cpp)
+endif()
+
 if (LLAMA_BUILD)
     set(BUILD_SHARED_LIBS "On")
+
+    set(CMAKE_SKIP_BUILD_RPATH FALSE)
+
+    # When building, don't use the install RPATH already
+    # (but later on when installing)
+    set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
+ 
+    # Add the automatically determined parts of the RPATH
+    # which point to directories outside the build tree to the install RPATH
+    set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+    set(CMAKE_INSTALL_RPATH "${LLAMA_CPP_PYTHON_INSTALL_DIR}")
 
     # Building llama
     if (APPLE AND NOT CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
@@ -24,31 +43,26 @@ if (LLAMA_BUILD)
 
     add_subdirectory(vendor/llama.cpp)
     install(
-        TARGETS llama 
-        LIBRARY DESTINATION ${SKBUILD_PLATLIB_DIR}/llama_cpp
-        RUNTIME DESTINATION ${SKBUILD_PLATLIB_DIR}/llama_cpp
-        ARCHIVE DESTINATION ${SKBUILD_PLATLIB_DIR}/llama_cpp
-        FRAMEWORK DESTINATION ${SKBUILD_PLATLIB_DIR}/llama_cpp
-        RESOURCE DESTINATION ${SKBUILD_PLATLIB_DIR}/llama_cpp
+        TARGETS llama
+        LIBRARY DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
+        RUNTIME DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
+        ARCHIVE DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
+        FRAMEWORK DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
+        RESOURCE DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
     )
-    # Temporary fix for https://github.com/scikit-build/scikit-build-core/issues/374
     install(
-        TARGETS llama 
-        LIBRARY DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
-        RUNTIME DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
-        ARCHIVE DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
-        FRAMEWORK DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
-        RESOURCE DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
+        TARGETS ggml
+        LIBRARY DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
+        RUNTIME DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
+        ARCHIVE DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
+        FRAMEWORK DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
+        RESOURCE DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
     )
     # Workaround for Windows + CUDA https://github.com/abetlen/llama-cpp-python/issues/563
     if (WIN32 AND (LLAMA_CUDA OR LLAMA_CUBLAS))
         install(
             FILES $<TARGET_RUNTIME_DLLS:llama>
-            DESTINATION ${SKBUILD_PLATLIB_DIR}/llama_cpp
-        )
-        install(
-            FILES $<TARGET_RUNTIME_DLLS:llama>
-            DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
+            DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
         )
     endif()
 
@@ -71,20 +85,11 @@ if (LLAMA_BUILD)
         endif()
         install(
             TARGETS llava_shared
-            LIBRARY DESTINATION ${SKBUILD_PLATLIB_DIR}/llama_cpp
-            RUNTIME DESTINATION ${SKBUILD_PLATLIB_DIR}/llama_cpp
-            ARCHIVE DESTINATION ${SKBUILD_PLATLIB_DIR}/llama_cpp
-            FRAMEWORK DESTINATION ${SKBUILD_PLATLIB_DIR}/llama_cpp
-            RESOURCE DESTINATION ${SKBUILD_PLATLIB_DIR}/llama_cpp
-        )
-        # Temporary fix for https://github.com/scikit-build/scikit-build-core/issues/374
-        install(
-            TARGETS llava_shared
-            LIBRARY DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
-            RUNTIME DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
-            ARCHIVE DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
-            FRAMEWORK DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
-            RESOURCE DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp
+            LIBRARY DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
+            RUNTIME DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
+            ARCHIVE DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
+            FRAMEWORK DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
+            RESOURCE DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
         )
     endif()
 endif()
