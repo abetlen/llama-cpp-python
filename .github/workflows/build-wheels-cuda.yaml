@@ -20,7 +20,7 @@ jobs:
         id: set-matrix
         run: |
           $matrix = @{
-              'os' = @('ubuntu-latest', 'windows-latest')
+              'os' = @('ubuntu-latest', 'windows-2019')
               'pyver' = @("3.9", "3.10", "3.11", "3.12")
               'cuda' = @("12.1.1", "12.2.2", "12.3.2", "12.4.1")
               'releasetag' = @("basic")
@@ -43,6 +43,12 @@ jobs:
       AVXVER: ${{ matrix.releasetag }}
 
     steps:
+      - name: Add MSBuild to PATH
+        if: runner.os == 'Windows'
+        uses: microsoft/setup-msbuild@v1.1
+        with:
+          vs-version: '[16.11,16.12)'
+
       - uses: actions/checkout@v4
         with:
           submodules: "recursive"
@@ -85,7 +91,7 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           $y = (gi '.\MSBuildExtensions').fullname + '\*'
-          (gi 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Microsoft\VC\*\BuildCustomizations').fullname.foreach({cp $y $_})
+          (gi 'C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\MSBuild\Microsoft\VC\*\BuildCustomizations').fullname.foreach({cp $y $_})
           $cupath = 'CUDA_PATH_V' + $env:CUDAVER.Remove($env:CUDAVER.LastIndexOf('.')).Replace('.','_')
           echo "$cupath=$env:CONDA_PREFIX" >> $env:GITHUB_ENV
 
