@@ -86,6 +86,7 @@ class ChatCompletionResponseChoice(TypedDict):
     message: "ChatCompletionResponseMessage"
     logprobs: Optional[CompletionLogprobs]
     finish_reason: Optional[str]
+    
 
 
 class CreateChatCompletionResponse(TypedDict):
@@ -134,6 +135,7 @@ class ChatCompletionStreamResponseChoice(TypedDict):
     ]
     finish_reason: Optional[Literal["stop", "length", "tool_calls", "function_call"]]
     logprobs: NotRequired[Optional[CompletionLogprobs]]
+    usage: NotRequired[Optional[CompletionUsage]]
 
 
 class CreateChatCompletionStreamResponse(TypedDict):
@@ -142,6 +144,7 @@ class CreateChatCompletionStreamResponse(TypedDict):
     object: Literal["chat.completion.chunk"]
     created: int
     choices: List[ChatCompletionStreamResponseChoice]
+    usage: NotRequired[Optional[CompletionUsage]]
 
 
 class ChatCompletionFunctions(TypedDict):

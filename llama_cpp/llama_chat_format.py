@@ -66,6 +66,7 @@ class LlamaChatCompletionHandler(Protocol):
         top_p: float = 0.95,
         top_k: int = 40,
         stream: bool = False,
+        stream_include_usage: Optional[bool] = False,
         stop: Optional[Union[str, List[str]]] = [],
         seed: Optional[int] = None,
         response_format: Optional[
@@ -239,6 +240,50 @@ class Jinja2ChatFormatter(ChatFormatter):
         return chat_formatter_to_chat_completion_handler(self)
 
 
+def _build_chunk(
+    completion_id: str,
+    created: int,
+    model_name: str,
+    logprobs_or_none: Union[Optional[llama_types.CompletionLogprobs], None],
+    include_usage: bool,
+    index: int,
+    delta: Union[Dict[str, Any], None],
+    finish_reason: Union[str, None],
+    usage: Union[Dict[str, Any], None] = None,
+) -> llama_types.ChatCompletionChunk:
+    if include_usage:        
+        chunk = {
+            "id": completion_id,
+            "object": "chat.completion.chunk",
+            "created": created,
+            "model": model_name,
+            "choices": [
+                {
+                    "index": index,
+                    "delta": delta,
+                    "logprobs": logprobs_or_none,
+                    "finish_reason": finish_reason,
+                }
+            ],
+            "usage": usage,
+        }
+    else:        
+        chunk = {
+            "id": completion_id,
+            "object": "chat.completion.chunk",
+            "created": created,
+            "model": model_name,
+            "choices": [
+                {
+                    "index": index,
+                    "delta": delta,
+                    "logprobs": logprobs_or_none,
+                    "finish_reason": finish_reason,
+                }
+            ],
+        }
+    return chunk
+
 def _convert_text_completion_to_chat(
     completion: llama_types.Completion,
 ) -> llama_types.ChatCompletion:
@@ -265,45 +310,39 @@ def _convert_text_completion_to_chat(
 
 def _convert_text_completion_chunks_to_chat(
     chunks: Iterator[llama_types.CreateCompletionStreamResponse],
+    stream_include_usage: Optional[bool] = False,
 ) -> Iterator[llama_types.ChatCompletionChunk]:
     for i, chunk in enumerate(chunks):
         if i == 0:
-            yield {
-                "id": "chat" + chunk["id"],
-                "model": chunk["model"],
-                "created": chunk["created"],
-                "object": "chat.completion.chunk",
-                "choices": [
-                    {
-                        "index": 0,
-                        "delta": {
-                            "role": "assistant",
-                        },
-                        "logprobs": None,
-                        "finish_reason": None,
-                    }
-                ],
-            }
-        yield {
-            "id": "chat" + chunk["id"],
-            "model": chunk["model"],
-            "created": chunk["created"],
-            "object": "chat.completion.chunk",
-            "choices": [
+            yield _build_chunk(
+                completion_id="chat" + chunk["id"],
+                created=chunk["created"],
+                model_name=chunk["model"],
+                delta={
+                    "role": "assistant",
+                },
+                logprobs_or_none=None,
+                include_usage=stream_include_usage,
+                index=0,
+                finish_reason=None,
+            )
+        yield _build_chunk(
+            completion_id="chat" + chunk["id"],
+            created=chunk["created"],
+            model_name=chunk["model"],
+            delta=(
                 {
-                    "index": 0,
-                    "delta": (
-                        {
-                            "content": chunk["choices"][0]["text"],
-                        }
-                        if chunk["choices"][0]["finish_reason"] is None
-                        else {}
-                    ),
-                    "logprobs": chunk["choices"][0]["logprobs"],
-                    "finish_reason": chunk["choices"][0]["finish_reason"],
+                    "content": chunk["choices"][0]["text"],
                 }
-            ],
-        }
+                if chunk["choices"][0]["finish_reason"] is None
+                else {}
+            ),
+            logprobs_or_none=chunk["choices"][0]["logprobs"],
+            include_usage=stream_include_usage,
+            index=0,
+            finish_reason=chunk["choices"][0]["finish_reason"],
+            usage=(chunk["usage"] if stream_include_usage else None),
+        )
 
 
 def _convert_completion_to_chat(
@@ -312,12 +351,13 @@ def _convert_completion_to_chat(
         Iterator[llama_types.CreateCompletionStreamResponse],
     ],
     stream: bool = False,
+    stream_include_usage: Optional[bool] = False,
 ) -> Union[
     llama_types.CreateChatCompletionResponse, Iterator[llama_types.ChatCompletionChunk]
 ]:
     if stream:
         chunks: Iterator[llama_types.CreateCompletionStreamResponse] = completion_or_chunks  # type: ignore
-        return _convert_text_completion_chunks_to_chat(chunks)
+        return _convert_text_completion_chunks_to_chat(chunks, stream_include_usage=stream_include_usage)
     else:
         completion: llama_types.Completion = completion_or_chunks  # type: ignore
         return _convert_text_completion_to_chat(completion)
@@ -330,6 +370,7 @@ def _convert_completion_to_chat_function(
         Iterator[llama_types.CreateCompletionStreamResponse],
     ],
     stream: bool,
+    stream_include_usage: Optional[bool] = False,
 ):
     if not stream:
         completion: llama_types.CreateCompletionResponse = completion_or_chunks  # type: ignore
@@ -370,6 +411,7 @@ def _convert_completion_to_chat_function(
         }
         return chat_completion
     else:
+        include_usage = stream_include_usage
         chunks: Iterator[llama_types.CreateCompletionStreamResponse] = completion_or_chunks  # type: ignore
 
         def _stream_response_to_function_stream(
@@ -387,71 +429,58 @@ def _convert_completion_to_chat_function(
                     created = chunk["created"]
                     model = chunk["model"]
                     tool_id = "call_" + "_0_" + tool_name + "_" + chunk["id"]
-                    yield {
-                        "id": id_,
-                        "object": "chat.completion.chunk",
-                        "created": created,
-                        "model": model,
-                        "choices": [
-                            {
-                                "index": 0,
-                                "finish_reason": None,
-                                "logprobs": None,
-                                "delta": {
-                                    "role": "assistant",
-                                    "content": None,
-                                    "function_call": None,
-                                    "tool_calls": None,
-                                },
-                            }
-                        ],
-                    }
-                    yield {
-                        "id": "chat" + chunk["id"],
-                        "object": "chat.completion.chunk",
-                        "created": chunk["created"],
-                        "model": chunk["model"],
-                        "choices": [
-                            {
-                                "index": 0,
-                                "finish_reason": None,
-                                "logprobs": chunk["choices"][0]["logprobs"],
-                                "delta": {
-                                    "role": None,
-                                    "content": None,
-                                    "function_call": {
+                    yield _build_chunk(
+                        completion_id=id_,
+                        created=created,
+                        model_name=model,
+                        delta={
+                            "role": "assistant",
+                            "content": None,
+                            "function_call": None,
+                            "tool_calls": None,
+                        },
+                        logprobs_or_none=None,
+                        include_usage=include_usage,
+                        index=0,
+                        finish_reason=None,
+                    )
+                    yield _build_chunk(
+                        completion_id="chat" + chunk["id"],
+                        created=chunk["created"],
+                        model_name=chunk["model"],
+                        delta={
+                            "role": None,
+                            "content": None,
+                            "function_call": {
+                                "name": tool_name,
+                                "arguments": chunk["choices"][0]["text"],
+                            },
+                            "tool_calls": [
+                                {
+                                    "index": 0,
+                                    "id": tool_id,
+                                    "type": "function",
+                                    "function": {
                                         "name": tool_name,
                                         "arguments": chunk["choices"][0]["text"],
                                     },
-                                    "tool_calls": [
-                                        {
-                                            "index": 0,
-                                            "id": tool_id,
-                                            "type": "function",
-                                            "function": {
-                                                "name": tool_name,
-                                                "arguments": chunk["choices"][0]["text"],
-                                            },
-                                        }
-                                    ],
-                                },
-                            }
-                        ],
-                    }
+                                }
+                            ],
+                        },
+                        logprobs_or_none=chunk["choices"][0]["logprobs"],
+                        include_usage=include_usage,
+                        index=0,
+                        finish_reason=None,
+                    )
                     first = False
                     continue
                 assert tool_id is not None
-                yield {
-                    "id": "chat" + chunk["id"],
-                    "object": "chat.completion.chunk",
-                    "created": chunk["created"],
-                    "model": chunk["model"],
-                    "choices": [
-                        {
-                            "index": 0,
-                            "finish_reason": None,
-                            "logprobs": chunk["choices"][0]["logprobs"],
-                            "delta": {
+
+                yield _build_chunk(
+                        completion_id="chat" + chunk["id"],
+                        created=chunk["created"],
+                        model_name=chunk["model"],
+                        delta={
                                 "role": None,
                                 "content": None,
                                 "function_call": {
@@ -472,31 +501,28 @@ def _convert_completion_to_chat_function(
                                     }
                                 ],
                             },
-                        }
-                    ],
-                }
+                        logprobs_or_none=chunk["choices"][0]["logprobs"],
+                        include_usage=include_usage,
+                        index=0,
+                        finish_reason=None,
+                    )                   
 
             if id_ is not None and created is not None and model is not None:
-                yield {
-                    "id": id_,
-                    "object": "chat.completion.chunk",
-                    "created": created,
-                    "model": model,
-                    "choices": [
-                        {
-                            "index": 0,
-                            "finish_reason": "tool_calls",
-                            "logprobs": None,
-                            "delta": {
+                yield _build_chunk(
+                        completion_id=id_,
+                        created=created,
+                        model_name=model,
+                        delta={
                                 "role": None,
                                 "content": None,
                                 "function_call": None,
                                 "tool_calls": None,
                             },
-                        }
-                    ],
-                }
-
+                        logprobs_or_none=None,
+                        include_usage=include_usage,
+                        index=0,
+                        finish_reason=None,
+                    )                                   
         return _stream_response_to_function_stream(chunks)
 
 
@@ -518,6 +544,7 @@ def chat_formatter_to_chat_completion_handler(
         min_p: float = 0.05,
         typical_p: float = 1.0,
         stream: bool = False,
+        stream_include_usage: Optional[bool] = False,
         stop: Optional[Union[str, List[str]]] = [],
         seed: Optional[int] = None,
         response_format: Optional[
@@ -612,6 +639,7 @@ def chat_formatter_to_chat_completion_handler(
             typical_p=typical_p,
             logprobs=top_logprobs if logprobs else None,
             stream=stream,
+            stream_include_usage=stream_include_usage,
             stop=stop,
             seed=seed,
             max_tokens=max_tokens,
@@ -631,9 +659,11 @@ def chat_formatter_to_chat_completion_handler(
         if tool is not None:
             tool_name = tool["function"]["name"]
             return _convert_completion_to_chat_function(
-                tool_name, completion_or_chunks, stream
+                tool_name, completion_or_chunks, stream, stream_include_usage=stream_include_usage
             )
-        return _convert_completion_to_chat(completion_or_chunks, stream=stream)
+        return _convert_completion_to_chat(
+            completion_or_chunks, stream=stream, stream_include_usage=stream_include_usage
+            )
 
     return chat_completion_handler
 
@@ -1342,6 +1372,7 @@ def functionary_chat_handler(
     min_p: float = 0.05,
     typical_p: float = 1.0,
     stream: bool = False,
+    stream_include_usage: bool = False,
     stop: Optional[Union[str, List[str]]] = [],
     response_format: Optional[llama_types.ChatCompletionRequestResponseFormat] = None,
     max_tokens: Optional[int] = None,
@@ -1549,6 +1580,7 @@ def functionary_chat_handler(
             min_p=min_p,
             typical_p=typical_p,
             stream=stream,
+            stream_include_usage=stream_include_usage,
             stop=["user:", "</s>"],
             max_tokens=max_tokens,
             presence_penalty=presence_penalty,
@@ -1562,14 +1594,14 @@ def functionary_chat_handler(
             logits_processor=logits_processor,
             grammar=grammar,
         )
-        return _convert_completion_to_chat(completion_or_completion_chunks, stream=stream)  # type: ignore
+        return _convert_completion_to_chat(completion_or_completion_chunks, stream=stream, stream_include_usage=stream_include_usage)  # type: ignore
 
     if function_call is None or (
         isinstance(function_call, str) and function_call == "auto"
     ):
         stop = "\n"
         completion: llama_types.Completion = llama.create_completion(
-            prompt=prompt, stop=stop, stream=False
+            prompt=prompt, stop=stop, stream=False, stream_include_usage=stream_include_usage
         )  # type: ignore
         completion_text = completion["choices"][0]["text"]
         # strip " to=functions." and ending ":"
@@ -1625,6 +1657,7 @@ def functionary_chat_handler(
         prompt=new_prompt,
         stop=["user:", "</s>"],
         stream=False,
+        stream_include_usage=stream_include_usage,
         grammar=grammar,
         max_tokens=max_tokens,
         temperature=temperature,
@@ -1701,6 +1734,7 @@ def functionary_v1_v2_chat_handler(
     min_p: float = 0.05,
     typical_p: float = 1.0,
     stream: bool = False,
+    stream_include_usage: bool = False,
     stop: Optional[Union[str, List[str]]] = [],
     response_format: Optional[llama_types.ChatCompletionRequestResponseFormat] = None,
     max_tokens: Optional[int] = None,
@@ -1918,6 +1952,7 @@ def functionary_v1_v2_chat_handler(
             min_p=min_p,
             typical_p=typical_p,
             stream=stream,
+            stream_include_usage=stream_include_usage,
             stop=stop,
             max_tokens=max_tokens,
             presence_penalty=presence_penalty,
@@ -1933,7 +1968,8 @@ def functionary_v1_v2_chat_handler(
         )
         if stream is False:
             completion_or_completion_chunks["choices"][0]["text"] = completion_or_completion_chunks["choices"][0]["text"].lstrip()
-        return _convert_completion_to_chat(completion_or_completion_chunks, stream=stream)  # type: ignore
+        return _convert_completion_to_chat(completion_or_completion_chunks, stream=stream, stream_include_usage=stream_include_usage
+)  # type: ignore
 
     def get_grammar(function_call):
         function_body = None
@@ -1977,6 +2013,7 @@ def functionary_v1_v2_chat_handler(
             min_p=min_p,
             typical_p=typical_p,
             stream=stream,
+            stream_include_usage=stream_include_usage,
             stop=stop,
             max_tokens=max_tokens,
             presence_penalty=presence_penalty,
@@ -2028,13 +2065,16 @@ def functionary_v1_v2_chat_handler(
                     else:
                         func_call_dict = {"function_call": {"name": function_call["name"], "arguments": ""}}
                     yield llama_types.CreateChatCompletionStreamResponse(
-                        id="chat" + chunk["id"],
-                        object="chat.completion.chunk",
-                        created=chunk["created"],
-                        model=chunk["model"],
-                        choices=[
-                            {"index": 0, "logprobs": None, "delta": {"role": None, "content": None, **func_call_dict}}
-                        ],
+                        _build_chunk(
+                            completion_id="chat" + chunk["id"],
+                            created=chunk["created"],
+                            model_name=chunk["model"],
+                            delta={"role": None, "content": None, **func_call_dict},
+                            logprobs_or_none=None,
+                            include_usage=stream_include_usage,
+                            index=0,
+                            finish_reason=None,
+                        )                        
                     )
                     first = False
                 if tools is not None:
@@ -2055,38 +2095,35 @@ def functionary_v1_v2_chat_handler(
                     func_call_dict = {"function_call": {"name": None, "arguments": chunk["choices"][0]["text"].rstrip()}}
                 if len(chunk["choices"][0]["text"].rstrip()) > 0:
                     yield llama_types.CreateChatCompletionStreamResponse(
-                        id="chat" + chunk["id"],
-                        object="chat.completion.chunk",
-                        created=chunk["created"],
-                        model=chunk["model"],
-                        choices=[
-                            {
-                                "index": 0,
-                                "logprobs": chunk["choices"][0]["logprobs"],
-                                "delta": {
+                        _build_chunk(
+                            completion_id="chat" + chunk["id"],
+                            created=chunk["created"],
+                            model_name=chunk["model"],
+                            delta={
                                     "role": None,
                                     "content": None,
                                     **func_call_dict,
                                 },
-                            }
-                        ],
+                            logprobs_or_none=chunk["choices"][0]["logprobs"],
+                            include_usage=stream_include_usage,
+                            index=0,
+                            finish_reason=None,
+                        )                        
                     )
             # Yield tool_call/function_call stop message
             yield llama_types.CreateChatCompletionStreamResponse(
-                id="chat" + chunk["id"],
-                object="chat.completion.chunk",
-                created=chunk["created"],
-                model=chunk["model"],
-                choices=[
-                    {
-                        "index": 0,
-                        "finish_reason": "tool_calls" if tools is not None else "function_call",
-                        "logprobs": None,
-                        "delta": {
+                _build_chunk(
+                        completion_id="chat" + chunk["id"],
+                        created=chunk["created"],
+                        model_name=chunk["model"],
+                        delta={
                             "role": None, "content": None, "function_call": None, "tool_calls": None
                         },
-                    }
-                ],
+                        logprobs_or_none=None,
+                        include_usage=stream_include_usage,
+                        index=0,
+                        finish_reason="tool_calls" if tools is not None else "function_call",
+                    )               
             )
         # If "auto" or no tool_choice/function_call
         elif isinstance(function_call, str) and function_call == "auto":
@@ -2108,18 +2145,16 @@ def functionary_v1_v2_chat_handler(
                     prompt += "all\n<|content|>"
                     # Yield the first empty message for content
                     yield llama_types.CreateChatCompletionStreamResponse(
-                        id="chat" + chunk_id,
-                        model=chunk["model"],
-                        created=chunk_created,
-                        object="chat.completion.chunk",
-                        choices=[
-                            {
-                                "index": 0,
-                                "delta": {"role": "assistant", "content": ""},
-                                "logprobs": None,
-                                "finish_reason": None,
-                            }
-                        ],
+                        _build_chunk(
+                            completion_id="chat" + chunk_id,
+                            created=chunk_created,
+                            model_name=chunk["model"],
+                            delta={"role": "assistant", "content": ""},
+                            logprobs_or_none=None,
+                            include_usage=stream_include_usage,
+                            index=0,
+                            finish_reason=None,
+                        )                                              
                     )
                 else:
                     prompt += f"{function_name}\n<|content|>"
@@ -2140,21 +2175,20 @@ def functionary_v1_v2_chat_handler(
                         func_call_dict = {"function_call": {"name": function_name, "arguments": ""}}
                     # Stream function name
                     yield llama_types.CreateChatCompletionStreamResponse(
-                        id="chat" + chunk_id,
-                        object="chat.completion.chunk",
-                        created=chunk_created,
-                        model=chunk["model"],
-                        choices=[
-                            {
-                                "index": 0,
-                                "logprobs": chunk["choices"][0]["logprobs"],
-                                "delta": {
+                        _build_chunk(
+                            completion_id="chat" + chunk_id,
+                            created=chunk_created,
+                            model_name=chunk["model"],
+                            delta={
                                     "role": "assistant",
                                     "content": None,
                                     **func_call_dict,
-                                },
-                            }
-                        ],
+                            },
+                            logprobs_or_none=chunk["choices"][0]["logprobs"],
+                            include_usage=stream_include_usage,
+                            index=0,
+                            finish_reason=None,
+                        )                        
                     )
                 # Generate content
                 stops = [RECIPIENT_TOKEN, STOP_TOKEN]
@@ -2172,19 +2206,18 @@ def functionary_v1_v2_chat_handler(
                                 buffer.pop()
                                 while len(buffer) > 0:
                                     yield llama_types.CreateChatCompletionStreamResponse(
-                                        id="chat" + chunk_id,
-                                        object="chat.completion.chunk",
-                                        created=chunk_created,
-                                        model=chunk["model"],
-                                        choices=[
-                                            {
-                                                "index": 0,
-                                                "logprobs": chunk["choices"][0]["logprobs"],
-                                                "delta": {
+                                        _build_chunk(
+                                            completion_id="chat" + chunk_id,
+                                            created=chunk_created,
+                                            model_name=chunk["model"],
+                                            delta={
                                                     "role": "assistant", "content": buffer.pop(0)
-                                                },
-                                            }
-                                        ],
+                                            },
+                                            logprobs_or_none=chunk["choices"][0]["logprobs"],
+                                            include_usage=stream_include_usage,
+                                            index=0,
+                                            finish_reason=None,
+                                        )                                        
                                     )
                                 is_end = False
                         elif chunk["choices"][0]["text"] == "\n":
@@ -2194,20 +2227,19 @@ def functionary_v1_v2_chat_handler(
 
                         if len(buffer) == 0 and len(chunk["choices"][0]["text"]) > 0:
                             yield llama_types.CreateChatCompletionStreamResponse(
-                                id="chat" + chunk_id,
-                                object="chat.completion.chunk",
-                                created=chunk_created,
-                                model=chunk["model"],
-                                choices=[
-                                    {
-                                        "index": 0,
-                                        "logprobs": chunk["choices"][0]["logprobs"],
-                                        "delta": {
+                                _build_chunk(
+                                    completion_id="chat" + chunk_id,
+                                    created=chunk_created,
+                                    model_name=chunk["model"],
+                                    delta={
                                             "role": "assistant",
                                             "content": chunk["choices"][0]["text"] if i > 0 else chunk["choices"][0]["text"].lstrip()
-                                        },
-                                    }
-                                ],
+                                    },
+                                    logprobs_or_none=chunk["choices"][0]["logprobs"],
+                                    include_usage=stream_include_usage,
+                                    index=0,
+                                    finish_reason=None,
+                                )                                
                             )
                     # Check whether the model wants to generate another turn
                     if "<|from|> assistant" in completion_text or "<|from|>assistant" in completion_text:
@@ -2221,18 +2253,16 @@ def functionary_v1_v2_chat_handler(
                     else:
                         # Yield stop message
                         yield llama_types.CreateChatCompletionStreamResponse(
-                            id="chat" + chunk_id,
-                            model=chunk["model"],
-                            created=chunk_created,
-                            object="chat.completion.chunk",
-                            choices=[
-                                {
-                                    "index": 0,
-                                    "delta": {},
-                                    "logprobs": None,
-                                    "finish_reason": "stop",
-                                }
-                            ],
+                            _build_chunk(
+                                completion_id="chat" + chunk_id,
+                                created=chunk_created,
+                                model_name=chunk["model"],
+                                delta={},
+                                logprobs_or_none=None,
+                                include_usage=stream_include_usage,
+                                index=0,
+                                finish_reason="stop",
+                            )                            
                         )
                         break
                 else:
@@ -2258,21 +2288,20 @@ def functionary_v1_v2_chat_handler(
                             else:
                                 func_call_dict = {"function_call": {"name": None, "arguments": chunk["choices"][0]["text"].rstrip()}}
                             yield llama_types.CreateChatCompletionStreamResponse(
-                                id="chat" + chunk_id,
-                                object="chat.completion.chunk",
-                                created=chunk_created,
-                                model=chunk["model"],
-                                choices=[
-                                    {
-                                        "index": 0,
-                                        "logprobs": chunk["choices"][0]["logprobs"],
-                                        "delta": {
+                                _build_chunk(
+                                    completion_id="chat" + chunk_id,
+                                    created=chunk_created,
+                                    model_name=chunk["model"],
+                                    delta={
                                             "role": None,
                                             "content": None,
                                             **func_call_dict,
-                                        },
-                                    }
-                                ],
+                                    },
+                                    logprobs_or_none=chunk["choices"][0]["logprobs"],
+                                    include_usage=stream_include_usage,
+                                    index=0,
+                                    finish_reason=None,
+                                )                               
                             )
                     prompt += completion_text.strip()
                     grammar = None
@@ -2284,20 +2313,18 @@ def functionary_v1_v2_chat_handler(
                     else:
                         # Yield tool_call/function_call stop message
                         yield llama_types.CreateChatCompletionStreamResponse(
-                            id="chat" + chunk_id,
-                            object="chat.completion.chunk",
-                            created=chunk_created,
-                            model=chunk["model"],
-                            choices=[
-                                {
-                                    "index": 0,
-                                    "finish_reason": "tool_calls" if tools is not None else "function_call",
-                                    "logprobs": None,
-                                    "delta": {
+                            _build_chunk(
+                                completion_id="chat" + chunk_id,
+                                created=chunk_created,
+                                model_name=chunk["model"],
+                                delta={
                                         "role": None, "content": None, "function_call": None, "tool_calls": None
-                                    },
-                                }
-                            ],
+                                },
+                                logprobs_or_none=None,
+                                include_usage=stream_include_usage,
+                                index=0,
+                                finish_reason="tool_calls" if tools is not None else "function_call",
+                            )                                                       
                         )
                         break
         
@@ -2570,6 +2597,7 @@ class Llava15ChatHandler:
         min_p: float = 0.05,
         typical_p: float = 1.0,
         stream: bool = False,
+        stream_include_usage: bool = False,
         stop: Optional[Union[str, List[str]]] = [],
         seed: Optional[int] = None,
         response_format: Optional[
@@ -2717,6 +2745,7 @@ class Llava15ChatHandler:
             typical_p=typical_p,
             logprobs=top_logprobs if logprobs else None,
             stream=stream,
+            stream_include_usage=stream_include_usage,
             stop=stop,
             seed=seed,
             max_tokens=max_tokens,
@@ -2735,9 +2764,9 @@ class Llava15ChatHandler:
         if tool is not None:
             tool_name = tool["function"]["name"]
             return _convert_completion_to_chat_function(
-                tool_name, completion_or_chunks, stream
+                tool_name, completion_or_chunks, stream, stream_include_usage=stream_include_usage,
             )
-        return _convert_completion_to_chat(completion_or_chunks, stream=stream)
+        return _convert_completion_to_chat(completion_or_chunks, stream=stream, stream_include_usage=stream_include_usage)
 
     @staticmethod
     def _load_image(image_url: str) -> bytes:
@@ -3176,6 +3205,7 @@ def chatml_function_calling(
     min_p: float = 0.05,
     typical_p: float = 1.0,
     stream: bool = False,
+    stream_include_usage: bool = False,
     stop: Optional[Union[str, List[str]]] = [],
     response_format: Optional[llama_types.ChatCompletionRequestResponseFormat] = None,
     max_tokens: Optional[int] = None,
@@ -3304,6 +3334,7 @@ def chatml_function_calling(
                 min_p=min_p,
                 typical_p=typical_p,
                 stream=stream,
+                stream_include_usage=stream_include_usage,
                 stop=stop,
                 max_tokens=max_tokens,
                 presence_penalty=presence_penalty,
@@ -3319,6 +3350,7 @@ def chatml_function_calling(
                 logprobs=top_logprobs if logprobs else None,
             ),
             stream=stream,
+            stream_include_usage=stream_include_usage,
         )
 
     # Case 2: Tool choice by user
@@ -3357,6 +3389,7 @@ def chatml_function_calling(
             min_p=min_p,
             typical_p=typical_p,
             stream=stream,
+            stream_include_usage=stream_include_usage,
             stop=stop,
             max_tokens=max_tokens,
             presence_penalty=presence_penalty,
@@ -3371,7 +3404,7 @@ def chatml_function_calling(
             grammar=grammar,
         )
         return _convert_completion_to_chat_function(
-            tool_name, completion_or_chunks, stream
+            tool_name, completion_or_chunks, stream, stream_include_usage=stream_include_usage,
         )
 
     # Case 3: Automatic tool choice
@@ -3400,7 +3433,7 @@ def chatml_function_calling(
         top_k=top_k,
         min_p=min_p,
         typical_p=typical_p,
-        stream=False,
+        stream=False,        
         stop=[":"],
         max_tokens=None,
         presence_penalty=presence_penalty,
@@ -3428,6 +3461,7 @@ def chatml_function_calling(
                 min_p=min_p,
                 typical_p=typical_p,
                 stream=stream,
+                stream_include_usage=stream_include_usage,
                 stop=["<|im_end|>"],
                 logprobs=top_logprobs if logprobs else None,
                 max_tokens=None,
@@ -3445,6 +3479,7 @@ def chatml_function_calling(
                 ),
             ),
             stream=stream,
+            stream_include_usage=stream_include_usage,
         )
 
     # One or more function calls
