@@ -26,6 +26,19 @@ function(llama_cpp_python_install_target target)
         INSTALL_RPATH "$ORIGIN"
         BUILD_WITH_INSTALL_RPATH TRUE
     )
+    if(UNIX)
+        if(APPLE)
+            set_target_properties(${target} PROPERTIES
+                INSTALL_RPATH "@loader_path"
+                BUILD_WITH_INSTALL_RPATH TRUE
+            )
+        else()
+            set_target_properties(${target} PROPERTIES
+                INSTALL_RPATH "$ORIGIN"
+                BUILD_WITH_INSTALL_RPATH TRUE
+            )
+        endif()
+    endif()
 endfunction()
 
 if (LLAMA_BUILD)
@@ -40,7 +53,6 @@ if (LLAMA_BUILD)
     # Add the automatically determined parts of the RPATH
     # which point to directories outside the build tree to the install RPATH
     set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
-    set(CMAKE_INSTALL_RPATH "$ORIGIN")
     set(CMAKE_SKIP_RPATH FALSE)
 
     # Building llama
