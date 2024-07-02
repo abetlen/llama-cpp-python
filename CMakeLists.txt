@@ -5,15 +5,28 @@ project(llama_cpp)
 option(LLAMA_BUILD "Build llama.cpp shared library and install alongside python package" ON)
 option(LLAVA_BUILD "Build llava shared library and install alongside python package" ON)
 
-if(SKBUILD_STATE STREQUAL "editable")
-    # Install into the source directory
-    # Temporary fix for https://github.com/scikit-build/scikit-build-core/issues/374
-    set(LLAMA_CPP_PYTHON_INSTALL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/lib)
-else()
-    set(LLAMA_CPP_PYTHON_INSTALL_DIR ${SKBUILD_PLATLIB_DIR}/llama_cpp/lib)
-endif()
-
-message(STATUS "LLAMA_CPP_PYTHON_INSTALL_DIR: ${LLAMA_CPP_PYTHON_INSTALL_DIR}")
+function(llama_cpp_python_install_target target)
+    install(
+        TARGETS ${target}
+        LIBRARY DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/lib
+        RUNTIME DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/lib
+        ARCHIVE DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/lib
+        FRAMEWORK DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/lib
+        RESOURCE DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/lib
+    )
+    install(
+        TARGETS ${target}
+        LIBRARY DESTINATION ${SKBUILD_PLATLIB_DIR}/llama_cpp/lib
+        RUNTIME DESTINATION ${SKBUILD_PLATLIB_DIR}/llama_cpp/lib
+        ARCHIVE DESTINATION ${SKBUILD_PLATLIB_DIR}/llama_cpp/lib
+        FRAMEWORK DESTINATION ${SKBUILD_PLATLIB_DIR}/llama_cpp/lib
+        RESOURCE DESTINATION ${SKBUILD_PLATLIB_DIR}/llama_cpp/lib
+    )
+    set_target_properties(${target} PROPERTIES
+        INSTALL_RPATH "$ORIGIN"
+        BUILD_WITH_INSTALL_RPATH TRUE
+    )
+endfunction()
 
 if (LLAMA_BUILD)
     set(BUILD_SHARED_LIBS "On")
@@ -45,30 +58,8 @@ if (LLAMA_BUILD)
     endif()
 
     add_subdirectory(vendor/llama.cpp)
-    install(
-        TARGETS llama
-        LIBRARY DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
-        RUNTIME DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
-        ARCHIVE DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
-        FRAMEWORK DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
-        RESOURCE DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
-    )
-    set_target_properties(llama PROPERTIES
-        INSTALL_RPATH "$ORIGIN"
-        BUILD_WITH_INSTALL_RPATH TRUE
-    )
-    install(
-        TARGETS ggml
-        LIBRARY DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
-        RUNTIME DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
-        ARCHIVE DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
-        FRAMEWORK DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
-        RESOURCE DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
-    )
-    set_target_properties(ggml PROPERTIES
-        INSTALL_RPATH "$ORIGIN"
-        BUILD_WITH_INSTALL_RPATH TRUE
-    )
+    llama_cpp_python_install_target(llama)
+    llama_cpp_python_install_target(ggml)
     # Workaround for Windows + CUDA https://github.com/abetlen/llama-cpp-python/issues/563
     if (WIN32 AND (LLAMA_CUDA OR LLAMA_CUBLAS))
         install(
@@ -94,17 +85,6 @@ if (LLAMA_BUILD)
         if (WIN32)
             set_target_properties(llava_shared PROPERTIES CUDA_ARCHITECTURES OFF)
         endif()
-        install(
-            TARGETS llava_shared
-            LIBRARY DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
-            RUNTIME DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
-            ARCHIVE DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
-            FRAMEWORK DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
-            RESOURCE DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
-        )
-        set_target_properties(llava PROPERTIES
-            INSTALL_RPATH "$ORIGIN"
-            BUILD_WITH_INSTALL_RPATH TRUE
-        )
+        llama_cpp_python_install_target(llava_shared)
     endif()
 endif()
