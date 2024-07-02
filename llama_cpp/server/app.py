@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import json
+import contextlib
 
 from threading import Lock
 from functools import partial
@@ -156,6 +157,7 @@ async def get_event_publisher(
     request: Request,
     inner_send_chan: MemoryObjectSendStream,
     iterator: Iterator,
+    on_complete=None,
 ):
     async with inner_send_chan:
         try:
@@ -175,6 +177,9 @@ async def get_event_publisher(
             with anyio.move_on_after(1, shield=True):
                 print(f"Disconnected from client (via refresh/close) {request.client}")
                 raise e
+        finally:
+            if on_complete:
+                on_complete()
 
 
 def _logit_bias_tokens_to_input_ids(
@@ -258,8 +263,11 @@ openai_v1_tag = "OpenAI V1"
 async def create_completion(
     request: Request,
     body: CreateCompletionRequest,
-    llama_proxy: LlamaProxy = Depends(get_llama_proxy),
 ) -> llama_cpp.Completion:
+    exit_stack = contextlib.ExitStack()
+    llama_proxy = await run_in_threadpool(
+        lambda: exit_stack.enter_context(contextlib.contextmanager(get_llama_proxy)())
+    )
     if isinstance(body.prompt, list):
         assert len(body.prompt) <= 1
         body.prompt = body.prompt[0] if len(body.prompt) > 0 else ""
@@ -312,6 +320,7 @@ async def create_completion(
         def iterator() -> Iterator[llama_cpp.CreateCompletionStreamResponse]:
             yield first_response
             yield from iterator_or_completion
+            exit_stack.close()
 
         send_chan, recv_chan = anyio.create_memory_object_stream(10)
         return EventSourceResponse(
@@ -321,6 +330,7 @@ async def create_completion(
                 request=request,
                 inner_send_chan=send_chan,
                 iterator=iterator(),
+                on_complete=exit_stack.close,
             ),
             sep="\n",
             ping_message_factory=_ping_message_factory,
@@ -449,8 +459,15 @@ async def create_chat_completion(
             },
         }
     ),
-    llama_proxy: LlamaProxy = Depends(get_llama_proxy),
 ) -> llama_cpp.ChatCompletion:
+    # This is a workaround for an issue in FastAPI dependencies
+    # where the dependency is cleaned up before a StreamingResponse
+    # is complete.
+    # https://github.com/tiangolo/fastapi/issues/11143
+    exit_stack = contextlib.ExitStack()
+    llama_proxy = await run_in_threadpool(
+        lambda: exit_stack.enter_context(contextlib.contextmanager(get_llama_proxy)())
+    )
     exclude = {
         "n",
         "logit_bias_type",
@@ -491,6 +508,7 @@ async def create_chat_completion(
         def iterator() -> Iterator[llama_cpp.ChatCompletionChunk]:
             yield first_response
             yield from iterator_or_completion
+            exit_stack.close()
 
         send_chan, recv_chan = anyio.create_memory_object_stream(10)
         return EventSourceResponse(
@@ -500,11 +518,13 @@ async def create_chat_completion(
                 request=request,
                 inner_send_chan=send_chan,
                 iterator=iterator(),
+                on_complete=exit_stack.close,
             ),
             sep="\n",
             ping_message_factory=_ping_message_factory,
         )
     else:
+        exit_stack.close()
         return iterator_or_completion
 
 
