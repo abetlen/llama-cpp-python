@@ -28,6 +28,7 @@ if (LLAMA_BUILD)
     # which point to directories outside the build tree to the install RPATH
     set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
     set(CMAKE_INSTALL_RPATH "$ORIGIN")
+    set(CMAKE_SKIP_RPATH FALSE)
 
     # Building llama
     if (APPLE AND NOT CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
@@ -52,6 +53,10 @@ if (LLAMA_BUILD)
         FRAMEWORK DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
         RESOURCE DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
     )
+    set_target_properties(llama PROPERTIES
+        INSTALL_RPATH "$ORIGIN"
+        BUILD_WITH_INSTALL_RPATH TRUE
+    )
     install(
         TARGETS ggml
         LIBRARY DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
@@ -59,6 +64,10 @@ if (LLAMA_BUILD)
         ARCHIVE DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
         FRAMEWORK DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
         RESOURCE DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
+    )
+    set_target_properties(ggml PROPERTIES
+        INSTALL_RPATH "$ORIGIN"
+        BUILD_WITH_INSTALL_RPATH TRUE
     )
     # Workaround for Windows + CUDA https://github.com/abetlen/llama-cpp-python/issues/563
     if (WIN32 AND (LLAMA_CUDA OR LLAMA_CUBLAS))
@@ -92,6 +101,10 @@ if (LLAMA_BUILD)
             ARCHIVE DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
             FRAMEWORK DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
             RESOURCE DESTINATION ${LLAMA_CPP_PYTHON_INSTALL_DIR}
+        )
+        set_target_properties(llava PROPERTIES
+            INSTALL_RPATH "$ORIGIN"
+            BUILD_WITH_INSTALL_RPATH TRUE
         )
     endif()
 endif()
