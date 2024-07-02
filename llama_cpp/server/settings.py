@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import multiprocessing
+import os
 
 from typing import Optional, List, Literal, Union, Dict, cast
 from typing_extensions import Self
@@ -56,7 +57,8 @@ class ModelSettings(BaseSettings):
     )
     kv_overrides: Optional[List[str]] = Field(
         default=None,
-        description="List of model kv overrides in the format key=type:value where type is one of (bool, int, float). Valid true values are (true, TRUE, 1), otherwise false.",
+        description="List of model kv overrides in the format key=type:value where type is one of (bool, int, "
+                    "float). Valid true values are (true, TRUE, 1), otherwise false.",
     )
     rpc_servers: Optional[str] = Field(
         default=None,
@@ -112,7 +114,8 @@ class ModelSettings(BaseSettings):
     # LoRA Params
     lora_base: Optional[str] = Field(
         default=None,
-        description="Optional path to base model, useful if using a quantized base model and you want to apply LoRA to an f16 model.",
+        description="Optional path to base model, useful if using a quantized base model and you want to apply LoRA "
+                    "to an f16 model.",
     )
     lora_path: Optional[str] = Field(
         default=None,
@@ -152,7 +155,8 @@ class ModelSettings(BaseSettings):
     )
     hf_pretrained_model_name_or_path: Optional[str] = Field(
         default=None,
-        description="The model name or path to a pretrained HuggingFace tokenizer model. Same as you would pass to AutoTokenizer.from_pretrained().",
+        description="The model name or path to a pretrained HuggingFace tokenizer model. Same as you would pass to "
+                    "AutoTokenizer.from_pretrained().",
     )
     # Loading from HuggingFace Model Hub
     hf_model_repo_id: Optional[str] = Field(
@@ -211,10 +215,6 @@ class ServerSettings(BaseSettings):
         default=None,
         description="API key for authentication. If set all requests need to be authenticated.",
     )
-    interrupt_requests: bool = Field(
-        default=True,
-        description="Whether to interrupt requests when a new request is received.",
-    )
     disable_ping_events: bool = Field(
         default=False,
         description="Disable EventSource pings (may be needed for some clients).",
@@ -233,3 +233,22 @@ class ConfigFileSettings(ServerSettings):
     """Configuration file format settings."""
 
     models: List[ModelSettings] = Field(default=[], description="Model configs")
+
+
+def read_config(config_file: str) -> tuple[ServerSettings, list[ModelSettings]]:
+    if not os.path.exists(config_file):
+        raise ValueError(f"Config file {config_file} not found!")
+    with open(config_file, "rb") as f:
+        # Check if yaml file
+        if config_file.endswith(".yaml") or config_file.endswith(".yml"):
+            import yaml
+            import json
+
+            config_file_settings = ConfigFileSettings.model_validate_json(
+                json.dumps(yaml.safe_load(f))
+            )
+        else:
+            config_file_settings = ConfigFileSettings.model_validate_json(f.read())
+        server_settings = ServerSettings.model_validate(config_file_settings)
+        model_settings = config_file_settings.models
+        return server_settings, model_settings
