@@ -273,6 +273,8 @@ class ChatCompletionNamedToolChoice(TypedDict):
     type: Literal["function"]
     function: ChatCompletionNamedToolChoiceFunction
 
+class StreamOptions(TypedDict):
+    include_usage: Optional[bool]
 
 ChatCompletionToolChoiceOption = Union[
     Literal["none", "auto"], ChatCompletionNamedToolChoice

@@ -66,7 +66,7 @@ class LlamaChatCompletionHandler(Protocol):
         top_p: float = 0.95,
         top_k: int = 40,
         stream: bool = False,
-        stream_include_usage: Optional[bool] = False,
+        stream_options: Optional[llama_types.StreamOptions] = None,
         stop: Optional[Union[str, List[str]]] = [],
         seed: Optional[int] = None,
         response_format: Optional[
@@ -544,7 +544,7 @@ def chat_formatter_to_chat_completion_handler(
         min_p: float = 0.05,
         typical_p: float = 1.0,
         stream: bool = False,
-        stream_include_usage: Optional[bool] = False,
+        stream_options: Optional[llama_types.StreamOptions] = None,
         stop: Optional[Union[str, List[str]]] = [],
         seed: Optional[int] = None,
         response_format: Optional[
@@ -577,6 +577,11 @@ def chat_formatter_to_chat_completion_handler(
             tool_choice=tool_choice,
         )
         prompt = llama.tokenize(result.prompt.encode("utf-8"), add_bos=not result.added_special, special=True)
+        if stream and ( stream_options is not None or stream_options.include_usage is not None):
+            stream_include_usage = stream_options.include_usage
+        else:
+            stream_include_usage = False
+
         if result.stop is not None:
             stop = [] if stop is None else [stop] if isinstance(stop, str) else stop
             rstop = result.stop if isinstance(result.stop, list) else [result.stop]
@@ -639,7 +644,7 @@ def chat_formatter_to_chat_completion_handler(
             typical_p=typical_p,
             logprobs=top_logprobs if logprobs else None,
             stream=stream,
-            stream_include_usage=stream_include_usage,
+            stream_options=stream_options,
             stop=stop,
             seed=seed,
             max_tokens=max_tokens,
@@ -1372,7 +1377,7 @@ def functionary_chat_handler(
     min_p: float = 0.05,
     typical_p: float = 1.0,
     stream: bool = False,
-    stream_include_usage: bool = False,
+    stream_options: Optional(llama_types.StreamOptions) = None,
     stop: Optional[Union[str, List[str]]] = [],
     response_format: Optional[llama_types.ChatCompletionRequestResponseFormat] = None,
     max_tokens: Optional[int] = None,
@@ -1389,6 +1394,12 @@ def functionary_chat_handler(
     **kwargs,  # type: ignore
 ) -> Union[llama_types.ChatCompletion, Iterator[llama_types.ChatCompletionChunk]]:
     SYSTEM_MESSAGE = """A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. The assistant calls functions with appropriate input when necessary"""
+
+    # Define stream inclusion to avoid having to re-calculate it multiple times
+    if stream and ( stream_options is not None or stream_options.include_usage is not None):
+        stream_include_usage = stream_options.include_usage
+    else:
+        stream_include_usage = False
 
     def generate_type_definition(
         param: Dict[str, llama_types.JsonType], indent_level: int, shared_defs
@@ -1580,7 +1591,7 @@ def functionary_chat_handler(
             min_p=min_p,
             typical_p=typical_p,
             stream=stream,
-            stream_include_usage=stream_include_usage,
+            stream_options=stream_options,
             stop=["user:", "</s>"],
             max_tokens=max_tokens,
             presence_penalty=presence_penalty,
@@ -1601,7 +1612,7 @@ def functionary_chat_handler(
     ):
         stop = "\n"
         completion: llama_types.Completion = llama.create_completion(
-            prompt=prompt, stop=stop, stream=False, stream_include_usage=stream_include_usage
+            prompt=prompt, stop=stop, stream=False, stream_options=stream_options
         )  # type: ignore
         completion_text = completion["choices"][0]["text"]
         # strip " to=functions." and ending ":"
@@ -1657,7 +1668,7 @@ def functionary_chat_handler(
         prompt=new_prompt,
         stop=["user:", "</s>"],
         stream=False,
-        stream_include_usage=stream_include_usage,
+        stream_options=stream_options,
         grammar=grammar,
         max_tokens=max_tokens,
         temperature=temperature,
@@ -1734,7 +1745,7 @@ def functionary_v1_v2_chat_handler(
     min_p: float = 0.05,
     typical_p: float = 1.0,
     stream: bool = False,
-    stream_include_usage: bool = False,
+    stream_options: Optional[llama_types.StreamOptions] = None,
     stop: Optional[Union[str, List[str]]] = [],
     response_format: Optional[llama_types.ChatCompletionRequestResponseFormat] = None,
     max_tokens: Optional[int] = None,
@@ -1751,6 +1762,12 @@ def functionary_v1_v2_chat_handler(
     **kwargs,  # type: ignore
 ) -> Union[llama_types.ChatCompletion, Iterator[llama_types.ChatCompletionChunk]]:
     SYSTEM_MESSAGE = """A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. The assistant calls functions with appropriate input when necessary"""
+
+    # Define stream inclusion to avoid having to re-calculate it multiple times
+    if stream and ( stream_options is not None or stream_options.include_usage is not None):
+        stream_include_usage = stream_options.include_usage
+    else:
+        stream_include_usage = False
 
     tokenizer = llama.tokenizer_
     assert hasattr(
@@ -1952,7 +1969,7 @@ def functionary_v1_v2_chat_handler(
             min_p=min_p,
             typical_p=typical_p,
             stream=stream,
-            stream_include_usage=stream_include_usage,
+            stream_options=stream_options,
             stop=stop,
             max_tokens=max_tokens,
             presence_penalty=presence_penalty,
@@ -2013,7 +2030,7 @@ def functionary_v1_v2_chat_handler(
             min_p=min_p,
             typical_p=typical_p,
             stream=stream,
-            stream_include_usage=stream_include_usage,
+            stream_options=stream_options,
             stop=stop,
             max_tokens=max_tokens,
             presence_penalty=presence_penalty,
@@ -2597,7 +2614,7 @@ class Llava15ChatHandler:
         min_p: float = 0.05,
         typical_p: float = 1.0,
         stream: bool = False,
-        stream_include_usage: bool = False,
+        stream_options: Optional[llama_types.StreamOptions] = None,
         stop: Optional[Union[str, List[str]]] = [],
         seed: Optional[int] = None,
         response_format: Optional[
@@ -2623,6 +2640,11 @@ class Llava15ChatHandler:
         Iterator[llama_types.CreateChatCompletionStreamResponse],
     ]:
         assert self.clip_ctx is not None
+        # Define stream inclusion to avoid having to re-calculate it multiple times
+        if stream and ( stream_options is not None or stream_options.include_usage is not None):
+            stream_include_usage = stream_options.include_usage
+        else:
+            stream_include_usage = False
 
         system_prompt = _get_system_message(messages)
         if system_prompt == "" and self.DEFAULT_SYSTEM_MESSAGE is not None:
@@ -2745,7 +2767,7 @@ class Llava15ChatHandler:
             typical_p=typical_p,
             logprobs=top_logprobs if logprobs else None,
             stream=stream,
-            stream_include_usage=stream_include_usage,
+            stream_options=stream_options,
             stop=stop,
             seed=seed,
             max_tokens=max_tokens,
@@ -3205,7 +3227,7 @@ def chatml_function_calling(
     min_p: float = 0.05,
     typical_p: float = 1.0,
     stream: bool = False,
-    stream_include_usage: bool = False,
+    stream_options: Optional[llama_types.StreamOptions] = None,
     stop: Optional[Union[str, List[str]]] = [],
     response_format: Optional[llama_types.ChatCompletionRequestResponseFormat] = None,
     max_tokens: Optional[int] = None,
@@ -3308,6 +3330,12 @@ def chatml_function_calling(
 
     stop = [stop, "<|im_end|>"] if isinstance(stop, str) else stop + ["<|im_end|>"] if stop else ["<|im_end|>"]
 
+    # Define stream inclusion to avoid having to re-calculate it multiple times
+    if stream and ( stream_options is not None or stream_options.include_usage is not None):
+        stream_include_usage = stream_options.include_usage
+    else:
+        stream_include_usage = False
+
     # Case 1: No tool choice by user
     if (
         tool_choice is None
@@ -3334,7 +3362,7 @@ def chatml_function_calling(
                 min_p=min_p,
                 typical_p=typical_p,
                 stream=stream,
-                stream_include_usage=stream_include_usage,
+                stream_options=stream_options,
                 stop=stop,
                 max_tokens=max_tokens,
                 presence_penalty=presence_penalty,
@@ -3350,7 +3378,7 @@ def chatml_function_calling(
                 logprobs=top_logprobs if logprobs else None,
             ),
             stream=stream,
-            stream_include_usage=stream_include_usage,
+            stream_include_usage=stream_include_usage
         )
 
     # Case 2: Tool choice by user
@@ -3389,7 +3417,7 @@ def chatml_function_calling(
             min_p=min_p,
             typical_p=typical_p,
             stream=stream,
-            stream_include_usage=stream_include_usage,
+            stream_options=stream_options,
             stop=stop,
             max_tokens=max_tokens,
             presence_penalty=presence_penalty,
@@ -3461,7 +3489,7 @@ def chatml_function_calling(
                 min_p=min_p,
                 typical_p=typical_p,
                 stream=stream,
-                stream_include_usage=stream_include_usage,
+                stream_options=stream_options,
                 stop=["<|im_end|>"],
                 logprobs=top_logprobs if logprobs else None,
                 max_tokens=None,

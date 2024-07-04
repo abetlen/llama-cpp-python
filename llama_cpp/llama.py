@@ -1013,7 +1013,7 @@ class Llama:
         repeat_penalty: float = 1.1,
         top_k: int = 40,
         stream: bool = False,
-        stream_include_usage: Optional[bool] = False,
+        stream_options: Optional[StreamOptions] = None,
         seed: Optional[int] = None,
         tfs_z: float = 1.0,
         mirostat_mode: int = 0,
@@ -1229,7 +1229,10 @@ class Llama:
                 break
 
             if stream:
-                include_usage = stream_include_usage
+                if stream_options is None or stream_options.include_usage == None:
+                    include_usage = False
+                else: 
+                    include_usage = stream_options.include_usage
                 remaining_tokens = completion_tokens[returned_tokens:]
                 remaining_text = self.detokenize(remaining_tokens, prev_tokens=prompt_tokens + completion_tokens[:returned_tokens])
                 remaining_length = len(remaining_text)
@@ -1583,7 +1586,7 @@ class Llama:
         repeat_penalty: float = 1.1,
         top_k: int = 40,
         stream: bool = False,
-        stream_include_usage: bool = False,
+        stream_options: Optional[StreamOptions] = None,
         seed: Optional[int] = None,
         tfs_z: float = 1.0,
         mirostat_mode: int = 0,
@@ -1647,7 +1650,7 @@ class Llama:
             repeat_penalty=repeat_penalty,
             top_k=top_k,
             stream=stream,
-            stream_include_usage=stream_include_usage,
+            stream_options=stream_options,
             seed=seed,
             tfs_z=tfs_z,
             mirostat_mode=mirostat_mode,
@@ -1682,7 +1685,7 @@ class Llama:
         repeat_penalty: float = 1.1,
         top_k: int = 40,
         stream: bool = False,
-        stream_include_usage: Optional[bool] = False,
+        stream_options: Optional[StreamOptions] = None,
         seed: Optional[int] = None,
         tfs_z: float = 1.0,
         mirostat_mode: int = 0,
@@ -1746,7 +1749,7 @@ class Llama:
             repeat_penalty=repeat_penalty,
             top_k=top_k,
             stream=stream,
-            stream_include_usage=stream_include_usage,
+            stream_options=stream_options,
             seed=seed,
             tfs_z=tfs_z,
             mirostat_mode=mirostat_mode,
@@ -1772,7 +1775,7 @@ class Llama:
         min_p: float = 0.05,
         typical_p: float = 1.0,
         stream: bool = False,
-        stream_include_usage: Optional[bool] = False,
+        stream_options: Optional[StreamOptions] = False,
         stop: Optional[Union[str, List[str]]] = [],
         seed: Optional[int] = None,
         response_format: Optional[ChatCompletionRequestResponseFormat] = None,
@@ -1844,7 +1847,7 @@ class Llama:
             logprobs=logprobs,
             top_logprobs=top_logprobs,
             stream=stream,
-            stream_include_usage=stream_include_usage,
+            stream_options=stream_options,
             stop=stop,
             seed=seed,
             response_format=response_format,
