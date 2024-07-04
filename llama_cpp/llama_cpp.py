@@ -23,7 +23,7 @@ from typing_extensions import TypeAlias
 # Load the library
 def _load_shared_library(lib_base_name: str):
     # Construct the paths to the possible shared library names
-    _base_path = pathlib.Path(os.path.abspath(os.path.dirname(__file__)))
+    _base_path = pathlib.Path(os.path.abspath(os.path.dirname(__file__))) / "lib"
     # Searching for the library in the current directory under the name "libllama" (default name
     # for llamacpp) and "llama" (default name for this repo)
     _lib_paths: List[pathlib.Path] = []
@@ -52,7 +52,12 @@ def _load_shared_library(lib_base_name: str):
         _lib_paths = [_lib.resolve()]
 
     cdll_args = dict()  # type: ignore
+
     # Add the library directory to the DLL search path on Windows (if needed)
+    if sys.platform == "win32":
+        os.add_dll_directory(str(_base_path))
+        os.environ['PATH'] = str(_base_path) + os.pathsep + os.environ['PATH']
+
     if sys.platform == "win32" and sys.version_info >= (3, 8):
         os.add_dll_directory(str(_base_path))
         if "CUDA_PATH" in os.environ:
@@ -273,6 +278,7 @@ llama_seq_id = ctypes.c_int32
 #     LLAMA_VOCAB_TYPE_SPM  = 1, // LLaMA tokenizer based on byte-level BPE with byte fallback
 #     LLAMA_VOCAB_TYPE_BPE  = 2, // GPT-2 tokenizer based on byte-level BPE
 #     LLAMA_VOCAB_TYPE_WPM  = 3, // BERT tokenizer based on WordPiece
+#     LLAMA_VOCAB_TYPE_UGM  = 4, // T5 tokenizer based on Unigram
 # };
 LLAMA_VOCAB_TYPE_NONE = 0
 """For models without vocab"""
@@ -282,6 +288,8 @@ LLAMA_VOCAB_TYPE_BPE = 2
 """GPT-2 tokenizer based on byte-level BPE"""
 LLAMA_VOCAB_TYPE_WPM = 3
 """BERT tokenizer based on WordPiece"""
+LLAMA_VOCAB_TYPE_UGM = 4
+"""T5 tokenizer based on Unigram"""
 
 
 # // pre-tokenization types
@@ -301,6 +309,9 @@ LLAMA_VOCAB_TYPE_WPM = 3
 #     LLAMA_VOCAB_PRE_TYPE_OLMO           = 12,
 #     LLAMA_VOCAB_PRE_TYPE_DBRX           = 13,
 #     LLAMA_VOCAB_PRE_TYPE_SMAUG          = 14,
+#     LLAMA_VOCAB_PRE_TYPE_PORO           = 15,
+#     LLAMA_VOCAB_PRE_TYPE_VIKING         = 16,
+#     LLAMA_VOCAB_PRE_TYPE_JAIS           = 17,
 # };
 LLAMA_VOCAB_PRE_TYPE_DEFAULT = 0
 LLAMA_VOCAB_PRE_TYPE_LLAMA3 = 1
@@ -317,6 +328,9 @@ LLAMA_VOCAB_PRE_TYPE_QWEN2 = 11
 LLAMA_VOCAB_PRE_TYPE_OLMO = 12
 LLAMA_VOCAB_PRE_TYPE_DBRX = 13
 LLAMA_VOCAB_PRE_TYPE_SMAUG = 14
+LLAMA_VOCAB_PRE_TYPE_PORO = 15
+LLAMA_VOCAB_PRE_TYPE_VIKING = 16
+LLAMA_VOCAB_PRE_TYPE_JAIS = 17
 
 
 # // note: these values should be synchronized with ggml_rope
@@ -466,11 +480,13 @@ LLAMA_ROPE_SCALING_TYPE_MAX_VALUE = LLAMA_ROPE_SCALING_TYPE_YARN
 #     LLAMA_POOLING_TYPE_NONE = 0,
 #     LLAMA_POOLING_TYPE_MEAN = 1,
 #     LLAMA_POOLING_TYPE_CLS  = 2,
+#     LLAMA_POOLING_TYPE_LAST = 3,
 # };
 LLAMA_POOLING_TYPE_UNSPECIFIED = -1
 LLAMA_POOLING_TYPE_NONE = 0
 LLAMA_POOLING_TYPE_MEAN = 1
 LLAMA_POOLING_TYPE_CLS = 2
+LLAMA_POOLING_TYPE_LAST = 3   
 
 # enum llama_split_mode {
 #     LLAMA_SPLIT_MODE_NONE    = 0, // single GPU
@@ -759,7 +775,6 @@ class llama_model_params(ctypes.Structure):
 
 #     enum llama_rope_scaling_type rope_scaling_type; // RoPE scaling type, from `enum llama_rope_scaling_type`
 #     enum llama_pooling_type      pooling_type;      // whether to pool (sum) embedding results by sequence id
-#                                                     // (ignored if no pooling layer)
 
 #     // ref: https://github.com/ggerganov/llama.cpp/pull/2054
 #     float    rope_freq_base;   // RoPE base frequency, 0 = from model
@@ -1426,6 +1441,24 @@ def llama_get_model_tensor(
     model: llama_model_p, name: Union[ctypes.c_char_p, bytes], /
 ) -> ctypes.c_void_p:
     """Get a llama model tensor"""
+    ...
+
+
+# // Returns true if the model contains an encoder that requires llama_encode() call
+# LLAMA_API bool llama_model_has_encoder(const struct llama_model * model);
+@ctypes_function("llama_model_has_encoder", [llama_model_p_ctypes], ctypes.c_bool)
+def llama_model_has_encoder(model: llama_model_p, /) -> bool:
+    """Returns true if the model contains an encoder that requires llama_encode() call"""
+    ...
+
+
+# // For encoder-decoder models, this function returns id of the token that must be provided
+# // to the decoder to start generating output sequence. For other models, it returns -1.
+# LLAMA_API llama_token llama_model_decoder_start_token(const struct llama_model * model);
+@ctypes_function("llama_model_decoder_start_token", [llama_model_p_ctypes], ctypes.c_int32)
+def llama_model_decoder_start_token(model: llama_model_p, /) -> int:
+    """For encoder-decoder models, this function returns id of the token that must be provided
+    to the decoder to start generating output sequence. For other models, it returns -1."""
     ...
 
 
@@ -2256,6 +2289,22 @@ def llama_batch_free(batch: llama_batch, /):
     ...
 
 
+# // Processes a batch of tokens with the ecoder part of the encoder-decoder model.
+# // Stores the encoder output internally for later use by the decoder cross-attention layers.
+# //   0 - success
+# // < 0 - error
+# LLAMA_API int32_t llama_encode(
+#         struct llama_context * ctx,
+#           struct llama_batch   batch);
+@ctypes_function("llama_encode", [llama_context_p_ctypes, llama_batch], ctypes.c_int32)
+def llama_encode(ctx: llama_context_p, batch: llama_batch, /) -> int:
+    """Processes a batch of tokens with the ecoder part of the encoder-decoder model.
+    Stores the encoder output internally for later use by the decoder cross-attention layers.
+    0 - success
+    < 0 - error"""
+    ...
+
+
 # // Positive return values does not mean a fatal error, but rather a warning.
 # //   0 - success
 # //   1 - could not find a KV slot for the batch (try reducing the size of the batch or increase the context)
@@ -2311,6 +2360,16 @@ def llama_n_threads(ctx: llama_context_p, /) -> int:
 @ctypes_function("llama_n_threads_batch", [llama_context_p_ctypes], ctypes.c_uint32)
 def llama_n_threads_batch(ctx: llama_context_p, /) -> int:
     """Get the number of threads used for prompt and batch processing (multiple token)"""
+    ...
+
+
+# // Set whether the model is in embeddings mode or not
+# // If true, embeddings will be returned but logits will not
+# LLAMA_API void llama_set_embeddings(struct llama_context * ctx, bool embeddings);
+@ctypes_function("llama_set_embeddings", [llama_context_p_ctypes, ctypes.c_bool], None)
+def llama_set_embeddings(ctx: llama_context_p, embeddings: bool, /):
+    """Set whether the model is in embeddings model or not
+    If true, embeddings will be returned but logits will not"""
     ...
 
 
