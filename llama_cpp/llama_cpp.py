@@ -488,6 +488,15 @@ LLAMA_POOLING_TYPE_MEAN = 1
 LLAMA_POOLING_TYPE_CLS = 2
 LLAMA_POOLING_TYPE_LAST = 3   
 
+# enum llama_attention_type {
+#     LLAMA_ATTENTION_TYPE_UNSPECIFIED = -1,
+#     LLAMA_ATTENTION_TYPE_CAUSAL      = 0,
+#     LLAMA_ATTENTION_TYPE_NON_CAUSAL  = 1,
+# };
+LLAMA_ATTENTION_TYPE_UNSPECIFIED = -1
+LLAMA_ATTENTION_TYPE_CAUSAL = 0
+LLAMA_ATTENTION_TYPE_NON_CAUSAL = 1
+
 # enum llama_split_mode {
 #     LLAMA_SPLIT_MODE_NONE    = 0, // single GPU
 #     LLAMA_SPLIT_MODE_LAYER   = 1, // split layers and KV across GPUs
@@ -775,6 +784,7 @@ class llama_model_params(ctypes.Structure):
 
 #     enum llama_rope_scaling_type rope_scaling_type; // RoPE scaling type, from `enum llama_rope_scaling_type`
 #     enum llama_pooling_type      pooling_type;      // whether to pool (sum) embedding results by sequence id
+#     enum llama_attention_type    attention_type;    // attention type to use for embeddings
 
 #     // ref: https://github.com/ggerganov/llama.cpp/pull/2054
 #     float    rope_freq_base;   // RoPE base frequency, 0 = from model
@@ -817,6 +827,7 @@ class llama_context_params(ctypes.Structure):
         n_threads_batch (int): number of threads to use for batch processing
         rope_scaling_type (int): RoPE scaling type, from `enum llama_rope_scaling_type`
         pooling_type (int): whether to pool (sum) embedding results by sequence id (ignored if no pooling layer)
+        attention_type (int): attention type to use for embeddings
         rope_freq_base (float): RoPE base frequency, 0 = from model
         rope_freq_scale (float): RoPE frequency scaling factor, 0 = from model
         yarn_ext_factor (float): YaRN extrapolation mix factor, negative = from model
@@ -847,6 +858,7 @@ class llama_context_params(ctypes.Structure):
         n_threads_batch: int
         rope_scaling_type: int
         pooling_type: int
+        attention_type: int
         rope_freq_base: float
         rope_freq_scale: float
         yarn_ext_factor: float
@@ -876,6 +888,7 @@ class llama_context_params(ctypes.Structure):
         ("n_threads_batch", ctypes.c_uint32),
         ("rope_scaling_type", ctypes.c_int),
         ("pooling_type", ctypes.c_int),
+        ("attention_type", ctypes.c_int),
         ("rope_freq_base", ctypes.c_float),
         ("rope_freq_scale", ctypes.c_float),
         ("yarn_ext_factor", ctypes.c_float),
@@ -2642,6 +2655,7 @@ def llama_token_eot(model: llama_model_p, /) -> int: ...
 # /// @param tokens The tokens pointer must be large enough to hold the resulting tokens.
 # /// @return Returns the number of tokens on success, no more than n_tokens_max
 # /// @return Returns a negative number on failure - the number of tokens that would have been returned
+# /// @param add_special Allow to add BOS and EOS tokens if model is configured to do so.
 # /// @param parse_special Allow tokenizing special and/or control tokens which otherwise are not exposed and treated
 # ///                      as plaintext. Does not insert a leading space.
 # LLAMA_API int32_t llama_tokenize(
@@ -2683,7 +2697,7 @@ def llama_tokenize(
         text_len: The length of the text.
         tokens: The tokens pointer must be large enough to hold the resulting tokens.
         n_max_tokens: The maximum number of tokens to return.
-        add_special: Allow tokenizing special and/or control tokens which otherwise are not exposed and treated as plaintext. Does not insert a leading space.
+        add_special: Allow adding special tokenns if the model is configured to do so.
         parse_special: Allow parsing special tokens.
 
     Returns:
@@ -2696,13 +2710,14 @@ def llama_tokenize(
 # // Token Id -> Piece.
 # // Uses the vocabulary in the provided context.
 # // Does not write null terminator to the buffer.
-# // User code is responsible to remove the leading whitespace of the first non-BOS token when decoding multiple tokens.
+# // User can skip up to 'lstrip' leading spaces before copying (useful when encoding/decoding multiple tokens with 'add_space_prefix')
 # // @param special If true, special tokens are rendered in the output.
 # LLAMA_API int32_t llama_token_to_piece(
 #           const struct llama_model * model,
 #                        llama_token   token,
 #                               char * buf,
 #                            int32_t   length,
+#                            int32_t   lstrip,
 #                               bool   special);
 @ctypes_function(
     "llama_token_to_piece",
@@ -2710,6 +2725,7 @@ def llama_tokenize(
         llama_model_p_ctypes,
         llama_token,
         ctypes.c_char_p,
+        ctypes.c_int32,
         ctypes.c_int32,
         ctypes.c_bool,
     ],
@@ -2720,6 +2736,7 @@ def llama_token_to_piece(
     token: Union[llama_token, int],
     buf: Union[ctypes.c_char_p, bytes, CtypesArray[ctypes.c_char]],
     length: Union[ctypes.c_int, int],
+    lstrip: Union[ctypes.c_int, int],
     special: Union[ctypes.c_bool, bool],
     /,
 ) -> int:
@@ -2733,7 +2750,58 @@ def llama_token_to_piece(
         token: The token to convert.
         buf: The buffer to write the token to.
         length: The length of the buffer.
+        lstrip: The number of leading spaces to skip.
         special: If true, special tokens are rendered in the output."""
+    ...
+
+
+# /// @details Convert the provided tokens into text (inverse of llama_tokenize()).
+# /// @param text The char pointer must be large enough to hold the resulting text.
+# /// @return Returns the number of chars/bytes on success, no more than text_len_max.
+# /// @return Returns a negative number on failure - the number of chars/bytes that would have been returned.
+# /// @param remove_special Allow to remove BOS and EOS tokens if model is configured to do so.
+# /// @param unparse_special If true, special tokens are rendered in the output.
+# LLAMA_API int32_t llama_detokenize(
+#     const struct llama_model * model,
+#            const llama_token * tokens,
+#                      int32_t   n_tokens,
+#                         char * text,
+#                      int32_t   text_len_max,
+#                         bool   remove_special,
+#                         bool   unparse_special);
+@ctypes_function(
+    "llama_detokenize",
+    [
+        llama_model_p_ctypes,
+        ctypes.POINTER(llama_token),
+        ctypes.c_int32,
+        ctypes.c_char_p,
+        ctypes.c_int32,
+        ctypes.c_bool,
+        ctypes.c_bool,
+    ],
+    ctypes.c_int32,
+)
+def llama_detokenize(
+    model: llama_model_p,
+    tokens: CtypesArray[llama_token],
+    n_tokens: Union[ctypes.c_int, int],
+    text: bytes,
+    text_len_max: Union[ctypes.c_int, int],
+    remove_special: Union[ctypes.c_bool, bool],
+    unparse_special: Union[ctypes.c_bool, bool],
+    /,
+) -> int:
+    """Convert the provided tokens into text (inverse of llama_tokenize()).
+
+    Args:
+        model: The model to use for tokenization.
+        tokens: The tokens to convert.
+        n_tokens: The number of tokens.
+        text: The buffer to write the text to.
+        text_len_max: The length of the buffer.
+        remove_special: Allow to remove BOS and EOS tokens if model is configured to do so.
+        unparse_special: If true, special tokens are rendered in the output."""
     ...
 
 
