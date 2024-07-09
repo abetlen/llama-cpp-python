@@ -3,8 +3,9 @@ from __future__ import annotations
 import sys
 import os
 import ctypes
-import functools
 import pathlib
+import functools
+import contextlib
 
 from typing import (
     Any,
@@ -22,6 +23,7 @@ from typing_extensions import TypeAlias
 
 # Load the library
 def _load_shared_library(lib_base_name: str):
+    _exit_stack = contextlib.ExitStack()
     # Construct the paths to the possible shared library names
     _base_path = pathlib.Path(os.path.abspath(os.path.dirname(__file__))) / "lib"
     # Searching for the library in the current directory under the name "libllama" (default name
@@ -56,7 +58,12 @@ def _load_shared_library(lib_base_name: str):
     # Add the library directory to the DLL search path on Windows (if needed)
     if sys.platform == "win32":
         os.add_dll_directory(str(_base_path))
+        old_path = os.environ.get("PATH", "")
+        def restore_path():
+            os.environ["PATH"] = old_path
+        # required to restore the PATH in case of an exception
         os.environ['PATH'] = str(_base_path) + os.pathsep + os.environ['PATH']
+        _exit_stack.callback(restore_path)
 
     if sys.platform == "win32" and sys.version_info >= (3, 8):
         os.add_dll_directory(str(_base_path))
