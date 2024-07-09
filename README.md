@@ -64,13 +64,13 @@ All `llama.cpp` cmake build options can be set via the `CMAKE_ARGS` environment 
 
 ```bash
 # Linux and Mac
-CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS" \
+CMAKE_ARGS="-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS" \
   pip install llama-cpp-python
 ```
 
 ```powershell
 # Windows
-$env:CMAKE_ARGS = "-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS"
+$env:CMAKE_ARGS = "-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS"
 pip install llama-cpp-python
 ```
 </details>
@@ -83,13 +83,13 @@ They can also be set via `pip install -C / --config-settings` command and saved 
 ```bash
 pip install --upgrade pip # ensure pip is up to date
 pip install llama-cpp-python \
-  -C cmake.args="-DLLAMA_BLAS=ON;-DLLAMA_BLAS_VENDOR=OpenBLAS"
+  -C cmake.args="-DGGML_BLAS=ON;-DGGML_BLAS_VENDOR=OpenBLAS"
 ```
 
 ```txt
 # requirements.txt
 
-llama-cpp-python -C cmake.args="-DLLAMA_BLAS=ON;-DLLAMA_BLAS_VENDOR=OpenBLAS"
+llama-cpp-python -C cmake.args="-DGGML_BLAS=ON;-DGGML_BLAS_VENDOR=OpenBLAS"
 ```
 
 </details>
@@ -101,20 +101,20 @@ Below are some common backends, their build commands and any additional environm
 <details open>
 <summary>OpenBLAS (CPU)</summary>
 
-To install with OpenBLAS, set the `LLAMA_BLAS` and `LLAMA_BLAS_VENDOR` environment variables before installing:
+To install with OpenBLAS, set the `GGML_BLAS` and `GGML_BLAS_VENDOR` environment variables before installing:
 
 ```bash
-CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS" pip install llama-cpp-python
+CMAKE_ARGS="-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS" pip install llama-cpp-python
 ```
 </details>
 
 <details>
 <summary>CUDA</summary>
 
-To install with CUDA support, set the `LLAMA_CUDA=on` environment variable before installing:
+To install with CUDA support, set the `GGML_CUDA=on` environment variable before installing:
 
 ```bash
-CMAKE_ARGS="-DLLAMA_CUDA=on" pip install llama-cpp-python
+CMAKE_ARGS="-DGGML_CUDA=on" pip install llama-cpp-python
 ```
 
 **Pre-built Wheel (New)**
@@ -147,10 +147,10 @@ pip install llama-cpp-python \
 <details>
 <summary>Metal</summary>
 
-To install with Metal (MPS), set the `LLAMA_METAL=on` environment variable before installing:
+To install with Metal (MPS), set the `GGML_METAL=on` environment variable before installing:
 
 ```bash
-CMAKE_ARGS="-DLLAMA_METAL=on" pip install llama-cpp-python
+CMAKE_ARGS="-DGGML_METAL=on" pip install llama-cpp-python
 ```
 
 **Pre-built Wheel (New)**
@@ -166,25 +166,14 @@ pip install llama-cpp-python \
 ```
 
 </details>
-<details>
-
-<summary>CLBlast (OpenCL)</summary>
-
-To install with CLBlast, set the `LLAMA_CLBLAST=on` environment variable before installing:
-
-```bash
-CMAKE_ARGS="-DLLAMA_CLBLAST=on" pip install llama-cpp-python
-```
-
-</details>
 
 <details>
 <summary>hipBLAS (ROCm)</summary>
 
-To install with hipBLAS / ROCm support for AMD cards, set the `LLAMA_HIPBLAS=on` environment variable before installing:
+To install with hipBLAS / ROCm support for AMD cards, set the `GGML_HIPBLAS=on` environment variable before installing:
 
 ```bash
-CMAKE_ARGS="-DLLAMA_HIPBLAS=on" pip install llama-cpp-python
+CMAKE_ARGS="-DGGML_HIPBLAS=on" pip install llama-cpp-python
 ```
 
 </details>
@@ -192,32 +181,33 @@ CMAKE_ARGS="-DLLAMA_HIPBLAS=on" pip install llama-cpp-python
 <details>
 <summary>Vulkan</summary>
 
-To install with Vulkan support, set the `LLAMA_VULKAN=on` environment variable before installing:
+To install with Vulkan support, set the `GGML_VULKAN=on` environment variable before installing:
 
 ```bash
-CMAKE_ARGS="-DLLAMA_VULKAN=on" pip install llama-cpp-python
+CMAKE_ARGS="-DGGML_VULKAN=on" pip install llama-cpp-python
 ```
 
-</details>
-
-<details>
-<summary>Kompute</summary>
-
-To install with Kompute support, set the `LLAMA_KOMPUTE=on` environment variable before installing:
-
-```bash
-CMAKE_ARGS="-DLLAMA_KOMPUTE=on" pip install llama-cpp-python
-```
 </details>
 
 <details>
 <summary>SYCL</summary>
 
-To install with SYCL support, set the `LLAMA_SYCL=on` environment variable before installing:
+To install with SYCL support, set the `GGML_SYCL=on` environment variable before installing:
 
 ```bash
 source /opt/intel/oneapi/setvars.sh   
-CMAKE_ARGS="-DLLAMA_SYCL=on -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx" pip install llama-cpp-python
+CMAKE_ARGS="-DGGML_SYCL=on -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx" pip install llama-cpp-python
+```
+</details>
+
+<details>
+<summary>RPC</summary>
+
+To install with RPC support, set the `GGML_RPC=on` environment variable before installing:
+
+```bash
+source /opt/intel/oneapi/setvars.sh   
+CMAKE_ARGS="-DGGML_RPC=on" pip install llama-cpp-python
 ```
 </details>
 
@@ -231,7 +221,7 @@ If you run into issues where it complains it can't find `'nmake'` `'?'` or CMAKE
 
 ```ps
 $env:CMAKE_GENERATOR = "MinGW Makefiles"
-$env:CMAKE_ARGS = "-DLLAMA_OPENBLAS=on -DCMAKE_C_COMPILER=C:/w64devkit/bin/gcc.exe -DCMAKE_CXX_COMPILER=C:/w64devkit/bin/g++.exe"
+$env:CMAKE_ARGS = "-DGGML_OPENBLAS=on -DCMAKE_C_COMPILER=C:/w64devkit/bin/gcc.exe -DCMAKE_CXX_COMPILER=C:/w64devkit/bin/g++.exe"
 ```
 
 See the above instructions and set `CMAKE_ARGS` to the BLAS backend you want to use.
@@ -260,7 +250,7 @@ Otherwise, while installing it will build the llama.cpp x86 version which will b
 Try installing with
 
 ```bash
-CMAKE_ARGS="-DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_APPLE_SILICON_PROCESSOR=arm64 -DLLAMA_METAL=on" pip install --upgrade --verbose --force-reinstall --no-cache-dir llama-cpp-python
+CMAKE_ARGS="-DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_APPLE_SILICON_PROCESSOR=arm64 -DGGML_METAL=on" pip install --upgrade --verbose --force-reinstall --no-cache-dir llama-cpp-python
 ```
 </details>
 
@@ -327,7 +317,7 @@ You'll need to install the `huggingface-hub` package to use this feature (`pip i
 
 ```python
 llm = Llama.from_pretrained(
-    repo_id="Qwen/Qwen1.5-0.5B-Chat-GGUF",
+    repo_id="Qwen/Qwen2-0.5B-Instruct-GGUF",
     filename="*q8_0.gguf",
     verbose=False
 )
@@ -499,13 +489,16 @@ llm = Llama.from_pretrained(
 
 `llama-cpp-python` supports such as llava1.5 which allow the language model to read information from both text and images.
 
-You'll first need to download one of the available multi-modal models in GGUF format:
+Below are the supported multi-modal models and their respective chat handlers (Python API) and chat formats (Server API).
 
-- [llava-v1.5-7b](https://huggingface.co/mys/ggml_llava-v1.5-7b)
-- [llava-v1.5-13b](https://huggingface.co/mys/ggml_llava-v1.5-13b)
-- [bakllava-1-7b](https://huggingface.co/mys/ggml_bakllava-1)
-- [llava-v1.6-34b](https://huggingface.co/cjpais/llava-v1.6-34B-gguf)
-- [moondream2](https://huggingface.co/vikhyatk/moondream2)
+| Model | `LlamaChatHandler` | `chat_format` |
+|:--- |:--- |:--- |
+| [llava-v1.5-7b](https://huggingface.co/mys/ggml_llava-v1.5-7b) | `Llava15ChatHandler` | `llava-1-5` |
+| [llava-v1.5-13b](https://huggingface.co/mys/ggml_llava-v1.5-13b) | `Llava15ChatHandler` | `llava-1-5` |
+| [llava-v1.6-34b](https://huggingface.co/cjpais/llava-v1.6-34B-gguf) | `Llava16ChatHandler` | `llava-1-6` |
+| [moondream2](https://huggingface.co/vikhyatk/moondream2) | `MoondreamChatHandler` | `moondream2` |
+| [nanollava](https://huggingface.co/abetlen/nanollava-gguf) | `NanollavaChatHandler` | `nanollava` |
+| [llama-3-vision-alpha](https://huggingface.co/abetlen/llama-3-vision-alpha-gguf) | `Llama3VisionAlphaChatHandler` | `llama-3-vision-alpha` |
 
 Then you'll need to use a custom chat handler to load the clip model and process the chat messages and images.
 
@@ -664,7 +657,7 @@ python3 -m llama_cpp.server --model models/7B/llama-model.gguf
 Similar to Hardware Acceleration section above, you can also install with GPU (cuBLAS) support like this:
 
 ```bash
-CMAKE_ARGS="-DLLAMA_CUDA=on" FORCE_CMAKE=1 pip install 'llama-cpp-python[server]'
+CMAKE_ARGS="-DGGML_CUDA=on" FORCE_CMAKE=1 pip install 'llama-cpp-python[server]'
 python3 -m llama_cpp.server --model models/7B/llama-model.gguf --n_gpu_layers 35
 ```
 
@@ -685,7 +678,7 @@ For possible options, see [llama_cpp/llama_chat_format.py](llama_cpp/llama_chat_
 If you have `huggingface-hub` installed, you can also use the `--hf_model_repo_id` flag to load a model from the Hugging Face Hub.
 
 ```bash
-python3 -m llama_cpp.server --hf_model_repo_id Qwen/Qwen1.5-0.5B-Chat-GGUF --model '*q8_0.gguf'
+python3 -m llama_cpp.server --hf_model_repo_id Qwen/Qwen2-0.5B-Instruct-GGUF --model '*q8_0.gguf'
 ```
 
 ### Web Server Features

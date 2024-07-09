@@ -21,6 +21,7 @@ python3 -m llama_cpp.server
 Then visit http://localhost:8000/docs to see the interactive API docs.
 
 """
+
 from __future__ import annotations
 
 import os
@@ -68,7 +69,9 @@ def main():
                         json.dumps(yaml.safe_load(f))
                     )
                 else:
-                    config_file_settings = ConfigFileSettings.model_validate_json(f.read())
+                    config_file_settings = ConfigFileSettings.model_validate_json(
+                        f.read()
+                    )
                 server_settings = ServerSettings.model_validate(config_file_settings)
                 model_settings = config_file_settings.models
         else:

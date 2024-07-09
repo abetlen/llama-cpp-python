@@ -40,7 +40,9 @@ class BaseLlamaCache(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def __setitem__(self, key: Sequence[int], value: "llama_cpp.llama.LlamaState") -> None:
+    def __setitem__(
+        self, key: Sequence[int], value: "llama_cpp.llama.LlamaState"
+    ) -> None:
         raise NotImplementedError
 
 
@@ -50,7 +52,9 @@ class LlamaRAMCache(BaseLlamaCache):
     def __init__(self, capacity_bytes: int = (2 << 30)):
         super().__init__(capacity_bytes)
         self.capacity_bytes = capacity_bytes
-        self.cache_state: OrderedDict[Tuple[int, ...], "llama_cpp.llama.LlamaState"] = OrderedDict()
+        self.cache_state: OrderedDict[Tuple[int, ...], "llama_cpp.llama.LlamaState"] = (
+            OrderedDict()
+        )
 
     @property
     def cache_size(self):
@@ -63,7 +67,8 @@ class LlamaRAMCache(BaseLlamaCache):
         min_len = 0
         min_key = None
         keys = (
-            (k, llama_cpp.llama.Llama.longest_token_prefix(k, key)) for k in self.cache_state.keys()
+            (k, llama_cpp.llama.Llama.longest_token_prefix(k, key))
+            for k in self.cache_state.keys()
         )
         for k, prefix_len in keys:
             if prefix_len > min_len:

@@ -58,6 +58,10 @@ class ModelSettings(BaseSettings):
         default=None,
         description="List of model kv overrides in the format key=type:value where type is one of (bool, int, float). Valid true values are (true, TRUE, 1), otherwise false.",
     )
+    rpc_servers: Optional[str] = Field(
+        default=None,
+        description="comma seperated list of rpc servers for offloading",
+    )
     # Context Params
     seed: int = Field(
         default=llama_cpp.LLAMA_DEFAULT_SEED, description="Random seed. -1 for random."
@@ -92,7 +96,7 @@ class ModelSettings(BaseSettings):
         default=True, description="if true, use experimental mul_mat_q kernels"
     )
     logits_all: bool = Field(default=True, description="Whether to return logits.")
-    embedding: bool = Field(default=True, description="Whether to use embeddings.")
+    embedding: bool = Field(default=False, description="Whether to use embeddings.")
     offload_kqv: bool = Field(
         default=True, description="Whether to offload kqv to the GPU."
     )
@@ -178,15 +182,17 @@ class ModelSettings(BaseSettings):
         default=True, description="Whether to print debug information."
     )
 
-    @model_validator(mode="before")  # pre=True to ensure this runs before any other validation
+    @model_validator(
+        mode="before"
+    )  # pre=True to ensure this runs before any other validation
     def set_dynamic_defaults(self) -> Self:
         # If n_threads or n_threads_batch is -1, set it to multiprocessing.cpu_count()
         cpu_count = multiprocessing.cpu_count()
         values = cast(Dict[str, int], self)
-        if values.get('n_threads', 0) == -1:
-            values['n_threads'] = cpu_count
-        if values.get('n_threads_batch', 0) == -1:
-            values['n_threads_batch'] = cpu_count
+        if values.get("n_threads", 0) == -1:
+            values["n_threads"] = cpu_count
+        if values.get("n_threads_batch", 0) == -1:
+            values["n_threads_batch"] = cpu_count
         return self
 
 

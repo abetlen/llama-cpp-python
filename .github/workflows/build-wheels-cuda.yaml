@@ -20,8 +20,8 @@ jobs:
         id: set-matrix
         run: |
           $matrix = @{
-              'os' = @('ubuntu-20.04', 'windows-latest')
-              'pyver' = @("3.10", "3.11", "3.12")
+              'os' = @('ubuntu-latest', 'windows-2019')
+              'pyver' = @("3.9", "3.10", "3.11", "3.12")
               'cuda' = @("12.1.1", "12.2.2", "12.3.2", "12.4.1")
               'releasetag' = @("basic")
           }
@@ -43,6 +43,12 @@ jobs:
       AVXVER: ${{ matrix.releasetag }}
 
     steps:
+      - name: Add MSBuild to PATH
+        if: runner.os == 'Windows'
+        uses: microsoft/setup-msbuild@v1.3
+        with:
+          vs-version: '[16.11,16.12)'
+
       - uses: actions/checkout@v4
         with:
           submodules: "recursive"
@@ -50,6 +56,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.pyver }}
+          cache: 'pip'
 
       - name: Setup Mamba
         uses: conda-incubator/setup-miniconda@v3.0.4
@@ -84,7 +91,7 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           $y = (gi '.\MSBuildExtensions').fullname + '\*'
-          (gi 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Microsoft\VC\*\BuildCustomizations').fullname.foreach({cp $y $_})
+          (gi 'C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\MSBuild\Microsoft\VC\*\BuildCustomizations').fullname.foreach({cp $y $_})
           $cupath = 'CUDA_PATH_V' + $env:CUDAVER.Remove($env:CUDAVER.LastIndexOf('.')).Replace('.','_')
           echo "$cupath=$env:CONDA_PREFIX" >> $env:GITHUB_ENV
 
@@ -107,17 +114,17 @@ jobs:
             $env:LD_LIBRARY_PATH = $env:CONDA_PREFIX + '/lib:' + $env:LD_LIBRARY_PATH
           }
           $env:VERBOSE = '1'
-          $env:CMAKE_ARGS = '-DLLAMA_CUBLAS=on -DCMAKE_CUDA_ARCHITECTURES=all'
-          $env:CMAKE_ARGS = "-DLLAMA_CUDA_FORCE_MMQ=ON $env:CMAKE_ARGS"
-          if ($env:AVXVER -eq 'AVX') {
-            $env:CMAKE_ARGS = $env:CMAKE_ARGS + ' -DLLAMA_AVX2=off -DLLAMA_FMA=off -DLLAMA_F16C=off'
-          }
-          if ($env:AVXVER -eq 'AVX512') {
-            $env:CMAKE_ARGS = $env:CMAKE_ARGS + ' -DLLAMA_AVX512=on'
-          }
-          if ($env:AVXVER -eq 'basic') {
-            $env:CMAKE_ARGS = $env:CMAKE_ARGS + ' -DLLAMA_AVX=off -DLLAMA_AVX2=off -DLLAMA_FMA=off -DLLAMA_F16C=off'
-          }
+          $env:CMAKE_ARGS = '-DGGML_CUDA=on -DCMAKE_CUDA_ARCHITECTURES=all'
+          $env:CMAKE_ARGS = "-DGGML_CUDA_FORCE_MMQ=ON $env:CMAKE_ARGS"
+          # if ($env:AVXVER -eq 'AVX') {
+          $env:CMAKE_ARGS = $env:CMAKE_ARGS + ' -DGGML_AVX2=off -DGGML_FMA=off -DGGML_F16C=off'
+          # }
+          # if ($env:AVXVER -eq 'AVX512') {
+          #  $env:CMAKE_ARGS = $env:CMAKE_ARGS + ' -DGGML_AVX512=on'
+          # }
+          # if ($env:AVXVER -eq 'basic') {
+          #  $env:CMAKE_ARGS = $env:CMAKE_ARGS + ' -DGGML_AVX=off -DGGML_AVX2=off -DGGML_FMA=off -DGGML_F16C=off'
+          # }
           python -m build --wheel
           # write the build tag to the output
           Write-Output "CUDA_VERSION=$cudaVersion" >> $env:GITHUB_ENV
