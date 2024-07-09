@@ -64,13 +64,13 @@ All `llama.cpp` cmake build options can be set via the `CMAKE_ARGS` environment 
 
 ```bash
 # Linux and Mac
-CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS" \
+CMAKE_ARGS="-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS" \
   pip install llama-cpp-python
 ```
 
 ```powershell
 # Windows
-$env:CMAKE_ARGS = "-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS"
+$env:CMAKE_ARGS = "-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS"
 pip install llama-cpp-python
 ```
 </details>
@@ -83,13 +83,13 @@ They can also be set via `pip install -C / --config-settings` command and saved 
 ```bash
 pip install --upgrade pip # ensure pip is up to date
 pip install llama-cpp-python \
-  -C cmake.args="-DLLAMA_BLAS=ON;-DLLAMA_BLAS_VENDOR=OpenBLAS"
+  -C cmake.args="-DGGML_BLAS=ON;-DGGML_BLAS_VENDOR=OpenBLAS"
 ```
 
 ```txt
 # requirements.txt
 
-llama-cpp-python -C cmake.args="-DLLAMA_BLAS=ON;-DLLAMA_BLAS_VENDOR=OpenBLAS"
+llama-cpp-python -C cmake.args="-DGGML_BLAS=ON;-DGGML_BLAS_VENDOR=OpenBLAS"
 ```
 
 </details>
@@ -101,20 +101,20 @@ Below are some common backends, their build commands and any additional environm
 <details open>
 <summary>OpenBLAS (CPU)</summary>
 
-To install with OpenBLAS, set the `LLAMA_BLAS` and `LLAMA_BLAS_VENDOR` environment variables before installing:
+To install with OpenBLAS, set the `GGML_BLAS` and `GGML_BLAS_VENDOR` environment variables before installing:
 
 ```bash
-CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS" pip install llama-cpp-python
+CMAKE_ARGS="-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS" pip install llama-cpp-python
 ```
 </details>
 
 <details>
 <summary>CUDA</summary>
 
-To install with CUDA support, set the `LLAMA_CUDA=on` environment variable before installing:
+To install with CUDA support, set the `GGML_CUDA=on` environment variable before installing:
 
 ```bash
-CMAKE_ARGS="-DLLAMA_CUDA=on" pip install llama-cpp-python
+CMAKE_ARGS="-DGGML_CUDA=on" pip install llama-cpp-python
 ```
 
 **Pre-built Wheel (New)**
@@ -147,10 +147,10 @@ pip install llama-cpp-python \
 <details>
 <summary>Metal</summary>
 
-To install with Metal (MPS), set the `LLAMA_METAL=on` environment variable before installing:
+To install with Metal (MPS), set the `GGML_METAL=on` environment variable before installing:
 
 ```bash
-CMAKE_ARGS="-DLLAMA_METAL=on" pip install llama-cpp-python
+CMAKE_ARGS="-DGGML_METAL=on" pip install llama-cpp-python
 ```
 
 **Pre-built Wheel (New)**
@@ -170,10 +170,10 @@ pip install llama-cpp-python \
 <details>
 <summary>hipBLAS (ROCm)</summary>
 
-To install with hipBLAS / ROCm support for AMD cards, set the `LLAMA_HIPBLAS=on` environment variable before installing:
+To install with hipBLAS / ROCm support for AMD cards, set the `GGML_HIPBLAS=on` environment variable before installing:
 
 ```bash
-CMAKE_ARGS="-DLLAMA_HIPBLAS=on" pip install llama-cpp-python
+CMAKE_ARGS="-DGGML_HIPBLAS=on" pip install llama-cpp-python
 ```
 
 </details>
@@ -181,43 +181,33 @@ CMAKE_ARGS="-DLLAMA_HIPBLAS=on" pip install llama-cpp-python
 <details>
 <summary>Vulkan</summary>
 
-To install with Vulkan support, set the `LLAMA_VULKAN=on` environment variable before installing:
+To install with Vulkan support, set the `GGML_VULKAN=on` environment variable before installing:
 
 ```bash
-CMAKE_ARGS="-DLLAMA_VULKAN=on" pip install llama-cpp-python
+CMAKE_ARGS="-DGGML_VULKAN=on" pip install llama-cpp-python
 ```
 
-</details>
-
-<details>
-<summary>Kompute</summary>
-
-To install with Kompute support, set the `LLAMA_KOMPUTE=on` environment variable before installing:
-
-```bash
-CMAKE_ARGS="-DLLAMA_KOMPUTE=on" pip install llama-cpp-python
-```
 </details>
 
 <details>
 <summary>SYCL</summary>
 
-To install with SYCL support, set the `LLAMA_SYCL=on` environment variable before installing:
+To install with SYCL support, set the `GGML_SYCL=on` environment variable before installing:
 
 ```bash
 source /opt/intel/oneapi/setvars.sh   
-CMAKE_ARGS="-DLLAMA_SYCL=on -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx" pip install llama-cpp-python
+CMAKE_ARGS="-DGGML_SYCL=on -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx" pip install llama-cpp-python
 ```
 </details>
 
 <details>
 <summary>RPC</summary>
 
-To install with RPC support, set the `LLAMA_RPC=on` environment variable before installing:
+To install with RPC support, set the `GGML_RPC=on` environment variable before installing:
 
 ```bash
 source /opt/intel/oneapi/setvars.sh   
-CMAKE_ARGS="-DLLAMA_RPC=on" pip install llama-cpp-python
+CMAKE_ARGS="-DGGML_RPC=on" pip install llama-cpp-python
 ```
 </details>
 
@@ -231,7 +221,7 @@ If you run into issues where it complains it can't find `'nmake'` `'?'` or CMAKE
 
 ```ps
 $env:CMAKE_GENERATOR = "MinGW Makefiles"
-$env:CMAKE_ARGS = "-DLLAMA_OPENBLAS=on -DCMAKE_C_COMPILER=C:/w64devkit/bin/gcc.exe -DCMAKE_CXX_COMPILER=C:/w64devkit/bin/g++.exe"
+$env:CMAKE_ARGS = "-DGGML_OPENBLAS=on -DCMAKE_C_COMPILER=C:/w64devkit/bin/gcc.exe -DCMAKE_CXX_COMPILER=C:/w64devkit/bin/g++.exe"
 ```
 
 See the above instructions and set `CMAKE_ARGS` to the BLAS backend you want to use.
@@ -260,7 +250,7 @@ Otherwise, while installing it will build the llama.cpp x86 version which will b
 Try installing with
 
 ```bash
-CMAKE_ARGS="-DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_APPLE_SILICON_PROCESSOR=arm64 -DLLAMA_METAL=on" pip install --upgrade --verbose --force-reinstall --no-cache-dir llama-cpp-python
+CMAKE_ARGS="-DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_APPLE_SILICON_PROCESSOR=arm64 -DGGML_METAL=on" pip install --upgrade --verbose --force-reinstall --no-cache-dir llama-cpp-python
 ```
 </details>
 
@@ -667,7 +657,7 @@ python3 -m llama_cpp.server --model models/7B/llama-model.gguf
 Similar to Hardware Acceleration section above, you can also install with GPU (cuBLAS) support like this:
 
 ```bash
-CMAKE_ARGS="-DLLAMA_CUDA=on" FORCE_CMAKE=1 pip install 'llama-cpp-python[server]'
+CMAKE_ARGS="-DGGML_CUDA=on" FORCE_CMAKE=1 pip install 'llama-cpp-python[server]'
 python3 -m llama_cpp.server --model models/7B/llama-model.gguf --n_gpu_layers 35
 ```
 

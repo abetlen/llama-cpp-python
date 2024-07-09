@@ -208,7 +208,7 @@ class _LlamaModel:
     def token_to_piece(self, token: int, special: bool = False) -> bytes:
         assert self.model is not None
         buf = ctypes.create_string_buffer(32)
-        llama_cpp.llama_token_to_piece(self.model, token, buf, 32, special)
+        llama_cpp.llama_token_to_piece(self.model, token, buf, 32, 0, special)
         return bytes(buf)
 
     def detokenize(self, tokens: List[int], special: bool = False) -> bytes:
@@ -218,7 +218,7 @@ class _LlamaModel:
         buffer = (ctypes.c_char * size)()
         for token in tokens:
             n = llama_cpp.llama_token_to_piece(
-                self.model, llama_cpp.llama_token(token), buffer, size, special
+                self.model, llama_cpp.llama_token(token), buffer, size, 0, special
             )
             assert n <= size
             output += bytes(buffer[:n])
@@ -635,10 +635,10 @@ def _tokenize(model: _LlamaModel, text: str, add_bos: bool, special: bool) -> li
 def _token_to_piece(model: _LlamaModel, token: int, special: bool = False) -> str:
     assert model.model is not None
     result = (ctypes.c_char * 8)(0)
-    n_tokens = llama_cpp.llama_token_to_piece(model.model, token, result, len(result), special)
+    n_tokens = llama_cpp.llama_token_to_piece(model.model, token, result, 0, len(result), special)
     if n_tokens < 0:
         result = (ctypes.c_char * -n_tokens)(0)
-        check = llama_cpp.llama_token_to_piece(model.model, token, result, len(result), special)
+        check = llama_cpp.llama_token_to_piece(model.model, token, result, 0, len(result), special)
         if check != -n_tokens:
             raise RuntimeError(f"Failed to get piece: token={token}")
     else:
