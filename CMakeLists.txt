@@ -59,14 +59,14 @@ if (LLAMA_BUILD)
     if (APPLE AND NOT CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
         # Need to disable these llama.cpp flags on Apple x86_64,
         # otherwise users may encounter invalid instruction errors
-        set(LLAMA_AVX "Off" CACHE BOOL "llama: enable AVX" FORCE)
-        set(LLAMA_AVX2 "Off" CACHE BOOL "llama: enable AVX2" FORCE)
-        set(LLAMA_FMA "Off" CACHE BOOL "llama: enable FMA" FORCE)
-        set(LLAMA_F16C "Off" CACHE BOOL "llama: enable F16C" FORCE)
+        set(GGML_AVX "Off" CACHE BOOL "ggml: enable AVX" FORCE)
+        set(GGML_AVX2 "Off" CACHE BOOL "ggml: enable AVX2" FORCE)
+        set(GGML_FMA "Off" CACHE BOOL "gml: enable FMA" FORCE)
+        set(GGML_F16C "Off" CACHE BOOL "gml: enable F16C" FORCE)
     endif()
 
     if (APPLE)
-        set(LLAMA_METAL_EMBED_LIBRARY "On" CACHE BOOL "llama: embed metal library" FORCE)
+        set(GGML_METAL_EMBED_LIBRARY "On" CACHE BOOL "llama: embed metal library" FORCE)
     endif()
 
     add_subdirectory(vendor/llama.cpp)
