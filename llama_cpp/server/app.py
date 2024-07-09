@@ -162,7 +162,9 @@ async def get_event_publisher(
     on_complete: typing.Optional[typing.Callable[[], None]] = None,
 ):
     server_settings = next(get_server_settings())
-    interrupt_requests = server_settings.interrupt_requests if server_settings else False
+    interrupt_requests = (
+        server_settings.interrupt_requests if server_settings else False
+    )
     async with inner_send_chan:
         try:
             async for chunk in iterate_in_threadpool(iterator):

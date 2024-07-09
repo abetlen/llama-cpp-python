@@ -56,7 +56,7 @@ def _load_shared_library(lib_base_name: str):
     # Add the library directory to the DLL search path on Windows (if needed)
     if sys.platform == "win32":
         os.add_dll_directory(str(_base_path))
-        os.environ['PATH'] = str(_base_path) + os.pathsep + os.environ['PATH']
+        os.environ["PATH"] = str(_base_path) + os.pathsep + os.environ["PATH"]
 
     if sys.platform == "win32" and sys.version_info >= (3, 8):
         os.add_dll_directory(str(_base_path))
@@ -490,7 +490,7 @@ LLAMA_POOLING_TYPE_UNSPECIFIED = -1
 LLAMA_POOLING_TYPE_NONE = 0
 LLAMA_POOLING_TYPE_MEAN = 1
 LLAMA_POOLING_TYPE_CLS = 2
-LLAMA_POOLING_TYPE_LAST = 3   
+LLAMA_POOLING_TYPE_LAST = 3
 
 # enum llama_attention_type {
 #     LLAMA_ATTENTION_TYPE_UNSPECIFIED = -1,
@@ -811,6 +811,7 @@ class llama_model_params(ctypes.Structure):
 #     bool embeddings;  // if true, extract embeddings (together with logits)
 #     bool offload_kqv; // whether to offload the KQV ops (including the KV cache) to GPU
 #     bool flash_attn;  // whether to use flash attention [EXPERIMENTAL]
+
 
 #     // Abort callback
 #     // if it returns true, execution of llama_decode() will be aborted
@@ -1472,10 +1473,13 @@ def llama_model_has_encoder(model: llama_model_p, /) -> bool:
 # // For encoder-decoder models, this function returns id of the token that must be provided
 # // to the decoder to start generating output sequence. For other models, it returns -1.
 # LLAMA_API llama_token llama_model_decoder_start_token(const struct llama_model * model);
-@ctypes_function("llama_model_decoder_start_token", [llama_model_p_ctypes], ctypes.c_int32)
+@ctypes_function(
+    "llama_model_decoder_start_token", [llama_model_p_ctypes], ctypes.c_int32
+)
 def llama_model_decoder_start_token(model: llama_model_p, /) -> int:
     """For encoder-decoder models, this function returns id of the token that must be provided
-    to the decoder to start generating output sequence. For other models, it returns -1."""
+    to the decoder to start generating output sequence. For other models, it returns -1.
+    """
     ...
 
 
@@ -2568,7 +2572,9 @@ def llama_token_is_eog(model: llama_model_p, token: Union[llama_token, int], /) 
 @ctypes_function(
     "llama_token_is_control", [llama_model_p_ctypes, llama_token], ctypes.c_bool
 )
-def llama_token_is_control(model: llama_model_p, token: Union[llama_token, int], /) -> bool:
+def llama_token_is_control(
+    model: llama_model_p, token: Union[llama_token, int], /
+) -> bool:
     """Identify if Token Id is a control token or a render-able token"""
     ...
 
@@ -3363,6 +3369,7 @@ def llama_grammar_accept_token(
 # //
 # // Model split
 # //
+
 
 # /// @details Build a split GGUF final path for this chunk.
 # ///          llama_split_path(split_path, sizeof(split_path), "/models/ggml-model-q4_0", 2, 4) => split_path = "/models/ggml-model-q4_0-00002-of-00004.gguf"

@@ -17,7 +17,7 @@ class BaseLlamaTokenizer(abc.ABC):
         self, text: bytes, add_bos: bool = True, special: bool = True
     ) -> List[int]:
         """Tokenize the text into tokens.
-        
+
         Args:
             text: The text to tokenize.
             add_bos: Whether to add a beginning of sequence token.
@@ -29,10 +29,11 @@ class BaseLlamaTokenizer(abc.ABC):
         self, tokens: List[int], prev_tokens: Optional[List[int]] = None
     ) -> bytes:
         """Detokenize the tokens into text.
-        
+
         Args:
             tokens: The tokens to detokenize.
-            prev_tokens: If tokens is a continuation of a previous sequence, the previous tokens."""
+            prev_tokens: If tokens is a continuation of a previous sequence, the previous tokens.
+        """
         raise NotImplementedError
 
 
@@ -80,7 +81,9 @@ class LlamaHFTokenizer(BaseLlamaTokenizer):
         self, tokens: List[int], prev_tokens: Optional[List[int]] = None
     ) -> bytes:
         if prev_tokens is not None:
-            text = self.hf_tokenizer.decode(prev_tokens + tokens).encode("utf-8", errors="ignore")
+            text = self.hf_tokenizer.decode(prev_tokens + tokens).encode(
+                "utf-8", errors="ignore"
+            )
             prev_text = self.hf_tokenizer.decode(prev_tokens).encode(
                 "utf-8", errors="ignore"
             )
