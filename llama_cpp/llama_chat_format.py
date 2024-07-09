@@ -2742,7 +2742,18 @@ class Llava15ChatHandler:
     @staticmethod
     def _load_image(image_url: str) -> bytes:
         # TODO: Add Pillow support for other image formats beyond (jpg, png)
-        if image_url.startswith("data:"):
+
+        # load image from disk
+        if os.path.isfile(image_url):
+            import io
+            from PIL import Image
+
+            image = Image.open(image_url)
+            with io.BytesIO() as buf:
+                image.save(buf, format="png")
+                image_bytes = buf.getvalue()
+                return image_bytes
+        elif image_url.startswith("data:"):
             import base64
 
             image_bytes = base64.b64decode(image_url.split(",")[1])
