@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import json
 import ctypes
 import dataclasses
@@ -627,6 +628,8 @@ def chat_formatter_to_chat_completion_handler(
                     json.dumps(schema), verbose=llama.verbose
                 )
             except Exception as e:
+                if llama.verbose:
+                    print(str(e), file=sys.stderr)
                 grammar = llama_grammar.LlamaGrammar.from_string(
                     llama_grammar.JSON_GBNF, verbose=llama.verbose
                 )
@@ -1611,12 +1614,12 @@ def functionary_chat_handler(
         function_call = completion_text.split(".")[-1][:-1]
         new_prompt = prompt + completion_text + stop
     elif isinstance(function_call, str) and function_call != "none":
-        new_prompt = prompt + f":\n"
+        new_prompt = prompt + ":\n"
     elif isinstance(function_call, dict):
         new_prompt = prompt + f" to=functions.{function_call['name']}:\n"
         function_call = function_call["name"]
     else:
-        new_prompt = prompt + f":\n"
+        new_prompt = prompt + ":\n"
 
     function_body = None
     for function in functions or []:
@@ -2871,6 +2874,8 @@ class Llava15ChatHandler:
                     json.dumps(schema), verbose=llama.verbose
                 )
             except Exception as e:
+                if llama.verbose:
+                    print(str(e), file=sys.stderr)
                 grammar = llama_grammar.LlamaGrammar.from_string(
                     llama_grammar.JSON_GBNF, verbose=llama.verbose
                 )

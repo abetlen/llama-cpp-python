@@ -11,10 +11,11 @@ import fnmatch
 import warnings
 import contextlib
 import multiprocessing
-from types import TracebackType
 
 from typing import (
+    Any,
     List,
+    Literal,
     Optional,
     Union,
     Generator,
@@ -23,13 +24,10 @@ from typing import (
     Deque,
     Callable,
     Dict,
-    Type,
 )
 from collections import deque
 from pathlib import Path
 
-
-from llama_cpp.llama_types import List
 
 from .llama_types import *
 from .llama_grammar import LlamaGrammar
@@ -901,7 +899,7 @@ class Llama:
         pooling_type = self.pooling_type()
         logits_all = pooling_type == llama_cpp.LLAMA_POOLING_TYPE_NONE
 
-        if self.context_params.embeddings == False:
+        if self.context_params.embeddings is False:
             raise RuntimeError(
                 "Llama model must be created with embedding=True to call this method"
             )
