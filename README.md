@@ -190,16 +190,6 @@ CMAKE_ARGS="-DGGML_VULKAN=on" pip install llama-cpp-python
 </details>
 
 <details>
-<summary>Kompute</summary>
-
-To install with Kompute support, set the `GGML_KOMPUTE=on` environment variable before installing:
-
-```bash
-CMAKE_ARGS="-DGGML_KOMPUTE=on" pip install llama-cpp-python
-```
-</details>
-
-<details>
 <summary>SYCL</summary>
 
 To install with SYCL support, set the `GGML_SYCL=on` environment variable before installing:
