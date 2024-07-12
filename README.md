@@ -755,7 +755,7 @@ pip install -e .[all]
 make clean
 ```
 
-You can also test out specific commits of `lama.cpp` by checking out the desired commit in the `vendor/llama.cpp` submodule and then running `make clean` and `pip install -e .` again. Any changes in the `llama.h` API will require
+You can also test out specific commits of `llama.cpp` by checking out the desired commit in the `vendor/llama.cpp` submodule and then running `make clean` and `pip install -e .` again. Any changes in the `llama.h` API will require
 changes to the `llama_cpp/llama_cpp.py` file to match the new API (additional changes may be required elsewhere).
 
 ## FAQ
