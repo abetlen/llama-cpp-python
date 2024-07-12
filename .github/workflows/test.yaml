@@ -97,7 +97,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          CMAKE_ARGS="-DLLAMA_METAL=on" python -m pip install .[all] --verbose
+          CMAKE_ARGS="-DGGML_METAL=on" python -m pip install .[all] --verbose
       - name: Test with pytest
         run: |
           python -m pytest
