@@ -49,7 +49,12 @@ class LlamaTokenizer(BaseLlamaTokenizer):
     def detokenize(
         self, tokens: List[int], prev_tokens: Optional[List[int]] = None, special: bool = True
     ) -> bytes:
-        return self._model.detokenize(tokens, prev_tokens=prev_tokens, special=special)
+        if prev_tokens is not None:
+            text = self._model.detokenize(prev_tokens + tokens, special=special)
+            prev_text = self._model.detokenize(prev_tokens, special=special)
+            return text[len(prev_text) :]
+        else:
+            return self._model.detokenize(tokens, special=special)
 
     def encode(
         self, text: str, add_bos: bool = True, special: bool = True
