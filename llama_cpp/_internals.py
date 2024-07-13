@@ -214,7 +214,7 @@ class _LlamaModel:
         llama_cpp.llama_token_to_piece(self.model, token, buf, 32, 0, special)
         return bytes(buf)
 
-    def detokenize(self, tokens: List[int], special: bool = False) -> bytes:
+    def detokenize(self, tokens: List[int], prev_tokens: Optional[List[int]] = None, special: bool = False) -> bytes:
         assert self.model is not None
         output = b""
         size = 32

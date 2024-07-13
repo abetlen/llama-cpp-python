@@ -588,7 +588,7 @@ class Llama:
         return self.tokenizer_.tokenize(text, add_bos, special)
 
     def detokenize(
-        self, tokens: List[int], prev_tokens: Optional[List[int]] = None
+        self, tokens: List[int], prev_tokens: Optional[List[int]] = None, special: bool = False
     ) -> bytes:
         """Detokenize a list of tokens.
 
@@ -599,7 +599,7 @@ class Llama:
         Returns:
             The detokenized string.
         """
-        return self.tokenizer_.detokenize(tokens, prev_tokens=prev_tokens)
+        return self.tokenizer_.detokenize(tokens, prev_tokens=prev_tokens, special=special)
 
     def set_cache(self, cache: Optional[BaseLlamaCache]):
         """Set the cache.
