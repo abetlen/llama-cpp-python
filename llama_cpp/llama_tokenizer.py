@@ -19,9 +19,10 @@ class BaseLlamaTokenizer(abc.ABC):
         """Tokenize the text into tokens.
 
         Args:
-            text: The text to tokenize.
+            text: The utf-8 encoded string to tokenize.
             add_bos: Whether to add a beginning of sequence token.
-            special: Whether to tokenize text literally or as special tokens."""
+            special: Whether to tokenize special tokens.
+        """
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -31,8 +32,9 @@ class BaseLlamaTokenizer(abc.ABC):
         """Detokenize the tokens into text.
 
         Args:
-            tokens: The tokens to detokenize.
-            prev_tokens: If tokens is a continuation of a previous sequence, the previous tokens.
+            tokens: The list of tokens to detokenize.
+            prev_tokens: The list of previous tokens. Offset mapping will be performed if provided.
+            special: Whether to detokenize special tokens.
         """
         raise NotImplementedError
 

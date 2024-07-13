@@ -578,6 +578,8 @@ class Llama:
 
         Args:
             text: The utf-8 encoded string to tokenize.
+            add_bos: Whether to add a beginning of sequence token.
+            special: Whether to tokenize special tokens.
 
         Raises:
             RuntimeError: If the tokenization failed.
@@ -594,7 +596,8 @@ class Llama:
 
         Args:
             tokens: The list of tokens to detokenize.
-            prev_tokens: The list of previous tokens. Offset mapping will be performed if provided
+            prev_tokens: The list of previous tokens. Offset mapping will be performed if provided.
+            special: Whether to detokenize special tokens.
 
         Returns:
             The detokenized string.
