@@ -223,6 +223,7 @@ class LlamaProxy:
             **kwargs,
             # Model Params
             n_gpu_layers=settings.n_gpu_layers,
+            split_mode=settings.split_mode,
             main_gpu=settings.main_gpu,
             tensor_split=settings.tensor_split,
             vocab_only=settings.vocab_only,
