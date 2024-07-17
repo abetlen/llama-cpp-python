@@ -408,15 +408,24 @@ class Llama:
             )
         )
 
+        self._lora_adapter: Optional[llama_cpp.llama_lora_adapter_p] = None
+
         if self.lora_path:
-            if self._model.apply_lora_from_file(
-                self.lora_path,
-                self.lora_scale,
-                self.lora_base,
-                self.n_threads,
+            assert self._model.model is not None
+            self._lora_adapter = llama_cpp.llama_lora_adapter_init(
+                self._model.model,
+                self.lora_path.encode("utf-8"),
+            )
+            if self._lora_adapter is None:
+                raise RuntimeError(
+                    f"Failed to initialize LoRA adapter from lora path: {self.lora_path}"
+                )
+            assert self._ctx.ctx is not None
+            if llama_cpp.llama_lora_adapter_set(
+                self._ctx.ctx, self._lora_adapter, self.lora_scale
             ):
                 raise RuntimeError(
-                    f"Failed to apply LoRA from lora path: {self.lora_path} to base path: {self.lora_base}"
+                    f"Failed to set LoRA adapter from lora path: {self.lora_path}"
                 )
 
         if self.verbose:
@@ -2077,6 +2086,8 @@ class Llama:
         self._stack.close()
 
     def __del__(self) -> None:
+        if self._lora_adapter is not None:
+            llama_cpp.llama_lora_adapter_free(self._lora_adapter)
         self.close()
 
     @staticmethod
