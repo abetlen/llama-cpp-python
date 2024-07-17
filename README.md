@@ -710,6 +710,7 @@ This is a Python module used to create memory in your chat applications.
 
 ## ⚙️ How to:
 - Clone the repo and import the module into your project. Ensure that it is in the project directory.
+- https://github.com/perpendicularai/SeKernel_for_LLM
 - ```
   import kernel
 
