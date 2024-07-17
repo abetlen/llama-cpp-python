@@ -401,7 +401,7 @@ LLAMA_TOKEN_ATTR_SINGLE_WORD = 1 << 9
 #     LLAMA_FTYPE_MOSTLY_F16           = 1,  // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_Q4_0          = 2,  // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_Q4_1          = 3,  // except 1d tensors
-#     LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16 = 4,  // tok_embeddings.weight and output.weight are F16
+#     // LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16 = 4,  // tok_embeddings.weight and output.weight are F16
 #     // LLAMA_FTYPE_MOSTLY_Q4_2       = 5,  // support has been removed
 #     // LLAMA_FTYPE_MOSTLY_Q4_3       = 6,  // support has been removed
 #     LLAMA_FTYPE_MOSTLY_Q8_0          = 7,  // except 1d tensors
@@ -430,14 +430,16 @@ LLAMA_TOKEN_ATTR_SINGLE_WORD = 1 << 9
 #     LLAMA_FTYPE_MOSTLY_IQ4_XS        = 30, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_IQ1_M         = 31, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_BF16          = 32, // except 1d tensors
-
+#     LLAMA_FTYPE_MOSTLY_Q4_0_4_4      = 33, // except 1d tensors
+#     LLAMA_FTYPE_MOSTLY_Q4_0_4_8      = 34, // except 1d tensors
+#     LLAMA_FTYPE_MOSTLY_Q4_0_8_8      = 35, // except 1d tensors
+#
 #     LLAMA_FTYPE_GUESSED = 1024, // not specified in the model file
 # };
 LLAMA_FTYPE_ALL_F32 = 0
 LLAMA_FTYPE_MOSTLY_F16 = 1
 LLAMA_FTYPE_MOSTLY_Q4_0 = 2
 LLAMA_FTYPE_MOSTLY_Q4_1 = 3
-LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16 = 4
 LLAMA_FTYPE_MOSTLY_Q8_0 = 7
 LLAMA_FTYPE_MOSTLY_Q5_0 = 8
 LLAMA_FTYPE_MOSTLY_Q5_1 = 9
@@ -464,6 +466,9 @@ LLAMA_FTYPE_MOSTLY_IQ2_M = 29
 LLAMA_FTYPE_MOSTLY_IQ4_XS = 30
 LLAMA_FTYPE_MOSTLY_IQ1_M = 31
 LLAMA_FTYPE_MOSTLY_BF16 = 32
+LLAMA_FTYPE_MOSTLY_Q4_0_4_4 = 33
+LLAMA_FTYPE_MOSTLY_Q4_0_4_8 = 34
+LLAMA_FTYPE_MOSTLY_Q4_0_8_8 = 35
 LLAMA_FTYPE_GUESSED = 1024
 
 # enum llama_rope_scaling_type {
@@ -1100,6 +1105,12 @@ class llama_chat_message(ctypes.Structure):
     ]
 
 
+# // lora adapter
+# struct llama_lora_adapter;
+llama_lora_adapter_p = ctypes.c_void_p
+llama_lora_adapter_p_ctypes = ctypes.POINTER(ctypes.c_void_p)
+
+
 # // Helpers for getting default parameters
 # LLAMA_API struct llama_model_params llama_model_default_params(void);
 @ctypes_function(
@@ -1507,43 +1518,72 @@ def llama_model_quantize(
     ...
 
 
-# // Apply a LoRA adapter to a loaded model
-# // path_base_model is the path to a higher quality model to use as a base for
-# // the layers modified by the adapter. Can be NULL to use the current loaded model.
-# // The model needs to be reloaded before applying a new adapter, otherwise the adapter
-# // will be applied on top of the previous one
-# // Returns 0 on success
-# LLAMA_API int32_t llama_model_apply_lora_from_file(
-#         const struct llama_model * model,
-#                       const char * path_lora,
-#                            float   scale,
-#                       const char * path_base_model,
-#                          int32_t   n_threads);
+# // Load a LoRA adapter from file
+# // The loaded adapter will be associated to the given model, and will be free when the model is deleted
+# LLAMA_API struct llama_lora_adapter * llama_lora_adapter_init(
+#         struct llama_model * model,
+#         const char * path_lora);
 @ctypes_function(
-    "llama_model_apply_lora_from_file",
-    [
-        llama_model_p_ctypes,
-        ctypes.c_char_p,
-        ctypes.c_float,
-        ctypes.c_char_p,
-        ctypes.c_int32,
-    ],
+    "llama_lora_adapter_init",
+    [llama_model_p_ctypes, ctypes.c_char_p],
+    llama_lora_adapter_p_ctypes,
+)
+def llama_lora_adapter_init(
+    model: llama_model_p, path_lora: bytes, /
+) -> Optional[llama_lora_adapter_p]:
+    """Load a LoRA adapter from file
+    The loaded adapter will be associated to the given model, and will be free when the model is deleted"""
+    ...
+
+
+# // Add a loaded LoRA adapter to given context
+# // This will not modify model's weight
+# LLAMA_API int32_t llama_lora_adapter_set(
+#         struct llama_context * ctx,
+#         struct llama_lora_adapter * adapter,
+#         float scale);
+@ctypes_function(
+    "llama_lora_adapter_set",
+    [llama_context_p_ctypes, llama_lora_adapter_p_ctypes, ctypes.c_float],
     ctypes.c_int32,
 )
-def llama_model_apply_lora_from_file(
-    model: llama_model_p,
-    path_lora: Union[ctypes.c_char_p, bytes],
-    scale: Union[ctypes.c_float, float],
-    path_base_model: Union[ctypes.c_char_p, bytes, None],
-    n_threads: Union[ctypes.c_int32, int],
-    /,
+def llama_lora_adapter_set(
+    ctx: llama_context_p, adapter: llama_lora_adapter_p, scale: float, /
 ) -> int:
-    """Apply a LoRA adapter to a loaded model
-    path_base_model is the path to a higher quality model to use as a base for
-    the layers modified by the adapter. Can be NULL to use the current loaded model.
-    The model needs to be reloaded before applying a new adapter, otherwise the adapter
-    will be applied on top of the previous one
-    Returns 0 on success"""
+    """Add a loaded LoRA adapter to given context
+    This will not modify model's weight"""
+    ...
+
+
+# // Remove a LoRA adapter from given context
+# // Return -1 if the adapter is not present in the context
+# LLAMA_API int32_t llama_lora_adapter_remove(
+#         struct llama_context * ctx,
+#         struct llama_lora_adapter * adapter);
+@ctypes_function(
+    "llama_lora_adapter_remove",
+    [llama_context_p_ctypes, llama_lora_adapter_p_ctypes],
+    ctypes.c_int32,
+)
+def llama_lora_adapter_remove(
+    ctx: llama_context_p, adapter: llama_lora_adapter_p, /
+) -> int:
+    """Remove a LoRA adapter from given context
+    Return -1 if the adapter is not present in the context"""
+    ...
+
+
+# // Manually free a LoRA adapter
+# // Note: loaded adapters will be free when the associated model is deleted
+# LLAMA_API void llama_lora_adapter_free(struct llama_lora_adapter * adapter);
+@ctypes_function(
+    "llama_lora_adapter_free",
+    [llama_lora_adapter_p_ctypes],
+    None,
+)
+def llama_lora_adapter_free(adapter: llama_lora_adapter_p, /):
+    """Manually free a LoRA adapter
+    Note: loaded adapters will be free when the associated model is deleted"""
     ...
 
 
