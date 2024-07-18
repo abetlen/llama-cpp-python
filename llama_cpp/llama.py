@@ -658,7 +658,7 @@ class Llama:
         min_p: float = 0.05,
         typical_p: float = 1.0,
         temp: float = 0.80,
-        repeat_penalty: float = 1.1,
+        repeat_penalty: float = 1.0,
         frequency_penalty: float = 0.0,
         presence_penalty: float = 0.0,
         tfs_z: float = 1.0,
@@ -733,7 +733,7 @@ class Llama:
         min_p: float = 0.05,
         typical_p: float = 1.0,
         temp: float = 0.80,
-        repeat_penalty: float = 1.1,
+        repeat_penalty: float = 1.0,
         reset: bool = True,
         frequency_penalty: float = 0.0,
         presence_penalty: float = 0.0,
@@ -751,7 +751,7 @@ class Llama:
         Examples:
             >>> llama = Llama("models/ggml-7b.bin")
             >>> tokens = llama.tokenize(b"Hello, world!")
-            >>> for token in llama.generate(tokens, top_k=40, top_p=0.95, temp=1.0, repeat_penalty=1.1):
+            >>> for token in llama.generate(tokens, top_k=40, top_p=0.95, temp=1.0, repeat_penalty=1.0):
             ...     print(llama.detokenize([token]))
 
         Args:
@@ -1020,7 +1020,7 @@ class Llama:
         stop: Optional[Union[str, List[str]]] = [],
         frequency_penalty: float = 0.0,
         presence_penalty: float = 0.0,
-        repeat_penalty: float = 1.1,
+        repeat_penalty: float = 1.0,
         top_k: int = 40,
         stream: bool = False,
         seed: Optional[int] = None,
@@ -1639,7 +1639,7 @@ class Llama:
         stop: Optional[Union[str, List[str]]] = [],
         frequency_penalty: float = 0.0,
         presence_penalty: float = 0.0,
-        repeat_penalty: float = 1.1,
+        repeat_penalty: float = 1.0,
         top_k: int = 40,
         stream: bool = False,
         seed: Optional[int] = None,
@@ -1736,7 +1736,7 @@ class Llama:
         stop: Optional[Union[str, List[str]]] = [],
         frequency_penalty: float = 0.0,
         presence_penalty: float = 0.0,
-        repeat_penalty: float = 1.1,
+        repeat_penalty: float = 1.0,
         top_k: int = 40,
         stream: bool = False,
         seed: Optional[int] = None,
@@ -1833,7 +1833,7 @@ class Llama:
         max_tokens: Optional[int] = None,
         presence_penalty: float = 0.0,
         frequency_penalty: float = 0.0,
-        repeat_penalty: float = 1.1,
+        repeat_penalty: float = 1.0,
         tfs_z: float = 1.0,
         mirostat_mode: int = 0,
         mirostat_tau: float = 5.0,

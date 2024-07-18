@@ -721,7 +721,7 @@ class _LlamaSamplingParams:
     typical_p: float = 1.00
     temp: float = 0.80
     penalty_last_n: int = 64
-    penalty_repeat: float = 1.10
+    penalty_repeat: float = 1.0
     penalty_freq: float = 0.00
     penalty_present: float = 0.00
     mirostat: int = 0
