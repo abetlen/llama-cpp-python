@@ -275,7 +275,7 @@ class ChatCompletionNamedToolChoice(TypedDict):
 
 
 ChatCompletionToolChoiceOption = Union[
-    Literal["none", "auto"], ChatCompletionNamedToolChoice
+    Literal["none", "auto", "required"], ChatCompletionNamedToolChoice
 ]
 
 
