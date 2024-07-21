@@ -7,9 +7,201 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.82]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@7fdb6f73e35605c8dbc39e9f19cd9ed84dbc87f2
+
+## [0.2.81]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@968967376dc2c018d29f897c4883d335bbf384fb
+- fix(ci): Fix CUDA wheels, use LLAMA_CUDA instead of removed LLAMA_CUBLAS by @abetlen in 4fb6fc12a02a68884c25dd9f6a421cacec7604c6
+- fix(ci): Fix MacOS release, use macos-12 image instead of removed macos-11 by @abetlen in 3a551eb5263fdbd24b36d7770856374c04e92788
+
+## [0.2.80]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@023b8807e10bc3ade24a255f01c1ad2a01bb4228
+- fix(server): Fix bug in FastAPI streaming response where dependency was released before request completes causing SEGFAULT by @abetlen in 296304b60bb83689659883c9cc24f4c074dd88ff
+- fix(server): Update default config value for embeddings to False to fix error in text generation where logits were not allocated by llama.cpp by @abetlen in bf5e0bb4b151f4ca2f5a21af68eb832a96a79d75
+- fix(ci): Fix the CUDA workflow by @oobabooga in #1551
+- docs: Update readme examples to use newer Qwen2 model by @jncraton in #1544
+
+## [0.2.79]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@9c77ec1d74874ee22bdef8f110e8e8d41389abf2
+- feat(ci): Update workflows and pre-built wheels by @Smartappli in #1416
+- feat: Add .close() method to Llama class to explicitly free model from memory by @jkawamoto in #1513
+- feat: Support SPM infill by @CISC in #1492
+
+## [0.2.78]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@fd5ea0f897ecb3659d6c269ef6f3d833e865ead7
+- fix: Avoid duplicate special tokens in chat formats by @CISC in #1439
+- fix: fix logprobs when BOS is not present by @ghorbani in #1471
+- feat: adding rpc_servers parameter to Llama class by @chraac in #1477
+
+## [0.2.77]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@bde7cd3cd949c1a85d3a199498ac98e78039d46f
+- fix: string value kv_overrides by @abetlen in df45a4b3fe46e72664bda87301b318210c6d4782
+- fix: Fix typo in Llama3VisionAlphaChatHandler by @abetlen in 165b4dc6c188f8fda2fc616154e111f710484eba
+- fix: Use numpy recarray for candidates data, fixes bug with temp < 0 by @abetlen in af3ed503e9ce60fe6b5365031abad4176a3536b3
+fix: Disable Windows+CUDA workaround when compiling for HIPBLAS by Engininja2 in #1493
+
+## [0.2.76]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@0df0aa8e43c3378975269a51f9b876c8692e70da
+- feat: Improve Llama.eval performance by avoiding list conversion by @thoughtp0lice in #1476
+- example: LLM inference with Ray Serve by @rgerganov in #1465
+
+## [0.2.75]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@13ad16af1231ab2d245d35df3295bcfa23de1305
+- fix: segfault for models without eos / bos tokens by @abetlen in d99a6ba607a4885fb00e63e967964aa41bdbbbcb
+- feat: add MinTokensLogitProcessor and min_tokens argument to server by @twaka in #1333
+- misc: Remove unnecessary metadata lookups by @CISC in #1448
+
+## [0.2.74]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@b228aba91ac2cd9eb90e9d423ba1d0d20e0117e2
+- fix: Enable CUDA backend for llava by @abetlen in 7f59856fa6f3e23f07e12fc15aeb9359dc6c3bb4
+- docs: Fix typo in README.md by @yupbank in #1444
+
+## [0.2.73]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@25c6e82e7a1ad25a42b0894e87d9b5c557409516
+- fix: Clear kv cache at beginning of image chat formats to avoid bug when image is evaluated first by @abetlen in ac55d0a175115d1e719672ce1cb1bec776c738b1
+
+## [0.2.72]
+
+- fix(security): Remote Code Execution by Server-Side Template Injection in Model Metadata by @retr0reg in b454f40a9a1787b2b5659cd2cb00819d983185df
+- fix(security): Update remaining jinja chat templates to use immutable sandbox by @CISC in #1441
+
+## [0.2.71]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@911b3900dded9a1cfe0f0e41b82c7a29baf3a217
+- fix: Make leading bos_token optional for image chat formats, fix nanollava system message by @abetlen in 77122638b4153e31d9f277b3d905c2900b536632
+- fix: free last image embed in llava chat handler by @abetlen in 3757328b703b2cd32dcbd5853271e3a8c8599fe7
+
+## [0.2.70]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@c0e6fbf8c380718102bd25fcb8d2e55f8f9480d1
+- feat: fill-in-middle support by @CISC in #1386
+- fix: adding missing args in create_completion for functionary chat handler by @skalade in #1430
+- docs: update README.md @eltociear in #1432
+- fix: chat_format log where auto-detected format prints None by @balvisio in #1434
+- feat(server): Add support for setting root_path by @abetlen in 0318702cdc860999ee70f277425edbbfe0e60419
+- feat(ci): Add docker checks and check deps more frequently by @Smartappli in #1426
+- fix: detokenization case where first token does not start with a leading space by @noamgat in #1375
+- feat: Implement streaming for Functionary v2 + Bug fixes by @jeffrey-fong in #1419
+- fix: Use memmove to copy str_value kv_override by @abetlen in 9f7a85571ae80d3b6ddbd3e1bae407b9f1e3448a
+- feat(server): Remove temperature bounds checks for server by @abetlen in 0a454bebe67d12a446981eb16028c168ca5faa81
+- fix(server): Propagate flash_attn to model load by @dthuerck in #1424
+
+## [0.2.69]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@6ecf3189e00a1e8e737a78b6d10e1d7006e050a2
+- feat: Add llama-3-vision-alpha chat format by @abetlen in 31b1d95a6c19f5b615a3286069f181a415f872e8
+- fix: Change default verbose value of verbose in image chat format handlers to True to match Llama by @abetlen in 4f01c452b6c738dc56eacac3758119b12c57ea94
+- fix: Suppress all logs when verbose=False, use hardcoded fileno's to work in colab notebooks by @abetlen in f116175a5a7c84569c88cad231855c1e6e59ff6e
+- fix: UTF-8 handling with grammars by @jsoma in #1415
+
+## [0.2.68]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@77e15bec6217a39be59b9cc83d6b9afb6b0d8167
+- feat: Add option to enable flash_attn to Lllama params and ModelSettings by @abetlen in 22d77eefd2edaf0148f53374d0cac74d0e25d06e
+- fix(ci): Fix build-and-release.yaml by @Smartappli in #1413
+
+## [0.2.67]
+
+- fix: Ensure image renders before text in chat formats regardless of message content order by @abetlen in 3489ef09d3775f4a87fb7114f619e8ba9cb6b656
+- fix(ci): Fix bug in use of upload-artifact failing to merge multiple artifacts into a single release by @abetlen in d03f15bb73a1d520970357b702a9e7d4cc2a7a62
+
+## [0.2.66]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@8843a98c2ba97a25e93319a104f9ddfaf83ce4c4
+- feat: Generic Chat Formats, Tool Calling, and Huggingface Pull Support for Multimodal Models (Obsidian, LLaVA1.6, Moondream) by @abetlen in #1147
+- ci(fix): Workflow actions updates and fix arm64 wheels not included in release by @Smartappli in #1392
+- ci: Add support for pre-built cuda 12.4.1 wheels by @Smartappli in #1388
+- feat: Add support for str type kv_overrides by @abetlen in a411612b385cef100d76145da1fbd02a7b7cc894
+- fix: Functionary bug fixes by @jeffrey-fong in #1385
+- examples: fix quantize example by @iyubondyrev in #1387
+- ci: Update dependabot.yml by @Smartappli in #1391
+
+## [0.2.65]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@46e12c4692a37bdd31a0432fc5153d7d22bc7f72
+- feat: Allow for possibly non-pooled embeddings by @iamlemec in #1380
+
+## [0.2.64]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@4e96a812b3ce7322a29a3008db2ed73d9087b176
+- feat: Add `llama-3` chat format by @andreabak in #1371
+- feat: Use new llama_token_is_eog in create_completions by @abetlen in d40a250ef3cfaa8224d12c83776a2f1de96ae3d1
+- feat(server): Provide ability to dynamically allocate all threads if desired using -1 by @sean-bailey in #1364
+- ci: Build arm64 wheels by @gaby in 611781f5319719a3d05fefccbbf0cc321742a026
+- fix: Update scikit-build-core build dependency avoid bug in 0.9.1 by @evelkey in #1370
+
+## [0.2.63]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@0e4802b2ecbaab04b4f829fde4a3096ca19c84b5
+- feat: Add stopping_criteria to ChatFormatter, allow stopping on arbitrary token ids, fixes llama3 instruct by @abetlen in cc81afebf04d26ca1ac3cf72f23f18da6ab58588
+
+## [0.2.62]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@3b8f1ec4b18770531d0b1d792f3edf08254e4f0c
+- feat: update grammar schema converter to match llama.cpp by @themrzmaster in #1353
+- feat: add disable_ping_events flag by @khimaros in #1257
+- feat: Make saved state more compact on-disk by @tc-wolf in #1296
+- feat: Use all available CPUs for batch processing by @ddh0 in #1345
+
+## [0.2.61]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@ba5e134e073ec6837078c874aba44a702944a676
+- fix: pass correct type to chat handlers for chat completion logprobs by @abetlen in bb65b4d76411112c6fb0bf759efd746f99ef3c6b
+- feat: Add support for yaml based server configs by @abetlen in 060bfa64d529ade2af9b1f4e207a3937bbc4138f
+- feat: Add typechecking for ctypes structure attributes by @abetlen in 1347e1d050fc5a9a32ffe0bb3e22858da28003bd
+
+## [0.2.60]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@75cd4c77292034ecec587ecb401366f57338f7c0
+- fix: Always embed metal library by @abetlen in b3bfea6dbfb6ed9ce18f9a2723e0a9e4bd1da7ad
+- fix: missing logprobs in response, incorrect response type for functionary by @abetlen in 1ae3abbcc3af7f4a25a3ffc40b246f18039565e8
+- fix(docs): incorrect tool_choice example by @CISC in #1330
+
+## [0.2.59]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@ba0c7c70ab5b15f1f2be7fb0dfbe0366dda30d6c
+- feat: Binary wheels for CPU, CUDA (12.1 - 12.3), Metal by @abetlen, @jllllll, and @oobabooga in #1247
+- fix: segfault when logits_all=False by @abetlen in 8649d7671bd1a7c0d9cc6a5ad91c6ca286512ab3
+- fix: last tokens passing to sample_repetition_penalties function by @ymikhailov in #1295
+
+## [0.2.58]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@ba0c7c70ab5b15f1f2be7fb0dfbe0366dda30d6c
+- feat: add support for KV cache quantization options by @Limour-dev in #1307
+- feat: Add logprobs support to chat completions by @windspirit95 in #1311
+- fix: set LLAMA_METAL_EMBED_LIBRARY=on on MacOS arm64 by @bretello in #1289
+- feat: Add tools/functions variables to Jinja2ChatFormatter, add function response formatting for all simple chat formats by @CISC in #1273
+- fix: Changed local API doc references to hosted by by @lawfordp2017 in #1317
+
+## [0.2.57]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@ac9ee6a4ad740bc1ee484ede43e9f92b5af244c1
+- fix: set default embedding pooling type to unspecified by @abetlen in 4084aabe867b8ec2aba1b22659e59c9318b0d1f3
+- fix: Fix and optimize functionary chat handler by @jeffrey-fong in #1282
+- fix: json mode for basic chat formats by @abetlen in 20e6815252d0efd9f015f7adbf108faaf36e3f3c
+
+## [0.2.56]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@c2101a2e909ac7c08976d414e64e96c90ee5fa9e
+- feat(server): Add endpoints for tokenize, detokenize and count tokens by @felipelo in #1136
+- feat: Switch embed to llama_get_embeddings_seq by @iamlemec in #1263
+- fix: Fixed json strings grammar by blacklisting character control set by @ExtReMLapin in d02a9cf16ff88ad011e2eb1ce29f4d9400f13cd1
+- fix: Check for existence of clip model path by @kejcao in #1264
+
 ## [0.2.55]
 
-- feat: Update llama.cpp to ggerganov/9731134296af3a6839cd682e51d9c2109a871de5
+- feat: Update llama.cpp to ggerganov/llama.cpp@9731134296af3a6839cd682e51d9c2109a871de5
 - docs: fix small typo in README: 'model know how' -> 'model knows how' by @boegel in #1244
 
 ## [0.2.54]

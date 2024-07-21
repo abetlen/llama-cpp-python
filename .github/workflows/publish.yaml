@@ -10,20 +10,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         submodules: "recursive"
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
-        python-version: "3.8"
+        python-version: "3.9"
     - name: Install dependencies
       run: |
-        python3 -m pip install --upgrade pip build
-        python3 -m pip install -e .[all]
+        python -m pip install --upgrade pip build
+        python -m pip install -e .[all]
     - name: Build source distribution
       run: |
-        python3 -m build --sdist
+        python -m build --sdist
     - name: Publish distribution to PyPI
       # TODO: move to tag based releases
       # if: startsWith(github.ref, 'refs/tags')

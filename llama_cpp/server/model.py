@@ -44,6 +44,8 @@ class LlamaProxy:
             if self._current_model is not None:
                 return self._current_model
 
+        if self._current_model:
+            self._current_model.close()
         self._current_model = None
 
         settings = self._model_settings_dict[model]
@@ -65,6 +67,7 @@ class LlamaProxy:
 
     def free(self):
         if self._current_model:
+            self._current_model.close()
             del self._current_model
 
     @staticmethod
@@ -72,9 +75,88 @@ class LlamaProxy:
         chat_handler = None
         if settings.chat_format == "llava-1-5":
             assert settings.clip_model_path is not None, "clip model not found"
-            chat_handler = llama_cpp.llama_chat_format.Llava15ChatHandler(
-                clip_model_path=settings.clip_model_path, verbose=settings.verbose
-            )
+            if settings.hf_model_repo_id is not None:
+                chat_handler = (
+                    llama_cpp.llama_chat_format.Llava15ChatHandler.from_pretrained(
+                        repo_id=settings.hf_model_repo_id,
+                        filename=settings.clip_model_path,
+                        verbose=settings.verbose,
+                    )
+                )
+            else:
+                chat_handler = llama_cpp.llama_chat_format.Llava15ChatHandler(
+                    clip_model_path=settings.clip_model_path, verbose=settings.verbose
+                )
+        elif settings.chat_format == "obsidian":
+            assert settings.clip_model_path is not None, "clip model not found"
+            if settings.hf_model_repo_id is not None:
+                chat_handler = (
+                    llama_cpp.llama_chat_format.ObsidianChatHandler.from_pretrained(
+                        repo_id=settings.hf_model_repo_id,
+                        filename=settings.clip_model_path,
+                        verbose=settings.verbose,
+                    )
+                )
+            else:
+                chat_handler = llama_cpp.llama_chat_format.ObsidianChatHandler(
+                    clip_model_path=settings.clip_model_path, verbose=settings.verbose
+                )
+        elif settings.chat_format == "llava-1-6":
+            assert settings.clip_model_path is not None, "clip model not found"
+            if settings.hf_model_repo_id is not None:
+                chat_handler = (
+                    llama_cpp.llama_chat_format.Llava16ChatHandler.from_pretrained(
+                        repo_id=settings.hf_model_repo_id,
+                        filename=settings.clip_model_path,
+                        verbose=settings.verbose,
+                    )
+                )
+            else:
+                chat_handler = llama_cpp.llama_chat_format.Llava16ChatHandler(
+                    clip_model_path=settings.clip_model_path, verbose=settings.verbose
+                )
+        elif settings.chat_format == "moondream":
+            assert settings.clip_model_path is not None, "clip model not found"
+            if settings.hf_model_repo_id is not None:
+                chat_handler = (
+                    llama_cpp.llama_chat_format.MoondreamChatHandler.from_pretrained(
+                        repo_id=settings.hf_model_repo_id,
+                        filename=settings.clip_model_path,
+                        verbose=settings.verbose,
+                    )
+                )
+            else:
+                chat_handler = llama_cpp.llama_chat_format.MoondreamChatHandler(
+                    clip_model_path=settings.clip_model_path, verbose=settings.verbose
+                )
+        elif settings.chat_format == "nanollava":
+            assert settings.clip_model_path is not None, "clip model not found"
+            if settings.hf_model_repo_id is not None:
+                chat_handler = (
+                    llama_cpp.llama_chat_format.NanoLlavaChatHandler.from_pretrained(
+                        repo_id=settings.hf_model_repo_id,
+                        filename=settings.clip_model_path,
+                        verbose=settings.verbose,
+                    )
+                )
+            else:
+                chat_handler = llama_cpp.llama_chat_format.NanoLlavaChatHandler(
+                    clip_model_path=settings.clip_model_path, verbose=settings.verbose
+                )
+        elif settings.chat_format == "llama-3-vision-alpha":
+            assert settings.clip_model_path is not None, "clip model not found"
+            if settings.hf_model_repo_id is not None:
+                chat_handler = (
+                    llama_cpp.llama_chat_format.Llama3VisionAlpha.from_pretrained(
+                        repo_id=settings.hf_model_repo_id,
+                        filename=settings.clip_model_path,
+                        verbose=settings.verbose,
+                    )
+                )
+            else:
+                chat_handler = llama_cpp.llama_chat_format.Llama3VisionAlpha(
+                    clip_model_path=settings.clip_model_path, verbose=settings.verbose
+                )
         elif settings.chat_format == "hf-autotokenizer":
             assert (
                 settings.hf_pretrained_model_name_or_path is not None
@@ -104,7 +186,7 @@ class LlamaProxy:
                 num_pred_tokens=settings.draft_model_num_pred_tokens
             )
 
-        kv_overrides: Optional[Dict[str, Union[bool, int, float]]] = None
+        kv_overrides: Optional[Dict[str, Union[bool, int, float, str]]] = None
         if settings.kv_overrides is not None:
             assert isinstance(settings.kv_overrides, list)
             kv_overrides = {}
@@ -118,6 +200,8 @@ class LlamaProxy:
                         kv_overrides[key] = int(value)
                     elif value_type == "float":
                         kv_overrides[key] = float(value)
+                    elif value_type == "str":
+                        kv_overrides[key] = value
                     else:
                         raise ValueError(f"Unknown value type {value_type}")
 
@@ -139,12 +223,14 @@ class LlamaProxy:
             **kwargs,
             # Model Params
             n_gpu_layers=settings.n_gpu_layers,
+            split_mode=settings.split_mode,
             main_gpu=settings.main_gpu,
             tensor_split=settings.tensor_split,
             vocab_only=settings.vocab_only,
             use_mmap=settings.use_mmap,
             use_mlock=settings.use_mlock,
             kv_overrides=kv_overrides,
+            rpc_servers=settings.rpc_servers,
             # Context Params
             seed=settings.seed,
             n_ctx=settings.n_ctx,
@@ -163,6 +249,7 @@ class LlamaProxy:
             logits_all=settings.logits_all,
             embedding=settings.embedding,
             offload_kqv=settings.offload_kqv,
+            flash_attn=settings.flash_attn,
             # Sampling Params
             last_n_tokens_size=settings.last_n_tokens_size,
             # LoRA Params
@@ -175,6 +262,9 @@ class LlamaProxy:
             chat_handler=chat_handler,
             # Speculative Decoding
             draft_model=draft_model,
+            # KV Cache Quantization
+            type_k=settings.type_k,
+            type_v=settings.type_v,
             # Tokenizer
             tokenizer=tokenizer,
             # Misc

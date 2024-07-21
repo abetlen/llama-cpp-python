@@ -6,7 +6,7 @@ from scipy.special import log_softmax
 
 import llama_cpp
 
-MODEL = "./vendor/llama.cpp/models/ggml-vocab-llama.gguf"
+MODEL = "./vendor/llama.cpp/models/ggml-vocab-llama-spm.gguf"
 
 
 def test_llama_cpp_tokenization():

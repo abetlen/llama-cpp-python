@@ -16,13 +16,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         submodules: "recursive"
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
-        python-version: "3.8"
+        python-version: "3.11"
+        cache: 'pip'
     - name: Append Dev Version to __version__
       run: |
         DEV_VERSION=${{ github.event.inputs.dev_version }}
@@ -31,11 +32,11 @@ jobs:
         sed -i 's/__version__ = \".*\"/__version__ = \"'"${NEW_VERSION}"'\"/' llama_cpp/__init__.py
     - name: Install dependencies
       run: |
-        python3 -m pip install --upgrade pip build
-        python3 -m pip install -e .[all]
+        python -m pip install --upgrade pip build
+        python -m pip install -e .[all]
     - name: Build source distribution
       run: |
-        python3 -m build --sdist
+        python -m build --sdist
     - name: Publish to Test PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
       with:

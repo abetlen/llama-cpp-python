@@ -6,6 +6,7 @@ Based on the OpenAI OpenAPI specification:
 https://github.com/openai/openai-openapi/blob/master/openapi.yaml
 
 """
+
 from typing import Any, List, Optional, Dict, Union
 from typing_extensions import TypedDict, NotRequired, Literal
 
@@ -24,7 +25,7 @@ class EmbeddingUsage(TypedDict):
 class Embedding(TypedDict):
     index: int
     object: str
-    embedding: List[float]
+    embedding: Union[List[float], List[List[float]]]
 
 
 class CreateEmbeddingResponse(TypedDict):
@@ -84,6 +85,7 @@ class ChatCompletionFunction(TypedDict):
 class ChatCompletionResponseChoice(TypedDict):
     index: int
     message: "ChatCompletionResponseMessage"
+    logprobs: Optional[CompletionLogprobs]
     finish_reason: Optional[str]
 
 
@@ -155,7 +157,9 @@ class ChatCompletionFunctionCallOption(TypedDict):
 
 class ChatCompletionRequestResponseFormat(TypedDict):
     type: Literal["text", "json_object"]
-    schema: NotRequired[JsonType] # https://docs.endpoints.anyscale.com/guides/json_mode/
+    schema: NotRequired[
+        JsonType
+    ]  # https://docs.endpoints.anyscale.com/guides/json_mode/
 
 
 class ChatCompletionRequestMessageContentPartText(TypedDict):
@@ -271,7 +275,7 @@ class ChatCompletionNamedToolChoice(TypedDict):
 
 
 ChatCompletionToolChoiceOption = Union[
-    Literal["none", "auto"], ChatCompletionNamedToolChoice
+    Literal["none", "auto", "required"], ChatCompletionNamedToolChoice
 ]
 
 

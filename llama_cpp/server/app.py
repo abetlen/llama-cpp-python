@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 import json
+import typing
+import contextlib
 
 from threading import Lock
 from functools import partial
@@ -12,14 +14,7 @@ import llama_cpp
 import anyio
 from anyio.streams.memory import MemoryObjectSendStream
 from starlette.concurrency import run_in_threadpool, iterate_in_threadpool
-from fastapi import (
-    Depends,
-    FastAPI,
-    APIRouter,
-    Request,
-    HTTPException,
-    status,
-)
+from fastapi import Depends, FastAPI, APIRouter, Request, HTTPException, status, Body
 from fastapi.middleware import Middleware
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer
@@ -41,6 +36,11 @@ from llama_cpp.server.types import (
     CreateEmbeddingRequest,
     CreateChatCompletionRequest,
     ModelList,
+    TokenizeInputRequest,
+    TokenizeInputResponse,
+    TokenizeInputCountResponse,
+    DetokenizeInputRequest,
+    DetokenizeInputResponse,
 )
 from llama_cpp.server.errors import RouteErrorHandler
 
@@ -89,6 +89,14 @@ def get_llama_proxy():
             llama_outer_lock.release()
 
 
+_ping_message_factory: typing.Optional[typing.Callable[[], bytes]] = None
+
+
+def set_ping_message_factory(factory: typing.Callable[[], bytes]):
+    global _ping_message_factory
+    _ping_message_factory = factory
+
+
 def create_app(
     settings: Settings | None = None,
     server_settings: ServerSettings | None = None,
@@ -99,7 +107,15 @@ def create_app(
         if not os.path.exists(config_file):
             raise ValueError(f"Config file {config_file} not found!")
         with open(config_file, "rb") as f:
-            config_file_settings = ConfigFileSettings.model_validate_json(f.read())
+            # Check if yaml file
+            if config_file.endswith(".yaml") or config_file.endswith(".yml"):
+                import yaml
+
+                config_file_settings = ConfigFileSettings.model_validate_json(
+                    json.dumps(yaml.safe_load(f))
+                )
+            else:
+                config_file_settings = ConfigFileSettings.model_validate_json(f.read())
             server_settings = ServerSettings.model_validate(config_file_settings)
             model_settings = config_file_settings.models
 
@@ -119,6 +135,7 @@ def create_app(
         middleware=middleware,
         title="🦙 llama.cpp Python API",
         version=llama_cpp.__version__,
+        root_path=server_settings.root_path,
     )
     app.add_middleware(
         CORSMiddleware,
@@ -132,24 +149,29 @@ def create_app(
     assert model_settings is not None
     set_llama_proxy(model_settings=model_settings)
 
+    if server_settings.disable_ping_events:
+        set_ping_message_factory(lambda: bytes())
+
     return app
 
 
 async def get_event_publisher(
     request: Request,
-    inner_send_chan: MemoryObjectSendStream,
-    iterator: Iterator,
+    inner_send_chan: MemoryObjectSendStream[typing.Any],
+    iterator: Iterator[typing.Any],
+    on_complete: typing.Optional[typing.Callable[[], None]] = None,
 ):
+    server_settings = next(get_server_settings())
+    interrupt_requests = (
+        server_settings.interrupt_requests if server_settings else False
+    )
     async with inner_send_chan:
         try:
             async for chunk in iterate_in_threadpool(iterator):
                 await inner_send_chan.send(dict(data=json.dumps(chunk)))
                 if await request.is_disconnected():
                     raise anyio.get_cancelled_exc_class()()
-                if (
-                    next(get_server_settings()).interrupt_requests
-                    and llama_outer_lock.locked()
-                ):
+                if interrupt_requests and llama_outer_lock.locked():
                     await inner_send_chan.send(dict(data="[DONE]"))
                     raise anyio.get_cancelled_exc_class()()
             await inner_send_chan.send(dict(data="[DONE]"))
@@ -158,6 +180,9 @@ async def get_event_publisher(
             with anyio.move_on_after(1, shield=True):
                 print(f"Disconnected from client (via refresh/close) {request.client}")
                 raise e
+        finally:
+            if on_complete:
+                on_complete()
 
 
 def _logit_bias_tokens_to_input_ids(
@@ -196,6 +221,9 @@ async def authenticate(
     )
 
 
+openai_v1_tag = "OpenAI V1"
+
+
 @router.post(
     "/v1/completions",
     summary="Completion",
@@ -227,17 +255,27 @@ async def authenticate(
             },
         }
     },
+    tags=[openai_v1_tag],
 )
 @router.post(
     "/v1/engines/copilot-codex/completions",
     include_in_schema=False,
     dependencies=[Depends(authenticate)],
+    tags=[openai_v1_tag],
 )
 async def create_completion(
     request: Request,
     body: CreateCompletionRequest,
-    llama_proxy: LlamaProxy = Depends(get_llama_proxy),
 ) -> llama_cpp.Completion:
+    exit_stack = contextlib.ExitStack()
+    llama_proxy = await run_in_threadpool(
+        lambda: exit_stack.enter_context(contextlib.contextmanager(get_llama_proxy)())
+    )
+    if llama_proxy is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Service is not available",
+        )
     if isinstance(body.prompt, list):
         assert len(body.prompt) <= 1
         body.prompt = body.prompt[0] if len(body.prompt) > 0 else ""
@@ -253,6 +291,7 @@ async def create_completion(
         "best_of",
         "logit_bias_type",
         "user",
+        "min_tokens",
     }
     kwargs = body.model_dump(exclude=exclude)
 
@@ -265,6 +304,15 @@ async def create_completion(
 
     if body.grammar is not None:
         kwargs["grammar"] = llama_cpp.LlamaGrammar.from_string(body.grammar)
+
+    if body.min_tokens > 0:
+        _min_tokens_logits_processor = llama_cpp.LogitsProcessorList(
+            [llama_cpp.MinTokensLogitsProcessor(body.min_tokens, llama.token_eos())]
+        )
+        if "logits_processor" not in kwargs:
+            kwargs["logits_processor"] = _min_tokens_logits_processor
+        else:
+            kwargs["logits_processor"].extend(_min_tokens_logits_processor)
 
     iterator_or_completion: Union[
         llama_cpp.CreateCompletionResponse,
@@ -280,6 +328,7 @@ async def create_completion(
         def iterator() -> Iterator[llama_cpp.CreateCompletionStreamResponse]:
             yield first_response
             yield from iterator_or_completion
+            exit_stack.close()
 
         send_chan, recv_chan = anyio.create_memory_object_stream(10)
         return EventSourceResponse(
@@ -289,15 +338,20 @@ async def create_completion(
                 request=request,
                 inner_send_chan=send_chan,
                 iterator=iterator(),
+                on_complete=exit_stack.close,
             ),
             sep="\n",
+            ping_message_factory=_ping_message_factory,
         )
     else:
         return iterator_or_completion
 
 
 @router.post(
-    "/v1/embeddings", summary="Embedding", dependencies=[Depends(authenticate)]
+    "/v1/embeddings",
+    summary="Embedding",
+    dependencies=[Depends(authenticate)],
+    tags=[openai_v1_tag],
 )
 async def create_embedding(
     request: CreateEmbeddingRequest,
@@ -339,16 +393,99 @@ async def create_embedding(
             },
         }
     },
+    tags=[openai_v1_tag],
 )
 async def create_chat_completion(
     request: Request,
-    body: CreateChatCompletionRequest,
-    llama_proxy: LlamaProxy = Depends(get_llama_proxy),
+    body: CreateChatCompletionRequest = Body(
+        openapi_examples={
+            "normal": {
+                "summary": "Chat Completion",
+                "value": {
+                    "model": "gpt-3.5-turbo",
+                    "messages": [
+                        {"role": "system", "content": "You are a helpful assistant."},
+                        {"role": "user", "content": "What is the capital of France?"},
+                    ],
+                },
+            },
+            "json_mode": {
+                "summary": "JSON Mode",
+                "value": {
+                    "model": "gpt-3.5-turbo",
+                    "messages": [
+                        {"role": "system", "content": "You are a helpful assistant."},
+                        {"role": "user", "content": "Who won the world series in 2020"},
+                    ],
+                    "response_format": {"type": "json_object"},
+                },
+            },
+            "tool_calling": {
+                "summary": "Tool Calling",
+                "value": {
+                    "model": "gpt-3.5-turbo",
+                    "messages": [
+                        {"role": "system", "content": "You are a helpful assistant."},
+                        {"role": "user", "content": "Extract Jason is 30 years old."},
+                    ],
+                    "tools": [
+                        {
+                            "type": "function",
+                            "function": {
+                                "name": "User",
+                                "description": "User record",
+                                "parameters": {
+                                    "type": "object",
+                                    "properties": {
+                                        "name": {"type": "string"},
+                                        "age": {"type": "number"},
+                                    },
+                                    "required": ["name", "age"],
+                                },
+                            },
+                        }
+                    ],
+                    "tool_choice": {
+                        "type": "function",
+                        "function": {
+                            "name": "User",
+                        },
+                    },
+                },
+            },
+            "logprobs": {
+                "summary": "Logprobs",
+                "value": {
+                    "model": "gpt-3.5-turbo",
+                    "messages": [
+                        {"role": "system", "content": "You are a helpful assistant."},
+                        {"role": "user", "content": "What is the capital of France?"},
+                    ],
+                    "logprobs": True,
+                    "top_logprobs": 10,
+                },
+            },
+        }
+    ),
 ) -> llama_cpp.ChatCompletion:
+    # This is a workaround for an issue in FastAPI dependencies
+    # where the dependency is cleaned up before a StreamingResponse
+    # is complete.
+    # https://github.com/tiangolo/fastapi/issues/11143
+    exit_stack = contextlib.ExitStack()
+    llama_proxy = await run_in_threadpool(
+        lambda: exit_stack.enter_context(contextlib.contextmanager(get_llama_proxy)())
+    )
+    if llama_proxy is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Service is not available",
+        )
     exclude = {
         "n",
         "logit_bias_type",
         "user",
+        "min_tokens",
     }
     kwargs = body.model_dump(exclude=exclude)
     llama = llama_proxy(body.model)
@@ -361,6 +498,15 @@ async def create_chat_completion(
 
     if body.grammar is not None:
         kwargs["grammar"] = llama_cpp.LlamaGrammar.from_string(body.grammar)
+
+    if body.min_tokens > 0:
+        _min_tokens_logits_processor = llama_cpp.LogitsProcessorList(
+            [llama_cpp.MinTokensLogitsProcessor(body.min_tokens, llama.token_eos())]
+        )
+        if "logits_processor" not in kwargs:
+            kwargs["logits_processor"] = _min_tokens_logits_processor
+        else:
+            kwargs["logits_processor"].extend(_min_tokens_logits_processor)
 
     iterator_or_completion: Union[
         llama_cpp.ChatCompletion, Iterator[llama_cpp.ChatCompletionChunk]
@@ -375,6 +521,7 @@ async def create_chat_completion(
         def iterator() -> Iterator[llama_cpp.ChatCompletionChunk]:
             yield first_response
             yield from iterator_or_completion
+            exit_stack.close()
 
         send_chan, recv_chan = anyio.create_memory_object_stream(10)
         return EventSourceResponse(
@@ -384,14 +531,22 @@ async def create_chat_completion(
                 request=request,
                 inner_send_chan=send_chan,
                 iterator=iterator(),
+                on_complete=exit_stack.close,
             ),
             sep="\n",
+            ping_message_factory=_ping_message_factory,
         )
     else:
+        exit_stack.close()
         return iterator_or_completion
 
 
-@router.get("/v1/models", summary="Models", dependencies=[Depends(authenticate)])
+@router.get(
+    "/v1/models",
+    summary="Models",
+    dependencies=[Depends(authenticate)],
+    tags=[openai_v1_tag],
+)
 async def get_models(
     llama_proxy: LlamaProxy = Depends(get_llama_proxy),
 ) -> ModelList:
@@ -407,3 +562,51 @@ async def get_models(
             for model_alias in llama_proxy
         ],
     }
+
+
+extras_tag = "Extras"
+
+
+@router.post(
+    "/extras/tokenize",
+    summary="Tokenize",
+    dependencies=[Depends(authenticate)],
+    tags=[extras_tag],
+)
+async def tokenize(
+    body: TokenizeInputRequest,
+    llama_proxy: LlamaProxy = Depends(get_llama_proxy),
+) -> TokenizeInputResponse:
+    tokens = llama_proxy(body.model).tokenize(body.input.encode("utf-8"), special=True)
+
+    return TokenizeInputResponse(tokens=tokens)
+
+
+@router.post(
+    "/extras/tokenize/count",
+    summary="Tokenize Count",
+    dependencies=[Depends(authenticate)],
+    tags=[extras_tag],
+)
+async def count_query_tokens(
+    body: TokenizeInputRequest,
+    llama_proxy: LlamaProxy = Depends(get_llama_proxy),
+) -> TokenizeInputCountResponse:
+    tokens = llama_proxy(body.model).tokenize(body.input.encode("utf-8"), special=True)
+
+    return TokenizeInputCountResponse(count=len(tokens))
+
+
+@router.post(
+    "/extras/detokenize",
+    summary="Detokenize",
+    dependencies=[Depends(authenticate)],
+    tags=[extras_tag],
+)
+async def detokenize(
+    body: DetokenizeInputRequest,
+    llama_proxy: LlamaProxy = Depends(get_llama_proxy),
+) -> DetokenizeInputResponse:
+    text = llama_proxy(body.model).detokenize(body.tokens).decode("utf-8")
+
+    return DetokenizeInputResponse(text=text)

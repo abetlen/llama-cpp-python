@@ -8,57 +8,60 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
 
     steps:
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          cache: 'pip'
       - name: Install dependencies
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install --verbose llama-cpp-python[all]
+          python -m pip install --upgrade pip
+          python -m pip install --verbose llama-cpp-python[all]
       - name: Test with pytest
         run: |
-          python3 -c "import llama_cpp"
+          python -c "import llama_cpp"
 
   build-windows:
 
     runs-on: windows-latest
     strategy:
       matrix:
-        python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
 
     steps:
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          cache: 'pip'
       - name: Install dependencies
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install --verbose llama-cpp-python[all]
+          python -m pip install --upgrade pip
+          python -m pip install --verbose llama-cpp-python[all]
       - name: Test with pytest
         run: |
-          python3 -c "import llama_cpp"
+          python -c "import llama_cpp"
 
   build-macos:
 
     runs-on: macos-latest
     strategy:
       matrix:
-        python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
 
     steps:
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          cache: 'pip'
       - name: Install dependencies
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install --verbose llama-cpp-python[all]
+          python -m pip install --upgrade pip
+          python -m pip install --verbose llama-cpp-python[all]
       - name: Test with pytest
         run: |
-          python3 -c "import llama_cpp"
+          python -c "import llama_cpp"
