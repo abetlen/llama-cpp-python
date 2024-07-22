@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.83]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@081fe431aa8fb6307145c4feb3eed4f48cab19f8
+- feat: Add 'required' literal to ChatCompletionToolChoiceOption by @mjschock in #1597
+- fix: Change repeat_penalty to 1.0 to match llama.cpp defaults by @ddh0 in #1590
+- fix(docs): Update README.md typo by @ericcurtin in #1589
+- fix(server): Use split_mode from model settings by @grider-withourai in #1594
+- feat(ci): Dockerfile update base images and post-install cleanup by @Smartappli in #1530
+
 ## [0.2.82]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@7fdb6f73e35605c8dbc39e9f19cd9ed84dbc87f2
