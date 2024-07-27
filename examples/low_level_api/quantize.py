@@ -22,7 +22,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("fname_inp", type=str, help="Path to input model")
     parser.add_argument("fname_out", type=str, help="Path to output model")
-    parser.add_argument("type", type=int, help="Type of quantization (2: q4_0, 3: q4_1), see llama_cpp.py for enum")
+    parser.add_argument(
+        "type",
+        type=int,
+        help="Type of quantization (2: q4_0, 3: q4_1), see llama_cpp.py for enum",
+    )
     args = parser.parse_args()
     main(args)
-
