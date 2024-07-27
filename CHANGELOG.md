@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.83]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@081fe431aa8fb6307145c4feb3eed4f48cab19f8
+- feat: Add 'required' literal to ChatCompletionToolChoiceOption by @mjschock in #1597
+- fix: Change repeat_penalty to 1.0 to match llama.cpp defaults by @ddh0 in #1590
+- fix(docs): Update README.md typo by @ericcurtin in #1589
+- fix(server): Use split_mode from model settings by @grider-withourai in #1594
+- feat(ci): Dockerfile update base images and post-install cleanup by @Smartappli in #1530
+
+## [0.2.82]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@7fdb6f73e35605c8dbc39e9f19cd9ed84dbc87f2
+
+## [0.2.81]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@968967376dc2c018d29f897c4883d335bbf384fb
+- fix(ci): Fix CUDA wheels, use LLAMA_CUDA instead of removed LLAMA_CUBLAS by @abetlen in 4fb6fc12a02a68884c25dd9f6a421cacec7604c6
+- fix(ci): Fix MacOS release, use macos-12 image instead of removed macos-11 by @abetlen in 3a551eb5263fdbd24b36d7770856374c04e92788
+
+## [0.2.80]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@023b8807e10bc3ade24a255f01c1ad2a01bb4228
+- fix(server): Fix bug in FastAPI streaming response where dependency was released before request completes causing SEGFAULT by @abetlen in 296304b60bb83689659883c9cc24f4c074dd88ff
+- fix(server): Update default config value for embeddings to False to fix error in text generation where logits were not allocated by llama.cpp by @abetlen in bf5e0bb4b151f4ca2f5a21af68eb832a96a79d75
+- fix(ci): Fix the CUDA workflow by @oobabooga in #1551
+- docs: Update readme examples to use newer Qwen2 model by @jncraton in #1544
+
 ## [0.2.79]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@9c77ec1d74874ee22bdef8f110e8e8d41389abf2

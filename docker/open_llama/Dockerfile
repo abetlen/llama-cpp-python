@@ -1,5 +1,5 @@
 # Define the image argument and provide a default value
-ARG IMAGE=python:3-slim-bullseye
+ARG IMAGE=python:3-slim-bookworm
 
 # Use the image as specified
 FROM ${IMAGE}
@@ -12,7 +12,9 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
     python3 \
     python3-pip \
     ninja-build \
-    build-essential
+    build-essential \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN python3 -m pip install --upgrade pip pytest cmake scikit-build setuptools fastapi uvicorn sse-starlette pydantic-settings starlette-context
 
