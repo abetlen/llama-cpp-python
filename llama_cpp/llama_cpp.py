@@ -233,9 +233,6 @@ LLAMA_MAX_DEVICES = _lib.llama_max_devices()
 # define LLAMA_DEFAULT_SEED 0xFFFFFFFF
 LLAMA_DEFAULT_SEED = 0xFFFFFFFF
 
-# define LLAMA_MAX_RNG_STATE (64*1024)
-LLAMA_MAX_RNG_STATE = 64 * 1024
-
 # define LLAMA_FILE_MAGIC_GGLA 0x67676c61u // 'ggla'
 LLAMA_FILE_MAGIC_GGLA = 0x67676C61
 
@@ -247,13 +244,13 @@ LLAMA_FILE_MAGIC_GGSQ = 0x67677371
 
 # define LLAMA_SESSION_MAGIC   LLAMA_FILE_MAGIC_GGSN
 LLAMA_SESSION_MAGIC = LLAMA_FILE_MAGIC_GGSN
-# define LLAMA_SESSION_VERSION 7
-LLAMA_SESSION_VERSION = 7
+# define LLAMA_SESSION_VERSION 8
+LLAMA_SESSION_VERSION = 8
 
 # define LLAMA_STATE_SEQ_MAGIC   LLAMA_FILE_MAGIC_GGSQ
 LLAMA_STATE_SEQ_MAGIC = LLAMA_FILE_MAGIC_GGSQ
-# define LLAMA_STATE_SEQ_VERSION 1
-LLAMA_STATE_SEQ_VERSION = 1
+# define LLAMA_STATE_SEQ_VERSION 2
+LLAMA_STATE_SEQ_VERSION = 2
 
 # struct llama_model;
 llama_model_p = NewType("llama_model_p", int)
@@ -1583,7 +1580,7 @@ def llama_lora_adapter_set(
     ...
 
 
-# // Remove a LoRA adapter from given context
+# // Remove a specific LoRA adapter from given context
 # // Return -1 if the adapter is not present in the context
 # LLAMA_API int32_t llama_lora_adapter_remove(
 #         struct llama_context * ctx,
@@ -1598,6 +1595,19 @@ def llama_lora_adapter_remove(
 ) -> int:
     """Remove a LoRA adapter from given context
     Return -1 if the adapter is not present in the context"""
+    ...
+
+
+# // Remove all LoRA adapters from given context
+# LLAMA_API void llama_lora_adapter_clear(
+#         struct llama_context * ctx);
+@ctypes_function(
+    "llama_lora_adapter_clear",
+    [llama_context_p_ctypes],
+    None,
+)
+def llama_lora_adapter_clear(ctx: llama_context_p, /):
+    """Remove all LoRA adapters from given context"""
     ...
 
 
@@ -1992,17 +2002,17 @@ def llama_kv_cache_update(ctx: llama_context_p, /):
 # //
 
 
-# Returns the maximum size in bytes of the state (rng, logits, embedding
-# and kv_cache) - will often be smaller after compacting tokens
-# LLAMA_API size_t llama_state_get_size(const struct llama_context * ctx);
+# // Returns the *actual* size in bytes of the state
+# // (rng, logits, embedding and kv_cache)
+# // Only use when saving the state, not when restoring it, otherwise the size may be too small.
+# LLAMA_API size_t llama_state_get_size(struct llama_context * ctx);
 @ctypes_function("llama_state_get_size", [llama_context_p_ctypes], ctypes.c_size_t)
 def llama_state_get_size(ctx: llama_context_p, /) -> int:
-    """Returns the maximum size in bytes of the state (rng, logits, embedding
-    and kv_cache) - will often be smaller after compacting tokens"""
+    """Returns the *actual* size in bytes of the state (rng, logits, embedding and kv_cache) - will often be smaller after compacting tokens"""
     ...
 
 
-# LLAMA_API DEPRECATED(size_t llama_get_state_size(const struct llama_context * ctx),
+# LLAMA_API DEPRECATED(size_t llama_get_state_size(struct llama_context * ctx),
 #     "use llama_state_get_size instead");
 @ctypes_function("llama_get_state_size", [llama_context_p_ctypes], ctypes.c_size_t)
 def llama_get_state_size(ctx: llama_context_p, /) -> int:
@@ -2011,22 +2021,27 @@ def llama_get_state_size(ctx: llama_context_p, /) -> int:
     ...
 
 
-# Copies the state to the specified destination address.
-# Destination needs to have allocated enough memory.
-# Returns the number of bytes copied
+# // Copies the state to the specified destination address.
+# // Destination needs to have allocated enough memory.
+# // Returns the number of bytes copied
 # LLAMA_API size_t llama_state_get_data(
 #         struct llama_context * ctx,
-#                      uint8_t * dst);
+#                      uint8_t * dst,
+#                       size_t   size);
 @ctypes_function(
     "llama_state_get_data",
     [
         llama_context_p_ctypes,
         ctypes.POINTER(ctypes.c_uint8),
+        ctypes.c_size_t,
     ],
     ctypes.c_size_t,
 )
 def llama_state_get_data(
-    ctx: llama_context_p, dst: CtypesArray[ctypes.c_uint8], /
+    ctx: llama_context_p,
+    dst: CtypesArray[ctypes.c_uint8],
+    size: Union[ctypes.c_size_t, int],
+    /,
 ) -> int:
     """Copies the state to the specified destination address.
     Destination needs to have allocated enough memory.
@@ -2059,14 +2074,18 @@ def llama_copy_state_data(
 # // Returns the number of bytes read
 # LLAMA_API size_t llama_state_set_data(
 #         struct llama_context * ctx,
-#                const uint8_t * src);
+#                const uint8_t * src,
+#                       size_t   size);
 @ctypes_function(
     "llama_state_set_data",
-    [llama_context_p_ctypes, ctypes.POINTER(ctypes.c_uint8)],
+    [llama_context_p_ctypes, ctypes.POINTER(ctypes.c_uint8), ctypes.c_size_t],
     ctypes.c_size_t,
 )
 def llama_state_set_data(
-    ctx: llama_context_p, src: CtypesArray[ctypes.c_uint8], /
+    ctx: llama_context_p,
+    src: CtypesArray[ctypes.c_uint8],
+    size: Union[ctypes.c_size_t, int],
+    /,
 ) -> int:
     """Set the state reading from the specified address
     Returns the number of bytes read"""
@@ -2216,14 +2235,24 @@ def llama_state_seq_get_size(ctx: llama_context_p, seq_id: llama_seq_id, /) -> i
 # LLAMA_API size_t llama_state_seq_get_data(
 #         struct llama_context * ctx,
 #                      uint8_t * dst,
+#                       size_t   size,
 #                 llama_seq_id   seq_id);
 @ctypes_function(
     "llama_state_seq_get_data",
-    [llama_context_p_ctypes, ctypes.POINTER(ctypes.c_uint8), llama_seq_id],
+    [
+        llama_context_p_ctypes,
+        ctypes.POINTER(ctypes.c_uint8),
+        ctypes.c_size_t,
+        llama_seq_id,
+    ],
     ctypes.c_size_t,
 )
 def llama_state_seq_get_data(
-    ctx: llama_context_p, dst: CtypesArray[ctypes.c_uint8], seq_id: llama_seq_id, /
+    ctx: llama_context_p,
+    dst: CtypesArray[ctypes.c_uint8],
+    size: Union[ctypes.c_size_t, int],
+    seq_id: llama_seq_id,
+    /,
 ) -> int:
     """Copy the KV cache of a single sequence into the specified buffer"""
     ...
@@ -2236,14 +2265,24 @@ def llama_state_seq_get_data(
 # LLAMA_API size_t llama_state_seq_set_data(
 #         struct llama_context * ctx,
 #                const uint8_t * src,
+#                       size_t   size,
 #                 llama_seq_id   dest_seq_id);
 @ctypes_function(
     "llama_state_seq_set_data",
-    [llama_context_p_ctypes, ctypes.POINTER(ctypes.c_uint8), llama_seq_id],
+    [
+        llama_context_p_ctypes,
+        ctypes.POINTER(ctypes.c_uint8),
+        ctypes.c_size_t,
+        llama_seq_id,
+    ],
     ctypes.c_size_t,
 )
 def llama_state_seq_set_data(
-    ctx: llama_context_p, src: CtypesArray[ctypes.c_uint8], dest_seq_id: llama_seq_id, /
+    ctx: llama_context_p,
+    src: CtypesArray[ctypes.c_uint8],
+    size: Union[ctypes.c_size_t, int],
+    dest_seq_id: llama_seq_id,
+    /,
 ) -> int:
     """Copy the sequence data (originally copied with `llama_state_seq_get_data`) into the specified sequence"""
     ...
