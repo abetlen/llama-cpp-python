@@ -891,6 +891,7 @@ def parse_sequence(
             pos += 1
             last_sym_start = out_elements.size()
             while pos[0] != '"':
+                assert pos[0] is not None, "Unexpected end of input"
                 char_pair = parse_char(pos)  # type: Tuple[int, const_char_p]
                 pos = char_pair[1]
                 out_elements.push_back(
@@ -920,6 +921,7 @@ def parse_sequence(
             #         : start_type;
             #     out_elements.push_back({type, char_pair.first});
             while pos[0] != "]":
+                assert pos[0] is not None, "Unexpected end of input"
                 char_pair = parse_char(pos)  # type: Tuple[int, const_char_p]
                 pos = char_pair[1]
                 _type = (
@@ -935,6 +937,7 @@ def parse_sequence(
                 #     }
                 # }
                 if pos[0] == "-" and pos[1] != "]":
+                    assert pos[1] is not None, "Unexpected end of input"
                     endchar_pair = parse_char(pos + 1)  # type: Tuple[int, const_char_p]
                     pos = endchar_pair[1]
                     out_elements.push_back(
@@ -1159,32 +1162,58 @@ def parse_rule(state: parse_state, src: const_char_p) -> const_char_p:
     elif pos[0]:
         raise RuntimeError("expecting newline or end at " + str(pos))
     return parse_space(pos, True)
+    
+#parse_state parse(const char * src) {
+#    try {
+#        parse_state state;
+#        const char * pos = parse_space(src, true);
+#        while (*pos) {
+#            pos = parse_rule(state, pos);
+#        }
+#        // Validate the state to ensure that all rules are defined
+#        for (const auto & rule : state.rules) {
+#            for (const auto & elem : rule) {
+#                if (elem.type == LLAMA_GRETYPE_RULE_REF) {
+#                    // Ensure that the rule at that location exists
+#                    if (elem.value >= state.rules.size() || state.rules[elem.value].empty()) {
+#                        // Get the name of the rule that is missing
+#                        for (const auto & kv : state.symbol_ids) {
+#                            if (kv.second == elem.value) {
+#                                throw std::runtime_error("Undefined rule identifier '" + kv.first + "'");
+#                            }
+#                        }
+#                    }
+#                }
+#            }
+#        }
+#        return state;
+#    } catch (const std::exception & err) {
+#        fprintf(stderr, "%s: error parsing grammar: %s\n", __func__, err.what());
+#        return parse_state();
+#    }
+#}
 
 
-# parse_state parse(const char * src) {
-#     try {
-#         parse_state state;
-#         const char * pos = parse_space(src, true);
-#         while (*pos) {
-#             pos = parse_rule(state, pos);
-#         }
-#         return state;
-#     } catch (const std::exception & err) {
-#         fprintf(stderr, "%s: error parsing grammar: %s\n", __func__, err.what());
-#         return parse_state();
-#     }
-# }
 def parse(src: const_char_p) -> parse_state:
     try:
         state = parse_state()  # type: parse_state
         pos = parse_space(src, True)  # type: const_char_p
         while pos[0]:
             pos = parse_rule(state, pos)
+        # Validate the state to ensure that all rules are defined
+        for rule in state.rules:
+            for elem in rule:
+                if elem.type == llama_gretype.LLAMA_GRETYPE_RULE_REF:
+                    # Ensure that the rule at that location exists
+                    if elem.value >= len(state.rules) or not state.rules[elem.value]:
+                        # Get the name of the rule that is missing
+                        for kv in state.symbol_ids:
+                            if kv.second == elem.value:
+                                raise RuntimeError("Undefined rule identifier '" + kv.first + "'")
         return state
     except Exception as err:
         print(f"{parse.__name__}: error parsing grammar: {err}")
         return parse_state()
-
 
 # void print_grammar_char(FILE * file, uint32_t c) {
 #     if (0x20 <= c && c <= 0x7f) {
@@ -1282,6 +1311,7 @@ def print_rule(
     #                 break;
     #         }
     
+
 
     for i, elem in enumerate(rule[:-1]):
         case = elem.type  # type: llama_gretype
