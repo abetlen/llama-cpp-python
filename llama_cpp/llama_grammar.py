@@ -244,7 +244,8 @@ class std:
             def __sub__(self, value: int) -> "std.vector[T].iterator":
                 return self.__class__(self._vector, self._index - value)
 
-        def __init__(self):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
             self._version = 0
 
         def modify(self):
@@ -309,7 +310,7 @@ class std:
             first: "std.vector[T].iterator",
             last: "std.vector[T].iterator",
         ) -> None:
-            self[pos._index : pos._index] = list(
+            self[pos._index:pos._index] = list(
                 islice(first._vector, first._index, last._index)
             )
 
@@ -318,6 +319,24 @@ class std:
 
         def end(self) -> "std.vector[T].iterator":
             return self.iterator(self, self.size())
+
+        def __getitem__(self, index):
+            if isinstance(index, slice):
+                return std.vector(super().__getitem__(index))
+            return super().__getitem__(index)
+
+        def __setitem__(self, index, value):
+            self.modify()
+            if isinstance(index, slice):
+                if isinstance(value, std.vector):
+                    value = list(value)
+                super().__setitem__(index, value)
+            else:
+                super().__setitem__(index, value)
+
+        def __delitem__(self, index):
+            self.modify()
+            super().__delitem__(index)
 
     class map(Generic[T, U], OrderedDict[T, U]):
         """C++ implementation of std::map."""
@@ -409,7 +428,6 @@ class std:
 
         def end(self) -> "std.map[T, U].iterator[T, U]":
             return self.iterator(self, Sentinel())
-
 
 # // grammar element type
 # enum llama_gretype {
@@ -824,7 +842,7 @@ def parse_sequence(
 
 
         previous_elements = out_elements[last_sym_start:]
-        print("type-1 ", type(out_elements))
+
         if min_times == 0:
             out_elements.resize(last_sym_start)
         else:
@@ -835,8 +853,7 @@ def parse_sequence(
         last_rec_rule_id = 0  # type: int
         n_opt = 1 if max_times < 0 else max_times - min_times  # type: int
         rec_rule = previous_elements  # type: List[LlamaGrammarElement]
-        print("type1", type(rec_rule))
-        print('ahhhhhhhhh')
+
         for i in range(n_opt):
             rec_rule = previous_elements
             rec_rule.resize(len(previous_elements))
@@ -1263,6 +1280,7 @@ def print_rule(
     #                 print_grammar_char(file, elem.value);
     #                 break;
     #         }
+    
     for i, elem in enumerate(rule[:-1]):
         case = elem.type  # type: llama_gretype
         if case is llama_gretype.LLAMA_GRETYPE_END:
