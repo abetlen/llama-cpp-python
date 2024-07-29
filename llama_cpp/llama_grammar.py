@@ -432,10 +432,12 @@ class std:
 #     // be an inclusive range ([a-z])
 #     LLAMA_GRETYPE_CHAR_RNG_UPPER = 5,
 
-
 #     // modifies a preceding LLAMA_GRETYPE_CHAR or
 #     // LLAMA_GRETYPE_CHAR_RNG_UPPER to add an alternate char to match ([ab], [a-zA])
 #     LLAMA_GRETYPE_CHAR_ALT       = 6,
+
+#     // any character (.)
+#     LLAMA_GRETYPE_CHAR_ANY       = 7,
 # };
 class llama_gretype(Enum):
     """grammar element type"""
@@ -447,6 +449,7 @@ class llama_gretype(Enum):
     LLAMA_GRETYPE_CHAR_NOT = 4  # inverse char(s) ([^a], [^a-b] [^abc])
     LLAMA_GRETYPE_CHAR_RNG_UPPER = 5  # modifies a preceding LLAMA_GRETYPE_CHAR or LLAMA_GRETYPE_CHAR_ALT to be an inclusive range ([a-z])
     LLAMA_GRETYPE_CHAR_ALT = 6  # modifies a preceding LLAMA_GRETYPE_CHAR or LLAMA_GRETYPE_CHAR_RNG_UPPER to add an alternate char to match ([ab], [a-zA])
+    LLAMA_GRETYPE_CHAR_ANY = 7  # any character (.)
 
 
 # struct parse_state {
@@ -830,6 +833,10 @@ def parse_sequence(
         #     if (last_sym_start == out_elements.size()) {
         #         throw std::runtime_error(std::string("expecting preceeding item to */+/? at ") + pos);
         #     }
+        elif pos[0] == '.':
+            last_sym_start = out_elements.size()
+            out_elements.push_back(LlamaGrammarElement(llama_gretype.LLAMA_GRETYPE_CHAR_ANY, 0))
+            pos = parse_space(pos + 1, is_nested)
         elif pos[0] in ("*", "+", "?"):  # repetition operator
             if last_sym_start == out_elements.size():
                 raise RuntimeError("expecting preceding item to */+/? at " + str(pos))
@@ -1039,6 +1046,7 @@ def is_char_element(elem: LlamaGrammarElement) -> bool:
         llama_gretype.LLAMA_GRETYPE_CHAR_NOT,
         llama_gretype.LLAMA_GRETYPE_CHAR_ALT,
         llama_gretype.LLAMA_GRETYPE_CHAR_RNG_UPPER,
+        llama_gretype.LLAMA_GRETYPE_CHAR_ANY,
     )
 
 
@@ -1135,6 +1143,8 @@ def print_rule(
                     + str(i)
                 )
             print_grammar_char(file, elem.value)
+        elif case is llama_gretype.LLAMA_GRETYPE_CHAR_ANY:
+            print(".", file=file, end="")
         # if (is_char_element(elem)) {
         #     switch (rule[i + 1].type) {
         #         case LLAMA_GRETYPE_CHAR_ALT:
