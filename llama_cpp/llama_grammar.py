@@ -563,11 +563,34 @@ def decode_utf8(src: const_char_p) -> Tuple[int, const_char_p]:
     return value, pos
 
 
+"""#static bool is_digit_char(char c) {
+#    return '0' <= c && c <= '9';
+#}
+def is_digit_char(c: str) -> bool:
+    return "0" <= c <= "9"
+
+
 # bool is_word_char(char c) {
 #     return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || c == '-' || ('0' <= c && c <= '9');
 # }
 def is_word_char(c: str) -> bool:
-    return ("a" <= c <= "z") or ("A" <= c <= "Z") or c == "-" or ("0" <= c <= "9")
+    return ("a" <= c <= "z") or ("A" <= c <= "Z") or c == "-" or ("0" <= c <= "9") or is_digit_char(c)
+"""
+
+##optimized version
+# Original is_digit_char time: 2.868295 seconds
+# Optimized is_digit_char time: 1.993195 seconds
+# Original is_word_char time: 3.856689 seconds
+# Optimized is_word_char time: 2.052832 seconds
+
+digit_chars = set("0123456789")
+word_chars = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-0123456789")
+
+def is_digit_char(c: str) -> bool:
+    return c in digit_chars
+
+def is_word_char(c: str) -> bool:
+    return c in word_chars
 
 
 # std::pair<uint32_t, const char *> parse_hex(const char * src, int size) {
@@ -679,6 +702,25 @@ def parse_name(src: const_char_p) -> const_char_p:
     return pos
 
 
+#static const char * parse_int(const char * src) {
+#    const char * pos = src;
+#    while (is_digit_char(*pos)) {
+#        pos++;
+#    }
+#    if (pos == src) {
+#        throw std::runtime_error(std::string("expecting integer at ") + src);
+#    }
+#    return pos;
+#}
+def parse_int(src: const_char_p) -> const_char_p:
+    pos = const_char_p(src)  # type: const_char_p
+    while is_digit_char(pos[0]):
+        pos += 1
+    if pos == src:
+        raise RuntimeError("expecting integer at " + str(src))
+    return pos
+
+
 # const char * parse_space(const char * src, bool newline_ok) {
 #     const char * pos = src;
 #     while (*pos == ' ' || *pos == '\t' || *pos == '#' ||
@@ -721,8 +763,104 @@ def parse_sequence(
     # const char * pos = src;
     last_sym_start = out_elements.size()  # type: int
     pos = const_char_p(src)  # type: const_char_p
+    
+    
+    # auto handle_repetitions = [&](int min_times, int max_times) {
+
+    #     if (last_sym_start == out_elements.size()) {
+    #         throw std::runtime_error(std::string("expecting preceding item to */+/?/{ at ") + pos);
+    #     }
+
+    #     // apply transformation to previous symbol (last_sym_start to end) according to
+    #     // the following rewrite rules:
+    #     // S{m,n} --> S S S (m times) S'(n-m)
+    #     //            S'(x)   ::= S S'(x-1) |
+    #     //            (... n-m definitions of these S' rules ...)
+    #     //            S'(1)   ::= S |
+    #     // S{m,} -->  S S S (m times) S'
+    #     //            S'     ::= S S' |
+    #     // S*     --> S{0,}
+    #     //        --> S'     ::= S S' |
+    #     // S+     --> S{1,}
+    #     //        --> S S'
+    #     //            S'     ::= S S' |
+    #     // S?     --> S{0,1}
+    #     //        --> S'
+    #     //            S'     ::= S |
+
+    #     std::vector<llama_grammar_element> previous_elements(out_elements.begin() + last_sym_start, out_elements.end());
+    #     if (min_times == 0) {
+    #         out_elements.resize(last_sym_start);
+    #     } else {
+    #         // Repeat the previous elements (min_times - 1) times
+    #         for (int i = 1; i < min_times; i++) {
+    #             out_elements.insert(out_elements.end(), previous_elements.begin(), previous_elements.end());
+    #         }
+    #     }
+
+    #     uint32_t last_rec_rule_id = 0;
+    #     auto n_opt = max_times < 0 ? 1 : max_times - min_times;
+
+    #     std::vector<llama_grammar_element> rec_rule(previous_elements);
+    #     for (int i = 0; i < n_opt; i++) {
+    #         rec_rule.resize(previous_elements.size());
+    #         uint32_t rec_rule_id = generate_symbol_id(state, rule_name);
+    #         if (i > 0 || max_times < 0) {
+    #             rec_rule.push_back({LLAMA_GRETYPE_RULE_REF, max_times < 0 ? rec_rule_id : last_rec_rule_id});
+    #         }
+    #         rec_rule.push_back({LLAMA_GRETYPE_ALT, 0});
+    #         rec_rule.push_back({LLAMA_GRETYPE_END, 0});
+    #         add_rule(state, rec_rule_id, rec_rule);
+    #         last_rec_rule_id = rec_rule_id;
+    #     }
+    #     if (n_opt > 0) {
+    #         out_elements.push_back({LLAMA_GRETYPE_RULE_REF, last_rec_rule_id});
+    #     }
+    # };
+    
+    def handle_repetitions(min_times: int, max_times: int) -> None:
+        if last_sym_start == out_elements.size():
+            raise RuntimeError("expecting preceding item to */+/?/{ at " + str(pos))
+
+
+        previous_elements = out_elements[last_sym_start:]
+        print("type-1 ", type(out_elements))
+        if min_times == 0:
+            out_elements.resize(last_sym_start)
+        else:
+            # Repeat the previous elements (min_times - 1) times
+            for i in range(1, min_times):
+                out_elements.extend(previous_elements)
+        
+        last_rec_rule_id = 0  # type: int
+        n_opt = 1 if max_times < 0 else max_times - min_times  # type: int
+        rec_rule = previous_elements  # type: List[LlamaGrammarElement]
+        print("type1", type(rec_rule))
+        print('ahhhhhhhhh')
+        for i in range(n_opt):
+            rec_rule = previous_elements
+            rec_rule.resize(len(previous_elements))
+            rec_rule_id = generate_symbol_id(state, rule_name)  # type: int
+            if i > 0 or max_times < 0:
+                rec_rule.push_back(LlamaGrammarElement(llama_gretype.LLAMA_GRETYPE_RULE_REF, rec_rule_id))
+            rec_rule.push_back(LlamaGrammarElement(llama_gretype.LLAMA_GRETYPE_ALT, 0))
+            rec_rule.push_back(LlamaGrammarElement(llama_gretype.LLAMA_GRETYPE_END, 0))
+            add_rule(state, rec_rule_id, rec_rule)
+            
+            last_rec_rule_id = rec_rule_id
+        if n_opt > 0:
+            out_elements.push_back(LlamaGrammarElement(llama_gretype.LLAMA_GRETYPE_RULE_REF, last_rec_rule_id))
+    
+    
+    
+    
+    
+    
+    
+    
     # while (*pos) {
     while pos[0]:
+
         # if (*pos == '"') { // literal string
         #     pos++;
         #     last_sym_start = out_elements.size();
@@ -767,12 +905,12 @@ def parse_sequence(
             while pos[0] != "]":
                 char_pair = parse_char(pos)  # type: Tuple[int, const_char_p]
                 pos = char_pair[1]
-                type = (
+                _type = (
                     llama_gretype.LLAMA_GRETYPE_CHAR_ALT
                     if last_sym_start < out_elements.size()
                     else start_type
                 )  # type: llama_gretype
-                out_elements.push_back(LlamaGrammarElement(type, char_pair[0]))
+                out_elements.push_back(LlamaGrammarElement(_type, char_pair[0]))
                 #     if (pos[0] == '-' && pos[1] != ']') {
                 #         auto endchar_pair = parse_char(pos + 1);
                 #                 pos          = endchar_pair.second;
@@ -829,83 +967,98 @@ def parse_sequence(
             if pos[0] != ")":
                 raise RuntimeError("expecting ')' at " + str(pos))
             pos = parse_space(pos + 1, is_nested)
-        # } else if (*pos == '*' || *pos == '+' || *pos == '?') { // repetition operator
-        #     if (last_sym_start == out_elements.size()) {
-        #         throw std::runtime_error(std::string("expecting preceeding item to */+/? at ") + pos);
-        #     }
         elif pos[0] == '.':
             last_sym_start = out_elements.size()
             out_elements.push_back(LlamaGrammarElement(llama_gretype.LLAMA_GRETYPE_CHAR_ANY, 0))
             pos = parse_space(pos + 1, is_nested)
-        elif pos[0] in ("*", "+", "?"):  # repetition operator
-            if last_sym_start == out_elements.size():
-                raise RuntimeError("expecting preceding item to */+/? at " + str(pos))
-            # // apply transformation to previous symbol (last_sym_start to end) according to
-            # // rewrite rules:
-            # // S* --> S' ::= S S' |
-            # // S+ --> S' ::= S S' | S
-            # // S? --> S' ::= S |
-            # uint32_t sub_rule_id = generate_symbol_id(state, rule_name);
-            # std::vector<llama_grammar_element> sub_rule;
-            # // add preceding symbol to generated rule
-            # sub_rule.insert(
-            #     sub_rule.end(), out_elements.begin() + last_sym_start, out_elements.end());
-            sub_rule_id = generate_symbol_id(state, rule_name)  # type: int
-            sub_rule = std.vector[
-                LlamaGrammarElement
-            ]()  # type: std.vector[LlamaGrammarElement]
-            sub_rule.insert(
-                sub_rule.end(),
-                out_elements.begin() + last_sym_start,
-                out_elements.end(),
-            )
-            # if (*pos == '*' || *pos == '+') {
-            #     // cause generated rule to recurse
-            #     sub_rule.push_back({LLAMA_GRETYPE_RULE_REF, sub_rule_id});
-            # }
-            # // mark start of alternate def
-            # sub_rule.push_back({LLAMA_GRETYPE_ALT, 0});
-            if pos[0] in ("*", "+"):
-                sub_rule.push_back(
-                    LlamaGrammarElement(
-                        llama_gretype.LLAMA_GRETYPE_RULE_REF, sub_rule_id
-                    )
-                )
-            sub_rule.push_back(LlamaGrammarElement(llama_gretype.LLAMA_GRETYPE_ALT, 0))
-            # if (*pos == '+') {
-            #     // add preceding symbol as alternate only for '+' (otherwise empty)
-            #     sub_rule.insert(
-            #         sub_rule.end(), out_elements.begin() + last_sym_start, out_elements.end());
-            # }
-            # sub_rule.push_back({LLAMA_GRETYPE_END, 0});
-            # add_rule(state, sub_rule_id, sub_rule);
-            # // in original rule, replace previous symbol with reference to generated rule
-            # out_elements.resize(last_sym_start);
-            # out_elements.push_back({LLAMA_GRETYPE_RULE_REF, sub_rule_id});
-            # pos = parse_space(pos + 1, is_nested);
-            if pos[0] == "+":
-                # add preceding symbol as alternate only for '+' (otherwise empty)
-                sub_rule.insert(
-                    sub_rule.end(),
-                    out_elements.begin() + last_sym_start,
-                    out_elements.end(),
-                )
-            sub_rule.push_back(LlamaGrammarElement(llama_gretype.LLAMA_GRETYPE_END, 0))
-            add_rule(state, sub_rule_id, sub_rule)
-            # in original rule, replace previous symbol with reference to generated rule
-            out_elements.resize(last_sym_start)
-            out_elements.push_back(
-                LlamaGrammarElement(llama_gretype.LLAMA_GRETYPE_RULE_REF, sub_rule_id)
-            )
-            pos = parse_space(pos + 1, is_nested)
+           
+        # } else if (*pos == '*') {
+        #         pos = parse_space(pos + 1, is_nested);
+        #         handle_repetitions(0, -1);
+        # } else if (*pos == '+') {
+        #     pos = parse_space(pos + 1, is_nested);
+        #     handle_repetitions(1, -1);
+        # } else if (*pos == '?') {
+        #     pos = parse_space(pos + 1, is_nested);
+        #     handle_repetitions(0, 1);
+        # } else if (*pos == '{') {
+        #     pos = parse_space(pos + 1, is_nested);
+
+        #     if (!is_digit_char(*pos)) {
+        #         throw std::runtime_error(std::string("expecting an int at ") + pos);
+        #     }
+        #     const char * int_end = parse_int(pos);
+        #     int min_times = std::stoul(std::string(pos, int_end - pos));
+        #     pos = parse_space(int_end, is_nested);
+
+        #     int max_times = -1;
+
+        #     if (*pos == '}') {
+        #         max_times = min_times;
+        #         pos = parse_space(pos + 1, is_nested);
+        #     } else if (*pos == ',') {
+        #         pos = parse_space(pos + 1, is_nested);
+
+        #         if (is_digit_char(*pos)) {
+        #             const char * int_end = parse_int(pos);
+        #             max_times = std::stoul(std::string(pos, int_end - pos));
+        #             pos = parse_space(int_end, is_nested);
+        #         }
+
+        #         if (*pos != '}') {
+        #             throw std::runtime_error(std::string("expecting '}' at ") + pos);
+        #         }
+        #         pos = parse_space(pos + 1, is_nested);
+        #     } else {
+        #         throw std::runtime_error(std::string("expecting ',' at ") + pos);
+        #     }
+        #     handle_repetitions(min_times, max_times);
         # } else {
         #     break;
         # }
+        elif pos[0] == "*":
+            pos = parse_space(pos + 1, is_nested)
+            handle_repetitions(0, -1)
+        elif pos[0] == "+":
+            pos = parse_space(pos + 1, is_nested)
+            handle_repetitions(1, -1)
+        elif pos[0] == "?":
+            pos = parse_space(pos + 1, is_nested)
+            handle_repetitions(0, 1)
+        elif pos[0] == "{":
+            pos = parse_space(pos + 1, is_nested)
+            
+            if not is_digit_char(pos[0]):
+                raise RuntimeError("expecting an int at " + str(pos))
+            
+
+            
+            int_end = parse_int(pos)
+            min_times = int(str(pos)[:int_end - pos])
+            pos = parse_space(int_end, is_nested)
+            max_times = -1
+            if pos[0] == "}":
+                max_times = min_times
+                pos = parse_space(pos + 1, is_nested)
+            elif pos[0] == ",":
+                pos = parse_space(pos + 1, is_nested)
+                if is_digit_char(pos[0]):
+                    int_end = parse_int(pos)
+                    max_times = int(str(pos)[:int_end - pos])
+                    pos = parse_space(int_end, is_nested)
+                if pos[0] != "}":
+                    raise RuntimeError("expecting '}' at " + str(pos))
+                pos = parse_space(pos + 1, is_nested)
+            else:
+                raise RuntimeError("expecting ',' at " + str(pos))
+            handle_repetitions(min_times, max_times)
+            
         else:
             break
-    #     }
-    #     return pos;
-    # }
+        
+        
+        
+
     return pos
 
 
