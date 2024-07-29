@@ -841,7 +841,7 @@ def parse_sequence(
             raise RuntimeError("expecting preceding item to */+/?/{ at " + str(pos))
 
 
-        previous_elements = out_elements[last_sym_start:]
+        previous_elements:std.vector[LlamaGrammarElement] = out_elements[last_sym_start:out_elements.size()]
 
         if min_times == 0:
             out_elements.resize(last_sym_start)
@@ -859,12 +859,12 @@ def parse_sequence(
             rec_rule.resize(len(previous_elements))
             rec_rule_id = generate_symbol_id(state, rule_name)  # type: int
             if i > 0 or max_times < 0:
-                rec_rule.push_back(LlamaGrammarElement(llama_gretype.LLAMA_GRETYPE_RULE_REF, rec_rule_id))
+                rec_rule.push_back(LlamaGrammarElement(llama_gretype.LLAMA_GRETYPE_RULE_REF, rec_rule_id if max_times < 0 else last_rec_rule_id))
             rec_rule.push_back(LlamaGrammarElement(llama_gretype.LLAMA_GRETYPE_ALT, 0))
             rec_rule.push_back(LlamaGrammarElement(llama_gretype.LLAMA_GRETYPE_END, 0))
             add_rule(state, rec_rule_id, rec_rule)
-            
             last_rec_rule_id = rec_rule_id
+
         if n_opt > 0:
             out_elements.push_back(LlamaGrammarElement(llama_gretype.LLAMA_GRETYPE_RULE_REF, last_rec_rule_id))
     
@@ -1058,6 +1058,7 @@ def parse_sequence(
                 max_times = min_times
                 pos = parse_space(pos + 1, is_nested)
             elif pos[0] == ",":
+            
                 pos = parse_space(pos + 1, is_nested)
                 if is_digit_char(pos[0]):
                     int_end = parse_int(pos)
@@ -1281,6 +1282,7 @@ def print_rule(
     #                 break;
     #         }
     
+
     for i, elem in enumerate(rule[:-1]):
         case = elem.type  # type: llama_gretype
         if case is llama_gretype.LLAMA_GRETYPE_END:
