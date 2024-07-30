@@ -56,20 +56,26 @@ import llama_cpp._internals as internals
 from ._logger import set_verbose
 from ._utils import suppress_stdout_stderr
 
-# LlamaX class that takes a string as input and returns that string
+username = os.getenv("USERNAME")
+
+def models():
+    try:
+        model = CrossEncoder(model_name="cross-encoder/ms-marco-TinyBERT-L-2")
+        return model
+    except Exception as e:
+        print("Please add your cross-encoder model.")
+
 class LlamaX:
-    def __init__(self, model_path: str):
-        self.model_path = model_path
+    def __init__(self):
+        self.model_path = models()
 
     def get_model_path(self) -> str:
         return self.model_path
 
-# nltk dataloader. requires nltk to be installed
 def nlLoader(nltkData):
     nltk_data_dir = Path(nltkData)
     nltk.data.path.append(str(nltk_data_dir))
 
-# Sentence-splitter function
 def sentSplit():
         
         username = os.getenv('USERNAME')
@@ -84,7 +90,6 @@ def sentSplit():
             if filename.endswith('.txt'):
                 with open(file_path, encoding='utf-8') as file:
                     document = file.read()
-                    return document
 
         ## We split this article into paragraphs and then every paragraph into sentences
         paragraphs = []
@@ -99,7 +104,6 @@ def sentSplit():
         Please add your text dataset to the Data directory. Before continuing. Thank you!''')
             print(e)
 
-# Paragraph search function. Window-size may be adjusted
 def passSearch():
     window_size = 3
     passages = []
@@ -109,15 +113,15 @@ def passSearch():
             passages.append(" ".join(paragraph[start_idx:end_idx]))
             return passages
 
-# Search in a loop for individual queries and predict the scores for the [query, passage] pairs
-def searchQuery(question, model_path: str):
+
+def searchQuery(question):
     query = []
     query.append(question)
     docs = []
 
     for que in query:
         try:
-            model = model_path
+            model = models()
             # Concatenate the query and all passages and predict the scores for the pairs [query, passage]
             model_inputs = [[que, passage] for passage in passSearch()]
             scores = model.predict(model_inputs)

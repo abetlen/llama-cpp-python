@@ -666,7 +666,7 @@ passages1 = llama_cpp.passSearch()
 import os
 username = os.getenv("USERNAME")
 modelPath = LlamaX(
-    model_path=f"C:\\Users\\{username}\\Models\\cross-encoder\\ms-marco-TinyBERT-L-2",
+    model_path=models(),
 )
 
 # Load LlamaCpp GGUF embeddings model and parse in the searchQuery function with the scored passages to generate embeddings
@@ -679,8 +679,8 @@ try:
     )
 # Store each document in a vector embedding database
     for i, d in enumerate(llama_cpp.searchQuery(
-    question=question,
-    model_path=modelPath)):
+    question=question
+    )):
         response = llm_embed.create_embedding(
             input=d
         )
