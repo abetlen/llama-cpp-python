@@ -56,11 +56,6 @@ import llama_cpp._internals as internals
 from ._logger import set_verbose
 from ._utils import suppress_stdout_stderr
 
-class LlamaX(str):
-    pass
-
-username = os.getenv("USERNAME")
-
 def models():
     try:
         model = CrossEncoder(model_name="cross-encoder/ms-marco-TinyBERT-L-2")
@@ -68,10 +63,13 @@ def models():
     except Exception as e:
         print("Please add your cross-encoder model.")
 
-def nlLoader(nltkData):
+def nlLoader():
+    # Uncomment the code below to download the nltk punkt corpus. You may then store it in the directory defined below or change it to a directory of your choice.
+    # nltk.download('punkt')
+    username = os.getenv("USERNAME")
+    nltkData = f"C:\\Users\\{username}\\data"
     nltk_data_dir = Path(nltkData)
     nltk.data.path.append(str(nltk_data_dir))
-
 def sentSplit():
         
         username = os.getenv('USERNAME')
