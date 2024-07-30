@@ -84,6 +84,7 @@ def sentSplit():
             if filename.endswith('.txt'):
                 with open(file_path, encoding='utf-8') as file:
                     document = file.read()
+                    return document
 
         ## We split this article into paragraphs and then every paragraph into sentences
         paragraphs = []
