@@ -64,7 +64,7 @@ class LlamaX:
     def get_model_path(self) -> str:
         return self.model_path
 
-# nltk dataloader. requires nltk to installed
+# nltk dataloader. requires nltk to be installed
 def nlLoader(nltkData):
     nltk_data_dir = Path(nltkData)
     nltk.data.path.append(str(nltk_data_dir))
