@@ -649,6 +649,46 @@ For instance, if you want to work with larger contexts, you can expand the conte
 llm = Llama(model_path="./models/7B/llama-model.gguf", n_ctx=2048)
 ```
 
+### Cross-encoders
+
+To utilise the cross-encoder, you follow the below code instructions:
+```
+- Define the location of your nltk data directory
+data_path1 = llama_cpp.nlLoader(nltkData="<PATH TO NLTK DATA DIRECTORY>")
+
+- Initialize the sentenc-splitter function
+paragraphs1 = llama_cpp.sentSplit()
+
+- Define the passSearch function to join sentences
+passages1 = llama_cpp.passSearch()
+
+- Call the LlamaX class to define the model. Add the path to your Bert cross-encoder.
+import os
+username = os.getenv("USERNAME")
+modelPath = LlamaX(
+    model_path=f"C:\\Users\\{username}\\Models\\cross-encoder\\ms-marco-TinyBERT-L-2",
+)
+
+- Load LlamaCpp GGUF embeddings model and parse in the searchQuery function with the scored passages to generate embeddings
+username = os.getenv("USERNAME")
+print("")
+try:
+    llm_embed = Llama(
+        model_path=f"C:\\Users\\{username}\\Models\\mxbai\\mxbai-embed-large-v1.Q4_K_M.gguf",
+        embedding=True,
+    )
+# Store each document in a vector embedding database
+    for i, d in enumerate(llama_cpp.searchQuery(
+    question=question,
+    model_path=modelPath)):
+        response = llm_embed.create_embedding(
+            input=d
+        )
+        embedding = response["data"][0]["embedding"]
+        collection.add(ids=[str(i)], embeddings=[embedding], documents=[d])
+        print("Processing embeddings...")
+```
+
 ## OpenAI Compatible Web Server
 
 `llama-cpp-python` offers a web server which aims to act as a drop-in replacement for the OpenAI API.
