@@ -70,6 +70,7 @@ def nlLoader():
     nltkData = f"C:\\Users\\{username}\\data"
     nltk_data_dir = Path(nltkData)
     nltk.data.path.append(str(nltk_data_dir))
+    
 def sentSplit():
         
         username = os.getenv('USERNAME')
