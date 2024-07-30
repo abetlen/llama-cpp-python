@@ -657,18 +657,15 @@ To utilise the cross-encoder, you follow the below code instructions:
 data_path1 = llama_cpp.nlLoader()
 
 # Load LlamaCpp GGUF embeddings model and parse in the searchQuery function with the scored passages to generate embeddings
-username = os.getenv("USERNAME")
-print("")
-try:
-    llm_embed = Llama(
-        model_path=f"C:\\Users\\{username}\\Models\\mxbai\\mxbai-embed-large-v1.Q4_K_M.gguf",
-        embedding=True,
+llm_embed = Llama(
+  model_path=f"<PATH TO YOUR GGUF EMBEDDINGS MODEL>",
+  embedding=True,
     )
 # Store each document in a vector embedding database
-    for i, d in enumerate(llama_cpp.searchQuery(
-    question=question
+for i, d in enumerate(llama_cpp.searchQuery(
+  question=question
     )):
-        response = llm_embed.create_embedding(
+    response = llm_embed.create_embedding(
             input=d
         )
         embedding = response["data"][0]["embedding"]
