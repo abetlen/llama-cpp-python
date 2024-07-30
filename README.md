@@ -654,8 +654,7 @@ llm = Llama(model_path="./models/7B/llama-model.gguf", n_ctx=2048)
 To utilise the cross-encoder, you follow the below code instructions:
 ```python
 # Define the location of your nltk data directory
-llmx = LlamaX("<PATH TO YOUR NLTK DATA DIRECTORY>")
-data_path1 = llama_cpp.nlLoader(nltkData=llmx)
+data_path1 = llama_cpp.nlLoader()
 
 # Initialize the sentence-splitter function
 paragraphs1 = llama_cpp.sentSplit()
