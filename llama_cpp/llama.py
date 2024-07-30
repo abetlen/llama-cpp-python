@@ -56,6 +56,9 @@ import llama_cpp._internals as internals
 from ._logger import set_verbose
 from ._utils import suppress_stdout_stderr
 
+class LlamaX(str):
+    pass
+
 username = os.getenv("USERNAME")
 
 def models():
@@ -64,13 +67,6 @@ def models():
         return model
     except Exception as e:
         print("Please add your cross-encoder model.")
-
-class LlamaX:
-    def __init__(self):
-        self.model_path = models()
-
-    def get_model_path(self) -> str:
-        return self.model_path
 
 def nlLoader(nltkData):
     nltk_data_dir = Path(nltkData)
