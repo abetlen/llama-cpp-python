@@ -653,23 +653,23 @@ llm = Llama(model_path="./models/7B/llama-model.gguf", n_ctx=2048)
 
 To utilise the cross-encoder, you follow the below code instructions:
 ```python
-- Define the location of your nltk data directory
+# Define the location of your nltk data directory
 data_path1 = llama_cpp.nlLoader(nltkData="<PATH TO NLTK DATA DIRECTORY>")
 
-- Initialize the sentenc-splitter function
+# Initialize the sentenc-splitter function
 paragraphs1 = llama_cpp.sentSplit()
 
-- Define the passSearch function to join sentences
+# Define the passSearch function to join sentences
 passages1 = llama_cpp.passSearch()
 
-- Call the LlamaX class to define the model. Add the path to your Bert cross-encoder.
+# Call the LlamaX class to define the model. Add the path to your Bert cross-encoder.
 import os
 username = os.getenv("USERNAME")
 modelPath = LlamaX(
     model_path=f"C:\\Users\\{username}\\Models\\cross-encoder\\ms-marco-TinyBERT-L-2",
 )
 
-- Load LlamaCpp GGUF embeddings model and parse in the searchQuery function with the scored passages to generate embeddings
+# Load LlamaCpp GGUF embeddings model and parse in the searchQuery function with the scored passages to generate embeddings
 username = os.getenv("USERNAME")
 print("")
 try:
