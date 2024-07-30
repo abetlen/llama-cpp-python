@@ -656,12 +656,6 @@ To utilise the cross-encoder, you follow the below code instructions:
 # Define the location of your nltk data directory
 data_path1 = llama_cpp.nlLoader()
 
-# Initialize the sentence-splitter function
-paragraphs1 = llama_cpp.sentSplit()
-
-# Define the passSearch function to join sentences
-passages1 = llama_cpp.passSearch()
-
 # Load LlamaCpp GGUF embeddings model and parse in the searchQuery function with the scored passages to generate embeddings
 username = os.getenv("USERNAME")
 print("")
