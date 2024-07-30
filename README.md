@@ -652,7 +652,7 @@ llm = Llama(model_path="./models/7B/llama-model.gguf", n_ctx=2048)
 ### Cross-encoders
 
 To utilise the cross-encoder, you follow the below code instructions:
-```
+```python
 - Define the location of your nltk data directory
 data_path1 = llama_cpp.nlLoader(nltkData="<PATH TO NLTK DATA DIRECTORY>")
 
