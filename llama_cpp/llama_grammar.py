@@ -523,7 +523,6 @@ def get_symbol_id(state: parse_state, src: const_char_p, len: int) -> int:
     result = state.symbol_ids.insert(std.string(src, len), next_id)
     return result[0].second  # type: ignore
 
-
 # uint32_t generate_symbol_id(parse_state & state, const std::string & base_name) {
 #     uint32_t next_id = static_cast<uint32_t>(state.symbol_ids.size());
 #     state.symbol_ids[base_name + '_' + std::to_string(next_id)] = next_id;
@@ -841,23 +840,22 @@ def parse_sequence(
             raise RuntimeError("expecting preceding item to */+/?/{ at " + str(pos))
 
 
-        previous_elements:std.vector[LlamaGrammarElement] = out_elements[last_sym_start:out_elements.size()]
+        previous_elements:std.vector[LlamaGrammarElement] = std.vector(out_elements[last_sym_start:])  # type: std.vector[LlamaGrammarElement]
 
         if min_times == 0:
             out_elements.resize(last_sym_start)
         else:
             # Repeat the previous elements (min_times - 1) times
             for i in range(1, min_times):
-                out_elements.extend(previous_elements)
+                out_elements.insert(out_elements.end(), previous_elements.begin(), previous_elements.end())
         
         last_rec_rule_id = 0  # type: int
         n_opt = 1 if max_times < 0 else max_times - min_times  # type: int
-        rec_rule = previous_elements  # type: List[LlamaGrammarElement]
+        rec_rule = std.vector(previous_elements)  # type: List[LlamaGrammarElement]
 
         for i in range(n_opt):
-            rec_rule = previous_elements
-            rec_rule.resize(len(previous_elements))
-            rec_rule_id = generate_symbol_id(state, rule_name)  # type: int
+            rec_rule.resize(previous_elements.size())
+            rec_rule_id = generate_symbol_id(state, rule_name) # type: int
             if i > 0 or max_times < 0:
                 rec_rule.push_back(LlamaGrammarElement(llama_gretype.LLAMA_GRETYPE_RULE_REF, rec_rule_id if max_times < 0 else last_rec_rule_id))
             rec_rule.push_back(LlamaGrammarElement(llama_gretype.LLAMA_GRETYPE_ALT, 0))
@@ -868,12 +866,7 @@ def parse_sequence(
         if n_opt > 0:
             out_elements.push_back(LlamaGrammarElement(llama_gretype.LLAMA_GRETYPE_RULE_REF, last_rec_rule_id))
     
-    
-    
-    
-    
-    
-    
+
     
     # while (*pos) {
     while pos[0]:
@@ -1208,8 +1201,8 @@ def parse(src: const_char_p) -> parse_state:
                     if elem.value >= len(state.rules) or not state.rules[elem.value]:
                         # Get the name of the rule that is missing
                         for kv in state.symbol_ids:
-                            if kv.second == elem.value:
-                                raise RuntimeError("Undefined rule identifier '" + kv.first + "'")
+                            if kv[1] == elem.value:
+                                raise RuntimeError("Undefined rule identifier '" + kv[0] + "'")
         return state
     except Exception as err:
         print(f"{parse.__name__}: error parsing grammar: {err}")
