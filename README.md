@@ -656,7 +656,7 @@ To utilise the cross-encoder, you follow the below code instructions:
 # Define the location of your nltk data directory
 data_path1 = llama_cpp.nlLoader(nltkData="<PATH TO NLTK DATA DIRECTORY>")
 
-# Initialize the sentenc-splitter function
+# Initialize the sentence-splitter function
 paragraphs1 = llama_cpp.sentSplit()
 
 # Define the passSearch function to join sentences
