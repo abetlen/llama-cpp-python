@@ -665,9 +665,7 @@ passages1 = llama_cpp.passSearch()
 # Call the LlamaX class to define the model. Add the path to your Bert cross-encoder.
 import os
 username = os.getenv("USERNAME")
-modelPath = LlamaX(
-    model_path=models(),
-)
+modelPath = LlamaX()
 
 # Load LlamaCpp GGUF embeddings model and parse in the searchQuery function with the scored passages to generate embeddings
 username = os.getenv("USERNAME")
