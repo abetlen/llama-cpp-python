@@ -20,13 +20,13 @@ RUN python3 -m pip install --upgrade pip pytest cmake scikit-build setuptools fa
 
 # Perform the conditional installations based on the image
 RUN echo "Image: ${IMAGE}" && \
-    if [ "${IMAGE}" = "python:3-slim-bullseye" ] ; then \
+    if [ "${IMAGE}" = "python:3-slim-bookworm" ] ; then \
     echo "OpenBLAS install:" && \
     apt-get install -y --no-install-recommends libopenblas-dev && \
-    LLAMA_OPENBLAS=1 pip install llama-cpp-python --verbose; \
+    CMAKE_ARGS="-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS" pip install llama-cpp-python --verbose; \
 else \
     echo "CuBLAS install:" && \
-    LLAMA_CUBLAS=1 pip install llama-cpp-python --verbose; \
+    CMAKE_ARGS="-DGGML_CUDA=on" pip install llama-cpp-python --verbose; \
 fi
 
 # Clean up apt cache
