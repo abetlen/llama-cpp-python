@@ -744,41 +744,41 @@ This is a Python module used to create a semantic kernel in your openai api comp
   import plugins
 
   ### INTERNET-SEARCH ###
-  - Define search plugin
+  # Define search plugin
   search_prompt = plugins.searchPlugin(output=question) # If context equals None, use the Chat template. See `kernel.py` for more templates.
 
-  - Initialize the kernel
+  # Initialize the kernel
   data = kernel.shopTemplate(prompt=prompt, plugin=plugins.defaultPlugin(), context=search_prompt or context=None # Where no context is provided, and so you may assume the AI assistant to not have any awareness of information of events that took place after the date until which it's training data is up until) # See plugins.py module for more plugins
 
   ### DATABASE ###
-  - Using this database plugin
-  -- Initialize the database plugin
+  # Using this database plugin
+  # Initialize the database plugin
   db = plugins.dbConn()
 
-  - Use the database plugin along with the dbChatPlugin
+  # Use the database plugin along with the dbChatPlugin
   data = kernel.chatTemplate(prompt=prompt, plugin=plugins.dbChatPlugin())
 
-  - Excuting the query
+  # Excuting the query
   db.execute(response)
 
-  - Getting the output
+  # Getting the output
   response = db.fetchall()
 
   ### LlamaCpp ###
-  - Parsing the kernel model to LlamaCpp
+  # Parsing the kernel model to LlamaCpp
   LlamaCpp
   client = Llama(
         model_path=kernel.model() # Make sure to add your GGUF model in the kernel module.
   )
 
-  - Use the kernel and set messages parameter equal to data. Depending on your LLM API defintion, messages may be a different parameter, in this case it is messages, as defined in the OpenAI API definition.
+  # Use the kernel and set messages parameter equal to data. Depending on your LLM API defintion, messages may be a different parameter, in this case it is messages, as defined in the OpenAI API definition.
   output = client.create_chat_completions(
     messages = data
   )
   ```
   See [OpenAI](https://platform.openai.com/docs/api-reference/chat/create) API reference for more.
-- ```
-  - You may then append any new content and/or messages to the kernel
+- ```python
+  # You may then append any new content and/or messages to the kernel
   data.append(new_message)
   ```
 ## 📽️ Short Films
