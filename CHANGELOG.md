@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.85]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@398ede5efeb07b9adf9fbda7ea63f630d476a792
+- fix: Missing LoRA adapter after API change by @shamitv in #1630
+- fix(docker): Update Dockerfile BLAS options by @olivierdebauche in #1632
+- fix(docker): Fix GGML_CUDA param by @olivierdebauche in #1633
+- fix(docker): Update Dockerfile build options from `LLAMA_` to `GGML_` by @olivierdebauche in #1634
+- feat: FreeBSD compatibility by @yurivict in #1635
+
 ## [0.2.84]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@4730faca618ff9cee0780580145e3cbe86f24876
