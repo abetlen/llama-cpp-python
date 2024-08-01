@@ -44,6 +44,8 @@ class LlamaProxy:
             if self._current_model is not None:
                 return self._current_model
 
+        if self._current_model:
+            self._current_model.close()
         self._current_model = None
 
         settings = self._model_settings_dict[model]
@@ -65,6 +67,7 @@ class LlamaProxy:
 
     def free(self):
         if self._current_model:
+            self._current_model.close()
             del self._current_model
 
     @staticmethod
@@ -220,12 +223,14 @@ class LlamaProxy:
             **kwargs,
             # Model Params
             n_gpu_layers=settings.n_gpu_layers,
+            split_mode=settings.split_mode,
             main_gpu=settings.main_gpu,
             tensor_split=settings.tensor_split,
             vocab_only=settings.vocab_only,
             use_mmap=settings.use_mmap,
             use_mlock=settings.use_mlock,
             kv_overrides=kv_overrides,
+            rpc_servers=settings.rpc_servers,
             # Context Params
             seed=settings.seed,
             n_ctx=settings.n_ctx,
