@@ -41,7 +41,7 @@ class BaseLlamaCache(ABC):
 
     @abstractmethod
     def __setitem__(
-        self, key: Sequence[int], value: "llama_cpp.llama.LlamaState"
+        self, key: Sequence[int], value: "llama_cpp.llama.LlamaState",
     ) -> None:
         raise NotImplementedError
 
@@ -105,7 +105,7 @@ class LlamaDiskCache(BaseLlamaCache):
     """Cache for a llama.cpp model using disk."""
 
     def __init__(
-        self, cache_dir: str = ".cache/llama_cache", capacity_bytes: int = (2 << 30)
+        self, cache_dir: str = ".cache/llama_cache", capacity_bytes: int = (2 << 30),
     ):
         super().__init__(capacity_bytes)
         self.cache = diskcache.Cache(cache_dir)
