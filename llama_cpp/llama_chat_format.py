@@ -2520,7 +2520,7 @@ def functionary_v1_v2_chat_handler(
                     if completion_text.endswith("\n<|from|>assistant\n"):
                         content += completion_text[: -len("\n<|from|>assistant\n")]
                     if completion_text.endswith("\n<|from|> assistant\n"):
-                        content += completion_text[-len("\n<|from|> assistant\n")]               
+                        content += completion_text[-len("\n<|from|> assistant\n")]
                     else:
                         content += completion_text
                     content = content.lstrip()
