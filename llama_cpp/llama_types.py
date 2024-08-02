@@ -131,7 +131,7 @@ class ChatCompletionStreamResponseDelta(TypedDict):
 class ChatCompletionStreamResponseChoice(TypedDict):
     index: int
     delta: Union[
-        ChatCompletionStreamResponseDelta, ChatCompletionStreamResponseDeltaEmpty
+        ChatCompletionStreamResponseDelta, ChatCompletionStreamResponseDeltaEmpty,
     ]
     finish_reason: Optional[Literal["stop", "length", "tool_calls", "function_call"]]
     logprobs: NotRequired[Optional[CompletionLogprobs]]
@@ -248,7 +248,7 @@ class ChatCompletionRequestFunctionCallOption(TypedDict):
 
 
 ChatCompletionRequestFunctionCall = Union[
-    Literal["none", "auto"], ChatCompletionRequestFunctionCallOption
+    Literal["none", "auto"], ChatCompletionRequestFunctionCallOption,
 ]
 
 ChatCompletionFunctionParameters = Dict[str, JsonType]  # TODO: make this more specific
@@ -275,7 +275,7 @@ class ChatCompletionNamedToolChoice(TypedDict):
 
 
 ChatCompletionToolChoiceOption = Union[
-    Literal["none", "auto", "required"], ChatCompletionNamedToolChoice
+    Literal["none", "auto", "required"], ChatCompletionNamedToolChoice,
 ]
 
 
