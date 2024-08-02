@@ -110,7 +110,7 @@ class LlamaProxy:
                 )
             else:
                 chat_handler = llama_cpp.llama_chat_format.Llava16ChatHandler(
-                    clip_model_path=settings.clip_model_path, verbose=settings.verbose
+                    clip_model_path=settings.clip_model_path, verbose=settings.verbose,
                 )
         elif settings.chat_format == "moondream":
             assert settings.clip_model_path is not None, "clip model not found"
@@ -160,7 +160,7 @@ class LlamaProxy:
             ), "hf_pretrained_model_name_or_path must be set for hf-autotokenizer"
             chat_handler = (
                 llama_cpp.llama_chat_format.hf_autotokenizer_to_chat_completion_handler(
-                    settings.hf_pretrained_model_name_or_path
+                    settings.hf_pretrained_model_name_or_path,
                 )
             )
         elif settings.chat_format == "hf-tokenizer-config":
