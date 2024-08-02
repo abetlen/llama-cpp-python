@@ -202,7 +202,7 @@ class _LlamaModel:
             )
             if n_tokens < 0:
                 raise RuntimeError(
-                    f'Failed to tokenize: text="{text}" n_tokens={n_tokens}'
+                    f'Failed to tokenize: text="{text}" n_tokens={n_tokens}',
                 )
         return list(tokens[:n_tokens])
 
