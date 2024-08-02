@@ -92,5 +92,5 @@ def parse_model_from_args(model: T, args: argparse.Namespace) -> T:
             k: v
             for k, v in vars(args).items()
             if v is not None and k in model.model_fields
-        }
+        },
     )
