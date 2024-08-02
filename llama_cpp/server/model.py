@@ -26,7 +26,7 @@ class LlamaProxy:
 
         # Load default model
         self._current_model = self.load_llama_from_model_settings(
-            self._default_model_settings
+            self._default_model_settings,
         )
         self._current_model_alias = self._default_model_alias
 
@@ -82,7 +82,7 @@ class LlamaProxy:
                 )
             else:
                 chat_handler = llama_cpp.llama_chat_format.Llava15ChatHandler(
-                    clip_model_path=settings.clip_model_path, verbose=settings.verbose
+                    clip_model_path=settings.clip_model_path, verbose=settings.verbose,
                 )
         elif settings.chat_format == "obsidian":
             assert settings.clip_model_path is not None, "clip model not found"
@@ -96,7 +96,7 @@ class LlamaProxy:
                 )
             else:
                 chat_handler = llama_cpp.llama_chat_format.ObsidianChatHandler(
-                    clip_model_path=settings.clip_model_path, verbose=settings.verbose
+                    clip_model_path=settings.clip_model_path, verbose=settings.verbose,
                 )
         elif settings.chat_format == "llava-1-6":
             assert settings.clip_model_path is not None, "clip model not found"
@@ -124,7 +124,7 @@ class LlamaProxy:
                 )
             else:
                 chat_handler = llama_cpp.llama_chat_format.MoondreamChatHandler(
-                    clip_model_path=settings.clip_model_path, verbose=settings.verbose
+                    clip_model_path=settings.clip_model_path, verbose=settings.verbose,
                 )
         elif settings.chat_format == "nanollava":
             assert settings.clip_model_path is not None, "clip model not found"
@@ -138,7 +138,7 @@ class LlamaProxy:
                 )
             else:
                 chat_handler = llama_cpp.llama_chat_format.NanoLlavaChatHandler(
-                    clip_model_path=settings.clip_model_path, verbose=settings.verbose
+                    clip_model_path=settings.clip_model_path, verbose=settings.verbose,
                 )
         elif settings.chat_format == "llama-3-vision-alpha":
             assert settings.clip_model_path is not None, "clip model not found"
@@ -152,7 +152,7 @@ class LlamaProxy:
                 )
             else:
                 chat_handler = llama_cpp.llama_chat_format.Llama3VisionAlpha(
-                    clip_model_path=settings.clip_model_path, verbose=settings.verbose
+                    clip_model_path=settings.clip_model_path, verbose=settings.verbose,
                 )
         elif settings.chat_format == "hf-autotokenizer":
             assert (
@@ -168,19 +168,19 @@ class LlamaProxy:
                 settings.hf_tokenizer_config_path is not None
             ), "hf_tokenizer_config_path must be set for hf-tokenizer-config"
             chat_handler = llama_cpp.llama_chat_format.hf_tokenizer_config_to_chat_completion_handler(
-                json.load(open(settings.hf_tokenizer_config_path))
+                json.load(open(settings.hf_tokenizer_config_path)),
             )
 
         tokenizer: Optional[llama_cpp.BaseLlamaTokenizer] = None
         if settings.hf_pretrained_model_name_or_path is not None:
             tokenizer = llama_tokenizer.LlamaHFTokenizer.from_pretrained(
-                settings.hf_pretrained_model_name_or_path
+                settings.hf_pretrained_model_name_or_path,
             )
 
         draft_model = None
         if settings.draft_model is not None:
             draft_model = llama_speculative.LlamaPromptLookupDecoding(
-                num_pred_tokens=settings.draft_model_num_pred_tokens
+                num_pred_tokens=settings.draft_model_num_pred_tokens,
             )
 
         kv_overrides: Optional[Dict[str, Union[bool, int, float, str]]] = None
