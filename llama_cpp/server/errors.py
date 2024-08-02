@@ -1,25 +1,25 @@
 from __future__ import annotations
 
 import sys
-import traceback
 import time
+import traceback
 from re import compile, Match, Pattern
-from typing import Callable, Coroutine, Optional, Tuple, Union, Dict
-from typing_extensions import TypedDict
-
+from re import Match, Pattern, compile
+from typing import Callable, Coroutine, Dict, Optional, Tuple, Union
 
 from fastapi import (
+    HTTPException,
     Request,
     Response,
-    HTTPException,
 )
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
+from typing_extensions import TypedDict
 
 from llama_cpp.server.types import (
+    CreateChatCompletionRequest,
     CreateCompletionRequest,
     CreateEmbeddingRequest,
-    CreateChatCompletionRequest,
 )
 
 
@@ -46,7 +46,7 @@ class ErrorResponseFormatters:
 
     @staticmethod
     def context_length_exceeded(
-        request: Union["CreateCompletionRequest", "CreateChatCompletionRequest"],
+        request: Union[CreateCompletionRequest, CreateChatCompletionRequest],
         match,  # type: Match[str] # type: ignore
     ) -> Tuple[int, ErrorResponse]:
         """Formatter for context length exceeded error"""
@@ -84,7 +84,7 @@ class ErrorResponseFormatters:
 
     @staticmethod
     def model_not_found(
-        request: Union["CreateCompletionRequest", "CreateChatCompletionRequest"],
+        request: Union[CreateCompletionRequest, CreateChatCompletionRequest],
         match,  # type: Match[str] # type: ignore
     ) -> Tuple[int, ErrorResponse]:
         """Formatter for model_not_found error"""
@@ -105,11 +105,11 @@ class RouteErrorHandler(APIRoute):
     # key: regex pattern for original error message from llama_cpp
     # value: formatter function
     pattern_and_formatters: Dict[
-        "Pattern[str]",
+        Pattern[str],
         Callable[
             [
-                Union["CreateCompletionRequest", "CreateChatCompletionRequest"],
-                "Match[str]",
+                Union[CreateCompletionRequest, CreateChatCompletionRequest],
+                Match[str],
             ],
             Tuple[int, ErrorResponse],
         ],
@@ -127,14 +127,14 @@ class RouteErrorHandler(APIRoute):
         error: Exception,
         body: Optional[
             Union[
-                "CreateChatCompletionRequest",
-                "CreateCompletionRequest",
-                "CreateEmbeddingRequest",
+                CreateChatCompletionRequest,
+                CreateCompletionRequest,
+                CreateEmbeddingRequest,
             ]
         ] = None,
     ) -> Tuple[int, ErrorResponse]:
         """Wraps error message in OpenAI style error response"""
-        print(f"Exception: {str(error)}", file=sys.stderr)
+        print(f"Exception: {error!s}", file=sys.stderr)
         traceback.print_exc(file=sys.stderr)
         if body is not None and isinstance(
             body,
