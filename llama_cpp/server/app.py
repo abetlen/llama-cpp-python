@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import os
 import contextlib
 import json
+import os
 import typing
 from functools import partial
 from threading import Lock
-
 from typing import Dict, Iterator, List, Optional, Union
 
 import anyio
@@ -19,7 +18,7 @@ from sse_starlette.sse import EventSourceResponse
 from starlette.concurrency import iterate_in_threadpool, run_in_threadpool
 from starlette_context.middleware import RawContextMiddleware
 from starlette_context.plugins import RequestIdPlugin  # type: ignore
- 
+
 import llama_cpp
 from llama_cpp.server.errors import RouteErrorHandler
 from llama_cpp.server.model import (
