@@ -36,14 +36,14 @@ class LLaMAInteract:
             raise NotImplementedError(
                 """************
 please use the 'perplexity' tool for perplexity calculations
-************"""
+************""",
             )
 
         if self.params.embedding:
             raise NotImplementedError(
                 """************
 please use the 'embedding' tool for embedding calculations
-************"""
+************""",
             )
 
         if self.params.n_ctx > 2048:
@@ -81,7 +81,7 @@ specified) expect poor results""",
         self.lparams.use_mmap = self.params.use_mmap
 
         self.model = llama_cpp.llama_load_model_from_file(
-            self.params.model.encode("utf8"), self.lparams
+            self.params.model.encode("utf8"), self.lparams,
         )
 
         # Context Params.
@@ -183,7 +183,7 @@ specified) expect poor results""",
 
         if len(self.embd_inp) > self.n_ctx - 4:
             raise RuntimeError(
-                f"error: prompt is too long ({len(self.embd_inp)} tokens, max {self.params.n_ctx - 4})"
+                f"error: prompt is too long ({len(self.embd_inp)} tokens, max {self.params.n_ctx - 4})",
             )
 
         # debug message about similarity of saved session, if applicable
@@ -201,15 +201,15 @@ specified) expect poor results""",
                 print("session file has exact match for prompt!")
             elif self.n_matching_session_tokens < (len(self.embd_inp) / 2):
                 print(
-                    f"warning: session file has low similarity to prompt ({self.n_matching_session_tokens} / {len(self.embd_inp)} tokens); will mostly be reevaluated"
+                    f"warning: session file has low similarity to prompt ({self.n_matching_session_tokens} / {len(self.embd_inp)} tokens); will mostly be reevaluated",
                 )
             else:
                 print(
-                    f"session file matches {self.n_matching_session_tokens} / {len(self.embd_inp)} tokens of prompt"
+                    f"session file matches {self.n_matching_session_tokens} / {len(self.embd_inp)} tokens of prompt",
                 )
 
         self.need_to_save_session = len(
-            self.params.path_session
+            self.params.path_session,
         ) > 0 and self.n_matching_session_tokens < (len(self.embd_inp) * 3 / 4)
 
         # number of tokens to keep when resetting context
@@ -424,7 +424,7 @@ n_keep = {self.params.n_keep}
                         self.ctx,
                         self.params.path_session.encode("utf8"),
                         (llama_cpp.llama_token * len(self.session_tokens))(
-                            *self.session_tokens
+                            *self.session_tokens,
                         ),
                         len(self.session_tokens),
                     )
@@ -442,7 +442,7 @@ n_keep = {self.params.n_keep}
                     *[
                         llama_cpp.llama_token_data(token_id, logits[token_id], 0.0)
                         for token_id in range(n_vocab)
-                    ]
+                    ],
                 )
                 candidates_p = llama_cpp.ctypes.pointer(
                     llama_cpp.llama_token_data_array(_arr, len(_arr), False)
