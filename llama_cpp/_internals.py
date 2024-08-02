@@ -15,6 +15,7 @@ import numpy as np
 import numpy.typing as npt
 
 from llama_cpp import llama_cpp
+
 from ._utils import suppress_stdout_stderr
 from .llama_grammar import LlamaGrammar
 from .llama_types import *
@@ -476,7 +477,7 @@ class _LlamaContext:
 
     def sample_token_mirostat_v2(
         self,
-        candidates: "_LlamaTokenDataArray",
+        candidates: _LlamaTokenDataArray,
         tau: float,
         eta: float,
         mu: llama_cpp.CtypesPointerOrRef[ctypes.c_float],
