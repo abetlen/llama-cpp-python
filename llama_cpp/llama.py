@@ -1380,7 +1380,7 @@ class Llama:
                                     "index": 0,
                                     "logprobs": None,
                                     "finish_reason": None,
-                                }
+                                },
                             ],
                         }
 
