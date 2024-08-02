@@ -82,7 +82,7 @@ def _load_shared_library(lib_base_name: str):
                 raise RuntimeError(f"Failed to load shared library '{_lib_path}': {e}")
 
     raise FileNotFoundError(
-        f"Shared library with base name '{lib_base_name}' not found"
+        f"Shared library with base name '{lib_base_name}' not found",
     )
 
 
@@ -107,7 +107,7 @@ if TYPE_CHECKING:
         pass
 
     CtypesPointerOrRef: TypeAlias = Union[
-        CtypesPointer[CtypesCData], CtypesRef[CtypesCData]
+        CtypesPointer[CtypesCData], CtypesRef[CtypesCData],
     ]
 
     CtypesFuncPointer: TypeAlias = ctypes._FuncPointer  # type: ignore
@@ -117,7 +117,7 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 def ctypes_function_for_shared_library(lib: ctypes.CDLL):
     def ctypes_function(
-        name: str, argtypes: List[Any], restype: Any, enabled: bool = True
+        name: str, argtypes: List[Any], restype: Any, enabled: bool = True,
     ):
         def decorator(f: F) -> F:
             if enabled:
@@ -165,7 +165,7 @@ class llava_image_embed(Structure):
     c_bool,
 )
 def llava_validate_embed_size(
-    ctx_llama: llama_cpp.llama_context_p, ctx_clip: clip_ctx_p, /
+    ctx_llama: llama_cpp.llama_context_p, ctx_clip: clip_ctx_p, /,
 ) -> bool: ...
 
 
@@ -193,7 +193,7 @@ def llava_image_embed_make_with_bytes(
     POINTER(llava_image_embed),
 )
 def llava_image_embed_make_with_filename(
-    ctx_clip: clip_ctx_p, n_threads: Union[c_int, int], image_path: bytes, /
+    ctx_clip: clip_ctx_p, n_threads: Union[c_int, int], image_path: bytes, /,
 ) -> _Pointer[llava_image_embed]: ...
 
 
@@ -233,7 +233,7 @@ def llava_eval_image_embed(
 # CLIP_API struct clip_ctx * clip_model_load    (const char * fname, int verbosity);
 @ctypes_function("clip_model_load", [c_char_p, c_int], clip_ctx_p_ctypes)
 def clip_model_load(
-    fname: bytes, verbosity: Union[c_int, int], /
+    fname: bytes, verbosity: Union[c_int, int], /,
 ) -> Optional[clip_ctx_p]: ...
 
 
