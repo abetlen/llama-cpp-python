@@ -19,7 +19,7 @@ ctx = llama_cpp.llama_new_context_with_model(model, cparams)
 # determine the required inference memory per token:
 tmp = [0, 1, 2, 3]
 llama_cpp.llama_eval(
-    ctx=ctx, tokens=(llama_cpp.c_int * len(tmp))(*tmp), n_tokens=len(tmp), n_past=0
+    ctx=ctx, tokens=(llama_cpp.c_int * len(tmp))(*tmp), n_tokens=len(tmp), n_past=0,
 )  # Deprecated
 
 n_past = 0
@@ -76,10 +76,10 @@ while remaining_tokens > 0:
             *[
                 llama_cpp.llama_token_data(token_id, logits[token_id], 0.0)
                 for token_id in range(n_vocab)
-            ]
+            ],
         )
         candidates_p = llama_cpp.ctypes.pointer(
-            llama_cpp.llama_token_data_array(_arr, len(_arr), False)
+            llama_cpp.llama_token_data_array(_arr, len(_arr), False),
         )
 
         _arr = (llama_cpp.c_int * len(last_n_tokens_data))(*last_n_tokens_data)
