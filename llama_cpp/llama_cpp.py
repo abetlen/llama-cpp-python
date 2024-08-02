@@ -109,7 +109,7 @@ if TYPE_CHECKING:
         pass
 
     CtypesPointerOrRef: TypeAlias = Union[
-        CtypesPointer[CtypesCData], CtypesRef[CtypesCData]
+        CtypesPointer[CtypesCData], CtypesRef[CtypesCData],
     ]
 
     CtypesFuncPointer: TypeAlias = ctypes._FuncPointer  # type: ignore
@@ -214,7 +214,7 @@ GGML_TYPE_COUNT = 30
 # from ggml-backend.h
 # typedef bool (*ggml_backend_sched_eval_callback)(struct ggml_tensor * t, bool ask, void * user_data);
 ggml_backend_sched_eval_callback = ctypes.CFUNCTYPE(
-    ctypes.c_bool, ctypes.c_void_p, ctypes.c_bool, ctypes.c_void_p
+    ctypes.c_bool, ctypes.c_void_p, ctypes.c_bool, ctypes.c_void_p,
 )
 
 # // Abort callback
@@ -2553,7 +2553,7 @@ def llama_synchronize(ctx: llama_context_p, /):
 # // Cols: n_vocab
 # LLAMA_API float * llama_get_logits(struct llama_context * ctx);
 @ctypes_function(
-    "llama_get_logits", [llama_context_p_ctypes], ctypes.POINTER(ctypes.c_float)
+    "llama_get_logits", [llama_context_p_ctypes], ctypes.POINTER(ctypes.c_float),
 )
 def llama_get_logits(ctx: llama_context_p, /) -> CtypesArray[ctypes.c_float]:
     """Token logits obtained from the last call to llama_eval()
@@ -2655,7 +2655,7 @@ def llama_token_get_text(
 
 # LLAMA_API float llama_token_get_score(const struct llama_model * model, llama_token token);
 @ctypes_function(
-    "llama_token_get_score", [llama_model_p_ctypes, llama_token], ctypes.c_float
+    "llama_token_get_score", [llama_model_p_ctypes, llama_token], ctypes.c_float,
 )
 def llama_token_get_score(
     model: llama_model_p, token: Union[llama_token, int], /,
