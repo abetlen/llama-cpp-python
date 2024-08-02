@@ -1,0 +1,27 @@
+name: Ruff
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    # The branches below must be a subset of the branches above
+    branches: [ "main" ]
+  schedule:
+    - cron: '30 3 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  ruff:
+    name: Ruff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - uses: chartboost/ruff-action@v1
+        with:
+          args: 'check --select B,F,I,PERF,NPY,PL,RUF,S,SIM,UP --output-format github --diff --exclude docker,docs,scripts,tests,vendor'
