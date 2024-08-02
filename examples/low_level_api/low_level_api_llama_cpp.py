@@ -114,7 +114,7 @@ while remaining_tokens > 0:
             size = 32
             buffer = (ctypes.c_char * size)()
             n = llama_cpp.llama_token_to_piece(
-                model, llama_cpp.llama_token(id), buffer, size
+                model, llama_cpp.llama_token(id), buffer, size,
             )
             assert n <= size
             print(
