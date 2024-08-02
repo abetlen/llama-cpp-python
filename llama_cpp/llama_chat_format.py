@@ -1631,7 +1631,7 @@ def functionary_chat_handler(
         try:
             with suppress_stdout_stderr(disable=llama.verbose):
                 grammar_text = llama_grammar.json_schema_to_gbnf(
-                    json.dumps(function_body), 
+                    json.dumps(function_body),
                 )
                 grammar = llama_grammar.LlamaGrammar.from_string(
                     llama_grammar.json_schema_to_gbnf(json.dumps(function_body)),
@@ -1792,7 +1792,7 @@ def functionary_v1_v2_chat_handler(
             nested_schema = "{\n"
             for nested_param_name, nested_param in properties.items():
                 nested_param_type = generate_type_definition(
-                    nested_param, indent_level + 1, shared_defs
+                    nested_param, indent_level + 1, shared_defs,
                 )
                 nested_schema += (
                     f"{indent}  {nested_param_name}: {nested_param_type},\n"
@@ -2129,7 +2129,7 @@ def functionary_v1_v2_chat_handler(
                                     "content": None,
                                     **func_call_dict,
                                 },
-                            }
+                            },
                         ],
                     )
             # Yield tool_call/function_call stop message
@@ -2209,8 +2209,8 @@ def functionary_v1_v2_chat_handler(
                                         "name": function_name,
                                         "arguments": "",
                                     },
-                                }
-                            ]
+                                },
+                            ],
                         }
                     else:
                         func_call_dict = {
@@ -2797,7 +2797,7 @@ class Llava15ChatHandler:
                 )
                 if llama.n_tokens + len(tokens) > llama.n_ctx():
                     raise ValueError(
-                        f"Prompt exceeds n_ctx: {llama.n_tokens + len(tokens)} > {llama.n_ctx()}"
+                        f"Prompt exceeds n_ctx: {llama.n_tokens + len(tokens)} > {llama.n_ctx()}",
                     )
                 llama.eval(tokens)
             else:
