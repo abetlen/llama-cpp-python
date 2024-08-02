@@ -32,7 +32,7 @@ Question: What is capital of france?
 Thought: Do I need to use an action? No, I know the answer
 Answer: Paris is the capital of France
 Question:""" + " ".join(
-    sys.argv[1:]
+    sys.argv[1:],
 )
 
 print("Loading model...")
