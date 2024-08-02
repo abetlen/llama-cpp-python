@@ -27,7 +27,7 @@ jobs:
       
       - uses: chartboost/ruff-action@v1
         with:
-          args: 'check --fix-only'
+          args: 'check --preview --fix-only'
 
       - uses: stefanzweifel/git-auto-commit-action@v5
         with:
