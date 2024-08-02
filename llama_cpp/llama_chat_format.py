@@ -2214,7 +2214,7 @@ def functionary_v1_v2_chat_handler(
                         }
                     else:
                         func_call_dict = {
-                            "function_call": {"name": function_name, "arguments": ""}
+                            "function_call": {"name": function_name, "arguments": ""},
                         }
                     # Stream function name
                     yield llama_types.CreateChatCompletionStreamResponse(
