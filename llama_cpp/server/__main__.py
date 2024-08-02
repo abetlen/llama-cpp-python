@@ -65,7 +65,7 @@ def main():
                     import json
 
                     import yaml
-                    
+
                     config_file_settings = ConfigFileSettings.model_validate_json(
                         json.dumps(yaml.safe_load(f))
                     )
