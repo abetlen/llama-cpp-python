@@ -51,7 +51,7 @@ The transcript only includes text, it does not include markup like HTML and Mark
 {USER_NAME}: What time is it?
 {AI_NAME}: It is {DATE_TIME}.
 {USER_NAME}:""" + " ".join(
-    sys.argv[1:]
+    sys.argv[1:],
 )
 
 print("Loading model...")
