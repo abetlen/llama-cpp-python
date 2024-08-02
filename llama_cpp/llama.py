@@ -2238,7 +2238,7 @@ StoppingCriteria = Callable[[npt.NDArray[np.intc], npt.NDArray[np.single]], bool
 
 class StoppingCriteriaList(List[StoppingCriteria]):
     def __call__(
-        self, input_ids: npt.NDArray[np.intc], logits: npt.NDArray[np.single,
+        self, input_ids: npt.NDArray[np.intc], logits: npt.NDArray[np.single],
     ) -> bool:
         return any([stopping_criteria(input_ids, logits) for stopping_criteria in self])
 
