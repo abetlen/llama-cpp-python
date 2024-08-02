@@ -445,7 +445,7 @@ n_keep = {self.params.n_keep}
                     ],
                 )
                 candidates_p = llama_cpp.ctypes.pointer(
-                    llama_cpp.llama_token_data_array(_arr, len(_arr), False)
+                    llama_cpp.llama_token_data_array(_arr, len(_arr), False),
                 )
 
                 # Apply penalties
@@ -453,7 +453,7 @@ n_keep = {self.params.n_keep}
                 last_n_repeat = min(len(self.last_n_tokens), repeat_last_n, self.n_ctx)
 
                 _arr = (llama_cpp.llama_token * last_n_repeat)(
-                    *self.last_n_tokens[len(self.last_n_tokens) - last_n_repeat :]
+                    *self.last_n_tokens[len(self.last_n_tokens) - last_n_repeat :],
                 )
                 llama_cpp.llama_sample_repetition_penalties(
                     ctx=self.ctx,
@@ -480,7 +480,7 @@ n_keep = {self.params.n_keep}
                     mirostat_mu = 2.0 * self.params.mirostat_tau
                     mirostat_m = 100
                     llama_cpp.llama_sample_temperature(
-                        self.ctx, candidates_p, llama_cpp.c_float(self.params.temp)
+                        self.ctx, candidates_p, llama_cpp.c_float(self.params.temp),
                     )
                     id = llama_cpp.llama_sample_token_mirostat(
                         self.ctx,
@@ -493,7 +493,7 @@ n_keep = {self.params.n_keep}
                 elif self.params.mirostat == 2:
                     mirostat_mu = 2.0 * self.params.mirostat_tau
                     llama_cpp.llama_sample_temperature(
-                        self.ctx, candidates_p, llama_cpp.c_float(self.params.temp)
+                        self.ctx, candidates_p, llama_cpp.c_float(self.params.temp),
                     )
                     id = llama_cpp.llama_sample_token_mirostat_v2(
                         self.ctx,
@@ -529,7 +529,7 @@ n_keep = {self.params.n_keep}
                         min_keep=llama_cpp.c_size_t(1),
                     )
                     llama_cpp.llama_sample_temperature(
-                        self.ctx, candidates_p, llama_cpp.c_float(self.params.temp)
+                        self.ctx, candidates_p, llama_cpp.c_float(self.params.temp),
                     )
                     id = llama_cpp.llama_sample_token(self.ctx, candidates_p)
                 # print("`{}`".format(candidates_p.size))
@@ -600,7 +600,7 @@ n_keep = {self.params.n_keep}
 
             # end of text token
             if len(self.embd) > 0 and self.embd[-1] == llama_cpp.llama_token_eos(
-                self.ctx
+                self.ctx,
             ):
                 if not self.params.instruct:
                     for i in self.llama_token_eot:
@@ -636,7 +636,7 @@ n_keep = {self.params.n_keep}
         size = 32
         buffer = (ctypes.c_char * size)()
         n = llama_cpp.llama_token_to_piece(
-            self.model, llama_cpp.llama_token(token_id), buffer, size
+            self.model, llama_cpp.llama_token(token_id), buffer, size,
         )
         assert n <= size
         return bytes(buffer[:n])
@@ -709,7 +709,7 @@ n_keep = {self.params.n_keep}
             else:
                 print(self.params.input_prefix, end="")
                 self.input(
-                    f"{self.params.input_prefix}{self.read_input()}{self.params.input_suffix}"
+                    f"{self.params.input_prefix}{self.read_input()}{self.params.input_suffix}",
                 )
                 print(self.params.input_suffix, end="")
             self.set_color(util.CONSOLE_COLOR_DEFAULT)
