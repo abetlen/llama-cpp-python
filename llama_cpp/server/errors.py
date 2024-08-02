@@ -114,10 +114,10 @@ class RouteErrorHandler(APIRoute):
         ],
     ] = {
         compile(
-            r"Requested tokens \((\d+)\) exceed context window of (\d+)"
+            r"Requested tokens \((\d+)\) exceed context window of (\d+)",
         ): ErrorResponseFormatters.context_length_exceeded,
         compile(
-            r"Model path does not exist: (.+)"
+            r"Model path does not exist: (.+)",
         ): ErrorResponseFormatters.model_not_found,
     }
 
