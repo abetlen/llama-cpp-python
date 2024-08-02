@@ -16,7 +16,7 @@ def predict(message, history):
     messages.append({"role": "user", "content": message})
 
     response = client.chat.completions.create(
-        model=model, messages=messages, stream=True
+        model=model, messages=messages, stream=True,
     )
 
     text = ""
