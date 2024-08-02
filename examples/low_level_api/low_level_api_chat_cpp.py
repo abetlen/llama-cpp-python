@@ -174,7 +174,7 @@ specified) expect poor results""",
                     file=sys.stderr,
                 )
             else:
-                print(f"session file does not exist, will create", file=sys.stderr)
+                print("session file does not exist, will create", file=sys.stderr)
 
         # tokenize the prompt
         self.embd = []
@@ -197,7 +197,7 @@ specified) expect poor results""",
                 self.n_matching_session_tokens += 1
 
             if self.n_matching_session_tokens >= len(self.embd_inp):
-                print(f"session file has exact match for prompt!")
+                print("session file has exact match for prompt!")
             elif self.n_matching_session_tokens < (len(self.embd_inp) / 2):
                 print(
                     f"warning: session file has low similarity to prompt ({self.n_matching_session_tokens} / {len(self.embd_inp)} tokens); will mostly be reevaluated"
@@ -668,7 +668,7 @@ n_keep = {self.params.n_keep}
                 self.multibyte_fix[self.multibyte_fix.index(None)] = cur_char
 
             # Return completed utf char
-            if len(self.multibyte_fix) > 0 and not None in self.multibyte_fix:
+            if len(self.multibyte_fix) > 0 and None not in self.multibyte_fix:
                 yield (b"".join(self.multibyte_fix)).decode("utf8")
                 self.multibyte_fix = []
                 continue
