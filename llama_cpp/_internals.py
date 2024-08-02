@@ -837,7 +837,7 @@ class _LlamaSamplingContext:
                 self.params.mirostat_tau,
                 self.params.mirostat_eta,
                 ctypes.pointer(self.mirostat_mu),
-            )     
+            )
         else:
             min_keep = max(1, self.params.n_probs)
             ctx_main.sample_top_k(
