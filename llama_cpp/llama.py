@@ -1299,12 +1299,10 @@ class Llama:
                         token_offset = len(prompt_tokens) + returned_tokens
                         logits = self._scores[token_offset - 1, :]
                         current_logprobs = Llama.logits_to_logprobs(logits).tolist()
-                        sorted_logprobs = list(
-                            sorted(
+                        sorted_logprobs = sorted(
                                 zip(current_logprobs, range(len(current_logprobs))),
                                 reverse=True,
                             )
-                        )
                         top_logprob = {
                             self.detokenize([i]).decode(
                                 "utf-8", errors="ignore"
@@ -1438,12 +1436,10 @@ class Llama:
                     token_offset = len(prompt_tokens) + returned_tokens - 1
                     logits = self._scores[token_offset, :]
                     current_logprobs = Llama.logits_to_logprobs(logits).tolist()
-                    sorted_logprobs = list(
-                        sorted(
+                    sorted_logprobs = sorted(
                             zip(current_logprobs, range(len(current_logprobs))),
                             reverse=True,
                         )
-                    )
                     top_logprob = {
                         self.detokenize([i]).decode("utf-8", errors="ignore"): logprob
                         for logprob, i in sorted_logprobs[:logprobs]
@@ -1571,11 +1567,9 @@ class Llama:
                     )
                 )
                 tokens.append(token_str)
-                sorted_logprobs = list(
-                    sorted(
+                sorted_logprobs = sorted(
                         zip(logprobs_token, range(len(logprobs_token))), reverse=True
                     )
-                )
                 token_logprobs.append(logprobs_token[int(token)])
                 top_logprob: Optional[Dict[str, float]] = {
                     self.detokenize([i], prev_tokens=all_tokens[:idx]).decode(
