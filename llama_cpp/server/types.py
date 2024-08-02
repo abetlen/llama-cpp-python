@@ -8,11 +8,11 @@ from typing_extensions import Literal, TypedDict
 import llama_cpp
 
 model_field = Field(
-    description="The model to use for generating completions.", default=None
+    description="The model to use for generating completions.", default=None,
 )
 
 max_tokens_field = Field(
-    default=16, ge=1, description="The maximum number of tokens to generate."
+    default=16, ge=1, description="The maximum number of tokens to generate.",
 )
 
 min_tokens_field = Field(
@@ -96,7 +96,7 @@ mirostat_tau_field = Field(
 )
 
 mirostat_eta_field = Field(
-    default=0.1, ge=0.001, le=1.0, description="Mirostat learning rate"
+    default=0.1, ge=0.001, le=1.0, description="Mirostat learning rate",
 )
 
 grammar = Field(
@@ -107,14 +107,14 @@ grammar = Field(
 
 class CreateCompletionRequest(BaseModel):
     prompt: Union[str, List[str]] = Field(
-        default="", description="The prompt to generate completions for."
+        default="", description="The prompt to generate completions for.",
     )
     suffix: Optional[str] = Field(
         default=None,
         description="A suffix to append to the generated text. If None, no suffix is appended. Useful for chatbots.",
     )
     max_tokens: Optional[int] = Field(
-        default=16, ge=0, description="The maximum number of tokens to generate."
+        default=16, ge=0, description="The maximum number of tokens to generate.",
     )
     min_tokens: int = min_tokens_field
     temperature: float = temperature_field
@@ -157,9 +157,9 @@ class CreateCompletionRequest(BaseModel):
                 {
                     "prompt": "\n\n### Instructions:\nWhat is the capital of France?\n\n### Response:\n",
                     "stop": ["\n", "###"],
-                }
-            ]
-        }
+                },
+            ],
+        },
     }
 
 
@@ -173,24 +173,24 @@ class CreateEmbeddingRequest(BaseModel):
             "examples": [
                 {
                     "input": "The food was delicious and the waiter...",
-                }
-            ]
-        }
+                },
+            ],
+        },
     }
 
 
 class ChatCompletionRequestMessage(BaseModel):
     role: Literal["system", "user", "assistant", "function"] = Field(
-        default="user", description="The role of the message."
+        default="user", description="The role of the message.",
     )
     content: Optional[str] = Field(
-        default="", description="The content of the message."
+        default="", description="The content of the message.",
     )
 
 
 class CreateChatCompletionRequest(BaseModel):
     messages: List[llama_cpp.ChatCompletionRequestMessage] = Field(
-        default=[], description="A list of messages to generate completions for."
+        default=[], description="A list of messages to generate completions for.",
     )
     functions: Optional[List[llama_cpp.ChatCompletionFunction]] = Field(
         default=None,
@@ -255,15 +255,15 @@ class CreateChatCompletionRequest(BaseModel):
                 {
                     "messages": [
                         ChatCompletionRequestMessage(
-                            role="system", content="You are a helpful assistant."
+                            role="system", content="You are a helpful assistant.",
                         ).model_dump(),
                         ChatCompletionRequestMessage(
-                            role="user", content="What is the capital of France?"
+                            role="user", content="What is the capital of France?",
                         ).model_dump(),
-                    ]
-                }
-            ]
-        }
+                    ],
+                },
+            ],
+        },
     }
 
 
@@ -284,7 +284,7 @@ class TokenizeInputRequest(BaseModel):
     input: str = Field(description="The input to tokenize.")
 
     model_config = {
-        "json_schema_extra": {"examples": [{"input": "How many tokens in this query?"}]}
+        "json_schema_extra": {"examples": [{"input": "How many tokens in this query?"}]},
     }
 
 
@@ -311,5 +311,5 @@ class DetokenizeInputResponse(BaseModel):
     text: str = Field(description="The detokenized text.")
 
     model_config = {
-        "json_schema_extra": {"example": {"text": "How many tokens in this query?"}}
+        "json_schema_extra": {"example": {"text": "How many tokens in this query?"}},
     }
