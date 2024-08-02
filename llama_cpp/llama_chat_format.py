@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import os
-import sys
-import json
 import ctypes
 import dataclasses
+import json
+import os
 import random
 import string
-
+import sys
 from contextlib import ExitStack
 from typing import (
     Any,
@@ -16,24 +15,21 @@ from typing import (
     List,
     Literal,
     Optional,
+    Protocol,
     Tuple,
     Union,
-    Protocol,
     cast,
 )
 
 import jinja2
-from jinja2.sandbox import ImmutableSandboxedEnvironment
-
 import numpy as np
 import numpy.typing as npt
+from jinja2.sandbox import ImmutableSandboxedEnvironment
 
-import llama_cpp.llama as llama
-import llama_cpp.llama_types as llama_types
-import llama_cpp.llama_grammar as llama_grammar
+from llama_cpp import llama, llama_grammar, llama_types
 
 from ._logger import logger
-from ._utils import suppress_stdout_stderr, Singleton
+from ._utils import Singleton, suppress_stdout_stderr
 
 ### Common Chat Templates and Special Tokens ###
 
@@ -1478,7 +1474,7 @@ def functionary_chat_handler(
                 schema += f"    {param_name}{optional_indicator}: {param_type},\n"
             schema += "  }) => any;\n\n"
 
-        schema += "}} // namespace {}\n".format(namespace)
+        schema += f"}} // namespace {namespace}\n"
         return schema
 
     def prepare_messages_for_inference(
@@ -1858,7 +1854,7 @@ def functionary_v1_v2_chat_handler(
                 schema += f"{param_name}{optional_indicator}: {param_type},\n"
             schema += "}) => any;\n\n"
 
-        schema += "}} // namespace {}".format(namespace)
+        schema += f"}} // namespace {namespace}"
         return schema
 
     def prepare_messages_for_inference(
@@ -1876,26 +1872,25 @@ def functionary_v1_v2_chat_handler(
                     role="system", content=generate_schema_from_functions([])
                 )
             )
-        else:
-            if functions is not None:
-                all_messages.append(
-                    llama_types.ChatCompletionRequestSystemMessage(
-                        role="system", content=generate_schema_from_functions(functions)
-                    )
+        elif functions is not None:
+            all_messages.append(
+                llama_types.ChatCompletionRequestSystemMessage(
+                    role="system", content=generate_schema_from_functions(functions)
                 )
-            elif tools is not None and tool_choice != "none":
-                all_messages.append(
-                    llama_types.ChatCompletionRequestSystemMessage(
-                        role="system",
-                        content=generate_schema_from_functions(
-                            [
-                                tool["function"]
-                                for tool in tools
-                                if tool["type"] == "function"
-                            ]
-                        ),
-                    )
-                )
+            )
+        elif tools is not None and tool_choice != "none":
+            all_messages.append(
+                llama_types.ChatCompletionRequestSystemMessage(
+                    role="system",
+                    content=generate_schema_from_functions(
+                        [
+                            tool["function"]
+                            for tool in tools
+                            if tool["type"] == "function"
+                        ]
+                    ),
+                 )
+            )
 
         all_messages.append(
             llama_types.ChatCompletionRequestSystemMessage(
@@ -2483,88 +2478,86 @@ def functionary_v1_v2_chat_handler(
             # If the prompt involves a function call, just append generated parameters to function_bodies
             else:
                 function_bodies.append(completion_text.strip())
-        else:
-            # If tool_choice/function_call is provided
-            if isinstance(function_call, dict):
-                prompt += f"{function_call['name']}\n{CONTENT_TOKEN}"
-                function_call = function_call["name"]
-                function_calls.append(function_call)
-                grammar = get_grammar(function_call)
-                stops = [STOP_TOKEN, FROM_TOKEN]
+        elif isinstance(function_call, dict):
+            prompt += f"{function_call['name']}\n{CONTENT_TOKEN}"
+            function_call = function_call["name"]
+            function_calls.append(function_call)
+            grammar = get_grammar(function_call)
+            stops = [STOP_TOKEN, FROM_TOKEN]
+            completion = create_completion(
+                prompt=prompt, stop=stops, grammar=grammar
+            )
+            completion_text = completion["choices"][0]["text"]
+            completion_tokens += completion["usage"]["completion_tokens"]
+            function_bodies.append(completion_text.strip())
+        # If "auto" or no tool_choice/function_call
+        elif isinstance(function_call, str) and function_call == "auto":
+            while True:
+                # Generate function name first
+                grammar = None
+                stops = CONTENT_TOKEN
                 completion = create_completion(
                     prompt=prompt, stop=stops, grammar=grammar
                 )
                 completion_text = completion["choices"][0]["text"]
                 completion_tokens += completion["usage"]["completion_tokens"]
-                function_bodies.append(completion_text.strip())
-            # If "auto" or no tool_choice/function_call
-            elif isinstance(function_call, str) and function_call == "auto":
-                while True:
-                    # Generate function name first
-                    grammar = None
-                    stops = CONTENT_TOKEN
-                    completion = create_completion(
-                        prompt=prompt, stop=stops, grammar=grammar
-                    )
-                    completion_text = completion["choices"][0]["text"]
-                    completion_tokens += completion["usage"]["completion_tokens"]
-                    function_name = completion_text.strip()
-                    if function_name == "all":
-                        prompt += "all\n<|content|>"
+                function_name = completion_text.strip()
+                if function_name == "all":
+                    prompt += "all\n<|content|>"
+                else:
+                    function_call = completion_text.strip()
+                    prompt += f"{function_call}\n<|content|>"
+                    function_calls.append(function_call)
+                    grammar = get_grammar(function_call)
+                # Generate content
+                stops = [RECIPIENT_TOKEN, STOP_TOKEN]
+                completion = create_completion(
+                    prompt=prompt, stop=stops, grammar=grammar
+                )
+                completion_text = completion["choices"][0]["text"]
+                completion_tokens += completion["usage"]["completion_tokens"]
+                if function_name == "all":
+                    if completion_text.endswith("\n<|from|>assistant\n"):
+                        content += completion_text[: -len("\n<|from|>assistant\n")]
+                    if completion_text.endswith("\n<|from|> assistant\n"):
+                        content += completion_text[-len("\n<|from|> assistant\n")]               
                     else:
-                        function_call = completion_text.strip()
-                        prompt += f"{function_call}\n<|content|>"
-                        function_calls.append(function_call)
-                        grammar = get_grammar(function_call)
-                    # Generate content
-                    stops = [RECIPIENT_TOKEN, STOP_TOKEN]
-                    completion = create_completion(
-                        prompt=prompt, stop=stops, grammar=grammar
-                    )
-                    completion_text = completion["choices"][0]["text"]
-                    completion_tokens += completion["usage"]["completion_tokens"]
-                    if function_name == "all":
+                        content += completion_text
+                    content = content.lstrip()
+                    # Check whether the model wants to generate another turn
+                    if (
+                        "<|from|> assistant" in completion_text
+                        or "<|from|>assistant" in completion_text
+                    ):
                         if completion_text.endswith("\n<|from|>assistant\n"):
-                            content += completion_text[: -len("\n<|from|>assistant\n")]
-                        if completion_text.endswith("\n<|from|> assistant\n"):
-                            content += completion_text[-len("\n<|from|> assistant\n")]
+                            cleaned_completion_text = completion_text[
+                                : -len("\n<|from|>assistant\n")
+                            ].strip()
+                        elif completion_text.endswith("\n<|from|> assistant\n"):
+                            cleaned_completion_text = completion_text[
+                                -len("\n<|from|> assistant\n")
+                            ].strip()
                         else:
-                            content += completion_text
-                        content = content.lstrip()
-                        # Check whether the model wants to generate another turn
-                        if (
-                            "<|from|> assistant" in completion_text
-                            or "<|from|>assistant" in completion_text
-                        ):
-                            if completion_text.endswith("\n<|from|>assistant\n"):
-                                cleaned_completion_text = completion_text[
-                                    : -len("\n<|from|>assistant\n")
-                                ].strip()
-                            elif completion_text.endswith("\n<|from|> assistant\n"):
-                                cleaned_completion_text = completion_text[
-                                    -len("\n<|from|> assistant\n")
-                                ].strip()
-                            else:
-                                cleaned_completion_text = completion_text.strip()
-                            prompt += f"{cleaned_completion_text}\n<|from|>assistant\n<|recipient|>"
-                        else:
-                            break
+                            cleaned_completion_text = completion_text.strip()
+                        prompt += f"{cleaned_completion_text}\n<|from|>assistant\n<|recipient|>"
                     else:
-                        function_bodies.append(completion_text.strip())
-                        # Check whether the model wants to generate another turn
-                        prompt += completion_text.strip()
-                        grammar = None
-                        completion = create_completion(
-                            prompt=prompt, stop=stops, grammar=grammar
-                        )
-                        completion_tokens += completion["usage"]["completion_tokens"]
-                        if (
-                            "<|from|> assistant" in completion["choices"][0]["text"]
-                            or "<|from|>assistant" in completion["choices"][0]["text"]
-                        ):
-                            prompt += "\n<|from|>assistant\n<|recipient|>"
-                        else:
-                            break
+                        break
+                else:
+                    function_bodies.append(completion_text.strip())
+                    # Check whether the model wants to generate another turn
+                    prompt += completion_text.strip()
+                    grammar = None
+                    completion = create_completion(
+                        prompt=prompt, stop=stops, grammar=grammar
+                    )
+                    completion_tokens += completion["usage"]["completion_tokens"]
+                    if (
+                        "<|from|> assistant" in completion["choices"][0]["text"]
+                        or "<|from|>assistant" in completion["choices"][0]["text"]
+                    ):
+                        prompt += "\n<|from|>assistant\n<|recipient|>"
+                    else:
+                        break
 
         assert "usage" in completion
         assert len(function_calls) == len(function_bodies)
@@ -2667,7 +2660,7 @@ class Llava15ChatHandler:
     )
 
     def __init__(self, clip_model_path: str, verbose: bool = True):
-        import llama_cpp.llava_cpp as llava_cpp
+        from llama_cpp import llava_cpp
 
         self.clip_model_path = clip_model_path
         self.verbose = verbose
@@ -2978,12 +2971,12 @@ class Llava15ChatHandler:
         local_dir_use_symlinks: Union[bool, Literal["auto"]] = "auto",
         cache_dir: Optional[Union[str, os.PathLike[str]]] = None,
         **kwargs: Any,
-    ) -> "Llava15ChatHandler":
+    ) -> Llava15ChatHandler:
         import fnmatch
         from pathlib import Path
 
         try:
-            from huggingface_hub import hf_hub_download, HfFileSystem  # type: ignore
+            from huggingface_hub import HfFileSystem, hf_hub_download  # type: ignore
             from huggingface_hub.utils import validate_repo_id  # type: ignore
         except ImportError:
             raise ImportError(
