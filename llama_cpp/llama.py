@@ -1294,7 +1294,7 @@ class Llama:
                                 completion_tokens[:returned_tokens],
                                 prev_tokens=prompt_tokens
                                 + completion_tokens[:returned_tokens],
-                            ).decode("utf-8", errors="ignore")
+                            ).decode("utf-8", errors="ignore"),
                         )
                         token_offset = len(prompt_tokens) + returned_tokens
                         logits = self._scores[token_offset - 1, :]
@@ -1305,7 +1305,7 @@ class Llama:
                             )
                         top_logprob = {
                             self.detokenize([i]).decode(
-                                "utf-8", errors="ignore"
+                                "utf-8", errors="ignore",
                             ): logprob
                             for logprob, i in sorted_logprobs[:logprobs]
                         }
@@ -1316,7 +1316,7 @@ class Llama:
                                     [token],
                                     prev_tokens=prompt_tokens
                                     + completion_tokens[:returned_tokens],
-                                ).decode("utf-8", errors="ignore")
+                                ).decode("utf-8", errors="ignore"),
                             ],
                             "text_offset": [text_offset],
                             "token_logprobs": [current_logprobs[int(token)]],
@@ -1338,7 +1338,7 @@ class Llama:
                                     "index": 0,
                                     "logprobs": logprobs_or_none,
                                     "finish_reason": None,
-                                }
+                                },
                             ],
                         }
                 else:
@@ -1390,7 +1390,7 @@ class Llama:
                 break
 
         if stopping_criteria is not None and stopping_criteria(
-            self._input_ids, self._scores[-1, :]
+            self._input_ids, self._scores[-1, :],
         ):
             text = self.detokenize(completion_tokens, prev_tokens=prompt_tokens)
             finish_reason = "stop"
@@ -1416,7 +1416,7 @@ class Llama:
                     self.detokenize(
                         [token],
                         prev_tokens=prompt_tokens + completion_tokens[:returned_tokens],
-                    )
+                    ),
                 )
 
                 logprobs_or_none: Optional[CompletionLogprobs] = None
@@ -1424,14 +1424,14 @@ class Llama:
                     if token == bos_token_id:
                         continue
                     token_str = self.detokenize([token]).decode(
-                        "utf-8", errors="ignore"
+                        "utf-8", errors="ignore",
                     )
                     text_offset = len(prompt) + len(
                         self.detokenize(
                             completion_tokens[:returned_tokens],
                             prev_tokens=prompt_tokens
                             + completion_tokens[:returned_tokens],
-                        )
+                        ),
                     )
                     token_offset = len(prompt_tokens) + returned_tokens - 1
                     logits = self._scores[token_offset, :]
@@ -1447,7 +1447,7 @@ class Llama:
                     top_logprob.update({token_str: current_logprobs[int(token)]})
                     logprobs_or_none = {
                         "tokens": [
-                            self.detokenize([token]).decode("utf-8", errors="ignore")
+                            self.detokenize([token]).decode("utf-8", errors="ignore"),
                         ],
                         "text_offset": [text_offset],
                         "token_logprobs": [current_logprobs[int(token)]],
@@ -1472,7 +1472,7 @@ class Llama:
                                 "index": 0,
                                 "logprobs": logprobs_or_none,
                                 "finish_reason": None,
-                            }
+                            },
                         ],
                     }
                     break
@@ -1485,12 +1485,12 @@ class Llama:
                     "choices": [
                         {
                             "text": self.detokenize([token]).decode(
-                                "utf-8", errors="ignore"
+                                "utf-8", errors="ignore",
                             ),
                             "index": 0,
                             "logprobs": logprobs_or_none,
                             "finish_reason": None,
-                        }
+                        },
                     ],
                 }
             yield {
@@ -1504,7 +1504,7 @@ class Llama:
                         "index": 0,
                         "logprobs": None,
                         "finish_reason": finish_reason,
-                    }
+                    },
                 ],
             }
             if self.cache:
@@ -1547,14 +1547,14 @@ class Llama:
 
             all_token_strs = [
                 self.detokenize([token], prev_tokens=all_tokens[:i]).decode(
-                    "utf-8", errors="ignore"
+                    "utf-8", errors="ignore",
                 )
                 for i, token in enumerate(all_tokens)
             ]
             all_logprobs = Llama.logits_to_logprobs(self._scores)[token_offset:]
             # TODO: may be able to change this loop to use np.take_along_dim
             for idx, (token, token_str, logprobs_token) in enumerate(
-                zip(all_tokens, all_token_strs, all_logprobs)
+                zip(all_tokens, all_token_strs, all_logprobs),
             ):
                 if token == bos_token_id:
                     continue
@@ -1562,18 +1562,18 @@ class Llama:
                     text_offset
                     + len(
                         self.detokenize(all_tokens[:idx]).decode(
-                            "utf-8", errors="ignore"
-                        )
-                    )
+                            "utf-8", errors="ignore",
+                        ),
+                    ),
                 )
                 tokens.append(token_str)
                 sorted_logprobs = sorted(
-                        zip(logprobs_token, range(len(logprobs_token))), reverse=True
+                        zip(logprobs_token, range(len(logprobs_token))), reverse=True,
                     )
                 token_logprobs.append(logprobs_token[int(token)])
                 top_logprob: Optional[Dict[str, float]] = {
                     self.detokenize([i], prev_tokens=all_tokens[:idx]).decode(
-                        "utf-8", errors="ignore"
+                        "utf-8", errors="ignore",
                     ): logprob
                     for logprob, i in sorted_logprobs[:logprobs]
                 }
@@ -1603,7 +1603,7 @@ class Llama:
                     "index": 0,
                     "logprobs": logprobs_or_none,
                     "finish_reason": finish_reason,
-                }
+                },
             ],
             "usage": {
                 "prompt_tokens": len(prompt_tokens),
@@ -1832,7 +1832,7 @@ class Llama:
         logprobs: Optional[bool] = None,
         top_logprobs: Optional[int] = None,
     ) -> Union[
-        CreateChatCompletionResponse, Iterator[CreateChatCompletionStreamResponse]
+        CreateChatCompletionResponse, Iterator[CreateChatCompletionStreamResponse],
     ]:
         """Generate a chat completion from a list of messages.
 
@@ -1934,7 +1934,7 @@ class Llama:
         except ImportError:
             raise ImportError(
                 "To use create_chat_completion_openai_v1, you must install the openai package."
-                "You can install it with `pip install openai`."
+                "You can install it with `pip install openai`.",
             )
 
     def __getstate__(self):
@@ -2082,7 +2082,7 @@ class Llama:
 
     @staticmethod
     def logits_to_logprobs(
-        logits: Union[npt.NDArray[np.single], List], axis: int = -1
+        logits: Union[npt.NDArray[np.single], List], axis: int = -1,
     ) -> npt.NDArray[np.single]:
         # https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.log_softmax.html
         logits_maxs: np.ndarray = np.amax(logits, axis=axis, keepdims=True)
@@ -2137,7 +2137,7 @@ class Llama:
         except ImportError:
             raise ImportError(
                 "Llama.from_pretrained requires the huggingface-hub package. "
-                "You can install it with `pip install huggingface-hub`."
+                "You can install it with `pip install huggingface-hub`.",
             )
 
         validate_repo_id(repo_id)
@@ -2160,13 +2160,13 @@ class Llama:
         if len(matching_files) == 0:
             raise ValueError(
                 f"No file found in {repo_id} that match {filename}\n\n"
-                f"Available Files:\n{json.dumps(file_list)}"
+                f"Available Files:\n{json.dumps(file_list)}",
             )
 
         if len(matching_files) > 1:
             raise ValueError(
                 f"Multiple files found in {repo_id} matching {filename}\n\n"
-                f"Available Files:\n{json.dumps(files)}"
+                f"Available Files:\n{json.dumps(files)}",
             )
 
         (matching_file,) = matching_files
@@ -2220,13 +2220,13 @@ class LlamaState:
 
 
 LogitsProcessor = Callable[
-    [npt.NDArray[np.intc], npt.NDArray[np.single]], npt.NDArray[np.single]
+    [npt.NDArray[np.intc], npt.NDArray[np.single]], npt.NDArray[np.single],
 ]
 
 
 class LogitsProcessorList(List[LogitsProcessor]):
     def __call__(
-        self, input_ids: npt.NDArray[np.intc], scores: npt.NDArray[np.single]
+        self, input_ids: npt.NDArray[np.intc], scores: npt.NDArray[np.single],
     ) -> npt.NDArray[np.single]:
         for processor in self:
             scores = processor(input_ids, scores)
@@ -2238,7 +2238,7 @@ StoppingCriteria = Callable[[npt.NDArray[np.intc], npt.NDArray[np.single]], bool
 
 class StoppingCriteriaList(List[StoppingCriteria]):
     def __call__(
-        self, input_ids: npt.NDArray[np.intc], logits: npt.NDArray[np.single]
+        self, input_ids: npt.NDArray[np.intc], logits: npt.NDArray[np.single,
     ) -> bool:
         return any([stopping_criteria(input_ids, logits) for stopping_criteria in self])
 
@@ -2250,7 +2250,7 @@ class MinTokensLogitsProcessor(LogitsProcessor):
         self.prompt_tokens = None
 
     def __call__(
-        self, input_ids: npt.NDArray[np.intc], scores: npt.NDArray[np.single]
+        self, input_ids: npt.NDArray[np.intc], scores: npt.NDArray[np.single],
     ) -> npt.NDArray[np.single]:
         if self.prompt_tokens is None:
             self.prompt_tokens = len(input_ids)
