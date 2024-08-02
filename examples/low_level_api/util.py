@@ -45,7 +45,7 @@ class Circle:
 
     def __getitem__(self, val):
         if isinstance(val, int):
-            if 0 > val or val >= self.size:
+            if val < 0 or val >= self.size:
                 raise IndexError("Index out of range")
             return (
                 self.list[val]
