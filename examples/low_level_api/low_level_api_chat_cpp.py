@@ -13,12 +13,13 @@ Quirks:
 
 import ctypes
 import sys
-from time import time
 from os import cpu_count, path
+from time import time
+
+import util
+from common import GptParams, gpt_params_parse, gpt_random_prompt
 
 import llama_cpp
-from common import GptParams, gpt_params_parse, gpt_random_prompt
-import util
 
 
 # A LLaMA interactive session
@@ -475,63 +476,62 @@ n_keep = {self.params.n_keep}
                 if self.params.temp <= 0:
                     # Greedy sampling
                     id = llama_cpp.llama_sample_token_greedy(self.ctx, candidates_p)
+                elif self.params.mirostat == 1:
+                    mirostat_mu = 2.0 * self.params.mirostat_tau
+                    mirostat_m = 100
+                    llama_cpp.llama_sample_temperature(
+                        self.ctx, candidates_p, llama_cpp.c_float(self.params.temp)
+                    )
+                    id = llama_cpp.llama_sample_token_mirostat(
+                        self.ctx,
+                        candidates_p,
+                        llama_cpp.c_float(self.params.mirostat_tau),
+                        llama_cpp.c_float(self.params.mirostat_eta),
+                        llama_cpp.c_int(mirostat_m),
+                        llama_cpp.c_float(mirostat_mu),
+                    )
+                elif self.params.mirostat == 2:
+                    mirostat_mu = 2.0 * self.params.mirostat_tau
+                    llama_cpp.llama_sample_temperature(
+                        self.ctx, candidates_p, llama_cpp.c_float(self.params.temp)
+                    )
+                    id = llama_cpp.llama_sample_token_mirostat_v2(
+                        self.ctx,
+                        candidates_p,
+                        llama_cpp.c_float(self.params.mirostat_tau),
+                        llama_cpp.c_float(self.params.mirostat_eta),
+                        llama_cpp.c_float(mirostat_mu),
+                    )
                 else:
-                    if self.params.mirostat == 1:
-                        mirostat_mu = 2.0 * self.params.mirostat_tau
-                        mirostat_m = 100
-                        llama_cpp.llama_sample_temperature(
-                            self.ctx, candidates_p, llama_cpp.c_float(self.params.temp)
-                        )
-                        id = llama_cpp.llama_sample_token_mirostat(
-                            self.ctx,
-                            candidates_p,
-                            llama_cpp.c_float(self.params.mirostat_tau),
-                            llama_cpp.c_float(self.params.mirostat_eta),
-                            llama_cpp.c_int(mirostat_m),
-                            llama_cpp.c_float(mirostat_mu),
-                        )
-                    elif self.params.mirostat == 2:
-                        mirostat_mu = 2.0 * self.params.mirostat_tau
-                        llama_cpp.llama_sample_temperature(
-                            self.ctx, candidates_p, llama_cpp.c_float(self.params.temp)
-                        )
-                        id = llama_cpp.llama_sample_token_mirostat_v2(
-                            self.ctx,
-                            candidates_p,
-                            llama_cpp.c_float(self.params.mirostat_tau),
-                            llama_cpp.c_float(self.params.mirostat_eta),
-                            llama_cpp.c_float(mirostat_mu),
-                        )
-                    else:
-                        # Temperature sampling
-                        llama_cpp.llama_sample_top_k(
-                            self.ctx,
-                            candidates_p,
-                            top_k,
-                            min_keep=llama_cpp.c_size_t(1),
-                        )
-                        llama_cpp.llama_sample_tail_free(
-                            self.ctx,
-                            candidates_p,
-                            llama_cpp.c_float(self.params.tfs_z),
-                            min_keep=llama_cpp.c_size_t(1),
-                        )
-                        llama_cpp.llama_sample_typical(
-                            self.ctx,
-                            candidates_p,
-                            llama_cpp.c_float(self.params.typical_p),
-                            min_keep=llama_cpp.c_size_t(1),
-                        )
-                        llama_cpp.llama_sample_top_p(
-                            self.ctx,
-                            candidates_p,
-                            llama_cpp.c_float(self.params.top_p),
-                            min_keep=llama_cpp.c_size_t(1),
-                        )
-                        llama_cpp.llama_sample_temperature(
-                            self.ctx, candidates_p, llama_cpp.c_float(self.params.temp)
-                        )
-                        id = llama_cpp.llama_sample_token(self.ctx, candidates_p)
+                    # Temperature sampling
+                    llama_cpp.llama_sample_top_k(
+                        self.ctx,
+                        candidates_p,
+                        top_k,
+                        min_keep=llama_cpp.c_size_t(1),
+                    )
+                    llama_cpp.llama_sample_tail_free(
+                        self.ctx,
+                        candidates_p,
+                        llama_cpp.c_float(self.params.tfs_z),
+                        min_keep=llama_cpp.c_size_t(1),
+                    )
+                    llama_cpp.llama_sample_typical(
+                        self.ctx,
+                        candidates_p,
+                        llama_cpp.c_float(self.params.typical_p),
+                        min_keep=llama_cpp.c_size_t(1),
+                    )
+                    llama_cpp.llama_sample_top_p(
+                        self.ctx,
+                        candidates_p,
+                        llama_cpp.c_float(self.params.top_p),
+                        min_keep=llama_cpp.c_size_t(1),
+                    )
+                    llama_cpp.llama_sample_temperature(
+                        self.ctx, candidates_p, llama_cpp.c_float(self.params.temp)
+                    )
+                    id = llama_cpp.llama_sample_token(self.ctx, candidates_p)
                 # print("`{}`".format(candidates_p.size))
 
                 self.last_n_tokens.pop(0)
