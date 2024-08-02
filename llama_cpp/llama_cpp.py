@@ -77,7 +77,7 @@ def _load_shared_library(lib_base_name: str):
                 raise RuntimeError(f"Failed to load shared library '{_lib_path}': {e}")
 
     raise FileNotFoundError(
-        f"Shared library with base name '{lib_base_name}' not found"
+        f"Shared library with base name '{lib_base_name}' not found",
     )
 
 
@@ -119,7 +119,7 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 def ctypes_function_for_shared_library(lib: ctypes.CDLL):
     def ctypes_function(
-        name: str, argtypes: List[Any], restype: Any, enabled: bool = True
+        name: str, argtypes: List[Any], restype: Any, enabled: bool = True,
     ):
         def decorator(f: F) -> F:
             if enabled:
@@ -576,7 +576,7 @@ llama_token_data_array_p = ctypes.POINTER(llama_token_data_array)
 
 # typedef bool (*llama_progress_callback)(float progress, void * user_data);
 llama_progress_callback = ctypes.CFUNCTYPE(
-    ctypes.c_bool, ctypes.c_float, ctypes.c_void_p
+    ctypes.c_bool, ctypes.c_float, ctypes.c_void_p,
 )
 
 
@@ -930,7 +930,7 @@ class llama_context_params(ctypes.Structure):
 # // It might not exist for progress report where '.' is output repeatedly.
 # typedef void (*llama_log_callback)(enum llama_log_level level, const char * text, void * user_data);
 llama_log_callback = ctypes.CFUNCTYPE(
-    None, ctypes.c_int, ctypes.c_char_p, ctypes.c_void_p
+    None, ctypes.c_int, ctypes.c_char_p, ctypes.c_void_p,
 )
 """Signature for logging events
 Note that text includes the new line character at the end for most events.
@@ -1214,7 +1214,7 @@ def llama_backend_free():
     llama_model_p_ctypes,
 )
 def llama_load_model_from_file(
-    path_model: bytes, params: llama_model_params, /
+    path_model: bytes, params: llama_model_params, /,
 ) -> Optional[llama_model_p]:
     ...
 
@@ -1238,7 +1238,7 @@ def llama_free_model(model: llama_model_p, /):
     llama_context_p_ctypes,
 )
 def llama_new_context_with_model(
-    model: llama_model_p, params: llama_context_params, /
+    model: llama_model_p, params: llama_context_params, /,
 ) -> Optional[llama_context_p]:
     ...
 
@@ -1488,10 +1488,10 @@ def llama_model_n_params(model: llama_model_p, /) -> int:
 # // Get a llama model tensor
 # LLAMA_API struct ggml_tensor * llama_get_model_tensor(struct llama_model * model, const char * name);
 @ctypes_function(
-    "llama_get_model_tensor", [llama_model_p_ctypes, ctypes.c_char_p], ctypes.c_void_p
+    "llama_get_model_tensor", [llama_model_p_ctypes, ctypes.c_char_p], ctypes.c_void_p,
 )
 def llama_get_model_tensor(
-    model: llama_model_p, name: Union[ctypes.c_char_p, bytes], /
+    model: llama_model_p, name: Union[ctypes.c_char_p, bytes], /,
 ) -> ctypes.c_void_p:
     """Get a llama model tensor"""
     ...
@@ -1509,7 +1509,7 @@ def llama_model_has_encoder(model: llama_model_p, /) -> bool:
 # // to the decoder to start generating output sequence. For other models, it returns -1.
 # LLAMA_API llama_token llama_model_decoder_start_token(const struct llama_model * model);
 @ctypes_function(
-    "llama_model_decoder_start_token", [llama_model_p_ctypes], ctypes.c_int32
+    "llama_model_decoder_start_token", [llama_model_p_ctypes], ctypes.c_int32,
 )
 def llama_model_decoder_start_token(model: llama_model_p, /) -> int:
     """For encoder-decoder models, this function returns id of the token that must be provided
@@ -1553,7 +1553,7 @@ def llama_model_quantize(
     llama_lora_adapter_p_ctypes,
 )
 def llama_lora_adapter_init(
-    model: llama_model_p, path_lora: bytes, /
+    model: llama_model_p, path_lora: bytes, /,
 ) -> Optional[llama_lora_adapter_p]:
     """Load a LoRA adapter from file
     The loaded adapter will be associated to the given model, and will be free when the model is deleted
@@ -1573,7 +1573,7 @@ def llama_lora_adapter_init(
     ctypes.c_int32,
 )
 def llama_lora_adapter_set(
-    ctx: llama_context_p, adapter: llama_lora_adapter_p, scale: float, /
+    ctx: llama_context_p, adapter: llama_lora_adapter_p, scale: float, /,
 ) -> int:
     """Add a loaded LoRA adapter to given context
     This will not modify model's weight"""
@@ -1591,7 +1591,7 @@ def llama_lora_adapter_set(
     ctypes.c_int32,
 )
 def llama_lora_adapter_remove(
-    ctx: llama_context_p, adapter: llama_lora_adapter_p, /
+    ctx: llama_context_p, adapter: llama_lora_adapter_p, /,
 ) -> int:
     """Remove a LoRA adapter from given context
     Return -1 if the adapter is not present in the context"""
@@ -1758,7 +1758,7 @@ llama_kv_cache_view_p = ctypes.POINTER(llama_kv_cache_view)
     llama_kv_cache_view,
 )
 def llama_kv_cache_view_init(
-    ctx: llama_context_p, n_seq_max: Union[ctypes.c_int32, int], /
+    ctx: llama_context_p, n_seq_max: Union[ctypes.c_int32, int], /,
 ) -> llama_kv_cache_view:
     """Create an empty KV cache view. (use only for debugging purposes)"""
     ...
@@ -1775,7 +1775,7 @@ def llama_kv_cache_view_free(view: ctypes.pointer[llama_kv_cache_view], /):  # t
 # // Update the KV cache view structure with the current state of the KV cache. (use only for debugging purposes)
 # LLAMA_API void llama_kv_cache_view_update(const struct llama_context * ctx, struct llama_kv_cache_view * view);
 @ctypes_function(
-    "llama_kv_cache_view_update", [llama_context_p_ctypes, llama_kv_cache_view_p], None
+    "llama_kv_cache_view_update", [llama_context_p_ctypes, llama_kv_cache_view_p], None,
 )
 def llama_kv_cache_view_update(ctx: llama_context_p, view: CtypesPointerOrRef[llama_kv_cache_view], /):  # type: ignore
     """Update the KV cache view structure with the current state of the KV cache. (use only for debugging purposes)"""
@@ -1786,7 +1786,7 @@ def llama_kv_cache_view_update(ctx: llama_context_p, view: CtypesPointerOrRef[ll
 # // If a KV cell has multiple sequences assigned to it, it will be counted multiple times
 # LLAMA_API int32_t llama_get_kv_cache_token_count(const struct llama_context * ctx);
 @ctypes_function(
-    "llama_get_kv_cache_token_count", [llama_context_p_ctypes], ctypes.c_int32
+    "llama_get_kv_cache_token_count", [llama_context_p_ctypes], ctypes.c_int32,
 )
 def llama_get_kv_cache_token_count(ctx: llama_context_p, /) -> int:
     """Returns the number of tokens in the KV cache (slow, use only for debug)
@@ -1798,7 +1798,7 @@ def llama_get_kv_cache_token_count(ctx: llama_context_p, /) -> int:
 # // Returns the number of used KV cells (i.e. have at least one sequence assigned to them)
 # LLAMA_API int32_t llama_get_kv_cache_used_cells(const struct llama_context * ctx);
 @ctypes_function(
-    "llama_get_kv_cache_used_cells", [llama_context_p_ctypes], ctypes.c_int32
+    "llama_get_kv_cache_used_cells", [llama_context_p_ctypes], ctypes.c_int32,
 )
 def llama_get_kv_cache_used_cells(ctx: llama_context_p, /) -> int:
     """Returns the number of used KV cells (i.e. have at least one sequence assigned to them)"""
@@ -1892,7 +1892,7 @@ def llama_kv_cache_seq_cp(
 #         struct llama_context * ctx,
 #                 llama_seq_id   seq_id);
 @ctypes_function(
-    "llama_kv_cache_seq_keep", [llama_context_p_ctypes, llama_seq_id], None
+    "llama_kv_cache_seq_keep", [llama_context_p_ctypes, llama_seq_id], None,
 )
 def llama_kv_cache_seq_keep(ctx: llama_context_p, seq_id: Union[llama_seq_id, int], /):
     """Removes all tokens that do not belong to the specified sequence"""
@@ -2062,7 +2062,7 @@ def llama_state_get_data(
     ctypes.c_size_t,
 )
 def llama_copy_state_data(
-    ctx: llama_context_p, dst: CtypesArray[ctypes.c_uint8], /
+    ctx: llama_context_p, dst: CtypesArray[ctypes.c_uint8], /,
 ) -> int:
     """Copies the state to the specified destination address.
     Destination needs to have allocated enough memory.
@@ -2102,7 +2102,7 @@ def llama_state_set_data(
     ctypes.c_size_t,
 )
 def llama_set_state_data(
-    ctx: llama_context_p, src: CtypesArray[ctypes.c_uint8], /
+    ctx: llama_context_p, src: CtypesArray[ctypes.c_uint8], /,
 ) -> int:
     """Set the state reading from the specified address"""
     ...
@@ -2397,7 +2397,7 @@ def llama_batch_get_one(
 #         int32_t embd,
 #         int32_t n_seq_max);
 @ctypes_function(
-    "llama_batch_init", [ctypes.c_int32, ctypes.c_int32, ctypes.c_int32], llama_batch
+    "llama_batch_init", [ctypes.c_int32, ctypes.c_int32, ctypes.c_int32], llama_batch,
 )
 def llama_batch_init(
     n_tokens: Union[ctypes.c_int32, int],
@@ -2578,7 +2578,7 @@ def llama_get_logits(ctx: llama_context_p, /) -> CtypesArray[ctypes.c_float]:
     ctypes.POINTER(ctypes.c_float),
 )
 def llama_get_logits_ith(
-    ctx: llama_context_p, i: Union[ctypes.c_int32, int], /
+    ctx: llama_context_p, i: Union[ctypes.c_int32, int], /,
 ) -> CtypesArray[ctypes.c_float]:
     """Logits for the ith token. Equivalent to:
     llama_get_logits(ctx) + i*n_vocab"""
@@ -2593,7 +2593,7 @@ def llama_get_logits_ith(
 # // Otherwise, returns NULL.
 # LLAMA_API float * llama_get_embeddings(struct llama_context * ctx);
 @ctypes_function(
-    "llama_get_embeddings", [llama_context_p_ctypes], ctypes.POINTER(ctypes.c_float)
+    "llama_get_embeddings", [llama_context_p_ctypes], ctypes.POINTER(ctypes.c_float),
 )
 def llama_get_embeddings(ctx: llama_context_p, /) -> CtypesArray[ctypes.c_float]:
     """Get the embeddings for the input
@@ -2613,7 +2613,7 @@ def llama_get_embeddings(ctx: llama_context_p, /) -> CtypesArray[ctypes.c_float]
     ctypes.POINTER(ctypes.c_float),
 )
 def llama_get_embeddings_ith(
-    ctx: llama_context_p, i: Union[ctypes.c_int32, int], /
+    ctx: llama_context_p, i: Union[ctypes.c_int32, int], /,
 ) -> CtypesArray[ctypes.c_float]:
     """Get the embeddings for the ith sequence
     llama_get_embeddings(ctx) + i*n_embd"""
@@ -2630,7 +2630,7 @@ def llama_get_embeddings_ith(
     ctypes.POINTER(ctypes.c_float),
 )
 def llama_get_embeddings_seq(
-    ctx: llama_context_p, seq_id: Union[llama_seq_id, int], /
+    ctx: llama_context_p, seq_id: Union[llama_seq_id, int], /,
 ) -> CtypesArray[ctypes.c_float]:
     """Get the embeddings for a sequence id
     Returns NULL if pooling_type is LLAMA_POOLING_TYPE_NONE
@@ -2645,10 +2645,10 @@ def llama_get_embeddings_seq(
 
 # LLAMA_API const char * llama_token_get_text(const struct llama_model * model, llama_token token);
 @ctypes_function(
-    "llama_token_get_text", [llama_model_p_ctypes, llama_token], ctypes.c_char_p
+    "llama_token_get_text", [llama_model_p_ctypes, llama_token], ctypes.c_char_p,
 )
 def llama_token_get_text(
-    model: llama_model_p, token: Union[llama_token, int], /
+    model: llama_model_p, token: Union[llama_token, int], /,
 ) -> bytes:
     ...
 
@@ -2658,17 +2658,17 @@ def llama_token_get_text(
     "llama_token_get_score", [llama_model_p_ctypes, llama_token], ctypes.c_float
 )
 def llama_token_get_score(
-    model: llama_model_p, token: Union[llama_token, int], /
+    model: llama_model_p, token: Union[llama_token, int], /,
 ) -> float:
     ...
 
 
 # LLAMA_API enum llama_token_attr llama_token_get_attr(const struct llama_model * model, llama_token token);
 @ctypes_function(
-    "llama_token_get_attr", [llama_model_p_ctypes, llama_token], ctypes.c_int
+    "llama_token_get_attr", [llama_model_p_ctypes, llama_token], ctypes.c_int,
 )
 def llama_token_get_attr(
-    model: llama_model_p, token: Union[llama_token, int], /
+    model: llama_model_p, token: Union[llama_token, int], /,
 ) -> int:
     ...
 
@@ -2676,7 +2676,7 @@ def llama_token_get_attr(
 # // Check if the token is supposed to end generation (end-of-generation, eg. EOS, EOT, etc.)
 # LLAMA_API bool llama_token_is_eog(const struct llama_model * model, llama_token token);
 @ctypes_function(
-    "llama_token_is_eog", [llama_model_p_ctypes, llama_token], ctypes.c_bool
+    "llama_token_is_eog", [llama_model_p_ctypes, llama_token], ctypes.c_bool,
 )
 def llama_token_is_eog(model: llama_model_p, token: Union[llama_token, int], /) -> bool:
     """Check if the token is supposed to end generation (end-of-generation, eg. EOS, EOT, etc.)"""
@@ -2686,10 +2686,10 @@ def llama_token_is_eog(model: llama_model_p, token: Union[llama_token, int], /) 
 # // Identify if Token Id is a control token or a render-able token
 # LLAMA_API bool llama_token_is_control(const struct llama_model * model, llama_token token);
 @ctypes_function(
-    "llama_token_is_control", [llama_model_p_ctypes, llama_token], ctypes.c_bool
+    "llama_token_is_control", [llama_model_p_ctypes, llama_token], ctypes.c_bool,
 )
 def llama_token_is_control(
-    model: llama_model_p, token: Union[llama_token, int], /
+    model: llama_model_p, token: Union[llama_token, int], /,
 ) -> bool:
     """Identify if Token Id is a control token or a render-able token"""
     ...
@@ -3047,7 +3047,7 @@ def llama_grammar_sample(
     grammar: llama_grammar_p,
     ctx: llama_context_p,
     candidates: Union[
-        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array]
+        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array],
     ],
     /,
 ):
@@ -3068,7 +3068,7 @@ def llama_grammar_sample(
 def llama_sample_grammar(
     ctx: llama_context_p,
     candidates: Union[
-        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array]
+        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array],
     ],
     grammar,  # type: llama_grammar_p
     /,
@@ -3145,7 +3145,7 @@ def llama_set_rng_seed(ctx: llama_context_p, seed: Union[ctypes.c_uint32, int], 
 def llama_sample_repetition_penalties(
     ctx: llama_context_p,
     candidates: Union[
-        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array]
+        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array],
     ],
     last_tokens_data: CtypesArray[llama_token],
     penalty_last_n: Union[ctypes.c_size_t, int],
@@ -3202,7 +3202,7 @@ def llama_sample_apply_guidance(
 def llama_sample_softmax(
     ctx: llama_context_p,
     candidates: Union[
-        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array]
+        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array],
     ],
     /,
 ):
@@ -3224,7 +3224,7 @@ def llama_sample_softmax(
 def llama_sample_top_k(
     ctx: llama_context_p,
     candidates: Union[
-        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array]
+        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array],
     ],
     k: Union[ctypes.c_int, int],
     min_keep: Union[ctypes.c_size_t, int],
@@ -3248,7 +3248,7 @@ def llama_sample_top_k(
 def llama_sample_top_p(
     ctx: llama_context_p,
     candidates: Union[
-        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array]
+        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array],
     ],
     p: Union[ctypes.c_float, float],
     min_keep: Union[ctypes.c_size_t, int],
@@ -3272,7 +3272,7 @@ def llama_sample_top_p(
 def llama_sample_min_p(
     ctx: llama_context_p,
     candidates: Union[
-        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array]
+        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array],
     ],
     p: Union[ctypes.c_float, float],
     min_keep: Union[ctypes.c_size_t, int],
@@ -3296,7 +3296,7 @@ def llama_sample_min_p(
 def llama_sample_tail_free(
     ctx: llama_context_p,
     candidates: Union[
-        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array]
+        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array],
     ],
     z: Union[ctypes.c_float, float],
     min_keep: Union[ctypes.c_size_t, int],
@@ -3320,7 +3320,7 @@ def llama_sample_tail_free(
 def llama_sample_typical(
     ctx: llama_context_p,
     candidates: Union[
-        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array]
+        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array],
     ],
     p: Union[ctypes.c_float, float],
     min_keep: Union[ctypes.c_size_t, int],
@@ -3351,7 +3351,7 @@ def llama_sample_typical(
 def llama_sample_entropy(
     ctx: llama_context_p,
     candidates: Union[
-        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array]
+        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array],
     ],
     min_temp: Union[ctypes.c_float, float],
     max_temp: Union[ctypes.c_float, float],
@@ -3374,7 +3374,7 @@ def llama_sample_entropy(
 def llama_sample_temp(
     ctx: llama_context_p,
     candidates: Union[
-        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array]
+        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array],
     ],
     temp: Union[ctypes.c_float, float],
     /,
@@ -3416,7 +3416,7 @@ def llama_sample_temp(
 def llama_sample_token_mirostat(
     ctx: llama_context_p,
     candidates: Union[
-        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array]
+        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array],
     ],
     tau: Union[ctypes.c_float, float],
     eta: Union[ctypes.c_float, float],
@@ -3461,7 +3461,7 @@ def llama_sample_token_mirostat(
 def llama_sample_token_mirostat_v2(
     ctx: llama_context_p,
     candidates: Union[
-        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array]
+        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array],
     ],
     tau: Union[ctypes.c_float, float],
     eta: Union[ctypes.c_float, float],
@@ -3492,7 +3492,7 @@ def llama_sample_token_mirostat_v2(
 def llama_sample_token_greedy(
     ctx: llama_context_p,
     candidates: Union[
-        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array]
+        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array],
     ],
     /,
 ) -> int:
@@ -3512,7 +3512,7 @@ def llama_sample_token_greedy(
 def llama_sample_token(
     ctx: llama_context_p,
     candidates: Union[
-        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array]
+        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array],
     ],
     /,
 ) -> int:
