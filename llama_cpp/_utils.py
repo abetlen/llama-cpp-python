@@ -1,6 +1,5 @@
 import os
 import sys
-
 from typing import Any, Dict
 
 # Avoid "LookupError: unknown encoding: ascii" when open() called in a destructor
@@ -11,7 +10,7 @@ STDOUT_FILENO = 1
 STDERR_FILENO = 2
 
 
-class suppress_stdout_stderr(object):
+class suppress_stdout_stderr:
     # NOTE: these must be "saved" here to avoid exceptions when using
     #       this context manager inside of a __del__ method
     sys = sys
@@ -69,7 +68,7 @@ class MetaSingleton(type):
         return cls._instances[cls]
 
 
-class Singleton(object, metaclass=MetaSingleton):
+class Singleton(metaclass=MetaSingleton):
     """
     Base class for implementing the Singleton pattern.
     """
