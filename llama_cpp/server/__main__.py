@@ -67,11 +67,11 @@ def main():
                     import yaml
 
                     config_file_settings = ConfigFileSettings.model_validate_json(
-                        json.dumps(yaml.safe_load(f))
+                        json.dumps(yaml.safe_load(f)),
                     )
                 else:
                     config_file_settings = ConfigFileSettings.model_validate_json(
-                        f.read()
+                        f.read(),
                     )
                 server_settings = ServerSettings.model_validate(config_file_settings)
                 model_settings = config_file_settings.models
