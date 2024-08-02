@@ -1,35 +1,36 @@
 from __future__ import annotations
 
-import sys
-import os
 import ctypes
 import functools
+import os
+import pathlib
+import sys
 from ctypes import (
+    POINTER,
+    Structure,
+    _Pointer,  # type: ignore
     c_bool,
     c_char_p,
+    c_float,
     c_int,
     c_uint8,
-    c_float,
     c_void_p,
-    POINTER,
-    _Pointer,  # type: ignore
-    Structure,
 )
-import pathlib
 from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Generic,
     List,
-    Union,
     NewType,
     Optional,
     TypeVar,
-    Callable,
-    Any,
-    TYPE_CHECKING,
-    Generic,
+    Union,
 )
+
 from typing_extensions import TypeAlias
 
-import llama_cpp.llama_cpp as llama_cpp
+from llama_cpp import llama_cpp
 
 
 # Load the library
@@ -181,7 +182,7 @@ def llava_image_embed_make_with_bytes(
     image_bytes: CtypesArray[c_uint8],
     image_bytes_length: Union[c_int, int],
     /,
-) -> "_Pointer[llava_image_embed]": ...
+) -> _Pointer[llava_image_embed]: ...
 
 
 # /** build an image embed from a path to an image filename */
@@ -193,13 +194,13 @@ def llava_image_embed_make_with_bytes(
 )
 def llava_image_embed_make_with_filename(
     ctx_clip: clip_ctx_p, n_threads: Union[c_int, int], image_path: bytes, /
-) -> "_Pointer[llava_image_embed]": ...
+) -> _Pointer[llava_image_embed]: ...
 
 
 # LLAVA_API void llava_image_embed_free(struct llava_image_embed * embed);
 # /** free an embedding made with llava_image_embed_make_* */
 @ctypes_function("llava_image_embed_free", [POINTER(llava_image_embed)], None)
-def llava_image_embed_free(embed: "_Pointer[llava_image_embed]", /): ...
+def llava_image_embed_free(embed: _Pointer[llava_image_embed], /): ...
 
 
 # /** write the image represented by embed into the llama context with batch size n_batch, starting at context pos n_past. on completion, n_past points to the next position in the context after the image embed. */
@@ -216,9 +217,9 @@ def llava_image_embed_free(embed: "_Pointer[llava_image_embed]", /): ...
 )
 def llava_eval_image_embed(
     ctx_llama: llama_cpp.llama_context_p,
-    embed: "_Pointer[llava_image_embed]",
+    embed: _Pointer[llava_image_embed],
     n_batch: Union[c_int, int],
-    n_past: "_Pointer[c_int]",
+    n_past: _Pointer[c_int],
     /,
 ) -> bool: ...
 
