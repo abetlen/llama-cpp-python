@@ -75,7 +75,7 @@ class GptParams:
 
 def gpt_params_parse(argv=None):
     parser = argparse.ArgumentParser(
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
         "-s",
@@ -102,7 +102,7 @@ def gpt_params_parse(argv=None):
         dest="n_predict",
     )
     parser.add_argument(
-        "--n_parts", type=int, default=-1, help="number of model parts", dest="n_parts"
+        "--n_parts", type=int, default=-1, help="number of model parts", dest="n_parts",
     )
     parser.add_argument(
         "-c",
@@ -143,10 +143,10 @@ def gpt_params_parse(argv=None):
         dest="ignore_eos",
     )
     parser.add_argument(
-        "--top_k", type=int, default=40, help="top-k sampling", dest="top_k"
+        "--top_k", type=int, default=40, help="top-k sampling", dest="top_k",
     )
     parser.add_argument(
-        "--top_p", type=float, default=0.95, help="top-p samplin", dest="top_p"
+        "--top_p", type=float, default=0.95, help="top-p samplin", dest="top_p",
     )
     parser.add_argument(
         "--tfs",
@@ -156,7 +156,7 @@ def gpt_params_parse(argv=None):
         dest="tfs_z",
     )
     parser.add_argument(
-        "--temp", type=float, default=0.80, help="temperature", dest="temp"
+        "--temp", type=float, default=0.80, help="temperature", dest="temp",
     )
     parser.add_argument(
         "--repeat_penalty",
@@ -217,7 +217,7 @@ def gpt_params_parse(argv=None):
         dest="model",
     )
     parser.add_argument(
-        "-p", "--prompt", type=str, default=None, help="initial prompt", dest="prompt"
+        "-p", "--prompt", type=str, default=None, help="initial prompt", dest="prompt",
     )
     parser.add_argument(
         "-f",
@@ -242,7 +242,7 @@ def gpt_params_parse(argv=None):
         dest="input_prefix",
     )
     parser.add_argument(
-        "--in-suffix", type=str, default="", help="append to input", dest="input_suffix"
+        "--in-suffix", type=str, default="", help="append to input", dest="input_suffix",
     )
     parser.add_argument(
         "-r",
