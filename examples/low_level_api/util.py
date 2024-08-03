@@ -52,7 +52,7 @@ class Circle:
                 if self.size < self.maxsize
                 else self.list[(self.offset + val) % self.maxsize]
             )
-        elif isinstance(val, slice):
+        if isinstance(val, slice):
             start, stop, step = val.start, val.stop, val.step
             if step is None:
                 step = 1
@@ -71,8 +71,7 @@ class Circle:
                 for i in indices
                 if i < self.size
             ]
-        else:
-            raise TypeError("Invalid argument type")
+        raise TypeError("Invalid argument type")
 
 
 if __name__ == "__main__":
