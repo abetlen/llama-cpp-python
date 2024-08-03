@@ -126,7 +126,7 @@ def ctypes_function_for_shared_library(lib: ctypes.CDLL):
                 func.restype = restype
                 functools.wraps(f)(func)
                 return func
-   
+
             return f
 
         return decorator
