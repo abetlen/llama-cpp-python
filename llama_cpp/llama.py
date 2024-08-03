@@ -996,7 +996,7 @@ class Llama:
 
         if return_count:
             return output, total_tokens
-            
+
         return output
 
     def _create_completion(
