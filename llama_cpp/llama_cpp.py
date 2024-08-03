@@ -1902,7 +1902,6 @@ def llama_kv_cache_seq_add(
     - explicitly with llama_kv_cache_update()
     p0 < 0 : [0,  p1]
     p1 < 0 : [p0, inf)"""
-    ...
 
 
 # // Integer division of the positions by factor of `d > 1`
@@ -2211,7 +2210,6 @@ def llama_state_seq_get_data(
     /,
 ) -> int:
     """Copy the KV cache of a single sequence into the specified buffer"""
-    ...
 
 
 # // Copy the sequence data (originally copied with `llama_state_seq_get_data`) into the specified sequence
@@ -2574,7 +2572,6 @@ def llama_get_embeddings_seq(
     """Get the embeddings for a sequence id
     Returns NULL if pooling_type is LLAMA_POOLING_TYPE_NONE
     shape: [n_embd] (1-dimensional)"""
-    ...
 
 
 # //
@@ -2619,7 +2616,6 @@ def llama_token_get_attr(
 )
 def llama_token_is_eog(model: llama_model_p, token: Union[llama_token, int], /) -> bool:
     """Check if the token is supposed to end generation (end-of-generation, eg. EOS, EOT, etc.)"""
-    ...
 
 
 # // Identify if Token Id is a control token or a render-able token
@@ -2631,7 +2627,6 @@ def llama_token_is_control(
     model: llama_model_p, token: Union[llama_token, int], /,
 ) -> bool:
     """Identify if Token Id is a control token or a render-able token"""
-    ...
 
 
 # // Special tokens
@@ -2641,35 +2636,30 @@ def llama_token_is_control(
 @ctypes_function("llama_token_bos", [llama_model_p_ctypes], llama_token)
 def llama_token_bos(model: llama_model_p, /) -> int:
     """beginning-of-sentence"""
-    ...
 
 
 # LLAMA_API llama_token llama_token_eos(const struct llama_model * model); // end-of-sentence
 @ctypes_function("llama_token_eos", [llama_model_p_ctypes], llama_token)
 def llama_token_eos(model: llama_model_p, /) -> int:
     """end-of-sentence"""
-    ...
 
 
 # LLAMA_API llama_token llama_token_cls(const struct llama_model * model); // classification
 @ctypes_function("llama_token_cls", [llama_model_p_ctypes], llama_token)
 def llama_token_cls(model: llama_model_p, /) -> int:
     """classification"""
-    ...
 
 
 # LLAMA_API llama_token llama_token_sep(const struct llama_model * model); // sentence separator
 @ctypes_function("llama_token_sep", [llama_model_p_ctypes], llama_token)
 def llama_token_sep(model: llama_model_p, /) -> int:
     """sentence separator"""
-    ...
 
 
 # LLAMA_API llama_token llama_token_nl (const struct llama_model * model); // next-line
 @ctypes_function("llama_token_nl", [llama_model_p_ctypes], llama_token)
 def llama_token_nl(model: llama_model_p, /) -> int:
     """next-line"""
-    ...
 
 
 # // Returns -1 if unknown, 1 for true or 0 for false.
@@ -2677,7 +2667,6 @@ def llama_token_nl(model: llama_model_p, /) -> int:
 @ctypes_function("llama_add_bos_token", [llama_model_p_ctypes], ctypes.c_int32)
 def llama_add_bos_token(model: llama_model_p, /) -> int:
     """Returns -1 if unknown, 1 for true or 0 for false."""
-    ...
 
 
 # // Returns -1 if unknown, 1 for true or 0 for false.
@@ -2685,7 +2674,6 @@ def llama_add_bos_token(model: llama_model_p, /) -> int:
 @ctypes_function("llama_add_eos_token", [llama_model_p_ctypes], ctypes.c_int32)
 def llama_add_eos_token(model: llama_model_p, /) -> int:
     """Returns -1 if unknown, 1 for true or 0 for false."""
-    ...
 
 
 # // Codellama infill tokens
@@ -2693,7 +2681,6 @@ def llama_add_eos_token(model: llama_model_p, /) -> int:
 @ctypes_function("llama_token_prefix", [llama_model_p_ctypes], llama_token)
 def llama_token_prefix(model: llama_model_p) -> int:
     """codellama infill tokens"""
-    ...
 
 
 # LLAMA_API llama_token llama_token_middle(const struct llama_model * model); // Beginning of infill middle
@@ -2772,7 +2759,6 @@ def llama_tokenize(
         Returns the number of tokens on success, no more than n_tokens_max
         Returns a negative number on failure - the number of tokens that would have been returned
     """
-    ...
 
 
 # // Token Id -> Piece.
@@ -2820,7 +2806,6 @@ def llama_token_to_piece(
         length: The length of the buffer.
         lstrip: The number of leading spaces to skip.
         special: If true, special tokens are rendered in the output."""
-    ...
 
 
 # /// @details Convert the provided tokens into text (inverse of llama_tokenize()).
@@ -2870,7 +2855,6 @@ def llama_detokenize(
         text_len_max: The length of the buffer.
         remove_special: Allow to remove BOS and EOS tokens if model is configured to do so.
         unparse_special: If true, special tokens are rendered in the output."""
-    ...
 
 
 # //
@@ -2943,7 +2927,6 @@ def llama_grammar_init(
     /,
 ) -> llama_grammar_p:
     """Initialize a grammar from a set of rules."""
-    ...
 
 
 # LLAMA_API void llama_grammar_free(struct llama_grammar * grammar);
@@ -2954,7 +2937,6 @@ def llama_grammar_init(
 )
 def llama_grammar_free(grammar: llama_grammar_p, /):
     """Free a grammar."""
-    ...
 
 
 # LLAMA_API struct llama_grammar * llama_grammar_copy(const struct llama_grammar * grammar);
@@ -2965,7 +2947,6 @@ def llama_grammar_free(grammar: llama_grammar_p, /):
 )
 def llama_grammar_copy(grammar: llama_grammar_p, /) -> llama_grammar_p:
     """Copy a grammar."""
-    ...
 
 
 # /// @details Apply constraints from grammar
@@ -2991,7 +2972,6 @@ def llama_grammar_sample(
     /,
 ):
     """Apply constraints from grammar"""
-    ...
 
 
 # LLAMA_API DEPRECATED(void llama_sample_grammar(
@@ -3018,7 +2998,6 @@ def llama_sample_grammar(
         candidates: A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
         grammar: A grammar object containing the rules and constraints to apply to the generated text.
     """
-    ...
 
 
 # /// @details Accepts the sampled token into the grammar
@@ -3038,7 +3017,6 @@ def llama_grammar_accept_token(
     /,
 ):
     """Accepts the sampled token into the grammar"""
-    ...
 
 
 # //
@@ -3055,7 +3033,6 @@ def llama_grammar_accept_token(
 )
 def llama_set_rng_seed(ctx: llama_context_p, seed: Union[ctypes.c_uint32, int], /):
     """Sets the current rng seed."""
-    ...
 
 
 # /// @details Repetition penalty described in CTRL academic paper https://arxiv.org/abs/1909.05858, with negative logit fix.
@@ -3096,7 +3073,6 @@ def llama_sample_repetition_penalties(
     """Repetition penalty described in CTRL academic paper https://arxiv.org/abs/1909.05858, with negative logit fix.
     Frequency and presence penalties described in OpenAI API https://platform.openai.com/docs/api-reference/parameter-details.
     """
-    ...
 
 
 # /// @details Apply classifier-free guidance to the logits as described in academic paper "Stay on topic with Classifier-Free Guidance" https://arxiv.org/abs/2306.17806
@@ -3126,7 +3102,6 @@ def llama_sample_apply_guidance(
     /,
 ):
     """Apply classifier-free guidance to the logits as described in academic paper "Stay on topic with Classifier-Free Guidance" https://arxiv.org/abs/2306.17806"""
-    ...
 
 
 # /// @details Sorts candidate tokens by their logits in descending order and calculate probabilities based on logits.
@@ -3146,7 +3121,6 @@ def llama_sample_softmax(
     /,
 ):
     """Sorts candidate tokens by their logits in descending order and calculate probabilities based on logits."""
-    ...
 
 
 # /// @details Top-K sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
@@ -3170,7 +3144,6 @@ def llama_sample_top_k(
     /,
 ):
     """Top-K sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751"""
-    ...
 
 
 # /// @details Nucleus sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
@@ -3194,7 +3167,6 @@ def llama_sample_top_p(
     /,
 ):
     """Nucleus sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751"""
-    ...
 
 
 # /// @details Minimum P sampling as described in https://github.com/ggerganov/llama.cpp/pull/3841
@@ -3218,7 +3190,6 @@ def llama_sample_min_p(
     /,
 ):
     """Minimum P sampling as described in https://github.com/ggerganov/llama.cpp/pull/3841"""
-    ...
 
 
 # /// @details Tail Free Sampling described in https://www.trentonbricken.com/Tail-Free-Sampling/.
@@ -3242,7 +3213,6 @@ def llama_sample_tail_free(
     /,
 ):
     """Tail Free Sampling described in https://www.trentonbricken.com/Tail-Free-Sampling/."""
-    ...
 
 
 # /// @details Locally Typical Sampling implementation described in the paper https://arxiv.org/abs/2202.00666.
@@ -3266,7 +3236,6 @@ def llama_sample_typical(
     /,
 ):
     """Locally Typical Sampling implementation described in the paper https://arxiv.org/abs/2202.00666."""
-    ...
 
 
 # /// @details Dynamic temperature implementation described in the paper https://arxiv.org/abs/2309.02772.
@@ -3298,7 +3267,6 @@ def llama_sample_entropy(
     /,
 ):
     """Dynamic temperature implementation described in the paper https://arxiv.org/abs/2309.02772."""
-    ...
 
 
 # LLAMA_API void llama_sample_temp(
@@ -3324,7 +3292,6 @@ def llama_sample_temp(
         candidates: A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
         temp: The temperature value to use for the sampling. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text.
     """
-    ...
 
 
 # /// @details Mirostat 1.0 algorithm described in the paper https://arxiv.org/abs/2007.14966. Uses tokens instead of words.
@@ -3372,7 +3339,6 @@ def llama_sample_token_mirostat(
         m: The number of tokens considered in the estimation of `s_hat`. This is an arbitrary value that is used to calculate `s_hat`, which in turn helps to calculate the value of `k`. In the paper, they use `m = 100`, but you can experiment with different values to see how it affects the performance of the algorithm.
         mu: Maximum cross-entropy. This value is initialized to be twice the target cross-entropy (`2 * tau`) and is updated in the algorithm based on the error between the target and observed surprisal.
     """
-    ...
 
 
 # /// @details Mirostat 2.0 algorithm described in the paper https://arxiv.org/abs/2007.14966. Uses tokens instead of words.
@@ -3415,7 +3381,6 @@ def llama_sample_token_mirostat_v2(
         eta: The learning rate used to update `mu` based on the error between the target and observed surprisal of the sampled word. A larger learning rate will cause `mu` to be updated more quickly, while a smaller learning rate will result in slower updates.
         mu: Maximum cross-entropy. This value is initialized to be twice the target cross-entropy (`2 * tau`) and is updated in the algorithm based on the error between the target and observed surprisal.
     """
-    ...
 
 
 # /// @details Selects the token with the highest probability.
@@ -3436,7 +3401,6 @@ def llama_sample_token_greedy(
     /,
 ) -> int:
     """Selects the token with the highest probability."""
-    ...
 
 
 # /// @details Randomly selects a token from the candidates based on their probabilities using the RNG of ctx.
@@ -3456,7 +3420,6 @@ def llama_sample_token(
     /,
 ) -> int:
     """Randomly selects a token from the candidates based on their probabilities."""
-    ...
 
 
 # //
@@ -3482,7 +3445,6 @@ def llama_split_path(
     /,
 ) -> int:
     """Build a split GGUF final path for this chunk."""
-    ...
 
 
 # /// @details Extract the path prefix from the split_path if and only if the split_no and split_count match.
@@ -3503,7 +3465,6 @@ def llama_split_prefix(
     /,
 ) -> int:
     """Extract the path prefix from the split_path if and only if the split_no and split_count match."""
-    ...
 
 
 # Performance information
@@ -3517,7 +3478,6 @@ def llama_split_prefix(
 )
 def llama_get_timings(ctx: llama_context_p, /) -> llama_timings:
     """Get performance information"""
-    ...
 
 
 # LLAMA_API void llama_print_timings(struct llama_context * ctx);
@@ -3528,7 +3488,6 @@ def llama_get_timings(ctx: llama_context_p, /) -> llama_timings:
 )
 def llama_print_timings(ctx: llama_context_p, /):
     """Print performance information"""
-    ...
 
 
 # LLAMA_API void llama_reset_timings(struct llama_context * ctx);
@@ -3539,7 +3498,6 @@ def llama_print_timings(ctx: llama_context_p, /):
 )
 def llama_reset_timings(ctx: llama_context_p, /):
     """Reset performance information"""
-    ...
 
 
 # Print system information
@@ -3551,7 +3509,6 @@ def llama_reset_timings(ctx: llama_context_p, /):
 )
 def llama_print_system_info() -> bytes:
     """Print system information"""
-    ...
 
 
 # NOTE: THIS IS CURRENTLY BROKEN AS ggml_log_callback IS NOT EXPOSED IN LLAMA.H
@@ -3571,7 +3528,6 @@ def llama_log_set(
     """Set callback for all future logging events.
 
     If this is not called, or NULL is supplied, everything is output on stderr."""
-    ...
 
 
 # LLAMA_API void llama_dump_timing_info_yaml(FILE * stream, const struct llama_context * ctx);
