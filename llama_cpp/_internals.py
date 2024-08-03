@@ -691,8 +691,8 @@ def _should_add_bos(model: _LlamaModel) -> bool:
     add_bos = llama_cpp.llama_add_bos_token(model.model)
     if add_bos != -1:
         return add_bos != 0
-    else:
-        return llama_cpp.llama_vocab_type(model.model) == llama_cpp.LLAMA_VOCAB_TYPE_SPM
+
+    return llama_cpp.llama_vocab_type(model.model) == llama_cpp.LLAMA_VOCAB_TYPE_SPM
 
 
 # Embedding functions
@@ -762,8 +762,8 @@ class _LlamaSamplingContext:
     def last(self) -> Optional[int]:
         if len(self.prev) > 0:
             return self.prev[-1]
-        else:
-            return None
+
+        return None
 
     def prev_str(self, ctx_main: _LlamaContext, n: int) -> str:
         return ctx_main.model.detokenize(self.prev[-n:]).decode("utf-8")
