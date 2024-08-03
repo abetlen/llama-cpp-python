@@ -88,8 +88,8 @@ class LlamaHFTokenizer(BaseLlamaTokenizer):
                 "utf-8", errors="ignore",
             )
             return text[len(prev_text) :]
-        else:
-            return self.hf_tokenizer.decode(tokens).encode("utf-8", errors="ignore")
+
+        return self.hf_tokenizer.decode(tokens).encode("utf-8", errors="ignore")
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path: str) -> LlamaHFTokenizer:
