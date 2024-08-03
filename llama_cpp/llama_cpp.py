@@ -128,8 +128,8 @@ def ctypes_function_for_shared_library(lib: ctypes.CDLL):
                 func.restype = restype
                 functools.wraps(f)(func)
                 return func
-            else:
-                return f
+
+            return f
 
         return decorator
 
