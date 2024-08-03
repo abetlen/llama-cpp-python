@@ -340,8 +340,7 @@ async def create_completion(
             sep="\n",
             ping_message_factory=_ping_message_factory,
         )
-    else:
-        return iterator_or_completion
+    return iterator_or_completion
 
 
 @router.post(
@@ -533,9 +532,8 @@ async def create_chat_completion(
             sep="\n",
             ping_message_factory=_ping_message_factory,
         )
-    else:
-        exit_stack.close()
-        return iterator_or_completion
+    exit_stack.close()
+    return iterator_or_completion
 
 
 @router.get(
