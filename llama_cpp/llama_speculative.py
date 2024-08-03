@@ -10,7 +10,7 @@ class LlamaDraftModel(abc.ABC):
     def __call__(
         self, input_ids: npt.NDArray[np.intc], /, **kwargs: Any,
     ) -> npt.NDArray[np.intc]:
-        raise NotImplementedError()
+        raise NotImplementedError
 
 
 class LlamaPromptLookupDecoding(LlamaDraftModel):
