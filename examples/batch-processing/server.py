@@ -24,7 +24,6 @@ from fastapi import FastAPI
 app = FastAPI()
 
 
-
 @app.post("/v1/chat/completions")
 def create_chat_completions():
     return {"message": "Hello World"}
