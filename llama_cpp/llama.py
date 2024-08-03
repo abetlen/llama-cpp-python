@@ -2070,12 +2070,12 @@ class Llama:
 
     def close(self) -> None:
         """Explicitly free the model from memory."""
-        if hasattr(self,'_stack'):
+        if hasattr(self,"_stack"):
             if self._stack is not None:
                 self._stack.close()
 
     def __del__(self) -> None:
-        if hasattr(self,'_lora_adapter'):
+        if hasattr(self,"_lora_adapter"):
             if self._lora_adapter is not None:
                 llama_cpp.llama_lora_adapter_free(self._lora_adapter)
         self.close()
