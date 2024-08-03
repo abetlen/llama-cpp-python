@@ -996,8 +996,8 @@ class Llama:
 
         if return_count:
             return output, total_tokens
-        else:
-            return output
+            
+        return output
 
     def _create_completion(
         self,
@@ -1929,8 +1929,8 @@ class Llama:
             assert isinstance(stream, bool)
             if stream:
                 return (ChatCompletionChunk(**chunk) for chunk in self.create_chat_completion(*args, **kwargs))  # type: ignore
-            else:
-                return ChatCompletion(**self.create_chat_completion(*args, **kwargs))  # type: ignore
+
+            return ChatCompletion(**self.create_chat_completion(*args, **kwargs))  # type: ignore
         except ImportError:
             raise ImportError(
                 "To use create_chat_completion_openai_v1, you must install the openai package."
@@ -2070,12 +2070,12 @@ class Llama:
 
     def close(self) -> None:
         """Explicitly free the model from memory."""
-        if hasattr(self,"_stack"):
+        if hasattr(self, "_stack"):
             if self._stack is not None:
                 self._stack.close()
 
     def __del__(self) -> None:
-        if hasattr(self,"_lora_adapter"):
+        if hasattr(self, "_lora_adapter"):
             if self._lora_adapter is not None:
                 llama_cpp.llama_lora_adapter_free(self._lora_adapter)
         self.close()
