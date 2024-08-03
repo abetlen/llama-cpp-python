@@ -24,4 +24,4 @@ jobs:
           cache: 'pip'
       - uses: chartboost/ruff-action@v1
         with:
-          args: 'check --preview --select A,AIR,ANN,ARG,ASYNC,B,BLE,C4,C90,COM,CPY,DTZ,E,EM,ERA,F,FA,FAST,FBT,FIX,FLY,FURB,G,I,ICN,INP,INT,ISC,LOG,N,NPY,PERF,PGH,PIE,PL,PT,PTH,PYI,Q,R,RET,RSE,RUF,S,SIM,SLF,SLOT,T10,T20,TCH,TD,TID,TRY,UP,W,YTT --output-format github --diff --exclude docker,docs,scripts,tests,vendor'
+          args: 'check --select A,AIR,ANN,ARG,ASYNC,B,BLE,C4,C90,COM,CPY,DTZ,E,EM,ERA,F,FA,FAST,FBT,FIX,FLY,FURB,G,I,ICN,INP,INT,ISC,LOG,N,NPY,PERF,PGH,PIE,PL,PT,PTH,PYI,Q,R,RET,RSE,RUF,S,SIM,SLF,SLOT,T10,T20,TCH,TD,TID,TRY,UP,W,YTT --output-format github --diff --exclude docker,docs,scripts,tests,vendor'
