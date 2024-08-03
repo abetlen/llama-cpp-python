@@ -141,7 +141,6 @@ ctypes_function = ctypes_function_for_shared_library(_lib)
 
 def byref(obj: CtypesCData, offset: Optional[int] = None) -> CtypesRef[CtypesCData]:
     """Type-annotated version of ctypes.byref"""
-    ...
 
 
 byref = ctypes.byref  # type: ignore
@@ -1123,7 +1122,6 @@ llama_lora_adapter_p_ctypes = ctypes.POINTER(ctypes.c_void_p)
 )
 def llama_model_default_params() -> llama_model_params:
     """Get default parameters for llama_model"""
-    ...
 
 
 # LLAMA_API struct llama_context_params llama_context_default_params(void);
@@ -1134,7 +1132,6 @@ def llama_model_default_params() -> llama_model_params:
 )
 def llama_context_default_params() -> llama_context_params:
     """Get default parameters for llama_context"""
-    ...
 
 
 # LLAMA_API struct llama_model_quantize_params llama_model_quantize_default_params(void);
@@ -1145,7 +1142,6 @@ def llama_context_default_params() -> llama_context_params:
 )
 def llama_model_quantize_default_params() -> llama_model_quantize_params:
     """Get default parameters for llama_model_quantize"""
-    ...
 
 
 # // Initialize the llama + ggml backend
@@ -1162,7 +1158,6 @@ def llama_backend_init():
     """Initialize the llama + ggml backend
     If numa is true, use NUMA optimizations
     Call once at the start of the program"""
-    ...
 
 
 # // numa strategies
@@ -1202,7 +1197,6 @@ def llama_numa_init(numa: int, /):
 )
 def llama_backend_free():
     """Call once at the end of the program - currently only used for MPI"""
-    ...
 
 
 # LLAMA_API struct llama_model * llama_load_model_from_file(
@@ -1252,7 +1246,6 @@ def llama_new_context_with_model(
 )
 def llama_free(ctx: llama_context_p, /):
     """Frees all allocated memory"""
-    ...
 
 
 # LLAMA_API int64_t llama_time_us(void);
@@ -1366,7 +1359,6 @@ def llama_n_layer(model: llama_model_p, /) -> int:
 @ctypes_function("llama_rope_freq_scale_train", [llama_model_p_ctypes], ctypes.c_float)
 def llama_rope_freq_scale_train(model: llama_model_p, /) -> float:
     """Get the model's RoPE frequency scaling factor"""
-    ...
 
 
 # // Functions to access the model's GGUF metadata scalar values
@@ -1395,7 +1387,6 @@ def llama_model_meta_val_str(
     /,
 ) -> int:
     """Get metadata value as a string by key name"""
-    ...
 
 
 # // Get the number of metadata key/value pairs
@@ -1403,7 +1394,6 @@ def llama_model_meta_val_str(
 @ctypes_function("llama_model_meta_count", [llama_model_p_ctypes], ctypes.c_int32)
 def llama_model_meta_count(model: llama_model_p, /) -> int:
     """Get the number of metadata key/value pairs"""
-    ...
 
 
 # // Get metadata key name by index
@@ -1426,7 +1416,6 @@ def llama_model_meta_key_by_index(
     /,
 ) -> int:
     """Get metadata key name by index"""
-    ...
 
 
 # // Get metadata value as a string by index
@@ -1449,7 +1438,6 @@ def llama_model_meta_val_str_by_index(
     /,
 ) -> int:
     """Get metadata value as a string by index"""
-    ...
 
 
 # // Get a string describing the model type
@@ -1466,7 +1454,6 @@ def llama_model_desc(
     /,
 ) -> int:
     """Get a string describing the model type"""
-    ...
 
 
 # // Returns the total size of all the tensors in the model in bytes
@@ -1474,7 +1461,6 @@ def llama_model_desc(
 @ctypes_function("llama_model_size", [llama_model_p_ctypes], ctypes.c_uint64)
 def llama_model_size(model: llama_model_p, /) -> int:
     """Returns the total size of all the tensors in the model in bytes"""
-    ...
 
 
 # // Returns the total number of parameters in the model
@@ -1482,7 +1468,6 @@ def llama_model_size(model: llama_model_p, /) -> int:
 @ctypes_function("llama_model_n_params", [llama_model_p_ctypes], ctypes.c_uint64)
 def llama_model_n_params(model: llama_model_p, /) -> int:
     """Returns the total number of parameters in the model"""
-    ...
 
 
 # // Get a llama model tensor
@@ -1494,7 +1479,6 @@ def llama_get_model_tensor(
     model: llama_model_p, name: Union[ctypes.c_char_p, bytes], /,
 ) -> ctypes.c_void_p:
     """Get a llama model tensor"""
-    ...
 
 
 # // Returns true if the model contains an encoder that requires llama_encode() call
@@ -1502,7 +1486,6 @@ def llama_get_model_tensor(
 @ctypes_function("llama_model_has_encoder", [llama_model_p_ctypes], ctypes.c_bool)
 def llama_model_has_encoder(model: llama_model_p, /) -> bool:
     """Returns true if the model contains an encoder that requires llama_encode() call"""
-    ...
 
 
 # // For encoder-decoder models, this function returns id of the token that must be provided
@@ -1515,7 +1498,6 @@ def llama_model_decoder_start_token(model: llama_model_p, /) -> int:
     """For encoder-decoder models, this function returns id of the token that must be provided
     to the decoder to start generating output sequence. For other models, it returns -1.
     """
-    ...
 
 
 # // Returns 0 on success
@@ -1539,7 +1521,6 @@ def llama_model_quantize(
     /,
 ) -> int:
     """Returns 0 on success"""
-    ...
 
 
 # // Load a LoRA adapter from file
@@ -1558,7 +1539,6 @@ def llama_lora_adapter_init(
     """Load a LoRA adapter from file
     The loaded adapter will be associated to the given model, and will be free when the model is deleted
     """
-    ...
 
 
 # // Add a loaded LoRA adapter to given context
@@ -1577,7 +1557,6 @@ def llama_lora_adapter_set(
 ) -> int:
     """Add a loaded LoRA adapter to given context
     This will not modify model's weight"""
-    ...
 
 
 # // Remove a specific LoRA adapter from given context
@@ -1595,7 +1574,6 @@ def llama_lora_adapter_remove(
 ) -> int:
     """Remove a LoRA adapter from given context
     Return -1 if the adapter is not present in the context"""
-    ...
 
 
 # // Remove all LoRA adapters from given context
@@ -1608,7 +1586,6 @@ def llama_lora_adapter_remove(
 )
 def llama_lora_adapter_clear(ctx: llama_context_p, /):
     """Remove all LoRA adapters from given context"""
-    ...
 
 
 # // Manually free a LoRA adapter
@@ -1622,7 +1599,6 @@ def llama_lora_adapter_clear(ctx: llama_context_p, /):
 def llama_lora_adapter_free(adapter: llama_lora_adapter_p, /):
     """Manually free a LoRA adapter
     Note: loaded adapters will be free when the associated model is deleted"""
-    ...
 
 
 # // Apply a loaded control vector to a llama_context, or if data is NULL, clear
@@ -1665,7 +1641,6 @@ def llama_control_vector_apply(
     to an n_embd x n_layers buffer starting from layer 1.
     il_start and il_end are the layer range the vector should apply to (both inclusive)
     See llama_control_vector_load in common to load a control vector."""
-    ...
 
 
 # //
