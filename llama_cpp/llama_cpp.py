@@ -1736,7 +1736,6 @@ def llama_kv_cache_view_init(
     ctx: llama_context_p, n_seq_max: Union[ctypes.c_int32, int], /,
 ) -> llama_kv_cache_view:
     """Create an empty KV cache view. (use only for debugging purposes)"""
-    ...
 
 
 # // Free a KV cache view. (use only for debugging purposes)
@@ -1744,7 +1743,6 @@ def llama_kv_cache_view_init(
 @ctypes_function("llama_kv_cache_view_free", [llama_kv_cache_view_p], None)
 def llama_kv_cache_view_free(view: ctypes.pointer[llama_kv_cache_view], /):  # type: ignore
     """Free a KV cache view. (use only for debugging purposes)"""
-    ...
 
 
 # // Update the KV cache view structure with the current state of the KV cache. (use only for debugging purposes)
@@ -1754,7 +1752,6 @@ def llama_kv_cache_view_free(view: ctypes.pointer[llama_kv_cache_view], /):  # t
 )
 def llama_kv_cache_view_update(ctx: llama_context_p, view: CtypesPointerOrRef[llama_kv_cache_view], /):  # type: ignore
     """Update the KV cache view structure with the current state of the KV cache. (use only for debugging purposes)"""
-    ...
 
 
 # // Returns the number of tokens in the KV cache (slow, use only for debug)
@@ -1767,7 +1764,6 @@ def llama_get_kv_cache_token_count(ctx: llama_context_p, /) -> int:
     """Returns the number of tokens in the KV cache (slow, use only for debug)
     If a KV cell has multiple sequences assigned to it, it will be counted multiple times
     """
-    ...
 
 
 # // Returns the number of used KV cells (i.e. have at least one sequence assigned to them)
@@ -1777,7 +1773,6 @@ def llama_get_kv_cache_token_count(ctx: llama_context_p, /) -> int:
 )
 def llama_get_kv_cache_used_cells(ctx: llama_context_p, /) -> int:
     """Returns the number of used KV cells (i.e. have at least one sequence assigned to them)"""
-    ...
 
 
 # // Clear the KV cache - both cell info is erased and KV data is zeroed
@@ -1786,7 +1781,6 @@ def llama_get_kv_cache_used_cells(ctx: llama_context_p, /) -> int:
 @ctypes_function("llama_kv_cache_clear", [llama_context_p_ctypes], None)
 def llama_kv_cache_clear(ctx: llama_context_p, /):
     """Clear the KV cache"""
-    ...
 
 
 # // Removes all tokens that belong to the specified sequence and have positions in [p0, p1)
@@ -1823,7 +1817,6 @@ def llama_kv_cache_seq_rm(
     seq_id < 0 : match any sequence
     p0 < 0     : [0,  p1]
     p1 < 0     : [p0, inf)"""
-    ...
 
 
 # // Copy all tokens that belong to the specified sequence to another sequence
@@ -1859,7 +1852,6 @@ def llama_kv_cache_seq_cp(
     Note that this does not allocate extra KV cache memory - it simply assigns the tokens to the new sequence
     p0 < 0 : [0,  p1]
     p1 < 0 : [p0, inf)"""
-    ...
 
 
 # // Removes all tokens that do not belong to the specified sequence
@@ -1871,7 +1863,6 @@ def llama_kv_cache_seq_cp(
 )
 def llama_kv_cache_seq_keep(ctx: llama_context_p, seq_id: Union[llama_seq_id, int], /):
     """Removes all tokens that do not belong to the specified sequence"""
-    ...
 
 
 # // Adds relative position "delta" to all tokens that belong to the specified sequence and have positions in [p0, p1)
@@ -1947,7 +1938,6 @@ def llama_kv_cache_seq_div(
     If the KV cache is RoPEd, the KV data is updated accordingly
     p0 < 0 : [0,  p1]
     p1 < 0 : [p0, inf)"""
-    ...
 
 
 # // Defragment the KV cache
@@ -1961,7 +1951,6 @@ def llama_kv_cache_defrag(ctx: llama_context_p, /):
     This will be applied:
     - lazily on next llama_decode()
     - explicitly with llama_kv_cache_update()"""
-    ...
 
 
 # // Apply the KV cache updates (such as K-shifts, defragmentation, etc.)
@@ -1969,7 +1958,6 @@ def llama_kv_cache_defrag(ctx: llama_context_p, /):
 @ctypes_function("llama_kv_cache_update", [llama_context_p_ctypes], None)
 def llama_kv_cache_update(ctx: llama_context_p, /):
     """Apply the KV cache updates (such as K-shifts, defragmentation, etc.)"""
-    ...
 
 
 # //
@@ -1984,7 +1972,6 @@ def llama_kv_cache_update(ctx: llama_context_p, /):
 @ctypes_function("llama_state_get_size", [llama_context_p_ctypes], ctypes.c_size_t)
 def llama_state_get_size(ctx: llama_context_p, /) -> int:
     """Returns the *actual* size in bytes of the state (rng, logits, embedding and kv_cache) - will often be smaller after compacting tokens"""
-    ...
 
 
 # LLAMA_API DEPRECATED(size_t llama_get_state_size(struct llama_context * ctx),
@@ -1993,7 +1980,6 @@ def llama_state_get_size(ctx: llama_context_p, /) -> int:
 def llama_get_state_size(ctx: llama_context_p, /) -> int:
     """Returns the maximum size in bytes of the state (rng, logits, embedding
     and kv_cache) - will often be smaller after compacting tokens"""
-    ...
 
 
 # // Copies the state to the specified destination address.
@@ -2021,7 +2007,6 @@ def llama_state_get_data(
     """Copies the state to the specified destination address.
     Destination needs to have allocated enough memory.
     Returns the number of bytes copied"""
-    ...
 
 
 # LLAMA_API DEPRECATED(size_t llama_copy_state_data(
@@ -2042,7 +2027,6 @@ def llama_copy_state_data(
     """Copies the state to the specified destination address.
     Destination needs to have allocated enough memory.
     Returns the number of bytes copied"""
-    ...
 
 
 # // Set the state reading from the specified address
@@ -2064,7 +2048,6 @@ def llama_state_set_data(
 ) -> int:
     """Set the state reading from the specified address
     Returns the number of bytes read"""
-    ...
 
 
 # LLAMA_API DEPRECATED(size_t llama_set_state_data(
@@ -2080,7 +2063,6 @@ def llama_set_state_data(
     ctx: llama_context_p, src: CtypesArray[ctypes.c_uint8], /,
 ) -> int:
     """Set the state reading from the specified address"""
-    ...
 
 
 # Save/load session file
@@ -2203,7 +2185,6 @@ def llama_save_session_file(
 )
 def llama_state_seq_get_size(ctx: llama_context_p, seq_id: llama_seq_id, /) -> int:
     """Get the exact size needed to copy the KV cache of a single sequence"""
-    ...
 
 
 # // Copy the KV cache of a single sequence into the specified buffer
@@ -2260,7 +2241,6 @@ def llama_state_seq_set_data(
     /,
 ) -> int:
     """Copy the sequence data (originally copied with `llama_state_seq_get_data`) into the specified sequence"""
-    ...
 
 
 # LLAMA_API size_t llama_state_seq_save_file(
@@ -2357,7 +2337,6 @@ def llama_batch_get_one(
 
     NOTE: this is a helper function to facilitate transition to the new batch API - avoid using it
     """
-    ...
 
 
 # // Allocates a batch of tokens on the heap that can hold a maximum of n_tokens
@@ -2387,7 +2366,6 @@ def llama_batch_init(
     Otherwise, llama_batch.token will be allocated to store n_tokens llama_token
     The rest of the llama_batch members are allocated with size n_tokens
     All members are left uninitialized"""
-    ...
 
 
 # // Frees a batch of tokens allocated with llama_batch_init()
@@ -2395,7 +2373,6 @@ def llama_batch_init(
 @ctypes_function("llama_batch_free", [llama_batch], None)
 def llama_batch_free(batch: llama_batch, /):
     """Frees a batch of tokens allocated with llama_batch_init()"""
-    ...
 
 
 # // Processes a batch of tokens with the ecoder part of the encoder-decoder model.
@@ -2411,7 +2388,6 @@ def llama_encode(ctx: llama_context_p, batch: llama_batch, /) -> int:
     Stores the encoder output internally for later use by the decoder cross-attention layers.
     0 - success
     < 0 - error"""
-    ...
 
 
 # // Positive return values does not mean a fatal error, but rather a warning.
@@ -2427,7 +2403,6 @@ def llama_decode(ctx: llama_context_p, batch: llama_batch, /) -> int:
     0 - success
     1 - could not find a KV slot for the batch (try reducing the size of the batch or increase the context)
     < 0 - error"""
-    ...
 
 
 # // Set the number of threads used for decoding
@@ -2453,7 +2428,6 @@ def llama_set_n_threads(
     n_threads is the number of threads used for generation (single token)
     n_threads_batch is the number of threads used for prompt and batch processing (multiple tokens)
     """
-    ...
 
 
 # // Get the number of threads used for generation of a single token.
@@ -2461,7 +2435,6 @@ def llama_set_n_threads(
 @ctypes_function("llama_n_threads", [llama_context_p_ctypes], ctypes.c_uint32)
 def llama_n_threads(ctx: llama_context_p, /) -> int:
     """Get the number of threads used for generation of a single token"""
-    ...
 
 
 # // Get the number of threads used for prompt and batch processing (multiple token).
@@ -2469,7 +2442,6 @@ def llama_n_threads(ctx: llama_context_p, /) -> int:
 @ctypes_function("llama_n_threads_batch", [llama_context_p_ctypes], ctypes.c_uint32)
 def llama_n_threads_batch(ctx: llama_context_p, /) -> int:
     """Get the number of threads used for prompt and batch processing (multiple token)"""
-    ...
 
 
 # // Set whether the model is in embeddings mode or not
@@ -2479,7 +2451,6 @@ def llama_n_threads_batch(ctx: llama_context_p, /) -> int:
 def llama_set_embeddings(ctx: llama_context_p, embeddings: bool, /):
     """Set whether the model is in embeddings model or not
     If true, embeddings will be returned but logits will not"""
-    ...
 
 
 # // Set whether to use causal attention or not
@@ -2489,7 +2460,6 @@ def llama_set_embeddings(ctx: llama_context_p, embeddings: bool, /):
 def llama_set_causal_attn(ctx: llama_context_p, causal_attn: bool, /):
     """Set whether to use causal attention or not
     If set to true, the model will only attend to the past tokens"""
-    ...
 
 
 # // Set abort callback
@@ -2506,7 +2476,6 @@ def llama_set_abort_callback(
     /,
 ):
     """Set abort callback"""
-    ...
 
 
 # // Wait until all computations are finished
@@ -2518,7 +2487,6 @@ def llama_synchronize(ctx: llama_context_p, /):
     """Wait until all computations are finished
     This is automatically done when using one of the functions below to obtain the computation results
     and is not necessary to call it explicitly in most cases"""
-    ...
 
 
 # // Token logits obtained from the last call to llama_decode()
@@ -2539,7 +2507,6 @@ def llama_get_logits(ctx: llama_context_p, /) -> CtypesArray[ctypes.c_float]:
 
     Returns:
         Pointer to the logits buffer of shape (n_tokens, n_vocab)"""
-    ...
 
 
 # // Logits for the ith token. For positive indices, Equivalent to:
@@ -2557,7 +2524,6 @@ def llama_get_logits_ith(
 ) -> CtypesArray[ctypes.c_float]:
     """Logits for the ith token. Equivalent to:
     llama_get_logits(ctx) + i*n_vocab"""
-    ...
 
 
 # // Get all output token embeddings.
@@ -2573,7 +2539,6 @@ def llama_get_logits_ith(
 def llama_get_embeddings(ctx: llama_context_p, /) -> CtypesArray[ctypes.c_float]:
     """Get the embeddings for the input
     shape: [n_embd] (1-dimensional)"""
-    ...
 
 
 # // Get the embeddings for the ith token. For positive indices, Equivalent to:
@@ -2592,7 +2557,6 @@ def llama_get_embeddings_ith(
 ) -> CtypesArray[ctypes.c_float]:
     """Get the embeddings for the ith sequence
     llama_get_embeddings(ctx) + i*n_embd"""
-    ...
 
 
 # // Get the embeddings for a sequence id
