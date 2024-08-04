@@ -37,7 +37,6 @@ if __name__ == "__main__":
     host = os.getenv('HOST', 'localhost')
     port = int(os.getenv('PORT', 8000))
     
-    # Ajouter le support pour IPv6 en écoutant sur les deux adresses IPv4 et IPv6
     config.bind = [f"{host}:{port}", f"[::]:{port}"]
     
     hypercorn.asyncio.run(app, config)
