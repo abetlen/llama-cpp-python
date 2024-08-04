@@ -511,7 +511,7 @@ class _LlamaContext:
     def grammar_accept_token(self, grammar: LlamaGrammar, token: int):
         assert self.ctx is not None
         assert grammar.grammar is not None
-        llama_cpp.llama_grammar_accept_token(self.ctx, grammar.grammar, token)
+        llama_cpp.llama_grammar_accept_token(grammar.grammar, self.ctx, token)
 
     def reset_timings(self):
         assert self.ctx is not None
