@@ -1,0 +1,68 @@
+name: Build Light Docker
+
+on: workflow_dispatch
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build-light-docker:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.9
+
+      - name: Install dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install .[all] -v
+          python3 -m pip install pyinstaller
+
+      - name: Build package
+        run: |
+          pyinstaller --onefile llama_cpp/server/__main__.py -n llama-server \
+            --add-binary "/home/runner/work/llama-cpp-python/llama-cpp-python/llama_cpp/libllama.so:./llama_cpp/" \
+            --add-binary "/home/runner/work/llama-cpp-python/llama-cpp-python/llama_cpp/libllava.so:./llama_cpp/"
+
+      - name: upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: llama-server
+          path: |
+            dist/*
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=light-server
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: "docker/light-server/Dockerfile"
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
