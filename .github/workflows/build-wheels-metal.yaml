@@ -30,7 +30,7 @@ jobs:
           python -m pip install -e .[all]
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.19.2
+        uses: pypa/cibuildwheel@v2.20.0
         env:
           # disable repair
           CIBW_REPAIR_WHEEL_COMMAND: ""
