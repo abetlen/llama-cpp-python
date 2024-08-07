@@ -1,6 +1,12 @@
 """Python implementation of llama grammar parser directly translated from C++ source file in vendor/llama.cpp/common/grammar-parser.cpp."""
 
 # flake8: noqa
+import sys
+import ctypes
+import enum
+import typing
+import dataclasses
+
 from itertools import groupby
 from typing import (
     Any,
@@ -10,9 +16,6 @@ from typing import (
     Tuple,
     Union,
 )
-
-import enum
-import typing
 
 import llama_cpp.llama_cpp as llama_cpp
 
@@ -26,12 +29,12 @@ class GrammarElementType(enum.IntEnum):
     CHAR_ALT = llama_cpp.LLAMA_GRETYPE_CHAR_ALT
     CHAR_ANY = llama_cpp.LLAMA_GRETYPE_CHAR_ANY
 
-import dataclasses
 
 @dataclasses.dataclass
 class GrammarElement:
     type: GrammarElementType
     value: int
+
 
 @dataclasses.dataclass
 class ParseState:
@@ -39,6 +42,20 @@ class ParseState:
     rules: typing.List[typing.List[GrammarElement]] = dataclasses.field(default_factory=list)
 
 
+# static std::pair<uint32_t, const char *> decode_utf8(const char * src) {
+#     static const int lookup[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 4 };
+#     uint8_t  first_byte = static_cast<uint8_t>(*src);
+#     uint8_t  highbits   = first_byte >> 4;
+#     int      len        = lookup[highbits];
+#     uint8_t  mask       = (1 << (8 - len)) - 1;
+#     uint32_t value      = first_byte & mask;
+#     const char * end    = src + len; // may overrun!
+#     const char * pos    = src + 1;
+#     for ( ; pos < end && *pos; pos++) {
+#         value = (value << 6) + (static_cast<uint8_t>(*pos) & 0x3F);
+#     }
+#     return std::make_pair(value, pos);
+# }
 def decode_utf8(src: str) -> typing.Tuple[int, str]:
     lookup: list[int] = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 4]
     first_byte: int = ord(src[0])
@@ -57,31 +74,78 @@ def decode_utf8(src: str) -> typing.Tuple[int, str]:
     return value, src[pos:] if pos < len(src) else ""
 
 
+# static uint32_t get_symbol_id(parse_state & state, const char * src, size_t len) {
+#     uint32_t next_id = static_cast<uint32_t>(state.symbol_ids.size());
+#     auto result = state.symbol_ids.emplace(std::string(src, len), next_id);
+#     return result.first->second;
+# }
 def get_symbol_id(state: ParseState, name: str) -> int:
     next_id = len(state.symbol_ids)
     return state.symbol_ids.setdefault(name, next_id)
 
 
+# static uint32_t generate_symbol_id(parse_state & state, const std::string & base_name) {
+#     uint32_t next_id = static_cast<uint32_t>(state.symbol_ids.size());
+#     state.symbol_ids[base_name + '_' + std::to_string(next_id)] = next_id;
+#     return next_id;
+# }
 def generate_symbol_id(state: ParseState, base_name: str) -> int:
     next_id = len(state.symbol_ids)
     state.symbol_ids[f"{base_name}_{next_id}"] = next_id
     return next_id
 
 
+# static void add_rule(
+#         parse_state & state,
+#         uint32_t      rule_id,
+#         const std::vector<llama_grammar_element> & rule) {
+#     if (state.rules.size() <= rule_id) {
+#         state.rules.resize(rule_id + 1);
+#     }
+#     state.rules[rule_id] = rule;
+# }
 def add_rule(state: ParseState, rule_id: int, rule: typing.List[GrammarElement]) -> None:
     if len(state.rules) <= rule_id:
         state.rules.extend([[]] * (rule_id + 1 - len(state.rules)))
     state.rules[rule_id] = rule
 
 
+# static bool is_digit_char(char c) {
+#     return '0' <= c && c <= '9';
+# }
 def is_digit_char(c: str) -> bool:
     return "0" <= c <= "9"
 
 
+# static bool is_word_char(char c) {
+#     return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || c == '-' || is_digit_char(c);
+# }
 def is_word_char(c: str) -> bool:
     return ("a" <= c <= "z") or ("A" <= c <= "Z") or c == "-" or is_digit_char(c)
 
 
+# static std::pair<uint32_t, const char *> parse_hex(const char * src, int size) {
+#     const char * pos   = src;
+#     const char * end   = src + size;
+#     uint32_t     value = 0;
+#     for ( ; pos < end && *pos; pos++) {
+#         value <<= 4;
+#         char c = *pos;
+#         if ('a' <= c && c <= 'f') {
+#             value += c - 'a' + 10;
+#         } else if ('A' <= c && c <= 'F') {
+#             value += c - 'A' + 10;
+#         } else if ('0' <= c && c <= '9') {
+#             value += c - '0';
+#         } else {
+#             break;
+#         }
+#     }
+#     if (pos != end) {
+#         throw std::runtime_error("expecting " + std::to_string(size) + " hex chars at " + src);
+#     }
+#     return std::make_pair(value, pos);
+# }
 def parse_hex(src: str, size: int) -> typing.Tuple[int, str]:
     pos = 0
     value = 0
@@ -102,38 +166,93 @@ def parse_hex(src: str, size: int) -> typing.Tuple[int, str]:
     return value, src[pos:]
 
 
+# static const char * parse_space(const char * src, bool newline_ok) {
+#     const char * pos = src;
+#     while (*pos == ' ' || *pos == '\t' || *pos == '#' ||
+#             (newline_ok && (*pos == '\r' || *pos == '\n'))) {
+#         if (*pos == '#') {
+#             while (*pos && *pos != '\r' && *pos != '\n') {
+#                 pos++;
+#             }
+#         } else {
+#             pos++;
+#         }
+#     }
+#     return pos;
+# }
 def parse_space(src: str, newline_ok: bool) -> str:
-    pos = 0
-    while pos < len(src) and (src[pos] in (" ", "\t", "#") or (newline_ok and src[pos] in ("\r", "\n"))):
-        if src[pos] == "#":
-            while pos < len(src) and src[pos] not in ("\r", "\n"):
-                pos += 1
-        pos += 1
-    return src[pos:]
+    pos = src
+    while pos and (pos[0] in (' ', '\t', '#') or (newline_ok and pos[0] in ('\r', '\n'))):
+        if pos[0] == "#":
+            while pos and pos[0] not in ("\r", "\n"):
+                pos = pos[1:]
+        else:
+            pos = pos[1:]
+    return pos
 
 
+# static const char * parse_name(const char * src) {
+#     const char * pos = src;
+#     while (is_word_char(*pos)) {
+#         pos++;
+#     }
+#     if (pos == src) {
+#         throw std::runtime_error(std::string("expecting name at ") + src);
+#     }
+#     return pos;
+# }
 def parse_name(src: str) -> typing.Tuple[str, str]:
-    pos = 0
-    try:
-        while is_word_char(src[pos]):
-            pos += 1
-    except IndexError:
-        return src, ""
-    if pos == 0:
+    pos = src
+    while pos and is_word_char(pos[0]):
+        pos = pos[1:]
+    if pos == src:
         raise ValueError(f"expecting name at {src}")
-    return src[:pos], src[pos:]
+    return src[:len(src) - len(pos)], pos
 
-
+# static const char * parse_int(const char * src) {
+#     const char * pos = src;
+#     while (is_digit_char(*pos)) {
+#         pos++;
+#     }
+#     if (pos == src) {
+#         throw std::runtime_error(std::string("expecting integer at ") + src);
+#     }
+#     return pos;
+# }
 def parse_int(src: str) -> typing.Tuple[int, str]:
-    pos = 0
-    while is_digit_char(src[pos]):
-        pos += 1
-    if pos == 0:
+    pos = src
+    while pos and is_digit_char(pos[0]):
+        pos = pos[1:]
+    if pos == src:
         raise ValueError(f"expecting integer at {src}")
-    return int(src[:pos]), src[pos:]
+    return int(src[:len(src) - len(pos)]), pos
 
 
+# static std::pair<uint32_t, const char *> parse_char(const char * src) {
+#     if (*src == '\\') {
+#         switch (src[1]) {
+#             case 'x': return parse_hex(src + 2, 2);
+#             case 'u': return parse_hex(src + 2, 4);
+#             case 'U': return parse_hex(src + 2, 8);
+#             case 't': return std::make_pair('\t', src + 2);
+#             case 'r': return std::make_pair('\r', src + 2);
+#             case 'n': return std::make_pair('\n', src + 2);
+#             case '\\':
+#             case '"':
+#             case '[':
+#             case ']':
+#                 return std::make_pair(src[1], src + 2);
+#             default:
+#                 throw std::runtime_error(std::string("unknown escape at ") + src);
+#         }
+#     } else if (*src) {
+#         return decode_utf8(src);
+#     }
+#     throw std::runtime_error("unexpected end of input");
+# }
 def parse_char(src: str) -> typing.Tuple[int, str]:
+    if not src:
+        raise ValueError("unexpected end of input")
     if src[0] == "\\":
         if src[1] == "x":
             return parse_hex(src[2:], 2)
@@ -151,33 +270,202 @@ def parse_char(src: str) -> typing.Tuple[int, str]:
             return ord(src[1]), src[2:]
         else:
             raise ValueError(f"unknown escape at {src}")
-    elif src:
-        return decode_utf8(src)
-    raise ValueError("unexpected end of input")
+    return decode_utf8(src)
 
-
+# static const char * parse_sequence(
+#         parse_state                        & state,
+#         const char                         * src,
+#         const std::string                  & rule_name,
+#         std::vector<llama_grammar_element> & out_elements,
+#         bool                                 is_nested) {
+#     size_t last_sym_start = out_elements.size();
+#     const char * pos = src;
+#
+#     auto handle_repetitions = [&](int min_times, int max_times) {
+#
+#         if (last_sym_start == out_elements.size()) {
+#             throw std::runtime_error(std::string("expecting preceding item to */+/?/{ at ") + pos);
+#         }
+#
+#         // apply transformation to previous symbol (last_sym_start to end) according to
+#         // the following rewrite rules:
+#         // S{m,n} --> S S S (m times) S'(n-m)
+#         //            S'(x)   ::= S S'(x-1) |
+#         //            (... n-m definitions of these S' rules ...)
+#         //            S'(1)   ::= S |
+#         // S{m,} -->  S S S (m times) S'
+#         //            S'     ::= S S' |
+#         // S*     --> S{0,}
+#         //        --> S'     ::= S S' |
+#         // S+     --> S{1,}
+#         //        --> S S'
+#         //            S'     ::= S S' |
+#         // S?     --> S{0,1}
+#         //        --> S'
+#         //            S'     ::= S |
+#
+#         std::vector<llama_grammar_element> previous_elements(out_elements.begin() + last_sym_start, out_elements.end());
+#         if (min_times == 0) {
+#             out_elements.resize(last_sym_start);
+#         } else {
+#             // Repeat the previous elements (min_times - 1) times
+#             for (int i = 1; i < min_times; i++) {
+#                 out_elements.insert(out_elements.end(), previous_elements.begin(), previous_elements.end());
+#             }
+#         }
+#
+#         uint32_t last_rec_rule_id = 0;
+#         auto n_opt = max_times < 0 ? 1 : max_times - min_times;
+#
+#         std::vector<llama_grammar_element> rec_rule(previous_elements);
+#         for (int i = 0; i < n_opt; i++) {
+#             rec_rule.resize(previous_elements.size());
+#             uint32_t rec_rule_id = generate_symbol_id(state, rule_name);
+#             if (i > 0 || max_times < 0) {
+#                 rec_rule.push_back({LLAMA_GRETYPE_RULE_REF, max_times < 0 ? rec_rule_id : last_rec_rule_id});
+#             }
+#             rec_rule.push_back({LLAMA_GRETYPE_ALT, 0});
+#             rec_rule.push_back({LLAMA_GRETYPE_END, 0});
+#             add_rule(state, rec_rule_id, rec_rule);
+#             last_rec_rule_id = rec_rule_id;
+#         }
+#         if (n_opt > 0) {
+#             out_elements.push_back({LLAMA_GRETYPE_RULE_REF, last_rec_rule_id});
+#         }
+#     };
+#
+#     while (*pos) {
+#         if (*pos == '"') { // literal string
+#             pos++;
+#             last_sym_start = out_elements.size();
+#             while (*pos != '"') {
+#                 if (!*pos) {
+#                     throw std::runtime_error("unexpected end of input");
+#                 }
+#                 auto char_pair = parse_char(pos);
+#                      pos       = char_pair.second;
+#                 out_elements.push_back({LLAMA_GRETYPE_CHAR, char_pair.first});
+#             }
+#             pos = parse_space(pos + 1, is_nested);
+#         } else if (*pos == '[') { // char range(s)
+#             pos++;
+#             enum llama_gretype start_type = LLAMA_GRETYPE_CHAR;
+#             if (*pos == '^') {
+#                 pos++;
+#                 start_type = LLAMA_GRETYPE_CHAR_NOT;
+#             }
+#             last_sym_start = out_elements.size();
+#             while (*pos != ']') {
+#                 if (!*pos) {
+#                     throw std::runtime_error("unexpected end of input");
+#                 }
+#                 auto char_pair = parse_char(pos);
+#                      pos       = char_pair.second;
+#                 enum llama_gretype type = last_sym_start < out_elements.size()
+#                     ? LLAMA_GRETYPE_CHAR_ALT
+#                     : start_type;
+#
+#                 out_elements.push_back({type, char_pair.first});
+#                 if (pos[0] == '-' && pos[1] != ']') {
+#                     if (!pos[1]) {
+#                         throw std::runtime_error("unexpected end of input");
+#                     }
+#                     auto endchar_pair = parse_char(pos + 1);
+#                          pos          = endchar_pair.second;
+#                     out_elements.push_back({LLAMA_GRETYPE_CHAR_RNG_UPPER, endchar_pair.first});
+#                 }
+#             }
+#             pos = parse_space(pos + 1, is_nested);
+#         } else if (is_word_char(*pos)) { // rule reference
+#             const char * name_end    = parse_name(pos);
+#             uint32_t     ref_rule_id = get_symbol_id(state, pos, name_end - pos);
+#             pos = parse_space(name_end, is_nested);
+#             last_sym_start = out_elements.size();
+#             out_elements.push_back({LLAMA_GRETYPE_RULE_REF, ref_rule_id});
+#         } else if (*pos == '(') { // grouping
+#             // parse nested alternates into synthesized rule
+#             pos = parse_space(pos + 1, true);
+#             uint32_t sub_rule_id = generate_symbol_id(state, rule_name);
+#             pos = parse_alternates(state, pos, rule_name, sub_rule_id, true);
+#             last_sym_start = out_elements.size();
+#             // output reference to synthesized rule
+#             out_elements.push_back({LLAMA_GRETYPE_RULE_REF, sub_rule_id});
+#             if (*pos != ')') {
+#                 throw std::runtime_error(std::string("expecting ')' at ") + pos);
+#             }
+#             pos = parse_space(pos + 1, is_nested);
+#         } else if (*pos == '.') { // any char
+#             last_sym_start = out_elements.size();
+#             out_elements.push_back({LLAMA_GRETYPE_CHAR_ANY, 0});
+#             pos = parse_space(pos + 1, is_nested);
+#         } else if (*pos == '*') {
+#             pos = parse_space(pos + 1, is_nested);
+#             handle_repetitions(0, -1);
+#         } else if (*pos == '+') {
+#             pos = parse_space(pos + 1, is_nested);
+#             handle_repetitions(1, -1);
+#         } else if (*pos == '?') {
+#             pos = parse_space(pos + 1, is_nested);
+#             handle_repetitions(0, 1);
+#         } else if (*pos == '{') {
+#             pos = parse_space(pos + 1, is_nested);
+#
+#             if (!is_digit_char(*pos)) {
+#                 throw std::runtime_error(std::string("expecting an int at ") + pos);
+#             }
+#             const char * int_end = parse_int(pos);
+#             int min_times = std::stoul(std::string(pos, int_end - pos));
+#             pos = parse_space(int_end, is_nested);
+#
+#             int max_times = -1;
+#
+#             if (*pos == '}') {
+#                 max_times = min_times;
+#                 pos = parse_space(pos + 1, is_nested);
+#             } else if (*pos == ',') {
+#                 pos = parse_space(pos + 1, is_nested);
+#
+#                 if (is_digit_char(*pos)) {
+#                     const char * int_end = parse_int(pos);
+#                     max_times = std::stoul(std::string(pos, int_end - pos));
+#                     pos = parse_space(int_end, is_nested);
+#                 }
+#
+#                 if (*pos != '}') {
+#                     throw std::runtime_error(std::string("expecting '}' at ") + pos);
+#                 }
+#                 pos = parse_space(pos + 1, is_nested);
+#             } else {
+#                 throw std::runtime_error(std::string("expecting ',' at ") + pos);
+#             }
+#             handle_repetitions(min_times, max_times);
+#         } else {
+#             break;
+#         }
+#     }
+#     return pos;
+# }
 def parse_sequence(state: ParseState, src: str, rule_name: str, out_elements: typing.List[GrammarElement], is_nested: bool) -> str:
     last_sym_start = len(out_elements)
     pos = src
 
     def handle_repetitions(min_times: int, max_times: int) -> None:
-        nonlocal last_sym_start
-        nonlocal pos
-        nonlocal out_elements
+        nonlocal state, src, rule_name, out_elements, is_nested, last_sym_start, pos
 
         if last_sym_start == len(out_elements):
             raise ValueError(f"expecting preceding item to */+/?/{{ at {pos}")
 
         previous_elements = out_elements[last_sym_start:]
         if min_times == 0:
-            out_elements = out_elements[:last_sym_start]
+            del out_elements[last_sym_start:]
         else:
             for i in range(1, min_times):
                 out_elements.extend(previous_elements)
+
         last_rec_rule_id = 0
         n_opt = 1 if max_times < 0 else max_times - min_times
 
-        rec_rule = list(previous_elements)
+        rec_rule = previous_elements[:]
         for i in range(n_opt):
             rec_rule = rec_rule[:len(previous_elements)]
             rec_rule_id = generate_symbol_id(state, rule_name)
@@ -191,21 +479,21 @@ def parse_sequence(state: ParseState, src: str, rule_name: str, out_elements: ty
             out_elements.append(GrammarElement(GrammarElementType.RULE_REF, last_rec_rule_id))
 
     while pos:
-        if pos.startswith('"'):
+        if pos[0] == '"':
             pos = pos[1:]
             last_sym_start = len(out_elements)
-            while pos[0] != '"':
+            while not pos.startswith('"'):
                 if not pos:
                     raise ValueError("unexpected end of input")
                 char, pos = parse_char(pos)
                 out_elements.append(GrammarElement(GrammarElementType.CHAR, char))
             pos = parse_space(pos[1:], is_nested)
-        elif pos.startswith("["):
+        elif pos[0] == "[":
             pos = pos[1:]
             start_type = GrammarElementType.CHAR
             if pos[0] == "^":
-                start_type = GrammarElementType.CHAR_NOT
                 pos = pos[1:]
+                start_type = GrammarElementType.CHAR_NOT
             last_sym_start = len(out_elements)
             while pos[0] != "]":
                 if not pos:
@@ -219,7 +507,7 @@ def parse_sequence(state: ParseState, src: str, rule_name: str, out_elements: ty
                     endchar, pos = parse_char(pos[1:])
                     out_elements.append(GrammarElement(GrammarElementType.CHAR_RNG_UPPER, endchar))
             pos = parse_space(pos[1:], is_nested)
-        elif is_word_char(pos[0]):
+        elif pos and is_word_char(pos[0]):
             name, rest = parse_name(pos)
             ref_rule_id = get_symbol_id(state, name)
             pos = parse_space(rest, is_nested)
@@ -249,7 +537,8 @@ def parse_sequence(state: ParseState, src: str, rule_name: str, out_elements: ty
             handle_repetitions(0, 1)
         elif pos.startswith("{"):
             pos = parse_space(pos[1:], is_nested)
-            if not is_digit_char(pos[0]):
+
+            if not is_digit_char(pos):
                 raise ValueError(f"expecting an int at {pos}")
             min_times, pos = parse_int(pos)
             pos = parse_space(pos, is_nested)
@@ -261,11 +550,14 @@ def parse_sequence(state: ParseState, src: str, rule_name: str, out_elements: ty
                 pos = parse_space(pos[1:], is_nested)
             elif pos[0] == ",":
                 pos = parse_space(pos[1:], is_nested)
-                if is_digit_char(pos[0]):
+
+                if is_digit_char(pos):
                     max_times, pos = parse_int(pos)
                     pos = parse_space(pos, is_nested)
+
                 if pos[0] != "}":
                     raise ValueError("expecting '}' at {}".format(pos))
+
                 pos = parse_space(pos[1:], is_nested)
             else:
                 raise ValueError(f"expecting ',' at {pos}")
@@ -275,6 +567,23 @@ def parse_sequence(state: ParseState, src: str, rule_name: str, out_elements: ty
     return pos
 
 
+# const char * parse_alternates(
+#         parse_state       & state,
+#         const char        * src,
+#         const std::string & rule_name,
+#         uint32_t            rule_id,
+#         bool                is_nested) {
+#     std::vector<llama_grammar_element> rule;
+#     const char * pos = parse_sequence(state, src, rule_name, rule, is_nested);
+#     while (*pos == '|') {
+#         rule.push_back({LLAMA_GRETYPE_ALT, 0});
+#         pos = parse_space(pos + 1, true);
+#         pos = parse_sequence(state, pos, rule_name, rule, is_nested);
+#     }
+#     rule.push_back({LLAMA_GRETYPE_END, 0});
+#     add_rule(state, rule_id, rule);
+#     return pos;
+# }
 def parse_alternates(state: ParseState, src: str, rule_name: str, rule_id: int, is_nested: bool) -> str:
     rule = []
     pos = parse_sequence(state, src, rule_name, rule, is_nested)
@@ -287,34 +596,86 @@ def parse_alternates(state: ParseState, src: str, rule_name: str, rule_id: int, 
     return pos
 
 
+# static const char * parse_rule(parse_state & state, const char * src) {
+#     const char * name_end = parse_name(src);
+#     const char * pos      = parse_space(name_end, false);
+#     size_t       name_len = name_end - src;
+#     uint32_t     rule_id  = get_symbol_id(state, src, name_len);
+#     const std::string name(src, name_len);
+#
+#     if (!(pos[0] == ':' && pos[1] == ':' && pos[2] == '=')) {
+#         throw std::runtime_error(std::string("expecting ::= at ") + pos);
+#     }
+#     pos = parse_space(pos + 3, true);
+#
+#     pos = parse_alternates(state, pos, name, rule_id, false);
+#
+#     if (*pos == '\r') {
+#         pos += pos[1] == '\n' ? 2 : 1;
+#     } else if (*pos == '\n') {
+#         pos++;
+#     } else if (*pos) {
+#         throw std::runtime_error(std::string("expecting newline or end at ") + pos);
+#     }
+#     return parse_space(pos, true);
+# }
 def parse_rule(state: ParseState, src: str) -> str:
-    name, s = parse_name(src)
-    s = parse_space(s, newline_ok=False)
+    pos = src
+    name, pos = parse_name(pos)
+    pos = parse_space(pos, newline_ok=False)
     rule_id = get_symbol_id(state, name)
 
-    if not s.startswith("::="):
-        raise ValueError(f"expecting ::= at {s}")
+    if not pos.startswith("::="):
+        raise ValueError(f"expecting ::= at {pos}")
 
-    s = s[3:]
+    pos = parse_space(pos[3:], newline_ok=True)
 
-    s = parse_space(s, newline_ok=True)
+    pos = parse_alternates(state, pos, name, rule_id, is_nested=False)
 
-    s = parse_alternates(state, s, name, rule_id, is_nested=False)
-
-    if s.startswith("\r"):
-        s = s[2:] if s[1] == "\n" else s[1:]
-    elif s.startswith("\n"):
-        s = s[1:]
-    elif s:
-        raise ValueError(f"expecting newline or end at {s}")
-    return parse_space(s, newline_ok=True)
+    if pos.startswith("\r"):
+        pos = pos[2:] if pos[1] == "\n" else pos[1:]
+    elif pos.startswith("\n"):
+        pos = pos[1:]
+    elif pos:
+        raise ValueError(f"expecting newline or end at {pos}")
+    return parse_space(pos, newline_ok=True)
 
 
-def parse(gbnf: str) -> ParseState:
+# parse_state parse(const char * src) {
+#     try {
+#         parse_state state;
+#         const char * pos = parse_space(src, true);
+#         while (*pos) {
+#             pos = parse_rule(state, pos);
+#         }
+#         // Validate the state to ensure that all rules are defined
+#         for (const auto & rule : state.rules) {
+#             for (const auto & elem : rule) {
+#                 if (elem.type == LLAMA_GRETYPE_RULE_REF) {
+#                     // Ensure that the rule at that location exists
+#                     if (elem.value >= state.rules.size() || state.rules[elem.value].empty()) {
+#                         // Get the name of the rule that is missing
+#                         for (const auto & kv : state.symbol_ids) {
+#                             if (kv.second == elem.value) {
+#                                 throw std::runtime_error("Undefined rule identifier '" + kv.first + "'");
+#                             }
+#                         }
+#                     }
+#                 }
+#             }
+#         }
+#         return state;
+#     } catch (const std::exception & err) {
+#         fprintf(stderr, "%s: error parsing grammar: %s\n", __func__, err.what());
+#         return parse_state();
+#     }
+# }
+def parse(src: str) -> ParseState:
     state = ParseState()
-    s = parse_space(gbnf, newline_ok=True)
-    while s:
-        s = parse_rule(state, s)
+    pos = src
+    pos = parse_space(pos, newline_ok=True)
+    while pos:
+        pos = parse_rule(state, pos)
     # validate
     for rule in state.rules:
         for elem in rule:
@@ -326,6 +687,16 @@ def parse(gbnf: str) -> ParseState:
     return state
 
 
+# static bool is_char_element(llama_grammar_element elem) {
+#     switch (elem.type) {
+#         case LLAMA_GRETYPE_CHAR:           return true;
+#         case LLAMA_GRETYPE_CHAR_NOT:       return true;
+#         case LLAMA_GRETYPE_CHAR_ALT:       return true;
+#         case LLAMA_GRETYPE_CHAR_RNG_UPPER: return true;
+#         case LLAMA_GRETYPE_CHAR_ANY:       return true;
+#         default:                           return false;
+#     }
+# }
 def is_char_element(elem: GrammarElement) -> bool:
     return elem.type in (
         GrammarElementType.CHAR, 
@@ -343,6 +714,71 @@ def print_grammar_char(file: typing.TextIO, c: int) -> None:
         print(f"<U+{c:04X}>", end="", file=file)
 
 
+# static void print_rule(
+#         FILE     * file,
+#         uint32_t   rule_id,
+#         const std::vector<llama_grammar_element> & rule,
+#         const std::map<uint32_t, std::string>    & symbol_id_names) {
+#     if (rule.empty() || rule.back().type != LLAMA_GRETYPE_END) {
+#         throw std::runtime_error(
+#             "malformed rule, does not end with LLAMA_GRETYPE_END: " + std::to_string(rule_id));
+#     }
+#     fprintf(file, "%s ::= ", symbol_id_names.at(rule_id).c_str());
+#     for (size_t i = 0, end = rule.size() - 1; i < end; i++) {
+#         llama_grammar_element elem = rule[i];
+#         switch (elem.type) {
+#             case LLAMA_GRETYPE_END:
+#                 throw std::runtime_error(
+#                     "unexpected end of rule: " + std::to_string(rule_id) + "," +
+#                     std::to_string(i));
+#             case LLAMA_GRETYPE_ALT:
+#                 fprintf(file, "| ");
+#                 break;
+#             case LLAMA_GRETYPE_RULE_REF:
+#                 fprintf(file, "%s ", symbol_id_names.at(elem.value).c_str());
+#                 break;
+#             case LLAMA_GRETYPE_CHAR:
+#                 fprintf(file, "[");
+#                 print_grammar_char(file, elem.value);
+#                 break;
+#             case LLAMA_GRETYPE_CHAR_NOT:
+#                 fprintf(file, "[^");
+#                 print_grammar_char(file, elem.value);
+#                 break;
+#             case LLAMA_GRETYPE_CHAR_RNG_UPPER:
+#                 if (i == 0 || !is_char_element(rule[i - 1])) {
+#                     throw std::runtime_error(
+#                         "LLAMA_GRETYPE_CHAR_RNG_UPPER without preceding char: " +
+#                         std::to_string(rule_id) + "," + std::to_string(i));
+#                 }
+#                 fprintf(file, "-");
+#                 print_grammar_char(file, elem.value);
+#                 break;
+#             case LLAMA_GRETYPE_CHAR_ALT:
+#                 if (i == 0 || !is_char_element(rule[i - 1])) {
+#                     throw std::runtime_error(
+#                         "LLAMA_GRETYPE_CHAR_ALT without preceding char: " +
+#                         std::to_string(rule_id) + "," + std::to_string(i));
+#                 }
+#                 print_grammar_char(file, elem.value);
+#                 break;
+#             case LLAMA_GRETYPE_CHAR_ANY:
+#                 fprintf(file, ".");
+#                 break;
+#         }
+#         if (is_char_element(elem)) {
+#             switch (rule[i + 1].type) {
+#                 case LLAMA_GRETYPE_CHAR_ALT:
+#                 case LLAMA_GRETYPE_CHAR_RNG_UPPER:
+#                 case LLAMA_GRETYPE_CHAR_ANY:
+#                     break;
+#                 default:
+#                     fprintf(file, "] ");
+#             }
+#         }
+#     }
+#     fprintf(file, "\n");
+# }
 def print_rule(
     file: typing.TextIO,
     rule_id: int,
@@ -394,7 +830,6 @@ def print_grammar(file: typing.TextIO, state: ParseState) -> None:
         print(f"\nerror printing grammar: {err}", file=file)
         raise err
 
-import ctypes
 
 class LlamaGrammar:
     def __init__(self, parse_state: ParseState):
@@ -406,7 +841,7 @@ class LlamaGrammar:
 
         self._element_lists = [
             [
-                llama_cpp.llama_grammar_element(ctypes.c_int(elem.type.value), ctypes.c_uint32(elem.value))
+                llama_cpp.llama_grammar_element(ctypes.c_int(elem.type), ctypes.c_uint32(elem.value))
                 for elem in subvector
             ]
             for subvector in self._grammar_rules
@@ -455,6 +890,7 @@ class LlamaGrammar:
     @classmethod
     def from_string(cls, grammar: str, verbose: bool = True) -> "LlamaGrammar":
         parsed_grammar = parse(grammar)
+        print_grammar(file=sys.stdout, state=parsed_grammar)
         return cls(parsed_grammar)
 
     @classmethod
