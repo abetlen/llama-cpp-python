@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.87]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@be55695eff44784a141a863f273661a6bce63dfc
+- fix: Include all llama.cpp source files and subdirectories by @abetlen in 9cad5714ae6e7c250af8d0bbb179f631368c928b
+- feat(ci): Re-build wheel index automatically when releases are created by @abetlen in 198f47dc1bd202fd2b71b29e041a9f33fe40bfad
+
+## [0.2.86]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@398ede5efeb07b9adf9fbda7ea63f630d476a792
+- feat: Ported back new grammar changes from C++ to Python implementation by @ExtReMLapin in (#1637)
+- fix: llama_grammar_accept_token arg order by @tc-wolf in (#1649)
+
 ## [0.2.85]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@398ede5efeb07b9adf9fbda7ea63f630d476a792
