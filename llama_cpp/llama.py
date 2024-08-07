@@ -2160,7 +2160,7 @@ class Llama:
 
         files = [
             file["name"] if isinstance(file, dict) else file
-            for file in hffs.ls(repo_id)
+            for file in hffs.ls(repo_id, recursive=True))
         ]
 
         # split each file into repo_id, subfolder, filename
