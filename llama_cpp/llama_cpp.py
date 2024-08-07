@@ -944,7 +944,7 @@ It might not exist for progress report where '.' is output repeatedly."""
 #     int32_t nthread;                     // number of threads to use for quantizing, if <=0 will use std::thread::hardware_concurrency()
 #     enum llama_ftype ftype;              // quantize to this llama_ftype
 #     enum ggml_type output_tensor_type;   // output tensor type
-#     enum ggml_type token_embedding_type; // itoken embeddings tensor type
+#     enum ggml_type token_embedding_type; // token embeddings tensor type
 #     bool allow_requantize;               // allow quantizing non-f32/f16 tensors
 #     bool quantize_output_tensor;         // quantize output.weight
 #     bool only_copy;                      // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
@@ -960,7 +960,7 @@ class llama_model_quantize_params(ctypes.Structure):
         nthread (int): number of threads to use for quantizing, if <=0 will use std::thread::hardware_concurrency()
         ftype (int): quantize to this llama_ftype
         output_tensor_type (int): output tensor type
-        token_embedding_type (int): itoken embeddings tensor type
+        token_embedding_type (int): token embeddings tensor type
         allow_requantize (bool): allow quantizing non-f32/f16 tensors
         quantize_output_tensor (bool): quantize output.weight
         only_copy (bool): only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
@@ -3002,7 +3002,7 @@ def llama_grammar_init(
     n_rules: Union[ctypes.c_size_t, int],
     start_rule_index: Union[ctypes.c_size_t, int],
     /,
-) -> llama_grammar_p:
+) -> Optional[llama_grammar_p]:
     """Initialize a grammar from a set of rules."""
     ...
 
