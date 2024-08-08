@@ -890,7 +890,8 @@ class LlamaGrammar:
     @classmethod
     def from_string(cls, grammar: str, verbose: bool = True) -> "LlamaGrammar":
         parsed_grammar = parse(grammar)
-        print_grammar(file=sys.stdout, state=parsed_grammar)
+        if verbose:
+            print_grammar(file=sys.stdout, state=parsed_grammar)
         return cls(parsed_grammar)
 
     @classmethod
