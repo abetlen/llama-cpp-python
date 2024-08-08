@@ -1,9 +1,11 @@
 name: Wheels Index
 
 on:
-  # Trigger on any new release
-  release:
-    types: [published]
+  # Trigger on new release
+  workflow_run:
+    workflows: ["Release", "Build Wheels (CUDA)", "Build Wheels (Metal)"]
+    types:
+      - completed
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
