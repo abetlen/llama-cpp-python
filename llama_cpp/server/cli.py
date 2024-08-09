@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import argparse
-
-from typing import List, Literal, Union, Any, Type, TypeVar
+from typing import Any, List, Literal, Type, TypeVar, Union
 
 from pydantic import BaseModel
 
@@ -93,5 +92,5 @@ def parse_model_from_args(model: T, args: argparse.Namespace) -> T:
             k: v
             for k, v in vars(args).items()
             if v is not None and k in model.model_fields
-        }
+        },
     )

@@ -1,5 +1,8 @@
 #!/bin/python
-import sys, os, datetime
+import datetime
+import os
+import sys
+
 from common import GptParams
 from low_level_api_chat_cpp import LLaMAInteract
 
@@ -48,7 +51,7 @@ The transcript only includes text, it does not include markup like HTML and Mark
 {USER_NAME}: What time is it?
 {AI_NAME}: It is {DATE_TIME}.
 {USER_NAME}:""" + " ".join(
-    sys.argv[1:]
+    sys.argv[1:],
 )
 
 print("Loading model...")

@@ -1,49 +1,46 @@
 from __future__ import annotations
 
-import os
-import json
-import typing
 import contextlib
-
-from threading import Lock
+import json
+import os
+import typing
 from functools import partial
-from typing import Iterator, List, Optional, Union, Dict
-
-import llama_cpp
+from threading import Lock
+from typing import Dict, Iterator, List, Optional, Union
 
 import anyio
 from anyio.streams.memory import MemoryObjectSendStream
-from starlette.concurrency import run_in_threadpool, iterate_in_threadpool
-from fastapi import Depends, FastAPI, APIRouter, Request, HTTPException, status, Body
+from fastapi import APIRouter, Body, Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware import Middleware
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer
 from sse_starlette.sse import EventSourceResponse
-from starlette_context.plugins import RequestIdPlugin  # type: ignore
+from starlette.concurrency import iterate_in_threadpool, run_in_threadpool
 from starlette_context.middleware import RawContextMiddleware
+from starlette_context.plugins import RequestIdPlugin  # type: ignore
 
+import llama_cpp
+from llama_cpp.server.errors import RouteErrorHandler
 from llama_cpp.server.model import (
     LlamaProxy,
 )
 from llama_cpp.server.settings import (
     ConfigFileSettings,
-    Settings,
     ModelSettings,
     ServerSettings,
+    Settings,
 )
 from llama_cpp.server.types import (
+    CreateChatCompletionRequest,
     CreateCompletionRequest,
     CreateEmbeddingRequest,
-    CreateChatCompletionRequest,
-    ModelList,
-    TokenizeInputRequest,
-    TokenizeInputResponse,
-    TokenizeInputCountResponse,
     DetokenizeInputRequest,
     DetokenizeInputResponse,
+    ModelList,
+    TokenizeInputCountResponse,
+    TokenizeInputRequest,
+    TokenizeInputResponse,
 )
-from llama_cpp.server.errors import RouteErrorHandler
-
 
 router = APIRouter(route_class=RouteErrorHandler)
 
@@ -112,7 +109,7 @@ def create_app(
                 import yaml
 
                 config_file_settings = ConfigFileSettings.model_validate_json(
-                    json.dumps(yaml.safe_load(f))
+                    json.dumps(yaml.safe_load(f)),
                 )
             else:
                 config_file_settings = ConfigFileSettings.model_validate_json(f.read())
@@ -150,7 +147,7 @@ def create_app(
     set_llama_proxy(model_settings=model_settings)
 
     if server_settings.disable_ping_events:
-        set_ping_message_factory(lambda: bytes())
+        set_ping_message_factory(lambda: b"")
 
     return app
 
@@ -239,21 +236,21 @@ openai_v1_tag = "OpenAI V1"
                 "application/json": {
                     "schema": {
                         "anyOf": [
-                            {"$ref": "#/components/schemas/CreateCompletionResponse"}
+                            {"$ref": "#/components/schemas/CreateCompletionResponse"},
                         ],
                         "title": "Completion response, when stream=False",
-                    }
+                    },
                 },
                 "text/event-stream": {
                     "schema": {
                         "type": "string",
                         "title": "Server Side Streaming response, when stream=True. "
-                        + "See SSE format: https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events#Event_stream_format",  # noqa: E501
+                        + "See SSE format: https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events#Event_stream_format",
                         "example": """data: {... see CreateCompletionResponse ...} \\n\\n data: ... \\n\\n ... data: [DONE]""",
-                    }
+                    },
                 },
             },
-        }
+        },
     },
     tags=[openai_v1_tag],
 )
@@ -269,7 +266,7 @@ async def create_completion(
 ) -> llama_cpp.Completion:
     exit_stack = contextlib.ExitStack()
     llama_proxy = await run_in_threadpool(
-        lambda: exit_stack.enter_context(contextlib.contextmanager(get_llama_proxy)())
+        lambda: exit_stack.enter_context(contextlib.contextmanager(get_llama_proxy)()),
     )
     if llama_proxy is None:
         raise HTTPException(
@@ -283,7 +280,7 @@ async def create_completion(
     llama = llama_proxy(
         body.model
         if request.url.path != "/v1/engines/copilot-codex/completions"
-        else "copilot-codex"
+        else "copilot-codex",
     )
 
     exclude = {
@@ -307,7 +304,7 @@ async def create_completion(
 
     if body.min_tokens > 0:
         _min_tokens_logits_processor = llama_cpp.LogitsProcessorList(
-            [llama_cpp.MinTokensLogitsProcessor(body.min_tokens, llama.token_eos())]
+            [llama_cpp.MinTokensLogitsProcessor(body.min_tokens, llama.token_eos())],
         )
         if "logits_processor" not in kwargs:
             kwargs["logits_processor"] = _min_tokens_logits_processor
@@ -343,8 +340,7 @@ async def create_completion(
             sep="\n",
             ping_message_factory=_ping_message_factory,
         )
-    else:
-        return iterator_or_completion
+    return iterator_or_completion
 
 
 @router.post(
@@ -376,22 +372,22 @@ async def create_embedding(
                     "schema": {
                         "anyOf": [
                             {
-                                "$ref": "#/components/schemas/CreateChatCompletionResponse"
-                            }
+                                "$ref": "#/components/schemas/CreateChatCompletionResponse",
+                            },
                         ],
                         "title": "Completion response, when stream=False",
-                    }
+                    },
                 },
                 "text/event-stream": {
                     "schema": {
                         "type": "string",
                         "title": "Server Side Streaming response, when stream=True"
-                        + "See SSE format: https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events#Event_stream_format",  # noqa: E501
+                        + "See SSE format: https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events#Event_stream_format",
                         "example": """data: {... see CreateChatCompletionResponse ...} \\n\\n data: ... \\n\\n ... data: [DONE]""",
-                    }
+                    },
                 },
             },
-        }
+        },
     },
     tags=[openai_v1_tag],
 )
@@ -443,7 +439,7 @@ async def create_chat_completion(
                                     "required": ["name", "age"],
                                 },
                             },
-                        }
+                        },
                     ],
                     "tool_choice": {
                         "type": "function",
@@ -465,7 +461,7 @@ async def create_chat_completion(
                     "top_logprobs": 10,
                 },
             },
-        }
+        },
     ),
 ) -> llama_cpp.ChatCompletion:
     # This is a workaround for an issue in FastAPI dependencies
@@ -474,7 +470,7 @@ async def create_chat_completion(
     # https://github.com/tiangolo/fastapi/issues/11143
     exit_stack = contextlib.ExitStack()
     llama_proxy = await run_in_threadpool(
-        lambda: exit_stack.enter_context(contextlib.contextmanager(get_llama_proxy)())
+        lambda: exit_stack.enter_context(contextlib.contextmanager(get_llama_proxy)()),
     )
     if llama_proxy is None:
         raise HTTPException(
@@ -501,7 +497,7 @@ async def create_chat_completion(
 
     if body.min_tokens > 0:
         _min_tokens_logits_processor = llama_cpp.LogitsProcessorList(
-            [llama_cpp.MinTokensLogitsProcessor(body.min_tokens, llama.token_eos())]
+            [llama_cpp.MinTokensLogitsProcessor(body.min_tokens, llama.token_eos())],
         )
         if "logits_processor" not in kwargs:
             kwargs["logits_processor"] = _min_tokens_logits_processor
@@ -509,7 +505,7 @@ async def create_chat_completion(
             kwargs["logits_processor"].extend(_min_tokens_logits_processor)
 
     iterator_or_completion: Union[
-        llama_cpp.ChatCompletion, Iterator[llama_cpp.ChatCompletionChunk]
+        llama_cpp.ChatCompletion, Iterator[llama_cpp.ChatCompletionChunk],
     ] = await run_in_threadpool(llama.create_chat_completion, **kwargs)
 
     if isinstance(iterator_or_completion, Iterator):
@@ -536,9 +532,8 @@ async def create_chat_completion(
             sep="\n",
             ping_message_factory=_ping_message_factory,
         )
-    else:
-        exit_stack.close()
-        return iterator_or_completion
+    exit_stack.close()
+    return iterator_or_completion
 
 
 @router.get(

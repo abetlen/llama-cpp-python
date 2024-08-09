@@ -1,5 +1,7 @@
 #!/bin/python
-import sys, os
+import os
+import sys
+
 from common import GptParams
 from low_level_api_chat_cpp import LLaMAInteract
 
@@ -35,7 +37,7 @@ The conversation is only through text, so {AI_NAME} can't see {USER_NAME}'s face
 {AI_NAME}: /think I wonder what {USER_NAME} likes to do in his free time? I should ask him about that!
 {AI_NAME}: What do you like to do in your free time? ^_^
 {USER_NAME}:""" + " ".join(
-    sys.argv[1:]
+    sys.argv[1:],
 )
 
 print("Loading model...")
