@@ -1523,7 +1523,8 @@ class Llama:
                 if self.verbose:
                     print("Llama._create_completion: cache save", file=sys.stderr)
                 self.cache[prompt_tokens + completion_tokens] = self.save_state()
-                print("Llama._create_completion: cache saved", file=sys.stderr)
+                if self.verbose:
+                    print("Llama._create_completion: cache saved", file=sys.stderr)
             return
 
         if self.cache:
