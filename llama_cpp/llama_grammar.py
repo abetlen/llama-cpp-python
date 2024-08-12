@@ -1,6 +1,7 @@
 """Python implementation of llama grammar parser directly translated from C++ source file in vendor/llama.cpp/common/grammar-parser.cpp."""
 
 # flake8: noqa
+from pathlib import Path
 import sys
 import ctypes
 import enum
@@ -893,6 +894,23 @@ class LlamaGrammar:
         if verbose:
             print_grammar(file=sys.stdout, state=parsed_grammar)
         return cls(parsed_grammar)
+    
+    @classmethod
+    def from_file(cls, file: Union[str, Path], verbose: bool = True) -> "LlamaGrammar":
+        try:
+            with open(file) as f:
+                grammar = f.read()
+        except Exception as err:
+            raise Exception(
+                f"{cls.from_file.__name__}: error reading grammar file: {err}"
+            )
+
+        if grammar:
+            return cls.from_string(grammar, verbose=verbose)
+
+        raise ValueError(
+            f"{cls.from_file.__name__}: error parsing grammar file: params_grammer is empty"
+        )
 
     @classmethod
     def from_json_schema(cls, json_schema: str, verbose: bool = True) -> "LlamaGrammar":
