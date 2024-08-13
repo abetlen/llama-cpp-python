@@ -156,10 +156,13 @@ class ChatCompletionFunctionCallOption(TypedDict):
 
 
 class ChatCompletionRequestResponseFormat(TypedDict):
-    type: Literal["text", "json_object"]
+    type: Literal["text", "json_object", "json_schema"]
     schema: NotRequired[
         JsonType
     ]  # https://docs.endpoints.anyscale.com/guides/json_mode/
+    json_schema: NotRequired[
+        JsonType
+    ]
 
 
 class ChatCompletionRequestMessageContentPartText(TypedDict):
