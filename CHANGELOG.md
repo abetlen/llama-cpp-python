@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.88]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@fc4ca27b25464a11b3b86c9dbb5b6ed6065965c2
+- fix: only print 'cache saved' in verbose mode by @lsorber in #1668 
+- fix: Added back from_file method to LlamaGrammar by @ExtReMLapin in #1673
+- fix: grammar prints on each call by @abetlen in 0998ea0deea076a547d54bd598d6b413b588ee2b
+- feat: Enable recursive search of HFFS.ls when using from_pretrained by @benHeidabetlen in #1656
+- feat: Add more detailed log for prefix-match by @xu-song in #1659
+
 ## [0.2.87]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@be55695eff44784a141a863f273661a6bce63dfc
