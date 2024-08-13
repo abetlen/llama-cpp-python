@@ -582,7 +582,7 @@ def chat_formatter_to_chat_completion_handler(
         if result.stopping_criteria is not None:
             stopping_criteria = result.stopping_criteria
 
-        if response_format is not None and response_format["type"] == "json_object":
+        if response_format is not None:
             grammar = _grammar_for_response_format(
                 response_format, verbose=llama.verbose
             )
@@ -928,6 +928,13 @@ def _grammar_for_response_format(
     response_format: llama_types.ChatCompletionRequestResponseFormat,
     verbose: bool = False,
 ):
+
+    # convert openai type 'json_schema' to llama_cpp type 'json_object':
+    if response_format['type'] == "json_schema":
+        response_format['type'] = "json_object"
+        response_format['schema'] = response_format['json_schema']['schema']
+        del response_format['json_schema']
+
     if response_format["type"] != "json_object":
         return None
 
@@ -2830,7 +2837,7 @@ class Llava15ChatHandler:
         # Get prompt tokens to avoid a cache miss
         prompt = llama.input_ids[: llama.n_tokens].tolist()
 
-        if response_format is not None and response_format["type"] == "json_object":
+        if response_format is not None:
             grammar = _grammar_for_response_format(response_format)
 
         # Convert legacy functions to tools
@@ -3442,7 +3449,7 @@ def chatml_function_calling(
             add_generation_prompt=True,
         )
 
-        if response_format is not None and response_format["type"] == "json_object":
+        if response_format is not None:
             grammar = _grammar_for_response_format(response_format)
 
         return _convert_completion_to_chat(
