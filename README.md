@@ -21,6 +21,7 @@ This package provides:
     - [LangChain compatibility](https://python.langchain.com/docs/integrations/llms/llamacpp)
     - [LlamaIndex compatibility](https://docs.llamaindex.ai/en/stable/examples/llm/llama_2_llama_cpp.html)
     - Chat with kernel memory
+    - LlamaCpp Python UI
 - OpenAI compatible web server
     - [Local Copilot replacement](https://llama-cpp-python.readthedocs.io/en/latest/server/#code-completion)
     - [Function Calling support](https://llama-cpp-python.readthedocs.io/en/latest/server/#function-calling)
@@ -824,6 +825,21 @@ Check out the [examples folder](examples/low_level_api) for more examples of usi
 
 Documentation is available via [https://llama-cpp-python.readthedocs.io/](https://llama-cpp-python.readthedocs.io/).
 If you find any issues with the documentation, please open an issue or submit a PR.
+
+## UI's
+# SeKernel_for_LLM_UI
+This is the repository for the UI for the SeKernel_for_LLM module
+
+## How to:
+- Clone the repo
+- Ensure that you have llama-cpp-python installed and running
+- Add your model to the `kernel.py` script
+- Launch the UI by running `python sekernel_ui.py`
+-- Please note : Only internet-connected chat is supported. If you have the skills, you can checkout the plugins.py module to add more functionality to your UI.
+
+## Short-films
+https://github.com/user-attachments/assets/a6e75136-bd3f-4960-8791-6f83094f2123
+
 
 ## Development
 
