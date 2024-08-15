@@ -1,0 +1,127 @@
+# Exclude a variety of commonly ignored directories.
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".ipynb",
+    ".ipynb_checkpoints",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pyenv",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".vscode",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "venv",
+]
+
+# Same as Black.
+line-length = 120
+indent-width = 4
+
+# Assume Python 3.12
+target-version = "py312"
+
+[lint]
+preview = true
+explicit-preview-rules = true
+# Enable Pyflakes (`F`) and a subset of the pycodestyle (`E`)  codes by default.
+select = [
+   "A",     # flake8-builtins
+   "AIR",   # Airflow
+   "ANN",   # flake8-annotations
+   "ARG",   # flake8-unused-arguments
+   "ASYNC", # flake8-async
+   "B",     # flake8-bugbear  
+   "BLE",   # flake8-blind-except
+   "C4",    # flake8-comprehensions
+   "C90",   # McCabe cyclomatic complexity
+   "COM",   # flake8-commas
+   "CPY",   # flake8-copyright
+   # "D",     # pydocstyle
+   # "DJ",    # flake8-django
+   # "DOC",   # pydoclint
+   "DTZ",   # flake8-datetimez
+   "E",     # pycodestyle
+   "EM",    # flake8-errmsg
+   "ERA",   # eradicate
+   # "EXE",   # flake8-executable
+   "F",     # Pyflakes
+   "FA",    # flake8-future-annotations
+   "FAST",  # FastAPI
+   "FBT",   # flake8-boolean-trap
+   "FIX",   # flake8-pp
+   "FLY",   # flynt
+   "FURB",  # refurb
+   "G",     # flake8-logging-format
+   "I",     # isort
+   "ICN",   # flake8-import-conventions
+   "INP",   # flake8-no-pep420
+   "INT",   # flake8-gettext
+   "ISC",   # flake8-implicit-str-concat
+   "LOG",   # flake8-logging
+   "N",     # pep8-naming
+   "NPY",   # NumPy-specific rules
+   # "PD",    # pandas-vet
+   "PERF",  # Perflint
+   "PGH",   # pygrep-hooks
+   "PIE",   # flake8-pie
+   "PL",    # Pylint
+   "PT",    # flake8-pytest-style
+   "PTH",   # flake8-use-pathlib
+   "PYI",   # flake8-pyi
+   "Q",     # flake8-quotes
+   "R",     # Refactor
+   "RET",   # flake8-return
+   "RSE",   # flake8-raise
+   "RUF",   # Ruff-specific rules
+   "S",     # flake8-bandit
+   "SIM",   # flake8-simplify
+   "SLF",   # flake8-self
+   "SLOT",  # flake8-slots
+   "T10",   # flake8-debugger
+   "T20",   # flake8-print
+   "TCH",   # flake8-type-checking
+   "TD",    # flake8-todos
+   "TID",   # flake8-tidy-imports
+   "TRY",   # tryceratops
+   "UP",    # pyupgrade
+   "W",     # pycodestyle
+   "YTT",   # flake8-2020
+]
+ignore = ["COM812","E501","F401","ISC001",]
+
+# Allow fix for all enabled rules (when `--fix`) is provided.
+fixable = ["ALL"]
+unfixable = []
+
+# Allow unused variables when underscore-prefixed.
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[format]
+preview = true
+# Like Black, use double quotes for strings.
+quote-style = "double"
+
+# Like Black, indent with spaces, rather than tabs.
+indent-style = "space"
+
+# Like Black, respect magic trailing commas.
+skip-magic-trailing-comma = false
+
+# Like Black, automatically detect the appropriate line ending.
+line-ending = "auto"
