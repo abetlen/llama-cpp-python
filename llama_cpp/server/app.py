@@ -4,10 +4,9 @@ import contextlib
 import json
 import os
 import typing
-from collections.abc import Iterator
 from functools import partial
 from threading import Lock
-from typing import Dict, List, Optional, Union
+from typing import Dict, Iterator, List, Optional, Union
 
 import anyio
 from anyio.streams.memory import MemoryObjectSendStream
@@ -45,7 +44,7 @@ from llama_cpp.server.types import (
 
 router = APIRouter(route_class=RouteErrorHandler)
 
-_server_settings: ServerSettings | None = None
+_server_settings: Optional[ServerSettings] = None
 
 
 def set_server_settings(server_settings: ServerSettings):
@@ -57,13 +56,13 @@ def get_server_settings():
     yield _server_settings
 
 
-_llama_proxy: LlamaProxy | None = None
+_llama_proxy: Optional[LlamaProxy] = None
 
 llama_outer_lock = Lock()
 llama_inner_lock = Lock()
 
 
-def set_llama_proxy(model_settings: list[ModelSettings]):
+def set_llama_proxy(model_settings: List[ModelSettings]):
     global _llama_proxy
     _llama_proxy = LlamaProxy(models=model_settings)
 
@@ -87,7 +86,7 @@ def get_llama_proxy():
             llama_outer_lock.release()
 
 
-_ping_message_factory: typing.Callable[[], bytes] | None = None
+_ping_message_factory: typing.Optional[typing.Callable[[], bytes]] = None
 
 
 def set_ping_message_factory(factory: typing.Callable[[], bytes]):
@@ -98,7 +97,7 @@ def set_ping_message_factory(factory: typing.Callable[[], bytes]):
 def create_app(
     settings: Settings | None = None,
     server_settings: ServerSettings | None = None,
-    model_settings: list[ModelSettings] | None = None,
+    model_settings: List[ModelSettings] | None = None,
 ):
     config_file = os.environ.get("CONFIG_FILE", None)
     if config_file is not None:
@@ -110,7 +109,7 @@ def create_app(
                 import yaml
 
                 config_file_settings = ConfigFileSettings.model_validate_json(
-                    json.dumps(yaml.safe_load(f)),
+                    json.dumps(yaml.safe_load(f))
                 )
             else:
                 config_file_settings = ConfigFileSettings.model_validate_json(f.read())
@@ -157,7 +156,7 @@ async def get_event_publisher(
     request: Request,
     inner_send_chan: MemoryObjectSendStream[typing.Any],
     iterator: Iterator[typing.Any],
-    on_complete: typing.Callable[[], None] | None = None,
+    on_complete: typing.Optional[typing.Callable[[], None]] = None,
 ):
     server_settings = next(get_server_settings())
     interrupt_requests = (
@@ -185,9 +184,9 @@ async def get_event_publisher(
 
 def _logit_bias_tokens_to_input_ids(
     llama: llama_cpp.Llama,
-    logit_bias: dict[str, float],
-) -> dict[str, float]:
-    to_bias: dict[str, float] = {}
+    logit_bias: Dict[str, float],
+) -> Dict[str, float]:
+    to_bias: Dict[str, float] = {}
     for token, score in logit_bias.items():
         token = token.encode("utf-8")
         for input_id in llama.tokenize(token, add_bos=False, special=True):
@@ -201,7 +200,7 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 async def authenticate(
     settings: Settings = Depends(get_server_settings),
-    authorization: str | None = Depends(bearer_scheme),
+    authorization: Optional[str] = Depends(bearer_scheme),
 ):
     # Skip API key check if it's not set in settings
     if settings.api_key is None:
@@ -237,10 +236,10 @@ openai_v1_tag = "OpenAI V1"
                 "application/json": {
                     "schema": {
                         "anyOf": [
-                            {"$ref": "#/components/schemas/CreateCompletionResponse"},
+                            {"$ref": "#/components/schemas/CreateCompletionResponse"}
                         ],
                         "title": "Completion response, when stream=False",
-                    },
+                    }
                 },
                 "text/event-stream": {
                     "schema": {
@@ -248,10 +247,10 @@ openai_v1_tag = "OpenAI V1"
                         "title": "Server Side Streaming response, when stream=True. "
                         + "See SSE format: https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events#Event_stream_format",
                         "example": """data: {... see CreateCompletionResponse ...} \\n\\n data: ... \\n\\n ... data: [DONE]""",
-                    },
+                    }
                 },
             },
-        },
+        }
     },
     tags=[openai_v1_tag],
 )
@@ -267,7 +266,7 @@ async def create_completion(
 ) -> llama_cpp.Completion:
     exit_stack = contextlib.ExitStack()
     llama_proxy = await run_in_threadpool(
-        lambda: exit_stack.enter_context(contextlib.contextmanager(get_llama_proxy)()),
+        lambda: exit_stack.enter_context(contextlib.contextmanager(get_llama_proxy)())
     )
     if llama_proxy is None:
         raise HTTPException(
@@ -281,7 +280,7 @@ async def create_completion(
     llama = llama_proxy(
         body.model
         if request.url.path != "/v1/engines/copilot-codex/completions"
-        else "copilot-codex",
+        else "copilot-codex"
     )
 
     exclude = {
@@ -305,14 +304,17 @@ async def create_completion(
 
     if body.min_tokens > 0:
         _min_tokens_logits_processor = llama_cpp.LogitsProcessorList(
-            [llama_cpp.MinTokensLogitsProcessor(body.min_tokens, llama.token_eos())],
+            [llama_cpp.MinTokensLogitsProcessor(body.min_tokens, llama.token_eos())]
         )
         if "logits_processor" not in kwargs:
             kwargs["logits_processor"] = _min_tokens_logits_processor
         else:
             kwargs["logits_processor"].extend(_min_tokens_logits_processor)
 
-    iterator_or_completion: llama_cpp.CreateCompletionResponse | Iterator[llama_cpp.CreateCompletionStreamResponse] = await run_in_threadpool(llama, **kwargs)
+    iterator_or_completion: Union[
+        llama_cpp.CreateCompletionResponse,
+        Iterator[llama_cpp.CreateCompletionStreamResponse],
+    ] = await run_in_threadpool(llama, **kwargs)
 
     if isinstance(iterator_or_completion, Iterator):
         # EAFP: It's easier to ask for forgiveness than permission
@@ -338,7 +340,8 @@ async def create_completion(
             sep="\n",
             ping_message_factory=_ping_message_factory,
         )
-    return iterator_or_completion
+    else:
+        return iterator_or_completion
 
 
 @router.post(
@@ -370,11 +373,11 @@ async def create_embedding(
                     "schema": {
                         "anyOf": [
                             {
-                                "$ref": "#/components/schemas/CreateChatCompletionResponse",
-                            },
+                                "$ref": "#/components/schemas/CreateChatCompletionResponse"
+                            }
                         ],
                         "title": "Completion response, when stream=False",
-                    },
+                    }
                 },
                 "text/event-stream": {
                     "schema": {
@@ -382,10 +385,10 @@ async def create_embedding(
                         "title": "Server Side Streaming response, when stream=True"
                         + "See SSE format: https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events#Event_stream_format",
                         "example": """data: {... see CreateChatCompletionResponse ...} \\n\\n data: ... \\n\\n ... data: [DONE]""",
-                    },
+                    }
                 },
             },
-        },
+        }
     },
     tags=[openai_v1_tag],
 )
@@ -437,7 +440,7 @@ async def create_chat_completion(
                                     "required": ["name", "age"],
                                 },
                             },
-                        },
+                        }
                     ],
                     "tool_choice": {
                         "type": "function",
@@ -459,7 +462,7 @@ async def create_chat_completion(
                     "top_logprobs": 10,
                 },
             },
-        },
+        }
     ),
 ) -> llama_cpp.ChatCompletion:
     # This is a workaround for an issue in FastAPI dependencies
@@ -468,7 +471,7 @@ async def create_chat_completion(
     # https://github.com/tiangolo/fastapi/issues/11143
     exit_stack = contextlib.ExitStack()
     llama_proxy = await run_in_threadpool(
-        lambda: exit_stack.enter_context(contextlib.contextmanager(get_llama_proxy)()),
+        lambda: exit_stack.enter_context(contextlib.contextmanager(get_llama_proxy)())
     )
     if llama_proxy is None:
         raise HTTPException(
@@ -495,14 +498,16 @@ async def create_chat_completion(
 
     if body.min_tokens > 0:
         _min_tokens_logits_processor = llama_cpp.LogitsProcessorList(
-            [llama_cpp.MinTokensLogitsProcessor(body.min_tokens, llama.token_eos())],
+            [llama_cpp.MinTokensLogitsProcessor(body.min_tokens, llama.token_eos())]
         )
         if "logits_processor" not in kwargs:
             kwargs["logits_processor"] = _min_tokens_logits_processor
         else:
             kwargs["logits_processor"].extend(_min_tokens_logits_processor)
 
-    iterator_or_completion: llama_cpp.ChatCompletion | Iterator[llama_cpp.ChatCompletionChunk] = await run_in_threadpool(llama.create_chat_completion, **kwargs)
+    iterator_or_completion: Union[
+        llama_cpp.ChatCompletion, Iterator[llama_cpp.ChatCompletionChunk]
+    ] = await run_in_threadpool(llama.create_chat_completion, **kwargs)
 
     if isinstance(iterator_or_completion, Iterator):
         # EAFP: It's easier to ask for forgiveness than permission
@@ -528,8 +533,9 @@ async def create_chat_completion(
             sep="\n",
             ping_message_factory=_ping_message_factory,
         )
-    exit_stack.close()
-    return iterator_or_completion
+    else:
+        exit_stack.close()
+        return iterator_or_completion
 
 
 @router.get(
