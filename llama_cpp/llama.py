@@ -1058,13 +1058,13 @@ class Llama:
 
         if (
             (isinstance(prompt, list) and suffix is None)
-            or self._model.add_bos_token() == 0
+            or not self._model.add_bos_token()
             or bos_tokens[:1] == [-1]
         ):
             bos_tokens = []
 
         if (isinstance(prompt, list) and suffix is None) or (
-            self._model.add_eos_token() != 1 and sep_token_id == -1
+            not self._model.add_eos_token() and sep_token_id == -1
         ):
             eos_tokens = []
 
