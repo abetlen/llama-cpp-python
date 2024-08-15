@@ -8,6 +8,7 @@ import random
 import string
 
 from contextlib import ExitStack
+from datetime import datetime
 from typing import Any, Dict, Iterator, List, Literal, Optional, Tuple, Union, Protocol, cast
 
 import jinja2
@@ -195,8 +196,10 @@ class Jinja2ChatFormatter(ChatFormatter):
         environment = ImmutableSandboxedEnvironment(
             trim_blocks=True,
             lstrip_blocks=True,
+            extensions=[jinja2.ext.loopcontrols],
         )
         environment.filters["tojson"] = lambda x, indent=None: json.dumps(x, indent=indent, ensure_ascii=False)
+        environment.globals["strftime"] = lambda format: datetime.now().strftime(format)
         self._environment = environment.from_string(self.template)
 
     def __call__(
