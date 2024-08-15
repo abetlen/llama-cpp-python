@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import multiprocessing
-from typing import Dict, List, Literal, Optional, Self, Union, cast
+from typing import Dict, List, Literal, Optional, Union, cast
+from typing_extensions import Self
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings
