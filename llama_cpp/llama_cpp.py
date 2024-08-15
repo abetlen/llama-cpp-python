@@ -13,11 +13,10 @@ from typing import (
     List,
     NewType,
     Optional,
-    TypeAlias,
     TypeVar,
     Union,
 )
-
+from typing_extensions import TypeAlias
 
 # Load the library
 def _load_shared_library(lib_base_name: str):
