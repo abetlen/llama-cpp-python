@@ -5,6 +5,7 @@ import functools
 import os
 import pathlib
 import sys
+from collections.abc import Callable
 from ctypes import (
     POINTER,
     Structure,
@@ -19,16 +20,14 @@ from ctypes import (
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
     Generic,
     List,
     NewType,
     Optional,
+    TypeAlias,
     TypeVar,
     Union,
 )
-
-from typing_extensions import TypeAlias
 
 from llama_cpp import llama_cpp
 
@@ -39,7 +38,7 @@ def _load_shared_library(lib_base_name: str):
     _base_path = pathlib.Path(os.path.abspath(os.path.dirname(__file__))) / "lib"
     # Searching for the library in the current directory under the name "libllama" (default name
     # for llamacpp) and "llama" (default name for this repo)
-    _lib_paths: List[pathlib.Path] = []
+    _lib_paths: list[pathlib.Path] = []
     # Determine the file extension based on the platform
     if sys.platform.startswith("linux"):
         _lib_paths += [
@@ -106,9 +105,7 @@ if TYPE_CHECKING:
     class CtypesRef(Generic[CtypesCData]):
         pass
 
-    CtypesPointerOrRef: TypeAlias = Union[
-        CtypesPointer[CtypesCData], CtypesRef[CtypesCData],
-    ]
+    CtypesPointerOrRef: TypeAlias = CtypesPointer[CtypesCData] | CtypesRef[CtypesCData]
 
     CtypesFuncPointer: TypeAlias = ctypes._FuncPointer  # type: ignore
 
@@ -117,7 +114,7 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 def ctypes_function_for_shared_library(lib: ctypes.CDLL):
     def ctypes_function(
-        name: str, argtypes: List[Any], restype: Any, enabled: bool = True,
+        name: str, argtypes: list[Any], restype: Any, enabled: bool = True,
     ):
         def decorator(f: F) -> F:
             if enabled:
@@ -178,9 +175,9 @@ def llava_validate_embed_size(
 )
 def llava_image_embed_make_with_bytes(
     ctx_clip: clip_ctx_p,
-    n_threads: Union[c_int, int],
+    n_threads: c_int | int,
     image_bytes: CtypesArray[c_uint8],
-    image_bytes_length: Union[c_int, int],
+    image_bytes_length: c_int | int,
     /,
 ) -> _Pointer[llava_image_embed]: ...
 
@@ -193,7 +190,7 @@ def llava_image_embed_make_with_bytes(
     POINTER(llava_image_embed),
 )
 def llava_image_embed_make_with_filename(
-    ctx_clip: clip_ctx_p, n_threads: Union[c_int, int], image_path: bytes, /,
+    ctx_clip: clip_ctx_p, n_threads: c_int | int, image_path: bytes, /,
 ) -> _Pointer[llava_image_embed]: ...
 
 
@@ -218,7 +215,7 @@ def llava_image_embed_free(embed: _Pointer[llava_image_embed], /): ...
 def llava_eval_image_embed(
     ctx_llama: llama_cpp.llama_context_p,
     embed: _Pointer[llava_image_embed],
-    n_batch: Union[c_int, int],
+    n_batch: c_int | int,
     n_past: _Pointer[c_int],
     /,
 ) -> bool: ...
@@ -233,8 +230,8 @@ def llava_eval_image_embed(
 # CLIP_API struct clip_ctx * clip_model_load    (const char * fname, int verbosity);
 @ctypes_function("clip_model_load", [c_char_p, c_int], clip_ctx_p_ctypes)
 def clip_model_load(
-    fname: bytes, verbosity: Union[c_int, int], /,
-) -> Optional[clip_ctx_p]: ...
+    fname: bytes, verbosity: c_int | int, /,
+) -> clip_ctx_p | None: ...
 
 
 # /** free mmproj model */

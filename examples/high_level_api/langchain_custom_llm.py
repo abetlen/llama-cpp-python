@@ -1,5 +1,6 @@
 import argparse
-from typing import Any, List, Mapping, Optional
+from collections.abc import Mapping
+from typing import Any, List, Optional
 
 from langchain.llms.base import LLM
 
@@ -19,7 +20,7 @@ class LlamaLLM(LLM):
         llm = Llama(model_path=model_path)
         super().__init__(model_path=model_path, llm=llm, **kwargs)
 
-    def _call(self, prompt: str, stop: Optional[List[str]] = None) -> str:
+    def _call(self, prompt: str, stop: list[str] | None = None) -> str:
         response = self.llm(prompt, stop=stop or [])
         return response["choices"][0]["text"]
 

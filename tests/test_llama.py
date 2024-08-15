@@ -101,7 +101,6 @@ def mock_llama(monkeypatch):
         def mock_kv_cache_clear(ctx: llama_cpp.llama_context_p):
             # Test some basic invariants of this mocking technique
             assert ctx == llama._ctx.ctx, "context does not match mock_llama"
-            return
 
         def mock_kv_cache_seq_rm(
             ctx: llama_cpp.llama_context_p,
@@ -111,7 +110,6 @@ def mock_llama(monkeypatch):
         ):
             # Test some basic invariants of this mocking technique
             assert ctx == llama._ctx.ctx, "context does not match mock_llama"
-            return
 
         def mock_kv_cache_seq_cp(
             ctx: llama_cpp.llama_context_p,
@@ -122,15 +120,13 @@ def mock_llama(monkeypatch):
         ):
             # Test some basic invariants of this mocking technique
             assert ctx == llama._ctx.ctx, "context does not match mock_llama"
-            return
-    
+
         def mock_kv_cache_seq_keep(
             ctx: llama_cpp.llama_context_p,
             seq_id: llama_cpp.llama_seq_id,
         ):
             # Test some basic invariants of this mocking technique
             assert ctx == llama._ctx.ctx, "context does not match mock_llama"
-            return
 
         def mock_kv_cache_seq_add(
             ctx: llama_cpp.llama_context_p,
@@ -140,7 +136,6 @@ def mock_llama(monkeypatch):
         ):
             # Test some basic invariants of this mocking technique
             assert ctx == llama._ctx.ctx, "context does not match mock_llama"
-            return
 
         monkeypatch.setattr("llama_cpp.llama_cpp.llama_kv_cache_clear", mock_kv_cache_clear)
         monkeypatch.setattr("llama_cpp.llama_cpp.llama_kv_cache_seq_rm", mock_kv_cache_seq_rm)
@@ -244,7 +239,8 @@ def test_utf8(mock_llama):
 
 def test_llama_server():
     from fastapi.testclient import TestClient
-    from llama_cpp.server.app import create_app, Settings
+
+    from llama_cpp.server.app import Settings, create_app
 
     settings = Settings(
         model=MODEL,

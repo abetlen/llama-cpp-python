@@ -4,9 +4,10 @@ import contextlib
 import json
 import os
 import typing
+from collections.abc import Iterator
 from functools import partial
 from threading import Lock
-from typing import Dict, Iterator, List, Optional, Union
+from typing import Dict, List, Optional, Union
 
 import anyio
 from anyio.streams.memory import MemoryObjectSendStream
@@ -44,7 +45,7 @@ from llama_cpp.server.types import (
 
 router = APIRouter(route_class=RouteErrorHandler)
 
-_server_settings: Optional[ServerSettings] = None
+_server_settings: ServerSettings | None = None
 
 
 def set_server_settings(server_settings: ServerSettings):
@@ -56,13 +57,13 @@ def get_server_settings():
     yield _server_settings
 
 
-_llama_proxy: Optional[LlamaProxy] = None
+_llama_proxy: LlamaProxy | None = None
 
 llama_outer_lock = Lock()
 llama_inner_lock = Lock()
 
 
-def set_llama_proxy(model_settings: List[ModelSettings]):
+def set_llama_proxy(model_settings: list[ModelSettings]):
     global _llama_proxy
     _llama_proxy = LlamaProxy(models=model_settings)
 
@@ -86,7 +87,7 @@ def get_llama_proxy():
             llama_outer_lock.release()
 
 
-_ping_message_factory: typing.Optional[typing.Callable[[], bytes]] = None
+_ping_message_factory: typing.Callable[[], bytes] | None = None
 
 
 def set_ping_message_factory(factory: typing.Callable[[], bytes]):
@@ -97,7 +98,7 @@ def set_ping_message_factory(factory: typing.Callable[[], bytes]):
 def create_app(
     settings: Settings | None = None,
     server_settings: ServerSettings | None = None,
-    model_settings: List[ModelSettings] | None = None,
+    model_settings: list[ModelSettings] | None = None,
 ):
     config_file = os.environ.get("CONFIG_FILE", None)
     if config_file is not None:
@@ -156,7 +157,7 @@ async def get_event_publisher(
     request: Request,
     inner_send_chan: MemoryObjectSendStream[typing.Any],
     iterator: Iterator[typing.Any],
-    on_complete: typing.Optional[typing.Callable[[], None]] = None,
+    on_complete: typing.Callable[[], None] | None = None,
 ):
     server_settings = next(get_server_settings())
     interrupt_requests = (
@@ -184,9 +185,9 @@ async def get_event_publisher(
 
 def _logit_bias_tokens_to_input_ids(
     llama: llama_cpp.Llama,
-    logit_bias: Dict[str, float],
-) -> Dict[str, float]:
-    to_bias: Dict[str, float] = {}
+    logit_bias: dict[str, float],
+) -> dict[str, float]:
+    to_bias: dict[str, float] = {}
     for token, score in logit_bias.items():
         token = token.encode("utf-8")
         for input_id in llama.tokenize(token, add_bos=False, special=True):
@@ -200,7 +201,7 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 async def authenticate(
     settings: Settings = Depends(get_server_settings),
-    authorization: Optional[str] = Depends(bearer_scheme),
+    authorization: str | None = Depends(bearer_scheme),
 ):
     # Skip API key check if it's not set in settings
     if settings.api_key is None:
@@ -311,10 +312,7 @@ async def create_completion(
         else:
             kwargs["logits_processor"].extend(_min_tokens_logits_processor)
 
-    iterator_or_completion: Union[
-        llama_cpp.CreateCompletionResponse,
-        Iterator[llama_cpp.CreateCompletionStreamResponse],
-    ] = await run_in_threadpool(llama, **kwargs)
+    iterator_or_completion: llama_cpp.CreateCompletionResponse | Iterator[llama_cpp.CreateCompletionStreamResponse] = await run_in_threadpool(llama, **kwargs)
 
     if isinstance(iterator_or_completion, Iterator):
         # EAFP: It's easier to ask for forgiveness than permission
@@ -504,9 +502,7 @@ async def create_chat_completion(
         else:
             kwargs["logits_processor"].extend(_min_tokens_logits_processor)
 
-    iterator_or_completion: Union[
-        llama_cpp.ChatCompletion, Iterator[llama_cpp.ChatCompletionChunk],
-    ] = await run_in_threadpool(llama.create_chat_completion, **kwargs)
+    iterator_or_completion: llama_cpp.ChatCompletion | Iterator[llama_cpp.ChatCompletionChunk] = await run_in_threadpool(llama.create_chat_completion, **kwargs)
 
     if isinstance(iterator_or_completion, Iterator):
         # EAFP: It's easier to ask for forgiveness than permission

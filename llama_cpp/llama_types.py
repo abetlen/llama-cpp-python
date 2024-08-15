@@ -7,14 +7,14 @@ https://github.com/openai/openai-openapi/blob/master/openapi.yaml
 
 """
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Literal, NotRequired, Optional, Union
 
-from typing_extensions import Literal, NotRequired, TypedDict
+from typing_extensions import TypedDict
 
 # NOTE: Defining this correctly using annotations seems to break pydantic validation.
 #       This is a workaround until we can figure out how to do this correctly
 # JsonType = Union[None, int, str, bool, List["JsonType"], Dict[str, "JsonType"]]
-JsonType = Union[None, int, str, bool, List[Any], Dict[str, Any]]
+JsonType = Union[None, int, str, bool, list[Any], dict[str, Any]]
 
 
 class EmbeddingUsage(TypedDict):
@@ -25,28 +25,28 @@ class EmbeddingUsage(TypedDict):
 class Embedding(TypedDict):
     index: int
     object: str
-    embedding: Union[List[float], List[List[float]]]
+    embedding: list[float] | list[list[float]]
 
 
 class CreateEmbeddingResponse(TypedDict):
     object: Literal["list"]
     model: str
-    data: List[Embedding]
+    data: list[Embedding]
     usage: EmbeddingUsage
 
 
 class CompletionLogprobs(TypedDict):
-    text_offset: List[int]
-    token_logprobs: List[Optional[float]]
-    tokens: List[str]
-    top_logprobs: List[Optional[Dict[str, float]]]
+    text_offset: list[int]
+    token_logprobs: list[float | None]
+    tokens: list[str]
+    top_logprobs: list[dict[str, float] | None]
 
 
 class CompletionChoice(TypedDict):
     text: str
     index: int
-    logprobs: Optional[CompletionLogprobs]
-    finish_reason: Optional[Literal["stop", "length"]]
+    logprobs: CompletionLogprobs | None
+    finish_reason: Literal["stop", "length"] | None
 
 
 class CompletionUsage(TypedDict):
@@ -60,7 +60,7 @@ class CreateCompletionResponse(TypedDict):
     object: Literal["text_completion"]
     created: int
     model: str
-    choices: List[CompletionChoice]
+    choices: list[CompletionChoice]
     usage: NotRequired[CompletionUsage]
 
 
@@ -70,7 +70,7 @@ class ChatCompletionResponseFunctionCall(TypedDict):
 
 
 class ChatCompletionResponseMessage(TypedDict):
-    content: Optional[str]
+    content: str | None
     tool_calls: NotRequired["ChatCompletionMessageToolCalls"]
     role: Literal["assistant", "function"]  # NOTE: "function" may be incorrect here
     function_call: NotRequired[ChatCompletionResponseFunctionCall]  # DEPRECATED
@@ -79,14 +79,14 @@ class ChatCompletionResponseMessage(TypedDict):
 class ChatCompletionFunction(TypedDict):
     name: str
     description: NotRequired[str]
-    parameters: Dict[str, JsonType]  # TODO: make this more specific
+    parameters: dict[str, JsonType]  # TODO: make this more specific
 
 
 class ChatCompletionResponseChoice(TypedDict):
     index: int
     message: "ChatCompletionResponseMessage"
-    logprobs: Optional[CompletionLogprobs]
-    finish_reason: Optional[str]
+    logprobs: CompletionLogprobs | None
+    finish_reason: str | None
 
 
 class CreateChatCompletionResponse(TypedDict):
@@ -94,12 +94,12 @@ class CreateChatCompletionResponse(TypedDict):
     object: Literal["chat.completion"]
     created: int
     model: str
-    choices: List["ChatCompletionResponseChoice"]
+    choices: list["ChatCompletionResponseChoice"]
     usage: CompletionUsage
 
 
 class ChatCompletionMessageToolCallChunkFunction(TypedDict):
-    name: Optional[str]
+    name: str | None
     arguments: str
 
 
@@ -120,21 +120,19 @@ class ChatCompletionStreamResponseDeltaFunctionCall(TypedDict):
 
 
 class ChatCompletionStreamResponseDelta(TypedDict):
-    content: NotRequired[Optional[str]]
+    content: NotRequired[str | None]
     function_call: NotRequired[
-        Optional[ChatCompletionStreamResponseDeltaFunctionCall]
+        ChatCompletionStreamResponseDeltaFunctionCall | None
     ]  # DEPRECATED
-    tool_calls: NotRequired[Optional[List[ChatCompletionMessageToolCallChunk]]]
-    role: NotRequired[Optional[Literal["system", "user", "assistant", "tool"]]]
+    tool_calls: NotRequired[list[ChatCompletionMessageToolCallChunk] | None]
+    role: NotRequired[Literal["system", "user", "assistant", "tool"] | None]
 
 
 class ChatCompletionStreamResponseChoice(TypedDict):
     index: int
-    delta: Union[
-        ChatCompletionStreamResponseDelta, ChatCompletionStreamResponseDeltaEmpty,
-    ]
-    finish_reason: Optional[Literal["stop", "length", "tool_calls", "function_call"]]
-    logprobs: NotRequired[Optional[CompletionLogprobs]]
+    delta: ChatCompletionStreamResponseDelta | ChatCompletionStreamResponseDeltaEmpty
+    finish_reason: Literal["stop", "length", "tool_calls", "function_call"] | None
+    logprobs: NotRequired[CompletionLogprobs | None]
 
 
 class CreateChatCompletionStreamResponse(TypedDict):
@@ -142,13 +140,13 @@ class CreateChatCompletionStreamResponse(TypedDict):
     model: str
     object: Literal["chat.completion.chunk"]
     created: int
-    choices: List[ChatCompletionStreamResponseChoice]
+    choices: list[ChatCompletionStreamResponseChoice]
 
 
 class ChatCompletionFunctions(TypedDict):
     name: str
     description: NotRequired[str]
-    parameters: Dict[str, JsonType]  # TODO: make this more specific
+    parameters: dict[str, JsonType]  # TODO: make this more specific
 
 
 class ChatCompletionFunctionCallOption(TypedDict):
@@ -174,7 +172,7 @@ class ChatCompletionRequestMessageContentPartImageImageUrl(TypedDict):
 
 class ChatCompletionRequestMessageContentPartImage(TypedDict):
     type: Literal["image_url"]
-    image_url: Union[str, ChatCompletionRequestMessageContentPartImageImageUrl]
+    image_url: str | ChatCompletionRequestMessageContentPartImageImageUrl
 
 
 ChatCompletionRequestMessageContentPart = Union[
@@ -185,12 +183,12 @@ ChatCompletionRequestMessageContentPart = Union[
 
 class ChatCompletionRequestSystemMessage(TypedDict):
     role: Literal["system"]
-    content: Optional[str]
+    content: str | None
 
 
 class ChatCompletionRequestUserMessage(TypedDict):
     role: Literal["user"]
-    content: Optional[Union[str, List[ChatCompletionRequestMessageContentPart]]]
+    content: str | list[ChatCompletionRequestMessageContentPart] | None
 
 
 class ChatCompletionMessageToolCallFunction(TypedDict):
@@ -204,7 +202,7 @@ class ChatCompletionMessageToolCall(TypedDict):
     function: ChatCompletionMessageToolCallFunction
 
 
-ChatCompletionMessageToolCalls = List[ChatCompletionMessageToolCall]
+ChatCompletionMessageToolCalls = list[ChatCompletionMessageToolCall]
 
 
 class ChatCompletionRequestAssistantMessageFunctionCall(TypedDict):
@@ -214,7 +212,7 @@ class ChatCompletionRequestAssistantMessageFunctionCall(TypedDict):
 
 class ChatCompletionRequestAssistantMessage(TypedDict):
     role: Literal["assistant"]
-    content: Optional[str]
+    content: str | None
     tool_calls: NotRequired[ChatCompletionMessageToolCalls]
     function_call: NotRequired[
         ChatCompletionRequestAssistantMessageFunctionCall
@@ -223,13 +221,13 @@ class ChatCompletionRequestAssistantMessage(TypedDict):
 
 class ChatCompletionRequestToolMessage(TypedDict):
     role: Literal["tool"]
-    content: Optional[str]
+    content: str | None
     tool_call_id: str
 
 
 class ChatCompletionRequestFunctionMessage(TypedDict):
     role: Literal["function"]
-    content: Optional[str]
+    content: str | None
     name: str
 
 
@@ -251,7 +249,7 @@ ChatCompletionRequestFunctionCall = Union[
     Literal["none", "auto"], ChatCompletionRequestFunctionCallOption,
 ]
 
-ChatCompletionFunctionParameters = Dict[str, JsonType]  # TODO: make this more specific
+ChatCompletionFunctionParameters = dict[str, JsonType]  # TODO: make this more specific
 
 
 class ChatCompletionToolFunction(TypedDict):

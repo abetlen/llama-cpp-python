@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
-from typing_extensions import Literal, TypedDict
+from typing_extensions import TypedDict
 
 import llama_cpp
 
@@ -106,14 +106,14 @@ grammar = Field(
 
 
 class CreateCompletionRequest(BaseModel):
-    prompt: Union[str, List[str]] = Field(
+    prompt: str | list[str] = Field(
         default="", description="The prompt to generate completions for.",
     )
-    suffix: Optional[str] = Field(
+    suffix: str | None = Field(
         default=None,
         description="A suffix to append to the generated text. If None, no suffix is appended. Useful for chatbots.",
     )
-    max_tokens: Optional[int] = Field(
+    max_tokens: int | None = Field(
         default=16, ge=0, description="The maximum number of tokens to generate.",
     )
     min_tokens: int = min_tokens_field
@@ -124,32 +124,32 @@ class CreateCompletionRequest(BaseModel):
         default=False,
         description="Whether to echo the prompt in the generated text. Useful for chatbots.",
     )
-    stop: Optional[Union[str, List[str]]] = stop_field
+    stop: str | list[str] | None = stop_field
     stream: bool = stream_field
-    logprobs: Optional[int] = Field(
+    logprobs: int | None = Field(
         default=None,
         ge=0,
         description="The number of logprobs to generate. If None, no logprobs are generated.",
     )
-    presence_penalty: Optional[float] = presence_penalty_field
-    frequency_penalty: Optional[float] = frequency_penalty_field
-    logit_bias: Optional[Dict[str, float]] = Field(None)
-    seed: Optional[int] = Field(None)
+    presence_penalty: float | None = presence_penalty_field
+    frequency_penalty: float | None = frequency_penalty_field
+    logit_bias: dict[str, float] | None = Field(None)
+    seed: int | None = Field(None)
 
     # ignored or currently unsupported
-    model: Optional[str] = model_field
-    n: Optional[int] = 1
-    best_of: Optional[int] = 1
-    user: Optional[str] = Field(default=None)
+    model: str | None = model_field
+    n: int | None = 1
+    best_of: int | None = 1
+    user: str | None = Field(default=None)
 
     # llama.cpp specific parameters
     top_k: int = top_k_field
     repeat_penalty: float = repeat_penalty_field
-    logit_bias_type: Optional[Literal["input_ids", "tokens"]] = Field(None)
+    logit_bias_type: Literal["input_ids", "tokens"] | None = Field(None)
     mirostat_mode: int = mirostat_mode_field
     mirostat_tau: float = mirostat_tau_field
     mirostat_eta: float = mirostat_eta_field
-    grammar: Optional[str] = None
+    grammar: str | None = None
 
     model_config = {
         "json_schema_extra": {
@@ -164,9 +164,9 @@ class CreateCompletionRequest(BaseModel):
 
 
 class CreateEmbeddingRequest(BaseModel):
-    model: Optional[str] = model_field
-    input: Union[str, List[str]] = Field(description="The input to embed.")
-    user: Optional[str] = Field(default=None)
+    model: str | None = model_field
+    input: str | list[str] = Field(description="The input to embed.")
+    user: str | None = Field(default=None)
 
     model_config = {
         "json_schema_extra": {
@@ -183,41 +183,41 @@ class ChatCompletionRequestMessage(BaseModel):
     role: Literal["system", "user", "assistant", "function"] = Field(
         default="user", description="The role of the message.",
     )
-    content: Optional[str] = Field(
+    content: str | None = Field(
         default="", description="The content of the message.",
     )
 
 
 class CreateChatCompletionRequest(BaseModel):
-    messages: List[llama_cpp.ChatCompletionRequestMessage] = Field(
+    messages: list[llama_cpp.ChatCompletionRequestMessage] = Field(
         default=[], description="A list of messages to generate completions for.",
     )
-    functions: Optional[List[llama_cpp.ChatCompletionFunction]] = Field(
+    functions: list[llama_cpp.ChatCompletionFunction] | None = Field(
         default=None,
         description="A list of functions to apply to the generated completions.",
     )
-    function_call: Optional[llama_cpp.ChatCompletionRequestFunctionCall] = Field(
+    function_call: llama_cpp.ChatCompletionRequestFunctionCall | None = Field(
         default=None,
         description="A function to apply to the generated completions.",
     )
-    tools: Optional[List[llama_cpp.ChatCompletionTool]] = Field(
+    tools: list[llama_cpp.ChatCompletionTool] | None = Field(
         default=None,
         description="A list of tools to apply to the generated completions.",
     )
-    tool_choice: Optional[llama_cpp.ChatCompletionToolChoiceOption] = Field(
+    tool_choice: llama_cpp.ChatCompletionToolChoiceOption | None = Field(
         default=None,
         description="A tool to apply to the generated completions.",
     )  # TODO: verify
-    max_tokens: Optional[int] = Field(
+    max_tokens: int | None = Field(
         default=None,
         description="The maximum number of tokens to generate. Defaults to inf",
     )
     min_tokens: int = min_tokens_field
-    logprobs: Optional[bool] = Field(
+    logprobs: bool | None = Field(
         default=False,
         description="Whether to output the logprobs or not. Default is True",
     )
-    top_logprobs: Optional[int] = Field(
+    top_logprobs: int | None = Field(
         default=None,
         ge=0,
         description="The number of logprobs to generate. If None, no logprobs are generated. logprobs need to set to True.",
@@ -225,29 +225,29 @@ class CreateChatCompletionRequest(BaseModel):
     temperature: float = temperature_field
     top_p: float = top_p_field
     min_p: float = min_p_field
-    stop: Optional[Union[str, List[str]]] = stop_field
+    stop: str | list[str] | None = stop_field
     stream: bool = stream_field
-    presence_penalty: Optional[float] = presence_penalty_field
-    frequency_penalty: Optional[float] = frequency_penalty_field
-    logit_bias: Optional[Dict[str, float]] = Field(None)
-    seed: Optional[int] = Field(None)
-    response_format: Optional[llama_cpp.ChatCompletionRequestResponseFormat] = Field(
+    presence_penalty: float | None = presence_penalty_field
+    frequency_penalty: float | None = frequency_penalty_field
+    logit_bias: dict[str, float] | None = Field(None)
+    seed: int | None = Field(None)
+    response_format: llama_cpp.ChatCompletionRequestResponseFormat | None = Field(
         default=None,
     )
 
     # ignored or currently unsupported
-    model: Optional[str] = model_field
-    n: Optional[int] = 1
-    user: Optional[str] = Field(None)
+    model: str | None = model_field
+    n: int | None = 1
+    user: str | None = Field(None)
 
     # llama.cpp specific parameters
     top_k: int = top_k_field
     repeat_penalty: float = repeat_penalty_field
-    logit_bias_type: Optional[Literal["input_ids", "tokens"]] = Field(None)
+    logit_bias_type: Literal["input_ids", "tokens"] | None = Field(None)
     mirostat_mode: int = mirostat_mode_field
     mirostat_tau: float = mirostat_tau_field
     mirostat_eta: float = mirostat_eta_field
-    grammar: Optional[str] = None
+    grammar: str | None = None
 
     model_config = {
         "json_schema_extra": {
@@ -271,16 +271,16 @@ class ModelData(TypedDict):
     id: str
     object: Literal["model"]
     owned_by: str
-    permissions: List[str]
+    permissions: list[str]
 
 
 class ModelList(TypedDict):
     object: Literal["list"]
-    data: List[ModelData]
+    data: list[ModelData]
 
 
 class TokenizeInputRequest(BaseModel):
-    model: Optional[str] = model_field
+    model: str | None = model_field
     input: str = Field(description="The input to tokenize.")
 
     model_config = {
@@ -289,7 +289,7 @@ class TokenizeInputRequest(BaseModel):
 
 
 class TokenizeInputResponse(BaseModel):
-    tokens: List[int] = Field(description="A list of tokens.")
+    tokens: list[int] = Field(description="A list of tokens.")
 
     model_config = {"json_schema_extra": {"example": {"tokens": [123, 321, 222]}}}
 
@@ -301,8 +301,8 @@ class TokenizeInputCountResponse(BaseModel):
 
 
 class DetokenizeInputRequest(BaseModel):
-    model: Optional[str] = model_field
-    tokens: List[int] = Field(description="A list of toekns to detokenize.")
+    model: str | None = model_field
+    tokens: list[int] = Field(description="A list of toekns to detokenize.")
 
     model_config = {"json_schema_extra": {"example": [{"tokens": [123, 321, 222]}]}}
 

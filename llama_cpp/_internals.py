@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import ctypes
 import os
+from collections.abc import Sequence
 from contextlib import ExitStack
 from dataclasses import dataclass, field
 from typing import (
     Dict,
     List,
     Optional,
-    Sequence,
 )
 
 import numpy as np
@@ -108,7 +108,7 @@ class _LlamaModel:
         self,
         lora_path: str,
         scale: float,
-        path_base_model: Optional[str],
+        path_base_model: str | None,
         n_threads: int,
     ):
         assert self.model is not None
@@ -212,7 +212,7 @@ class _LlamaModel:
         llama_cpp.llama_token_to_piece(self.model, token, buf, 32, 0, special)
         return bytes(buf)
 
-    def detokenize(self, tokens: List[int], special: bool = False) -> bytes:
+    def detokenize(self, tokens: list[int], special: bool = False) -> bytes:
         assert self.model is not None
         output = b""
         size = 32
@@ -232,9 +232,9 @@ class _LlamaModel:
         )
 
     # Extra
-    def metadata(self) -> Dict[str, str]:
+    def metadata(self) -> dict[str, str]:
         assert self.model is not None
-        metadata: Dict[str, str] = {}
+        metadata: dict[str, str] = {}
         buffer_size = 1024
         buffer = ctypes.create_string_buffer(buffer_size)
         # zero the buffer
@@ -665,7 +665,7 @@ def _token_to_piece(model: _LlamaModel, token: int, special: bool = False) -> st
     return bytes(result).decode("utf-8")
 
 
-def _detokenize_spm(model: _LlamaModel, tokens: List[int]) -> str:
+def _detokenize_spm(model: _LlamaModel, tokens: list[int]) -> str:
     bos_id = model.token_bos()
     result = ""
     for i, token in enumerate(tokens):
@@ -678,7 +678,7 @@ def _detokenize_spm(model: _LlamaModel, tokens: List[int]) -> str:
     return result
 
 
-def _detokenize_bpe(model: _LlamaModel, tokens: List[int]) -> str:
+def _detokenize_bpe(model: _LlamaModel, tokens: list[int]) -> str:
     result = ""
     for token in tokens:
         piece = _token_to_piece(model, token)
@@ -739,7 +739,7 @@ class _LlamaSamplingParams:
 class _LlamaSamplingContext:
     params: _LlamaSamplingParams = field(default_factory=_LlamaSamplingParams)
     mirostat_mu: ctypes.c_float = field(default_factory=ctypes.c_float)
-    grammar: Optional[LlamaGrammar] = None
+    grammar: LlamaGrammar | None = None
     # NOTE: Missing parsed_grammar
     prev: list[int] = field(default_factory=list)
     cur: list[llama_cpp.llama_token_data] = field(default_factory=list)
@@ -759,7 +759,7 @@ class _LlamaSamplingContext:
             cur=self.cur.copy(),
         )
 
-    def last(self) -> Optional[int]:
+    def last(self) -> int | None:
         if len(self.prev) > 0:
             return self.prev[-1]
 
@@ -772,7 +772,7 @@ class _LlamaSamplingContext:
         self,
         ctx_main: _LlamaContext,
         idx: int = 0,
-        logits_array: Optional[npt.NDArray[np.single]] = None,
+        logits_array: npt.NDArray[np.single] | None = None,
     ):
         n_vocab = ctx_main.model.n_vocab()
         id: int = 0

@@ -60,7 +60,7 @@ class MetaSingleton(type):
     Metaclass for implementing the Singleton pattern.
     """
 
-    _instances: Dict[type, Any] = {}
+    _instances: dict[type, Any] = {}
 
     def __call__(cls, *args: Any, **kwargs: Any) -> Any:
         if cls not in cls._instances:

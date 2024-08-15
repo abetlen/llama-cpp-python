@@ -37,7 +37,7 @@ class GptParams:
     path_session: str = ""
     input_prefix: str = " "
     input_suffix: str = ""
-    antiprompt: List[str] = field(default_factory=list)
+    antiprompt: list[str] = field(default_factory=list)
 
     lora_adapter: str = ""
     lora_base: str = ""

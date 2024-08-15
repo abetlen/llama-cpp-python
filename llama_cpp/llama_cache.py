@@ -1,9 +1,9 @@
 import sys
 from abc import ABC, abstractmethod
 from collections import OrderedDict
+from collections.abc import Sequence
 from typing import (
     Optional,
-    Sequence,
     Tuple,
 )
 
@@ -27,8 +27,8 @@ class BaseLlamaCache(ABC):
 
     def _find_longest_prefix_key(
         self,
-        key: Tuple[int, ...],
-    ) -> Optional[Tuple[int, ...]]:
+        key: tuple[int, ...],
+    ) -> tuple[int, ...] | None:
         pass
 
     @abstractmethod
@@ -52,7 +52,7 @@ class LlamaRAMCache(BaseLlamaCache):
     def __init__(self, capacity_bytes: int = (2 << 30)):
         super().__init__(capacity_bytes)
         self.capacity_bytes = capacity_bytes
-        self.cache_state: OrderedDict[Tuple[int, ...], llama_cpp.llama.LlamaState] = (
+        self.cache_state: OrderedDict[tuple[int, ...], llama_cpp.llama.LlamaState] = (
             OrderedDict()
         )
 
@@ -62,8 +62,8 @@ class LlamaRAMCache(BaseLlamaCache):
 
     def _find_longest_prefix_key(
         self,
-        key: Tuple[int, ...],
-    ) -> Optional[Tuple[int, ...]]:
+        key: tuple[int, ...],
+    ) -> tuple[int, ...] | None:
         min_len = 0
         min_key = None
         keys = (
@@ -116,10 +116,10 @@ class LlamaDiskCache(BaseLlamaCache):
 
     def _find_longest_prefix_key(
         self,
-        key: Tuple[int, ...],
-    ) -> Optional[Tuple[int, ...]]:
+        key: tuple[int, ...],
+    ) -> tuple[int, ...] | None:
         min_len = 0
-        min_key: Optional[Tuple[int, ...]] = None
+        min_key: tuple[int, ...] | None = None
         for k in self.cache.iterkeys():  # type: ignore
             prefix_len = llama_cpp.llama.Llama.longest_token_prefix(k, key)
             if prefix_len > min_len:

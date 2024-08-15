@@ -9,7 +9,7 @@ from llama_cpp.server.settings import ModelSettings
 
 
 class LlamaProxy:
-    def __init__(self, models: List[ModelSettings]) -> None:
+    def __init__(self, models: list[ModelSettings]) -> None:
         assert len(models) > 0, "No models provided!"
 
         self._model_settings_dict: dict[str, ModelSettings] = {}
@@ -18,8 +18,8 @@ class LlamaProxy:
                 model.model_alias = model.model
             self._model_settings_dict[model.model_alias] = model
 
-        self._current_model: Optional[llama_cpp.Llama] = None
-        self._current_model_alias: Optional[str] = None
+        self._current_model: llama_cpp.Llama | None = None
+        self._current_model_alias: str | None = None
 
         self._default_model_settings: ModelSettings = models[0]
         self._default_model_alias: str = self._default_model_settings.model_alias  # type: ignore
@@ -30,7 +30,7 @@ class LlamaProxy:
         )
         self._current_model_alias = self._default_model_alias
 
-    def __call__(self, model: Optional[str] = None) -> llama_cpp.Llama:
+    def __call__(self, model: str | None = None) -> llama_cpp.Llama:
         if model is None:
             model = self._default_model_alias
 
@@ -53,7 +53,7 @@ class LlamaProxy:
     def __getitem__(self, model: str):
         return self._model_settings_dict[model].model_dump()
 
-    def __setitem__(self, model: str, settings: Union[ModelSettings, str, bytes]):
+    def __setitem__(self, model: str, settings: ModelSettings | str | bytes):
         if isinstance(settings, (bytes, str)):
             settings = ModelSettings.model_validate_json(settings)
         self._model_settings_dict[model] = settings
@@ -171,7 +171,7 @@ class LlamaProxy:
                 json.load(open(settings.hf_tokenizer_config_path)),
             )
 
-        tokenizer: Optional[llama_cpp.BaseLlamaTokenizer] = None
+        tokenizer: llama_cpp.BaseLlamaTokenizer | None = None
         if settings.hf_pretrained_model_name_or_path is not None:
             tokenizer = llama_tokenizer.LlamaHFTokenizer.from_pretrained(
                 settings.hf_pretrained_model_name_or_path,
@@ -183,7 +183,7 @@ class LlamaProxy:
                 num_pred_tokens=settings.draft_model_num_pred_tokens,
             )
 
-        kv_overrides: Optional[Dict[str, Union[bool, int, float, str]]] = None
+        kv_overrides: dict[str, bool | int | float | str] | None = None
         if settings.kv_overrides is not None:
             assert isinstance(settings.kv_overrides, list)
             kv_overrides = {}
