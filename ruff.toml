@@ -103,7 +103,7 @@ select = [
    "W",     # pycodestyle
    "YTT",   # flake8-2020
 ]
-ignore = ["COM812","E501","F401","ISC001",]
+ignore = ["COM812","E501","F401","ISC001","T201"]
 
 # Allow fix for all enabled rules (when `--fix`) is provided.
 fixable = ["ALL"]
