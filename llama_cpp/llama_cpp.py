@@ -1493,7 +1493,6 @@ def llama_model_has_encoder(model: llama_model_p, /) -> bool:
 @ctypes_function("llama_model_has_decoder", [llama_model_p_ctypes], ctypes.c_bool)
 def llama_model_has_decoder(model: llama_model_p, /) -> bool:
     """Returns true if the model contains a decoder that requires llama_decode() call"""
-    ...
 
 
 # // For encoder-decoder models, this function returns id of the token that must be provided
