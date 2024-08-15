@@ -12,10 +12,10 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
+ #       with:
+ #         ref: ${{ github.head_ref }}
       - uses: actions/setup-python@v5
       - uses: pre-commit/action@v3.0.1
-      - uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: 'pre commit fixes'
+ #     - uses: stefanzweifel/git-auto-commit-action@v5
+ #       with:
+ #         commit_message: 'pre commit fixes'
