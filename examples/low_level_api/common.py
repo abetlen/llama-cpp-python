@@ -377,7 +377,7 @@ def gpt_params_parse(argv=None):
     if params.lora_adapter:
         params.use_mmap = False
 
-    if logit_bias_str != None:
+    if logit_bias_str is not None:
         for i in logit_bias_str:
             if m := re.match(r"(\d+)([-+]\d+)", i):
                 params.logit_bias[int(m.group(1))] = float(m.group(2))
