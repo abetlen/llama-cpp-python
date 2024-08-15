@@ -775,7 +775,7 @@ class Llama:
                 self.n_tokens = longest_prefix
                 if self.verbose:
                     print(f"Llama.generate: {longest_prefix} prefix-match hit, "
-                          f"remaining {len(tokens)} prompt tokens to eval", file=sys.stderr)                    
+                          f"remaining {len(tokens)} prompt tokens to eval", file=sys.stderr)
 
         # Reset the model state
         if reset:
