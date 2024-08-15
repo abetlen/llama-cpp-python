@@ -25,7 +25,7 @@ class EmbeddingUsage(TypedDict):
 class Embedding(TypedDict):
     index: int
     object: str
-    embedding: list[float] | list[list[float]]
+    embedding: Union[List[float], List[List[float]]]
 
 
 class CreateEmbeddingResponse(TypedDict):
