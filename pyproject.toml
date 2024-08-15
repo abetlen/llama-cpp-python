@@ -50,6 +50,8 @@ dev = [
     "mkdocs-material>=9.1.18",
     "pytest>=7.4.0",
     "httpx>=0.24.1",
+    "pre-commit>=3.8.0",
+    "ruff>=0.5.7",
 ]
 all = [
     "llama_cpp_python[server,test,dev]",
