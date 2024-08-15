@@ -10,6 +10,7 @@ errnull_file = open(os.devnull, "w")
 STDOUT_FILENO = 1
 STDERR_FILENO = 2
 
+
 class suppress_stdout_stderr(object):
     # NOTE: these must be "saved" here to avoid exceptions when using
     #       this context manager inside of a __del__ method

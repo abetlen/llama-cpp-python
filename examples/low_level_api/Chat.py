@@ -3,10 +3,12 @@ import sys, os, datetime
 from common import GptParams
 from low_level_api_chat_cpp import LLaMAInteract
 
+
 def env_or_def(env, default):
-	if (env in os.environ):
-		return os.environ[env]
-	return default
+    if env in os.environ:
+        return os.environ[env]
+    return default
+
 
 AI_NAME = env_or_def("AI_NAME", "ChatLLaMa")
 MODEL = env_or_def("MODEL", "./models/llama-13B/ggml-model.bin")
@@ -15,10 +17,10 @@ N_PREDICTS = int(env_or_def("N_PREDICTS", "2048"))
 N_THREAD = int(env_or_def("N_THREAD", "8"))
 
 today = datetime.datetime.today()
-DATE_YEAR=today.strftime("%Y")
-DATE_TIME=today.strftime("%H:%M")
+DATE_YEAR = today.strftime("%Y")
+DATE_TIME = today.strftime("%H:%M")
 
-prompt=f"""Text transcript of a never ending dialog, where {USER_NAME} interacts with an AI assistant named {AI_NAME}.
+prompt = f"""Text transcript of a never ending dialog, where {USER_NAME} interacts with an AI assistant named {AI_NAME}.
 {AI_NAME} is helpful, kind, honest, friendly, good at writing and never fails to answer {USER_NAME}'s requests immediately and with details and precision.
 There are no annotations like (30 seconds passed...) or (to himself), just what {USER_NAME} and {AI_NAME} say aloud to each other.
 The dialog lasts for years, the entirety of it is shared below. It's 10000 pages long.
@@ -45,27 +47,29 @@ The transcript only includes text, it does not include markup like HTML and Mark
 {AI_NAME}: Blue.
 {USER_NAME}: What time is it?
 {AI_NAME}: It is {DATE_TIME}.
-{USER_NAME}:""" + " ".join(sys.argv[1:])
+{USER_NAME}:""" + " ".join(
+    sys.argv[1:]
+)
 
 print("Loading model...")
 params = GptParams(
-	n_ctx=2048,
-	temp=0.7,
-	top_k=40,
-	top_p=0.5,
-	repeat_last_n=256,
-	n_batch=1024,
-	repeat_penalty=1.17647,
-	model=MODEL,
-	n_threads=N_THREAD,
-	n_predict=N_PREDICTS,
-	use_color=True,
-	interactive=True,
-	antiprompt=[f"{USER_NAME}:"],
-	input_prefix=" ",
-	input_suffix=f"{AI_NAME}:",
-	prompt=prompt,
+    n_ctx=2048,
+    temp=0.7,
+    top_k=40,
+    top_p=0.5,
+    repeat_last_n=256,
+    n_batch=1024,
+    repeat_penalty=1.17647,
+    model=MODEL,
+    n_threads=N_THREAD,
+    n_predict=N_PREDICTS,
+    use_color=True,
+    interactive=True,
+    antiprompt=[f"{USER_NAME}:"],
+    input_prefix=" ",
+    input_suffix=f"{AI_NAME}:",
+    prompt=prompt,
 )
 
 with LLaMAInteract(params) as m:
-	m.interact()
+    m.interact()
