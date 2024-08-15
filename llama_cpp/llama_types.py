@@ -7,9 +7,9 @@ https://github.com/openai/openai-openapi/blob/master/openapi.yaml
 
 """
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Literal, NotRequired, Optional, Union
 
-from typing_extensions import Literal, NotRequired, TypedDict
+from typing_extensions import TypedDict
 
 # NOTE: Defining this correctly using annotations seems to break pydantic validation.
 #       This is a workaround until we can figure out how to do this correctly
