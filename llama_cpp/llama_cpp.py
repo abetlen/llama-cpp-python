@@ -1530,6 +1530,14 @@ def llama_model_decoder_start_token(model: llama_model_p, /) -> int:
     ...
 
 
+# // Returns true if the model is recurrent (like Mamba, RWKV, etc.)
+# LLAMA_API bool llama_model_is_recurrent(const struct llama_model * model);
+@ctypes_function("llama_model_is_recurrent", [llama_model_p_ctypes], ctypes.c_bool)
+def llama_model_is_recurrent(model: llama_model_p, /) -> bool:
+    """Returns true if the model is recurrent (like Mamba, RWKV, etc.)"""
+    ...
+
+
 # // Returns 0 on success
 # LLAMA_API uint32_t llama_model_quantize(
 #         const char * fname_inp,
