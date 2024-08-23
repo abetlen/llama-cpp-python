@@ -30,7 +30,7 @@ conda activate llama
     *(you needed xcode installed in order pip to build/compile the C++ code)*
 ```
 pip uninstall llama-cpp-python -y
-CMAKE_ARGS="-DLLAMA_METAL=on" pip install -U llama-cpp-python --no-cache-dir
+CMAKE_ARGS="-DGGML_METAL=on" pip install -U llama-cpp-python --no-cache-dir
 pip install 'llama-cpp-python[server]'
 
 # you should now have llama-cpp-python v0.1.62 or higher installed

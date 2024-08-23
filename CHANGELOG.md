@@ -7,6 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.89]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@cfac111e2b3953cdb6b0126e67a2487687646971
+- fix: Llama.close didn't free lora adapter by @jkawamoto in #1679
+- fix: missing dependencies for test by @jkawamoto in #1680
+
+## [0.2.88]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@fc4ca27b25464a11b3b86c9dbb5b6ed6065965c2
+- fix: only print 'cache saved' in verbose mode by @lsorber in #1668 
+- fix: Added back from_file method to LlamaGrammar by @ExtReMLapin in #1673
+- fix: grammar prints on each call by @abetlen in 0998ea0deea076a547d54bd598d6b413b588ee2b
+- feat: Enable recursive search of HFFS.ls when using from_pretrained by @benHeidabetlen in #1656
+- feat: Add more detailed log for prefix-match by @xu-song in #1659
+
+## [0.2.87]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@be55695eff44784a141a863f273661a6bce63dfc
+- fix: Include all llama.cpp source files and subdirectories by @abetlen in 9cad5714ae6e7c250af8d0bbb179f631368c928b
+- feat(ci): Re-build wheel index automatically when releases are created by @abetlen in 198f47dc1bd202fd2b71b29e041a9f33fe40bfad
+
+## [0.2.86]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@398ede5efeb07b9adf9fbda7ea63f630d476a792
+- feat: Ported back new grammar changes from C++ to Python implementation by @ExtReMLapin in (#1637)
+- fix: llama_grammar_accept_token arg order by @tc-wolf in (#1649)
+
+## [0.2.85]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@398ede5efeb07b9adf9fbda7ea63f630d476a792
+- fix: Missing LoRA adapter after API change by @shamitv in #1630
+- fix(docker): Update Dockerfile BLAS options by @olivierdebauche in #1632
+- fix(docker): Fix GGML_CUDA param by @olivierdebauche in #1633
+- fix(docker): Update Dockerfile build options from `LLAMA_` to `GGML_` by @olivierdebauche in #1634
+- feat: FreeBSD compatibility by @yurivict in #1635
+
+## [0.2.84]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@4730faca618ff9cee0780580145e3cbe86f24876
+- fix: fix: Correcting run.sh filepath in Simple Docker implementation by @mashuk999 in #1626
+
+## [0.2.83]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@081fe431aa8fb6307145c4feb3eed4f48cab19f8
+- feat: Add 'required' literal to ChatCompletionToolChoiceOption by @mjschock in #1597
+- fix: Change repeat_penalty to 1.0 to match llama.cpp defaults by @ddh0 in #1590
+- fix(docs): Update README.md typo by @ericcurtin in #1589
+- fix(server): Use split_mode from model settings by @grider-withourai in #1594
+- feat(ci): Dockerfile update base images and post-install cleanup by @Smartappli in #1530
+
+## [0.2.82]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@7fdb6f73e35605c8dbc39e9f19cd9ed84dbc87f2
+
+## [0.2.81]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@968967376dc2c018d29f897c4883d335bbf384fb
+- fix(ci): Fix CUDA wheels, use LLAMA_CUDA instead of removed LLAMA_CUBLAS by @abetlen in 4fb6fc12a02a68884c25dd9f6a421cacec7604c6
+- fix(ci): Fix MacOS release, use macos-12 image instead of removed macos-11 by @abetlen in 3a551eb5263fdbd24b36d7770856374c04e92788
+
+## [0.2.80]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@023b8807e10bc3ade24a255f01c1ad2a01bb4228
+- fix(server): Fix bug in FastAPI streaming response where dependency was released before request completes causing SEGFAULT by @abetlen in 296304b60bb83689659883c9cc24f4c074dd88ff
+- fix(server): Update default config value for embeddings to False to fix error in text generation where logits were not allocated by llama.cpp by @abetlen in bf5e0bb4b151f4ca2f5a21af68eb832a96a79d75
+- fix(ci): Fix the CUDA workflow by @oobabooga in #1551
+- docs: Update readme examples to use newer Qwen2 model by @jncraton in #1544
+
 ## [0.2.79]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@9c77ec1d74874ee22bdef8f110e8e8d41389abf2

@@ -23,12 +23,12 @@ from typing_extensions import TypeAlias
 # Load the library
 def _load_shared_library(lib_base_name: str):
     # Construct the paths to the possible shared library names
-    _base_path = pathlib.Path(os.path.abspath(os.path.dirname(__file__)))
+    _base_path = pathlib.Path(os.path.abspath(os.path.dirname(__file__))) / "lib"
     # Searching for the library in the current directory under the name "libllama" (default name
     # for llamacpp) and "llama" (default name for this repo)
     _lib_paths: List[pathlib.Path] = []
     # Determine the file extension based on the platform
-    if sys.platform.startswith("linux"):
+    if sys.platform.startswith("linux") or sys.platform.startswith("freebsd"):
         _lib_paths += [
             _base_path / f"lib{lib_base_name}.so",
         ]
@@ -52,7 +52,12 @@ def _load_shared_library(lib_base_name: str):
         _lib_paths = [_lib.resolve()]
 
     cdll_args = dict()  # type: ignore
+
     # Add the library directory to the DLL search path on Windows (if needed)
+    if sys.platform == "win32":
+        os.add_dll_directory(str(_base_path))
+        os.environ["PATH"] = str(_base_path) + os.pathsep + os.environ["PATH"]
+
     if sys.platform == "win32" and sys.version_info >= (3, 8):
         os.add_dll_directory(str(_base_path))
         if "CUDA_PATH" in os.environ:
@@ -228,9 +233,6 @@ LLAMA_MAX_DEVICES = _lib.llama_max_devices()
 # define LLAMA_DEFAULT_SEED 0xFFFFFFFF
 LLAMA_DEFAULT_SEED = 0xFFFFFFFF
 
-# define LLAMA_MAX_RNG_STATE (64*1024)
-LLAMA_MAX_RNG_STATE = 64 * 1024
-
 # define LLAMA_FILE_MAGIC_GGLA 0x67676c61u // 'ggla'
 LLAMA_FILE_MAGIC_GGLA = 0x67676C61
 
@@ -242,13 +244,13 @@ LLAMA_FILE_MAGIC_GGSQ = 0x67677371
 
 # define LLAMA_SESSION_MAGIC   LLAMA_FILE_MAGIC_GGSN
 LLAMA_SESSION_MAGIC = LLAMA_FILE_MAGIC_GGSN
-# define LLAMA_SESSION_VERSION 6
-LLAMA_SESSION_VERSION = 6
+# define LLAMA_SESSION_VERSION 8
+LLAMA_SESSION_VERSION = 8
 
 # define LLAMA_STATE_SEQ_MAGIC   LLAMA_FILE_MAGIC_GGSQ
 LLAMA_STATE_SEQ_MAGIC = LLAMA_FILE_MAGIC_GGSQ
-# define LLAMA_STATE_SEQ_VERSION 1
-LLAMA_STATE_SEQ_VERSION = 1
+# define LLAMA_STATE_SEQ_VERSION 2
+LLAMA_STATE_SEQ_VERSION = 2
 
 # struct llama_model;
 llama_model_p = NewType("llama_model_p", int)
@@ -273,6 +275,7 @@ llama_seq_id = ctypes.c_int32
 #     LLAMA_VOCAB_TYPE_SPM  = 1, // LLaMA tokenizer based on byte-level BPE with byte fallback
 #     LLAMA_VOCAB_TYPE_BPE  = 2, // GPT-2 tokenizer based on byte-level BPE
 #     LLAMA_VOCAB_TYPE_WPM  = 3, // BERT tokenizer based on WordPiece
+#     LLAMA_VOCAB_TYPE_UGM  = 4, // T5 tokenizer based on Unigram
 # };
 LLAMA_VOCAB_TYPE_NONE = 0
 """For models without vocab"""
@@ -282,6 +285,8 @@ LLAMA_VOCAB_TYPE_BPE = 2
 """GPT-2 tokenizer based on byte-level BPE"""
 LLAMA_VOCAB_TYPE_WPM = 3
 """BERT tokenizer based on WordPiece"""
+LLAMA_VOCAB_TYPE_UGM = 4
+"""T5 tokenizer based on Unigram"""
 
 
 # // pre-tokenization types
@@ -302,6 +307,16 @@ LLAMA_VOCAB_TYPE_WPM = 3
 #     LLAMA_VOCAB_PRE_TYPE_DBRX           = 13,
 #     LLAMA_VOCAB_PRE_TYPE_SMAUG          = 14,
 #     LLAMA_VOCAB_PRE_TYPE_PORO           = 15,
+#     LLAMA_VOCAB_PRE_TYPE_CHATGLM3       = 16,
+#     LLAMA_VOCAB_PRE_TYPE_CHATGLM4       = 17,
+#     LLAMA_VOCAB_PRE_TYPE_VIKING         = 18,
+#     LLAMA_VOCAB_PRE_TYPE_JAIS           = 19,
+#     LLAMA_VOCAB_PRE_TYPE_TEKKEN         = 20,
+#     LLAMA_VOCAB_PRE_TYPE_SMOLLM         = 21,
+#     LLAMA_VOCAB_PRE_TYPE_CODESHELL      = 22,
+#     LLAMA_VOCAB_PRE_TYPE_BLOOM          = 23,
+#     LLAMA_VOCAB_PRE_TYPE_GPT3_FINNISH   = 24,
+#     LLAMA_VOCAB_PRE_TYPE_EXAONE         = 25,
 # };
 LLAMA_VOCAB_PRE_TYPE_DEFAULT = 0
 LLAMA_VOCAB_PRE_TYPE_LLAMA3 = 1
@@ -319,6 +334,16 @@ LLAMA_VOCAB_PRE_TYPE_OLMO = 12
 LLAMA_VOCAB_PRE_TYPE_DBRX = 13
 LLAMA_VOCAB_PRE_TYPE_SMAUG = 14
 LLAMA_VOCAB_PRE_TYPE_PORO = 15
+LLAMA_VOCAV_PRE_TYPE_CHATGLM3 = 16
+LLAMA_VOCAB_PRE_TYPE_CHATGLM4 = 17
+LLAMA_VOCAB_PRE_TYPE_VIKING = 18
+LLAMA_VOCAB_PRE_TYPE_JAIS = 19
+LLAMA_VOCAB_PRE_TYPE_TEKKEN = 20
+LLAMA_VOCAB_PRE_TYPE_SMOLLM = 21
+LLAMA_VOCAB_PRE_TYPE_CODESHELL = 22
+LLAMA_VOCAB_PRE_TYPE_BLOOM = 23
+LLAMA_VOCAB_PRE_TYPE_GPT3_FINNISH = 24
+LLAMA_VOCAB_PRE_TYPE_EXAONE = 25
 
 
 # // note: these values should be synchronized with ggml_rope
@@ -326,13 +351,11 @@ LLAMA_VOCAB_PRE_TYPE_PORO = 15
 # enum llama_rope_type {
 #     LLAMA_ROPE_TYPE_NONE = -1,
 #     LLAMA_ROPE_TYPE_NORM =  0,
-#     LLAMA_ROPE_TYPE_NEOX =  2,
-#     LLAMA_ROPE_TYPE_GLM  =  4,
+#     LLAMA_ROPE_TYPE_NEOX = GGML_ROPE_TYPE_NEOX,
 # };
 LLAMA_ROPE_TYPE_NONE = -1
 LLAMA_ROPE_TYPE_NORM = 0
-LLAMA_ROPE_TYPE_NEOX = 2
-LLAMA_ROPE_TYPE_GLM = 4
+LLAMA_ROPE_TYPE_NEOX = GGML_ROPE_TYPE_NEOX = 2
 
 
 # enum llama_token_type { //TODO: remove, required until per token attributes are available from GGUF file
@@ -385,7 +408,7 @@ LLAMA_TOKEN_ATTR_SINGLE_WORD = 1 << 9
 #     LLAMA_FTYPE_MOSTLY_F16           = 1,  // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_Q4_0          = 2,  // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_Q4_1          = 3,  // except 1d tensors
-#     LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16 = 4,  // tok_embeddings.weight and output.weight are F16
+#     // LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16 = 4,  // tok_embeddings.weight and output.weight are F16
 #     // LLAMA_FTYPE_MOSTLY_Q4_2       = 5,  // support has been removed
 #     // LLAMA_FTYPE_MOSTLY_Q4_3       = 6,  // support has been removed
 #     LLAMA_FTYPE_MOSTLY_Q8_0          = 7,  // except 1d tensors
@@ -414,14 +437,16 @@ LLAMA_TOKEN_ATTR_SINGLE_WORD = 1 << 9
 #     LLAMA_FTYPE_MOSTLY_IQ4_XS        = 30, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_IQ1_M         = 31, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_BF16          = 32, // except 1d tensors
-
+#     LLAMA_FTYPE_MOSTLY_Q4_0_4_4      = 33, // except 1d tensors
+#     LLAMA_FTYPE_MOSTLY_Q4_0_4_8      = 34, // except 1d tensors
+#     LLAMA_FTYPE_MOSTLY_Q4_0_8_8      = 35, // except 1d tensors
+#
 #     LLAMA_FTYPE_GUESSED = 1024, // not specified in the model file
 # };
 LLAMA_FTYPE_ALL_F32 = 0
 LLAMA_FTYPE_MOSTLY_F16 = 1
 LLAMA_FTYPE_MOSTLY_Q4_0 = 2
 LLAMA_FTYPE_MOSTLY_Q4_1 = 3
-LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16 = 4
 LLAMA_FTYPE_MOSTLY_Q8_0 = 7
 LLAMA_FTYPE_MOSTLY_Q5_0 = 8
 LLAMA_FTYPE_MOSTLY_Q5_1 = 9
@@ -448,6 +473,9 @@ LLAMA_FTYPE_MOSTLY_IQ2_M = 29
 LLAMA_FTYPE_MOSTLY_IQ4_XS = 30
 LLAMA_FTYPE_MOSTLY_IQ1_M = 31
 LLAMA_FTYPE_MOSTLY_BF16 = 32
+LLAMA_FTYPE_MOSTLY_Q4_0_4_4 = 33
+LLAMA_FTYPE_MOSTLY_Q4_0_4_8 = 34
+LLAMA_FTYPE_MOSTLY_Q4_0_8_8 = 35
 LLAMA_FTYPE_GUESSED = 1024
 
 # enum llama_rope_scaling_type {
@@ -468,11 +496,22 @@ LLAMA_ROPE_SCALING_TYPE_MAX_VALUE = LLAMA_ROPE_SCALING_TYPE_YARN
 #     LLAMA_POOLING_TYPE_NONE = 0,
 #     LLAMA_POOLING_TYPE_MEAN = 1,
 #     LLAMA_POOLING_TYPE_CLS  = 2,
+#     LLAMA_POOLING_TYPE_LAST = 3,
 # };
 LLAMA_POOLING_TYPE_UNSPECIFIED = -1
 LLAMA_POOLING_TYPE_NONE = 0
 LLAMA_POOLING_TYPE_MEAN = 1
 LLAMA_POOLING_TYPE_CLS = 2
+LLAMA_POOLING_TYPE_LAST = 3
+
+# enum llama_attention_type {
+#     LLAMA_ATTENTION_TYPE_UNSPECIFIED = -1,
+#     LLAMA_ATTENTION_TYPE_CAUSAL      = 0,
+#     LLAMA_ATTENTION_TYPE_NON_CAUSAL  = 1,
+# };
+LLAMA_ATTENTION_TYPE_UNSPECIFIED = -1
+LLAMA_ATTENTION_TYPE_CAUSAL = 0
+LLAMA_ATTENTION_TYPE_NON_CAUSAL = 1
 
 # enum llama_split_mode {
 #     LLAMA_SPLIT_MODE_NONE    = 0, // single GPU
@@ -761,7 +800,7 @@ class llama_model_params(ctypes.Structure):
 
 #     enum llama_rope_scaling_type rope_scaling_type; // RoPE scaling type, from `enum llama_rope_scaling_type`
 #     enum llama_pooling_type      pooling_type;      // whether to pool (sum) embedding results by sequence id
-#                                                     // (ignored if no pooling layer)
+#     enum llama_attention_type    attention_type;    // attention type to use for embeddings
 
 #     // ref: https://github.com/ggerganov/llama.cpp/pull/2054
 #     float    rope_freq_base;   // RoPE base frequency, 0 = from model
@@ -785,6 +824,7 @@ class llama_model_params(ctypes.Structure):
 #     bool offload_kqv; // whether to offload the KQV ops (including the KV cache) to GPU
 #     bool flash_attn;  // whether to use flash attention [EXPERIMENTAL]
 
+
 #     // Abort callback
 #     // if it returns true, execution of llama_decode() will be aborted
 #     // currently works only with CPU execution
@@ -804,6 +844,7 @@ class llama_context_params(ctypes.Structure):
         n_threads_batch (int): number of threads to use for batch processing
         rope_scaling_type (int): RoPE scaling type, from `enum llama_rope_scaling_type`
         pooling_type (int): whether to pool (sum) embedding results by sequence id (ignored if no pooling layer)
+        attention_type (int): attention type to use for embeddings
         rope_freq_base (float): RoPE base frequency, 0 = from model
         rope_freq_scale (float): RoPE frequency scaling factor, 0 = from model
         yarn_ext_factor (float): YaRN extrapolation mix factor, negative = from model
@@ -834,6 +875,7 @@ class llama_context_params(ctypes.Structure):
         n_threads_batch: int
         rope_scaling_type: int
         pooling_type: int
+        attention_type: int
         rope_freq_base: float
         rope_freq_scale: float
         yarn_ext_factor: float
@@ -863,6 +905,7 @@ class llama_context_params(ctypes.Structure):
         ("n_threads_batch", ctypes.c_uint32),
         ("rope_scaling_type", ctypes.c_int),
         ("pooling_type", ctypes.c_int),
+        ("attention_type", ctypes.c_int),
         ("rope_freq_base", ctypes.c_float),
         ("rope_freq_scale", ctypes.c_float),
         ("yarn_ext_factor", ctypes.c_float),
@@ -905,7 +948,7 @@ It might not exist for progress report where '.' is output repeatedly."""
 #     int32_t nthread;                     // number of threads to use for quantizing, if <=0 will use std::thread::hardware_concurrency()
 #     enum llama_ftype ftype;              // quantize to this llama_ftype
 #     enum ggml_type output_tensor_type;   // output tensor type
-#     enum ggml_type token_embedding_type; // itoken embeddings tensor type
+#     enum ggml_type token_embedding_type; // token embeddings tensor type
 #     bool allow_requantize;               // allow quantizing non-f32/f16 tensors
 #     bool quantize_output_tensor;         // quantize output.weight
 #     bool only_copy;                      // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
@@ -921,7 +964,7 @@ class llama_model_quantize_params(ctypes.Structure):
         nthread (int): number of threads to use for quantizing, if <=0 will use std::thread::hardware_concurrency()
         ftype (int): quantize to this llama_ftype
         output_tensor_type (int): output tensor type
-        token_embedding_type (int): itoken embeddings tensor type
+        token_embedding_type (int): token embeddings tensor type
         allow_requantize (bool): allow quantizing non-f32/f16 tensors
         quantize_output_tensor (bool): quantize output.weight
         only_copy (bool): only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
@@ -1069,6 +1112,12 @@ class llama_chat_message(ctypes.Structure):
     ]
 
 
+# // lora adapter
+# struct llama_lora_adapter;
+llama_lora_adapter_p = ctypes.c_void_p
+llama_lora_adapter_p_ctypes = ctypes.POINTER(ctypes.c_void_p)
+
+
 # // Helpers for getting default parameters
 # LLAMA_API struct llama_model_params llama_model_default_params(void);
 @ctypes_function(
@@ -1144,7 +1193,8 @@ GGML_NUMA_STRATEGY_COUNT = 5
     [ctypes.c_int],
     None,
 )
-def llama_numa_init(numa: int, /): ...
+def llama_numa_init(numa: int, /):
+    ...
 
 
 # // Call once at the end of the program - currently only used for MPI
@@ -1169,7 +1219,8 @@ def llama_backend_free():
 )
 def llama_load_model_from_file(
     path_model: bytes, params: llama_model_params, /
-) -> Optional[llama_model_p]: ...
+) -> Optional[llama_model_p]:
+    ...
 
 
 # LLAMA_API void llama_free_model(struct llama_model * model);
@@ -1178,7 +1229,8 @@ def llama_load_model_from_file(
     [llama_model_p_ctypes],
     None,
 )
-def llama_free_model(model: llama_model_p, /): ...
+def llama_free_model(model: llama_model_p, /):
+    ...
 
 
 # LLAMA_API struct llama_context * llama_new_context_with_model(
@@ -1191,7 +1243,8 @@ def llama_free_model(model: llama_model_p, /): ...
 )
 def llama_new_context_with_model(
     model: llama_model_p, params: llama_context_params, /
-) -> Optional[llama_context_p]: ...
+) -> Optional[llama_context_p]:
+    ...
 
 
 # // Frees all allocated memory
@@ -1212,87 +1265,104 @@ def llama_free(ctx: llama_context_p, /):
     [],
     ctypes.c_int64,
 )
-def llama_time_us() -> int: ...
+def llama_time_us() -> int:
+    ...
 
 
 # LLAMA_API size_t llama_max_devices(void);
 @ctypes_function("llama_max_devices", [], ctypes.c_size_t)
-def llama_max_devices() -> int: ...
+def llama_max_devices() -> int:
+    ...
 
 
 # LLAMA_API bool llama_supports_mmap       (void);
 @ctypes_function("llama_supports_mmap", [], ctypes.c_bool)
-def llama_supports_mmap() -> bool: ...
+def llama_supports_mmap() -> bool:
+    ...
 
 
 # LLAMA_API bool llama_supports_mlock      (void);
 @ctypes_function("llama_supports_mlock", [], ctypes.c_bool)
-def llama_supports_mlock() -> bool: ...
+def llama_supports_mlock() -> bool:
+    ...
 
 
 # LLAMA_API bool llama_supports_gpu_offload(void);
 @ctypes_function("llama_supports_gpu_offload", [], ctypes.c_bool)
-def llama_supports_gpu_offload() -> bool: ...
+def llama_supports_gpu_offload() -> bool:
+    ...
 
 
 # LLAMA_API const struct llama_model * llama_get_model(const struct llama_context * ctx);
 @ctypes_function("llama_get_model", [llama_context_p_ctypes], llama_model_p_ctypes)
-def llama_get_model(ctx: llama_context_p, /) -> Optional[llama_model_p]: ...
+def llama_get_model(ctx: llama_context_p, /) -> Optional[llama_model_p]:
+    ...
 
 
 # LLAMA_API uint32_t llama_n_ctx      (const struct llama_context * ctx);
 @ctypes_function("llama_n_ctx", [llama_context_p_ctypes], ctypes.c_uint32)
-def llama_n_ctx(ctx: llama_context_p, /) -> int: ...
+def llama_n_ctx(ctx: llama_context_p, /) -> int:
+    ...
 
 
 # LLAMA_API uint32_t llama_n_batch    (const struct llama_context * ctx);
 @ctypes_function("llama_n_batch", [llama_context_p_ctypes], ctypes.c_uint32)
-def llama_n_batch(ctx: llama_context_p, /) -> int: ...
+def llama_n_batch(ctx: llama_context_p, /) -> int:
+    ...
 
 
 # LLAMA_API uint32_t llama_n_ubatch   (const struct llama_context * ctx);
 @ctypes_function("llama_n_ubatch", [llama_context_p_ctypes], ctypes.c_uint32)
-def llama_n_ubatch(ctx: llama_context_p, /) -> int: ...
+def llama_n_ubatch(ctx: llama_context_p, /) -> int:
+    ...
 
 
 # LLAMA_API uint32_t llama_n_seq_max  (const struct llama_context * ctx);
 @ctypes_function("llama_n_seq_max", [llama_context_p_ctypes], ctypes.c_uint32)
-def llama_n_seq_max(ctx: llama_context_p, /) -> int: ...
+def llama_n_seq_max(ctx: llama_context_p, /) -> int:
+    ...
 
 
 # LLAMA_API enum llama_pooling_type llama_pooling_type(const struct llama_context * ctx);
 @ctypes_function("llama_pooling_type", [llama_context_p_ctypes], ctypes.c_int)
-def llama_pooling_type(ctx: llama_context_p, /) -> int: ...
+def llama_pooling_type(ctx: llama_context_p, /) -> int:
+    ...
 
 
 # LLAMA_API enum llama_vocab_type   llama_vocab_type  (const struct llama_model * model);
 @ctypes_function("llama_vocab_type", [llama_model_p_ctypes], ctypes.c_int)
-def llama_vocab_type(model: llama_model_p, /) -> int: ...
+def llama_vocab_type(model: llama_model_p, /) -> int:
+    ...
 
 
 # LLAMA_API enum llama_rope_type    llama_rope_type   (const struct llama_model * model);
 @ctypes_function("llama_rope_type", [llama_model_p_ctypes], ctypes.c_int)
-def llama_rope_type(model: llama_model_p, /) -> int: ...
+def llama_rope_type(model: llama_model_p, /) -> int:
+    ...
 
 
 # LLAMA_API int32_t llama_n_vocab    (const struct llama_model * model);
 @ctypes_function("llama_n_vocab", [llama_model_p_ctypes], ctypes.c_int32)
-def llama_n_vocab(model: llama_model_p, /) -> int: ...
+def llama_n_vocab(model: llama_model_p, /) -> int:
+    ...
 
 
 # LLAMA_API int32_t llama_n_ctx_train(const struct llama_model * model);
 @ctypes_function("llama_n_ctx_train", [llama_model_p_ctypes], ctypes.c_int32)
-def llama_n_ctx_train(model: llama_model_p, /) -> int: ...
+def llama_n_ctx_train(model: llama_model_p, /) -> int:
+    ...
 
 
 # LLAMA_API int32_t llama_n_embd     (const struct llama_model * model);
 @ctypes_function("llama_n_embd", [llama_model_p_ctypes], ctypes.c_int32)
-def llama_n_embd(model: llama_model_p, /) -> int: ...
+def llama_n_embd(model: llama_model_p, /) -> int:
+    ...
 
 
 # LLAMA_API int32_t llama_n_layer    (const struct llama_model * model);
 @ctypes_function("llama_n_layer", [llama_model_p_ctypes], ctypes.c_int32)
-def llama_n_layer(model: llama_model_p, /) -> int: ...
+def llama_n_layer(model: llama_model_p, /) -> int:
+    ...
 
 
 # // Get the model's RoPE frequency scaling factor
@@ -1431,6 +1501,43 @@ def llama_get_model_tensor(
     ...
 
 
+# // Returns true if the model contains an encoder that requires llama_encode() call
+# LLAMA_API bool llama_model_has_encoder(const struct llama_model * model);
+@ctypes_function("llama_model_has_encoder", [llama_model_p_ctypes], ctypes.c_bool)
+def llama_model_has_encoder(model: llama_model_p, /) -> bool:
+    """Returns true if the model contains an encoder that requires llama_encode() call"""
+    ...
+
+
+# // Returns true if the model contains a decoder that requires llama_decode() call
+# LLAMA_API bool llama_model_has_decoder(const struct llama_model * model);
+@ctypes_function("llama_model_has_decoder", [llama_model_p_ctypes], ctypes.c_bool)
+def llama_model_has_decoder(model: llama_model_p, /) -> bool:
+    """Returns true if the model contains a decoder that requires llama_decode() call"""
+    ...
+
+
+# // For encoder-decoder models, this function returns id of the token that must be provided
+# // to the decoder to start generating output sequence. For other models, it returns -1.
+# LLAMA_API llama_token llama_model_decoder_start_token(const struct llama_model * model);
+@ctypes_function(
+    "llama_model_decoder_start_token", [llama_model_p_ctypes], ctypes.c_int32
+)
+def llama_model_decoder_start_token(model: llama_model_p, /) -> int:
+    """For encoder-decoder models, this function returns id of the token that must be provided
+    to the decoder to start generating output sequence. For other models, it returns -1.
+    """
+    ...
+
+
+# // Returns true if the model is recurrent (like Mamba, RWKV, etc.)
+# LLAMA_API bool llama_model_is_recurrent(const struct llama_model * model);
+@ctypes_function("llama_model_is_recurrent", [llama_model_p_ctypes], ctypes.c_bool)
+def llama_model_is_recurrent(model: llama_model_p, /) -> bool:
+    """Returns true if the model is recurrent (like Mamba, RWKV, etc.)"""
+    ...
+
+
 # // Returns 0 on success
 # LLAMA_API uint32_t llama_model_quantize(
 #         const char * fname_inp,
@@ -1455,43 +1562,86 @@ def llama_model_quantize(
     ...
 
 
-# // Apply a LoRA adapter to a loaded model
-# // path_base_model is the path to a higher quality model to use as a base for
-# // the layers modified by the adapter. Can be NULL to use the current loaded model.
-# // The model needs to be reloaded before applying a new adapter, otherwise the adapter
-# // will be applied on top of the previous one
-# // Returns 0 on success
-# LLAMA_API int32_t llama_model_apply_lora_from_file(
-#         const struct llama_model * model,
-#                       const char * path_lora,
-#                            float   scale,
-#                       const char * path_base_model,
-#                          int32_t   n_threads);
+# // Load a LoRA adapter from file
+# // The loaded adapter will be associated to the given model, and will be free when the model is deleted
+# LLAMA_API struct llama_lora_adapter * llama_lora_adapter_init(
+#         struct llama_model * model,
+#         const char * path_lora);
 @ctypes_function(
-    "llama_model_apply_lora_from_file",
-    [
-        llama_model_p_ctypes,
-        ctypes.c_char_p,
-        ctypes.c_float,
-        ctypes.c_char_p,
-        ctypes.c_int32,
-    ],
+    "llama_lora_adapter_init",
+    [llama_model_p_ctypes, ctypes.c_char_p],
+    llama_lora_adapter_p_ctypes,
+)
+def llama_lora_adapter_init(
+    model: llama_model_p, path_lora: bytes, /
+) -> Optional[llama_lora_adapter_p]:
+    """Load a LoRA adapter from file
+    The loaded adapter will be associated to the given model, and will be free when the model is deleted
+    """
+    ...
+
+
+# // Add a loaded LoRA adapter to given context
+# // This will not modify model's weight
+# LLAMA_API int32_t llama_lora_adapter_set(
+#         struct llama_context * ctx,
+#         struct llama_lora_adapter * adapter,
+#         float scale);
+@ctypes_function(
+    "llama_lora_adapter_set",
+    [llama_context_p_ctypes, llama_lora_adapter_p_ctypes, ctypes.c_float],
     ctypes.c_int32,
 )
-def llama_model_apply_lora_from_file(
-    model: llama_model_p,
-    path_lora: Union[ctypes.c_char_p, bytes],
-    scale: Union[ctypes.c_float, float],
-    path_base_model: Union[ctypes.c_char_p, bytes, None],
-    n_threads: Union[ctypes.c_int32, int],
-    /,
+def llama_lora_adapter_set(
+    ctx: llama_context_p, adapter: llama_lora_adapter_p, scale: float, /
 ) -> int:
-    """Apply a LoRA adapter to a loaded model
-    path_base_model is the path to a higher quality model to use as a base for
-    the layers modified by the adapter. Can be NULL to use the current loaded model.
-    The model needs to be reloaded before applying a new adapter, otherwise the adapter
-    will be applied on top of the previous one
-    Returns 0 on success"""
+    """Add a loaded LoRA adapter to given context
+    This will not modify model's weight"""
+    ...
+
+
+# // Remove a specific LoRA adapter from given context
+# // Return -1 if the adapter is not present in the context
+# LLAMA_API int32_t llama_lora_adapter_remove(
+#         struct llama_context * ctx,
+#         struct llama_lora_adapter * adapter);
+@ctypes_function(
+    "llama_lora_adapter_remove",
+    [llama_context_p_ctypes, llama_lora_adapter_p_ctypes],
+    ctypes.c_int32,
+)
+def llama_lora_adapter_remove(
+    ctx: llama_context_p, adapter: llama_lora_adapter_p, /
+) -> int:
+    """Remove a LoRA adapter from given context
+    Return -1 if the adapter is not present in the context"""
+    ...
+
+
+# // Remove all LoRA adapters from given context
+# LLAMA_API void llama_lora_adapter_clear(
+#         struct llama_context * ctx);
+@ctypes_function(
+    "llama_lora_adapter_clear",
+    [llama_context_p_ctypes],
+    None,
+)
+def llama_lora_adapter_clear(ctx: llama_context_p, /):
+    """Remove all LoRA adapters from given context"""
+    ...
+
+
+# // Manually free a LoRA adapter
+# // Note: loaded adapters will be free when the associated model is deleted
+# LLAMA_API void llama_lora_adapter_free(struct llama_lora_adapter * adapter);
+@ctypes_function(
+    "llama_lora_adapter_free",
+    [llama_lora_adapter_p_ctypes],
+    None,
+)
+def llama_lora_adapter_free(adapter: llama_lora_adapter_p, /):
+    """Manually free a LoRA adapter
+    Note: loaded adapters will be free when the associated model is deleted"""
     ...
 
 
@@ -1872,17 +2022,17 @@ def llama_kv_cache_update(ctx: llama_context_p, /):
 # //
 
 
-# Returns the maximum size in bytes of the state (rng, logits, embedding
-# and kv_cache) - will often be smaller after compacting tokens
-# LLAMA_API size_t llama_state_get_size(const struct llama_context * ctx);
+# // Returns the *actual* size in bytes of the state
+# // (rng, logits, embedding and kv_cache)
+# // Only use when saving the state, not when restoring it, otherwise the size may be too small.
+# LLAMA_API size_t llama_state_get_size(struct llama_context * ctx);
 @ctypes_function("llama_state_get_size", [llama_context_p_ctypes], ctypes.c_size_t)
 def llama_state_get_size(ctx: llama_context_p, /) -> int:
-    """Returns the maximum size in bytes of the state (rng, logits, embedding
-    and kv_cache) - will often be smaller after compacting tokens"""
+    """Returns the *actual* size in bytes of the state (rng, logits, embedding and kv_cache) - will often be smaller after compacting tokens"""
     ...
 
 
-# LLAMA_API DEPRECATED(size_t llama_get_state_size(const struct llama_context * ctx),
+# LLAMA_API DEPRECATED(size_t llama_get_state_size(struct llama_context * ctx),
 #     "use llama_state_get_size instead");
 @ctypes_function("llama_get_state_size", [llama_context_p_ctypes], ctypes.c_size_t)
 def llama_get_state_size(ctx: llama_context_p, /) -> int:
@@ -1891,22 +2041,27 @@ def llama_get_state_size(ctx: llama_context_p, /) -> int:
     ...
 
 
-# Copies the state to the specified destination address.
-# Destination needs to have allocated enough memory.
-# Returns the number of bytes copied
+# // Copies the state to the specified destination address.
+# // Destination needs to have allocated enough memory.
+# // Returns the number of bytes copied
 # LLAMA_API size_t llama_state_get_data(
 #         struct llama_context * ctx,
-#                      uint8_t * dst);
+#                      uint8_t * dst,
+#                       size_t   size);
 @ctypes_function(
     "llama_state_get_data",
     [
         llama_context_p_ctypes,
         ctypes.POINTER(ctypes.c_uint8),
+        ctypes.c_size_t,
     ],
     ctypes.c_size_t,
 )
 def llama_state_get_data(
-    ctx: llama_context_p, dst: CtypesArray[ctypes.c_uint8], /
+    ctx: llama_context_p,
+    dst: CtypesArray[ctypes.c_uint8],
+    size: Union[ctypes.c_size_t, int],
+    /,
 ) -> int:
     """Copies the state to the specified destination address.
     Destination needs to have allocated enough memory.
@@ -1939,14 +2094,18 @@ def llama_copy_state_data(
 # // Returns the number of bytes read
 # LLAMA_API size_t llama_state_set_data(
 #         struct llama_context * ctx,
-#                const uint8_t * src);
+#                const uint8_t * src,
+#                       size_t   size);
 @ctypes_function(
     "llama_state_set_data",
-    [llama_context_p_ctypes, ctypes.POINTER(ctypes.c_uint8)],
+    [llama_context_p_ctypes, ctypes.POINTER(ctypes.c_uint8), ctypes.c_size_t],
     ctypes.c_size_t,
 )
 def llama_state_set_data(
-    ctx: llama_context_p, src: CtypesArray[ctypes.c_uint8], /
+    ctx: llama_context_p,
+    src: CtypesArray[ctypes.c_uint8],
+    size: Union[ctypes.c_size_t, int],
+    /,
 ) -> int:
     """Set the state reading from the specified address
     Returns the number of bytes read"""
@@ -1994,7 +2153,8 @@ def llama_state_load_file(
     n_token_capacity: Union[ctypes.c_size_t, int],
     n_token_count_out: CtypesPointerOrRef[ctypes.c_size_t],
     /,
-) -> bool: ...
+) -> bool:
+    ...
 
 
 # LLAMA_API DEPRECATED(bool llama_load_session_file(
@@ -2022,7 +2182,8 @@ def llama_load_session_file(
     n_token_capacity: Union[ctypes.c_size_t, int],
     n_token_count_out: CtypesPointerOrRef[ctypes.c_size_t],
     /,
-) -> int: ...
+) -> int:
+    ...
 
 
 # LLAMA_API bool llama_state_save_file(
@@ -2046,7 +2207,8 @@ def llama_state_save_file(
     tokens: CtypesArray[llama_token],
     n_token_count: Union[ctypes.c_size_t, int],
     /,
-) -> bool: ...
+) -> bool:
+    ...
 
 
 # LLAMA_API DEPRECATED(bool llama_save_session_file(
@@ -2071,7 +2233,8 @@ def llama_save_session_file(
     tokens: CtypesArray[llama_token],
     n_token_count: Union[ctypes.c_size_t, int],
     /,
-) -> int: ...
+) -> int:
+    ...
 
 
 # // Get the exact size needed to copy the KV cache of a single sequence
@@ -2092,14 +2255,24 @@ def llama_state_seq_get_size(ctx: llama_context_p, seq_id: llama_seq_id, /) -> i
 # LLAMA_API size_t llama_state_seq_get_data(
 #         struct llama_context * ctx,
 #                      uint8_t * dst,
+#                       size_t   size,
 #                 llama_seq_id   seq_id);
 @ctypes_function(
     "llama_state_seq_get_data",
-    [llama_context_p_ctypes, ctypes.POINTER(ctypes.c_uint8), llama_seq_id],
+    [
+        llama_context_p_ctypes,
+        ctypes.POINTER(ctypes.c_uint8),
+        ctypes.c_size_t,
+        llama_seq_id,
+    ],
     ctypes.c_size_t,
 )
 def llama_state_seq_get_data(
-    ctx: llama_context_p, dst: CtypesArray[ctypes.c_uint8], seq_id: llama_seq_id, /
+    ctx: llama_context_p,
+    dst: CtypesArray[ctypes.c_uint8],
+    size: Union[ctypes.c_size_t, int],
+    seq_id: llama_seq_id,
+    /,
 ) -> int:
     """Copy the KV cache of a single sequence into the specified buffer"""
     ...
@@ -2112,14 +2285,24 @@ def llama_state_seq_get_data(
 # LLAMA_API size_t llama_state_seq_set_data(
 #         struct llama_context * ctx,
 #                const uint8_t * src,
+#                       size_t   size,
 #                 llama_seq_id   dest_seq_id);
 @ctypes_function(
     "llama_state_seq_set_data",
-    [llama_context_p_ctypes, ctypes.POINTER(ctypes.c_uint8), llama_seq_id],
+    [
+        llama_context_p_ctypes,
+        ctypes.POINTER(ctypes.c_uint8),
+        ctypes.c_size_t,
+        llama_seq_id,
+    ],
     ctypes.c_size_t,
 )
 def llama_state_seq_set_data(
-    ctx: llama_context_p, src: CtypesArray[ctypes.c_uint8], dest_seq_id: llama_seq_id, /
+    ctx: llama_context_p,
+    src: CtypesArray[ctypes.c_uint8],
+    size: Union[ctypes.c_size_t, int],
+    dest_seq_id: llama_seq_id,
+    /,
 ) -> int:
     """Copy the sequence data (originally copied with `llama_state_seq_get_data`) into the specified sequence"""
     ...
@@ -2149,7 +2332,8 @@ def llama_state_seq_save_file(
     tokens: CtypesArray[llama_token],
     n_token_count: Union[ctypes.c_size_t, int],
     /,
-) -> int: ...
+) -> int:
+    ...
 
 
 # LLAMA_API size_t llama_state_seq_load_file(
@@ -2179,7 +2363,8 @@ def llama_state_seq_load_file(
     n_token_capacity: Union[ctypes.c_size_t, int],
     n_token_count_out: CtypesPointerOrRef[ctypes.c_size_t],
     /,
-) -> int: ...
+) -> int:
+    ...
 
 
 # //
@@ -2258,6 +2443,22 @@ def llama_batch_free(batch: llama_batch, /):
     ...
 
 
+# // Processes a batch of tokens with the ecoder part of the encoder-decoder model.
+# // Stores the encoder output internally for later use by the decoder cross-attention layers.
+# //   0 - success
+# // < 0 - error
+# LLAMA_API int32_t llama_encode(
+#         struct llama_context * ctx,
+#           struct llama_batch   batch);
+@ctypes_function("llama_encode", [llama_context_p_ctypes, llama_batch], ctypes.c_int32)
+def llama_encode(ctx: llama_context_p, batch: llama_batch, /) -> int:
+    """Processes a batch of tokens with the ecoder part of the encoder-decoder model.
+    Stores the encoder output internally for later use by the decoder cross-attention layers.
+    0 - success
+    < 0 - error"""
+    ...
+
+
 # // Positive return values does not mean a fatal error, but rather a warning.
 # //   0 - success
 # //   1 - could not find a KV slot for the batch (try reducing the size of the batch or increase the context)
@@ -2313,6 +2514,16 @@ def llama_n_threads(ctx: llama_context_p, /) -> int:
 @ctypes_function("llama_n_threads_batch", [llama_context_p_ctypes], ctypes.c_uint32)
 def llama_n_threads_batch(ctx: llama_context_p, /) -> int:
     """Get the number of threads used for prompt and batch processing (multiple token)"""
+    ...
+
+
+# // Set whether the model is in embeddings mode or not
+# // If true, embeddings will be returned but logits will not
+# LLAMA_API void llama_set_embeddings(struct llama_context * ctx, bool embeddings);
+@ctypes_function("llama_set_embeddings", [llama_context_p_ctypes, ctypes.c_bool], None)
+def llama_set_embeddings(ctx: llama_context_p, embeddings: bool, /):
+    """Set whether the model is in embeddings model or not
+    If true, embeddings will be returned but logits will not"""
     ...
 
 
@@ -2458,7 +2669,8 @@ def llama_get_embeddings_seq(
 )
 def llama_token_get_text(
     model: llama_model_p, token: Union[llama_token, int], /
-) -> bytes: ...
+) -> bytes:
+    ...
 
 
 # LLAMA_API float llama_token_get_score(const struct llama_model * model, llama_token token);
@@ -2467,7 +2679,8 @@ def llama_token_get_text(
 )
 def llama_token_get_score(
     model: llama_model_p, token: Union[llama_token, int], /
-) -> float: ...
+) -> float:
+    ...
 
 
 # LLAMA_API enum llama_token_attr llama_token_get_attr(const struct llama_model * model, llama_token token);
@@ -2476,7 +2689,8 @@ def llama_token_get_score(
 )
 def llama_token_get_attr(
     model: llama_model_p, token: Union[llama_token, int], /
-) -> int: ...
+) -> int:
+    ...
 
 
 # // Check if the token is supposed to end generation (end-of-generation, eg. EOS, EOT, etc.)
@@ -2494,7 +2708,9 @@ def llama_token_is_eog(model: llama_model_p, token: Union[llama_token, int], /) 
 @ctypes_function(
     "llama_token_is_control", [llama_model_p_ctypes, llama_token], ctypes.c_bool
 )
-def llama_token_is_control(model: llama_model_p, token: Union[llama_token, int], /) -> bool:
+def llama_token_is_control(
+    model: llama_model_p, token: Union[llama_token, int], /
+) -> bool:
     """Identify if Token Id is a control token or a render-able token"""
     ...
 
@@ -2537,19 +2753,15 @@ def llama_token_nl(model: llama_model_p, /) -> int:
     ...
 
 
-# // Returns -1 if unknown, 1 for true or 0 for false.
-# LLAMA_API int32_t         llama_add_bos_token(const struct llama_model * model);
-@ctypes_function("llama_add_bos_token", [llama_model_p_ctypes], ctypes.c_int32)
-def llama_add_bos_token(model: llama_model_p, /) -> int:
-    """Returns -1 if unknown, 1 for true or 0 for false."""
+# LLAMA_API bool llama_add_bos_token(const struct llama_model * model);
+@ctypes_function("llama_add_bos_token", [llama_model_p_ctypes], ctypes.c_bool)
+def llama_add_bos_token(model: llama_model_p, /) -> bool:
     ...
 
 
-# // Returns -1 if unknown, 1 for true or 0 for false.
-# LLAMA_API int32_t         llama_add_eos_token(const struct llama_model * model);
-@ctypes_function("llama_add_eos_token", [llama_model_p_ctypes], ctypes.c_int32)
-def llama_add_eos_token(model: llama_model_p, /) -> int:
-    """Returns -1 if unknown, 1 for true or 0 for false."""
+# LLAMA_API bool llama_add_eos_token(const struct llama_model * model);
+@ctypes_function("llama_add_eos_token", [llama_model_p_ctypes], ctypes.c_bool)
+def llama_add_eos_token(model: llama_model_p, /) -> bool:
     ...
 
 
@@ -2563,17 +2775,20 @@ def llama_token_prefix(model: llama_model_p) -> int:
 
 # LLAMA_API llama_token llama_token_middle(const struct llama_model * model); // Beginning of infill middle
 @ctypes_function("llama_token_middle", [llama_model_p_ctypes], llama_token)
-def llama_token_middle(model: llama_model_p, /) -> int: ...
+def llama_token_middle(model: llama_model_p, /) -> int:
+    ...
 
 
 # LLAMA_API llama_token llama_token_suffix(const struct llama_model * model); // Beginning of infill suffix
 @ctypes_function("llama_token_suffix", [llama_model_p_ctypes], llama_token)
-def llama_token_suffix(model: llama_model_p, /) -> int: ...
+def llama_token_suffix(model: llama_model_p, /) -> int:
+    ...
 
 
 # LLAMA_API llama_token llama_token_eot   (const struct llama_model * model); // End of infill middle
 @ctypes_function("llama_token_eot", [llama_model_p_ctypes], llama_token)
-def llama_token_eot(model: llama_model_p, /) -> int: ...
+def llama_token_eot(model: llama_model_p, /) -> int:
+    ...
 
 
 # //
@@ -2585,6 +2800,7 @@ def llama_token_eot(model: llama_model_p, /) -> int: ...
 # /// @param tokens The tokens pointer must be large enough to hold the resulting tokens.
 # /// @return Returns the number of tokens on success, no more than n_tokens_max
 # /// @return Returns a negative number on failure - the number of tokens that would have been returned
+# /// @param add_special Allow to add BOS and EOS tokens if model is configured to do so.
 # /// @param parse_special Allow tokenizing special and/or control tokens which otherwise are not exposed and treated
 # ///                      as plaintext. Does not insert a leading space.
 # LLAMA_API int32_t llama_tokenize(
@@ -2626,7 +2842,7 @@ def llama_tokenize(
         text_len: The length of the text.
         tokens: The tokens pointer must be large enough to hold the resulting tokens.
         n_max_tokens: The maximum number of tokens to return.
-        add_special: Allow tokenizing special and/or control tokens which otherwise are not exposed and treated as plaintext. Does not insert a leading space.
+        add_special: Allow adding special tokenns if the model is configured to do so.
         parse_special: Allow parsing special tokens.
 
     Returns:
@@ -2639,13 +2855,14 @@ def llama_tokenize(
 # // Token Id -> Piece.
 # // Uses the vocabulary in the provided context.
 # // Does not write null terminator to the buffer.
-# // User code is responsible to remove the leading whitespace of the first non-BOS token when decoding multiple tokens.
+# // User can skip up to 'lstrip' leading spaces before copying (useful when encoding/decoding multiple tokens with 'add_space_prefix')
 # // @param special If true, special tokens are rendered in the output.
 # LLAMA_API int32_t llama_token_to_piece(
 #           const struct llama_model * model,
 #                        llama_token   token,
 #                               char * buf,
 #                            int32_t   length,
+#                            int32_t   lstrip,
 #                               bool   special);
 @ctypes_function(
     "llama_token_to_piece",
@@ -2653,6 +2870,7 @@ def llama_tokenize(
         llama_model_p_ctypes,
         llama_token,
         ctypes.c_char_p,
+        ctypes.c_int32,
         ctypes.c_int32,
         ctypes.c_bool,
     ],
@@ -2663,6 +2881,7 @@ def llama_token_to_piece(
     token: Union[llama_token, int],
     buf: Union[ctypes.c_char_p, bytes, CtypesArray[ctypes.c_char]],
     length: Union[ctypes.c_int, int],
+    lstrip: Union[ctypes.c_int, int],
     special: Union[ctypes.c_bool, bool],
     /,
 ) -> int:
@@ -2676,8 +2895,64 @@ def llama_token_to_piece(
         token: The token to convert.
         buf: The buffer to write the token to.
         length: The length of the buffer.
+        lstrip: The number of leading spaces to skip.
         special: If true, special tokens are rendered in the output."""
     ...
+
+
+# /// @details Convert the provided tokens into text (inverse of llama_tokenize()).
+# /// @param text The char pointer must be large enough to hold the resulting text.
+# /// @return Returns the number of chars/bytes on success, no more than text_len_max.
+# /// @return Returns a negative number on failure - the number of chars/bytes that would have been returned.
+# /// @param remove_special Allow to remove BOS and EOS tokens if model is configured to do so.
+# /// @param unparse_special If true, special tokens are rendered in the output.
+# LLAMA_API int32_t llama_detokenize(
+#     const struct llama_model * model,
+#            const llama_token * tokens,
+#                      int32_t   n_tokens,
+#                         char * text,
+#                      int32_t   text_len_max,
+#                         bool   remove_special,
+#                         bool   unparse_special);
+@ctypes_function(
+    "llama_detokenize",
+    [
+        llama_model_p_ctypes,
+        ctypes.POINTER(llama_token),
+        ctypes.c_int32,
+        ctypes.c_char_p,
+        ctypes.c_int32,
+        ctypes.c_bool,
+        ctypes.c_bool,
+    ],
+    ctypes.c_int32,
+)
+def llama_detokenize(
+    model: llama_model_p,
+    tokens: CtypesArray[llama_token],
+    n_tokens: Union[ctypes.c_int, int],
+    text: bytes,
+    text_len_max: Union[ctypes.c_int, int],
+    remove_special: Union[ctypes.c_bool, bool],
+    unparse_special: Union[ctypes.c_bool, bool],
+    /,
+) -> int:
+    """Convert the provided tokens into text (inverse of llama_tokenize()).
+
+    Args:
+        model: The model to use for tokenization.
+        tokens: The tokens to convert.
+        n_tokens: The number of tokens.
+        text: The buffer to write the text to.
+        text_len_max: The length of the buffer.
+        remove_special: Allow to remove BOS and EOS tokens if model is configured to do so.
+        unparse_special: If true, special tokens are rendered in the output."""
+    ...
+
+
+# //
+# // Chat templates
+# //
 
 
 # /// Apply chat template. Inspired by hf apply_chat_template() on python.
@@ -2714,7 +2989,8 @@ def llama_chat_apply_template(
     chat: CtypesArray[llama_chat_message],
     n_msg: int,
     /,
-) -> int: ...
+) -> int:
+    ...
 
 
 # //
@@ -2742,7 +3018,7 @@ def llama_grammar_init(
     n_rules: Union[ctypes.c_size_t, int],
     start_rule_index: Union[ctypes.c_size_t, int],
     /,
-) -> llama_grammar_p:
+) -> Optional[llama_grammar_p]:
     """Initialize a grammar from a set of rules."""
     ...
 
@@ -2766,6 +3042,79 @@ def llama_grammar_free(grammar: llama_grammar_p, /):
 )
 def llama_grammar_copy(grammar: llama_grammar_p, /) -> llama_grammar_p:
     """Copy a grammar."""
+    ...
+
+
+# /// @details Apply constraints from grammar
+# LLAMA_API void llama_grammar_sample(
+#         const struct llama_grammar * grammar,
+#         const struct llama_context * ctx,
+#             llama_token_data_array * candidates);
+@ctypes_function(
+    "llama_grammar_sample",
+    [
+        llama_grammar_p,
+        llama_context_p_ctypes,
+        llama_token_data_array_p,
+    ],
+    None,
+)
+def llama_grammar_sample(
+    grammar: llama_grammar_p,
+    ctx: llama_context_p,
+    candidates: Union[
+        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array]
+    ],
+    /,
+):
+    """Apply constraints from grammar"""
+    ...
+
+
+# LLAMA_API DEPRECATED(void llama_sample_grammar(
+#         struct llama_context * ctx,
+#       llama_token_data_array * candidates,
+#   const struct llama_grammar * grammar),
+#     "use llama_grammar_sample instead");
+@ctypes_function(
+    "llama_sample_grammar",
+    [llama_context_p_ctypes, llama_token_data_array_p, llama_grammar_p],
+    None,
+)
+def llama_sample_grammar(
+    ctx: llama_context_p,
+    candidates: Union[
+        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array]
+    ],
+    grammar,  # type: llama_grammar_p
+    /,
+):
+    """Apply constraints from grammar
+
+    Parameters:
+        candidates: A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
+        grammar: A grammar object containing the rules and constraints to apply to the generated text.
+    """
+    ...
+
+
+# /// @details Accepts the sampled token into the grammar
+# LLAMA_API void llama_grammar_accept_token(
+#         struct llama_grammar * grammar,
+#         struct llama_context * ctx,
+#                  llama_token   token);
+@ctypes_function(
+    "llama_grammar_accept_token",
+    [llama_grammar_p, llama_context_p_ctypes, llama_token],
+    None,
+)
+def llama_grammar_accept_token(
+    grammar: llama_grammar_p,
+    ctx: llama_context_p,
+    token: Union[llama_token, int],
+    /,
+):
+    """Accepts the sampled token into the grammar"""
     ...
 
 
@@ -3055,33 +3404,6 @@ def llama_sample_temp(
     ...
 
 
-# /// @details Apply constraints from grammar
-# LLAMA_API void llama_sample_grammar(
-#         struct llama_context * ctx,
-#       llama_token_data_array * candidates,
-#   const struct llama_grammar * grammar);
-@ctypes_function(
-    "llama_sample_grammar",
-    [llama_context_p_ctypes, llama_token_data_array_p, llama_grammar_p],
-    None,
-)
-def llama_sample_grammar(
-    ctx: llama_context_p,
-    candidates: Union[
-        CtypesArray[llama_token_data_array], CtypesPointerOrRef[llama_token_data_array]
-    ],
-    grammar,  # type: llama_grammar_p
-    /,
-):
-    """Apply constraints from grammar
-
-    Parameters:
-        candidates: A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
-        grammar: A grammar object containing the rules and constraints to apply to the generated text.
-    """
-    ...
-
-
 # /// @details Mirostat 1.0 algorithm described in the paper https://arxiv.org/abs/2007.14966. Uses tokens instead of words.
 # /// @param candidates A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
 # /// @param tau  The target cross-entropy (or surprise) value you want to achieve for the generated text. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text.
@@ -3214,26 +3536,10 @@ def llama_sample_token(
     ...
 
 
-# /// @details Accepts the sampled token into the grammar
-# LLAMA_API void llama_grammar_accept_token(
-#         struct llama_context * ctx,
-#         struct llama_grammar * grammar,
-#                  llama_token   token);
-@ctypes_function(
-    "llama_grammar_accept_token",
-    [llama_context_p_ctypes, llama_grammar_p, llama_token],
-    None,
-)
-def llama_grammar_accept_token(
-    ctx: llama_context_p, grammar: llama_grammar_p, token: Union[llama_token, int], /
-) -> None:
-    """Accepts the sampled token into the grammar"""
-    ...
-
-
 # //
 # // Model split
 # //
+
 
 # /// @details Build a split GGUF final path for this chunk.
 # ///          llama_split_path(split_path, sizeof(split_path), "/models/ggml-model-q4_0", 2, 4) => split_path = "/models/ggml-model-q4_0-00002-of-00004.gguf"
@@ -3351,4 +3657,5 @@ def llama_log_set(
     [ctypes.c_void_p, llama_context_p_ctypes],
     None,
 )
-def llama_dump_timing_info_yaml(stream: ctypes.c_void_p, ctx: llama_context_p, /): ...
+def llama_dump_timing_info_yaml(stream: ctypes.c_void_p, ctx: llama_context_p, /):
+    ...

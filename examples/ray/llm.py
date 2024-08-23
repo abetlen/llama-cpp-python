@@ -4,6 +4,7 @@ from ray import serve
 from ray.serve import Application
 from llama_cpp import Llama
 
+
 @serve.deployment
 class LlamaDeployment:
     def __init__(self, model_path: str):

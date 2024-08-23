@@ -4,6 +4,7 @@ import os
 import ctypes
 
 from typing import (
+    Dict,
     List,
     Optional,
     Sequence,
@@ -117,9 +118,11 @@ class _LlamaModel:
             self.model,
             lora_path.encode("utf-8"),
             scale,
-            path_base_model.encode("utf-8")
-            if path_base_model is not None
-            else ctypes.c_char_p(0),
+            (
+                path_base_model.encode("utf-8")
+                if path_base_model is not None
+                else ctypes.c_char_p(0)
+            ),
             n_threads,
         )
 
@@ -176,11 +179,11 @@ class _LlamaModel:
         assert self.model is not None
         return llama_cpp.llama_token_eot(self.model)
 
-    def add_bos_token(self) -> int:
+    def add_bos_token(self) -> bool:
         assert self.model is not None
         return llama_cpp.llama_add_bos_token(self.model)
 
-    def add_eos_token(self) -> int:
+    def add_eos_token(self) -> bool:
         assert self.model is not None
         return llama_cpp.llama_add_eos_token(self.model)
 
@@ -208,7 +211,7 @@ class _LlamaModel:
     def token_to_piece(self, token: int, special: bool = False) -> bytes:
         assert self.model is not None
         buf = ctypes.create_string_buffer(32)
-        llama_cpp.llama_token_to_piece(self.model, token, buf, 32, special)
+        llama_cpp.llama_token_to_piece(self.model, token, buf, 32, 0, special)
         return bytes(buf)
 
     def detokenize(self, tokens: List[int], special: bool = False) -> bytes:
@@ -218,14 +221,16 @@ class _LlamaModel:
         buffer = (ctypes.c_char * size)()
         for token in tokens:
             n = llama_cpp.llama_token_to_piece(
-                self.model, llama_cpp.llama_token(token), buffer, size, special
+                self.model, llama_cpp.llama_token(token), buffer, size, 0, special
             )
             assert n <= size
             output += bytes(buffer[:n])
         # NOTE: Llama1 models automatically added a space at the start of the prompt
         # this line removes a leading space if the first token is a beginning of sentence token
         return (
-            output[1:] if len(tokens) > 0 and tokens[0] == self.token_bos() and output[0:1] == b' ' else output
+            output[1:]
+            if len(tokens) > 0 and tokens[0] == self.token_bos() and output[0:1] == b" "
+            else output
         )
 
     # Extra
@@ -235,20 +240,28 @@ class _LlamaModel:
         buffer_size = 1024
         buffer = ctypes.create_string_buffer(buffer_size)
         # zero the buffer
-        buffer.value = b'\0' * buffer_size
+        buffer.value = b"\0" * buffer_size
         # iterate over model keys
         for i in range(llama_cpp.llama_model_meta_count(self.model)):
-            nbytes = llama_cpp.llama_model_meta_key_by_index(self.model, i, buffer, buffer_size)
+            nbytes = llama_cpp.llama_model_meta_key_by_index(
+                self.model, i, buffer, buffer_size
+            )
             if nbytes > buffer_size:
                 buffer_size = nbytes + 1
                 buffer = ctypes.create_string_buffer(buffer_size)
-                nbytes = llama_cpp.llama_model_meta_key_by_index(self.model, i, buffer, buffer_size)
+                nbytes = llama_cpp.llama_model_meta_key_by_index(
+                    self.model, i, buffer, buffer_size
+                )
             key = buffer.value.decode("utf-8")
-            nbytes = llama_cpp.llama_model_meta_val_str_by_index(self.model, i, buffer, buffer_size)
+            nbytes = llama_cpp.llama_model_meta_val_str_by_index(
+                self.model, i, buffer, buffer_size
+            )
             if nbytes > buffer_size:
                 buffer_size = nbytes + 1
                 buffer = ctypes.create_string_buffer(buffer_size)
-                nbytes = llama_cpp.llama_model_meta_val_str_by_index(self.model, i, buffer, buffer_size)
+                nbytes = llama_cpp.llama_model_meta_val_str_by_index(
+                    self.model, i, buffer, buffer_size
+                )
             value = buffer.value.decode("utf-8")
             metadata[key] = value
         return metadata
@@ -465,7 +478,11 @@ class _LlamaContext:
         )
 
     def sample_token_mirostat_v2(
-        self, candidates: "_LlamaTokenDataArray", tau: float, eta: float, mu: llama_cpp.CtypesPointerOrRef[ctypes.c_float]
+        self,
+        candidates: "_LlamaTokenDataArray",
+        tau: float,
+        eta: float,
+        mu: llama_cpp.CtypesPointerOrRef[ctypes.c_float],
     ) -> int:
         assert self.ctx is not None
         return llama_cpp.llama_sample_token_mirostat_v2(
@@ -494,7 +511,7 @@ class _LlamaContext:
     def grammar_accept_token(self, grammar: LlamaGrammar, token: int):
         assert self.ctx is not None
         assert grammar.grammar is not None
-        llama_cpp.llama_grammar_accept_token(self.ctx, grammar.grammar, token)
+        llama_cpp.llama_grammar_accept_token(grammar.grammar, self.ctx, token)
 
     def reset_timings(self):
         assert self.ctx is not None
@@ -589,7 +606,7 @@ class _LlamaTokenDataArray:
             size=self.n_vocab,
             sorted=False,
         )
-        self.default_candidates_data_id = np.arange(self.n_vocab, dtype=np.intc) # type: ignore
+        self.default_candidates_data_id = np.arange(self.n_vocab, dtype=np.intc)  # type: ignore
         self.default_candidates_data_p = np.zeros(self.n_vocab, dtype=np.single)
 
     def copy_logits(self, logits: npt.NDArray[np.single]):
@@ -635,10 +652,14 @@ def _tokenize(model: _LlamaModel, text: str, add_bos: bool, special: bool) -> li
 def _token_to_piece(model: _LlamaModel, token: int, special: bool = False) -> str:
     assert model.model is not None
     result = (ctypes.c_char * 8)(0)
-    n_tokens = llama_cpp.llama_token_to_piece(model.model, token, result, len(result), special)
+    n_tokens = llama_cpp.llama_token_to_piece(
+        model.model, token, result, 0, len(result), special
+    )
     if n_tokens < 0:
         result = (ctypes.c_char * -n_tokens)(0)
-        check = llama_cpp.llama_token_to_piece(model.model, token, result, len(result), special)
+        check = llama_cpp.llama_token_to_piece(
+            model.model, token, result, 0, len(result), special
+        )
         if check != -n_tokens:
             raise RuntimeError(f"Failed to get piece: token={token}")
     else:
@@ -670,8 +691,8 @@ def _detokenize_bpe(model: _LlamaModel, tokens: List[int]) -> str:
 def _should_add_bos(model: _LlamaModel) -> bool:
     assert model.model is not None
     add_bos = llama_cpp.llama_add_bos_token(model.model)
-    if add_bos != -1:
-        return add_bos != 0
+    if add_bos:
+        return add_bos
     else:
         return llama_cpp.llama_vocab_type(model.model) == llama_cpp.LLAMA_VOCAB_TYPE_SPM
 
@@ -700,7 +721,7 @@ class _LlamaSamplingParams:
     typical_p: float = 1.00
     temp: float = 0.80
     penalty_last_n: int = 64
-    penalty_repeat: float = 1.10
+    penalty_repeat: float = 1.0
     penalty_freq: float = 0.00
     penalty_present: float = 0.00
     mirostat: int = 0
@@ -750,7 +771,10 @@ class _LlamaSamplingContext:
         return ctx_main.model.detokenize(self.prev[-n:]).decode("utf-8")
 
     def sample(
-        self, ctx_main: _LlamaContext, idx: int = 0, logits_array: Optional[npt.NDArray[np.single]] = None
+        self,
+        ctx_main: _LlamaContext,
+        idx: int = 0,
+        logits_array: Optional[npt.NDArray[np.single]] = None,
     ):
         n_vocab = ctx_main.model.n_vocab()
         id: int = 0
@@ -775,7 +799,7 @@ class _LlamaSamplingContext:
         if len(self.prev) > 0:
             nl_token = ctx_main.model.token_nl()
             nl_logit = logits_array[nl_token]
-            last_tokens = self.prev[-self.params.penalty_last_n:]
+            last_tokens = self.prev[-self.params.penalty_last_n :]
             last_tokens_size = min(len(last_tokens), self.params.penalty_last_n)
             if last_tokens_size > 0:
                 last_tokens_p = (llama_cpp.llama_token * len(last_tokens))(*last_tokens)
