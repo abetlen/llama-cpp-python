@@ -2049,7 +2049,8 @@ class Llama:
         assert self._ctx.ctx is not None
         # Only filling in up to `n_tokens` and then zero-ing out the rest
         self.scores[: state.n_tokens, :] = state.scores.copy()
-        self.scores[state.n_tokens :, :] = 0.0
+        rest = self.scores[state.n_tokens :, :]
+        rest[rest > 0] = 0.0
         self.input_ids = state.input_ids.copy()
         self.n_tokens = state.n_tokens
         state_size = state.llama_state_size
