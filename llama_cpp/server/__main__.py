@@ -85,7 +85,9 @@ def main():
     assert server_settings is not None
     assert model_settings is not None
 
-    load_chat_formats()
+    if server_settings.load_external_chat_formats:
+        load_chat_formats()
+
     app = create_app(
         server_settings=server_settings,
         model_settings=model_settings,
