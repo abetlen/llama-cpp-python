@@ -1,3 +1,5 @@
+![icon.svg](./docs/icon.svg)
+
 # 🦙 Python Bindings for [`llama.cpp`](https://github.com/ggerganov/llama.cpp)
 
 [![Documentation Status](https://readthedocs.org/projects/llama-cpp-python/badge/?version=latest)](https://llama-cpp-python.readthedocs.io/en/latest/?badge=latest)
