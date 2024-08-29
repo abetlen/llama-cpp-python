@@ -27,7 +27,7 @@ class BaseLlamaTokenizer(abc.ABC):
 
     @abc.abstractmethod
     def detokenize(
-        self, tokens: List[int], prev_tokens: Optional[List[int]] = None, special: bool = True
+        self, tokens: List[int], prev_tokens: Optional[List[int]] = None, special: bool = False
     ) -> bytes:
         """Detokenize the tokens into text.
 
@@ -49,14 +49,9 @@ class LlamaTokenizer(BaseLlamaTokenizer):
         return self._model.tokenize(text, add_bos=add_bos, special=special)
 
     def detokenize(
-        self, tokens: List[int], prev_tokens: Optional[List[int]] = None, special: bool = True
+        self, tokens: List[int], prev_tokens: Optional[List[int]] = None, special: bool = False
     ) -> bytes:
-        if prev_tokens is not None:
-            text = self._model.detokenize(prev_tokens + tokens, special=special)
-            prev_text = self._model.detokenize(prev_tokens, special=special)
-            return text[len(prev_text) :]
-        else:
-            return self._model.detokenize(tokens, special=special)
+        return self._model.detokenize(tokens, special=special)
 
     def encode(
         self, text: str, add_bos: bool = True, special: bool = True
@@ -85,7 +80,7 @@ class LlamaHFTokenizer(BaseLlamaTokenizer):
         )
 
     def detokenize(
-        self, tokens: List[int], prev_tokens: Optional[List[int]] = None, special: bool = True
+        self, tokens: List[int], prev_tokens: Optional[List[int]] = None, special: bool = False
     ) -> bytes:
         skip_special_tokens = not special 
         if prev_tokens is not None:
