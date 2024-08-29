@@ -3312,7 +3312,7 @@ class Llama3VisionAlphaChatHandler(Llava15ChatHandler):
 Llama3VisionAlpha = Llama3VisionAlphaChatHandler
 
 
-class MiniCPMv26(Llava15ChatHandler):
+class MiniCPMv26ChatHandler(Llava15ChatHandler):
     DEFAULT_SYSTEM_MESSAGE = "You are a helpful assistant."
 
     CHAT_FORMAT = (
