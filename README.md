@@ -1,6 +1,8 @@
-![icon.svg](./docs/icon.svg)
+<p align="center">
+  <img src="https://raw.githubusercontent.com/abetlen/llama-cpp-python/main/docs/icon.svg" height="128">
+</p>
 
-# 🦙 Python Bindings for [`llama.cpp`](https://github.com/ggerganov/llama.cpp)
+#  Python Bindings for [`llama.cpp`](https://github.com/ggerganov/llama.cpp)
 
 [![Documentation Status](https://readthedocs.org/projects/llama-cpp-python/badge/?version=latest)](https://llama-cpp-python.readthedocs.io/en/latest/?badge=latest)
 [![Tests](https://github.com/abetlen/llama-cpp-python/actions/workflows/test.yaml/badge.svg?branch=main)](https://github.com/abetlen/llama-cpp-python/actions/workflows/test.yaml)
