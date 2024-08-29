@@ -30,6 +30,7 @@ import argparse
 
 import uvicorn
 
+from llama_cpp.llama_chat_format import load_chat_formats
 from llama_cpp.server.app import create_app
 from llama_cpp.server.settings import (
     Settings,
@@ -83,6 +84,8 @@ def main():
         sys.exit(1)
     assert server_settings is not None
     assert model_settings is not None
+
+    load_chat_formats()
     app = create_app(
         server_settings=server_settings,
         model_settings=model_settings,
