@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/abetlen/llama-cpp-python/main/docs/icon.svg" height="128">
+  <img src="https://raw.githubusercontent.com/abetlen/llama-cpp-python/main/docs/icon.svg" style="height: 6.25rem; width: 6.25rem">
 </p>
 
 #  Python Bindings for [`llama.cpp`](https://github.com/ggerganov/llama.cpp)
