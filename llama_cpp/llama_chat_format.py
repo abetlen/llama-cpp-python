@@ -1009,7 +1009,7 @@ def format_qwen(
     **kwargs: Any,
 ) -> ChatFormatterResponse:
     _roles = dict(user="<|im_start|>user", assistant="<|im_start|>assistant")
-    system_message = "You are a helpful assistant."
+    system_message = _get_system_message(messages) or "You are a helpful assistant."
     system_template = "<|im_start|>system\n{system_message}"
     system_message = system_template.format(system_message=system_message)
     _messages = _map_roles(messages, _roles)
