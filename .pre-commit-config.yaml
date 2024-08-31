@@ -1,7 +1,7 @@
 repos:
   # auto update
   - repo: https://gitlab.com/vojko.pribudic.foss/pre-commit-update
-    rev: "v0.3.3post1"
+    rev: "v0.4.0post1"
     hooks:
       - id: pre-commit-update
         args: [--dry-run, --all-versions]
