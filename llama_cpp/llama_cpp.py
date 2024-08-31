@@ -795,8 +795,8 @@ class llama_model_params(ctypes.Structure):
 #     uint32_t n_batch;           // logical maximum batch size that can be submitted to llama_decode
 #     uint32_t n_ubatch;          // physical maximum batch size
 #     uint32_t n_seq_max;         // max number of sequences (i.e. distinct states for recurrent models)
-#     uint32_t n_threads;         // number of threads to use for generation
-#     uint32_t n_threads_batch;   // number of threads to use for batch processing
+#     int32_t  n_threads;         // number of threads to use for generation
+#     int32_t  n_threads_batch;   // number of threads to use for batch processing
 
 #     enum llama_rope_scaling_type rope_scaling_type; // RoPE scaling type, from `enum llama_rope_scaling_type`
 #     enum llama_pooling_type      pooling_type;      // whether to pool (sum) embedding results by sequence id
@@ -901,8 +901,8 @@ class llama_context_params(ctypes.Structure):
         ("n_batch", ctypes.c_uint32),
         ("n_ubatch", ctypes.c_uint32),
         ("n_seq_max", ctypes.c_uint32),
-        ("n_threads", ctypes.c_uint32),
-        ("n_threads_batch", ctypes.c_uint32),
+        ("n_threads", ctypes.c_int32),
+        ("n_threads_batch", ctypes.c_int32),
         ("rope_scaling_type", ctypes.c_int),
         ("pooling_type", ctypes.c_int),
         ("attention_type", ctypes.c_int),
@@ -1195,6 +1195,16 @@ GGML_NUMA_STRATEGY_COUNT = 5
 )
 def llama_numa_init(numa: int, /):
     ...
+
+
+# // Optional: an auto threadpool gets created in ggml if not passed explicitly
+# LLAMA_API void llama_attach_threadpool(
+#            struct   llama_context * ctx,
+#         ggml_threadpool_t   threadpool,
+#         ggml_threadpool_t   threadpool_batch);
+
+
+# LLAMA_API void llama_detach_threadpool(struct llama_context * ctx);
 
 
 # // Call once at the end of the program - currently only used for MPI
@@ -2478,20 +2488,20 @@ def llama_decode(ctx: llama_context_p, batch: llama_batch, /) -> int:
 # // Set the number of threads used for decoding
 # // n_threads is the number of threads used for generation (single token)
 # // n_threads_batch is the number of threads used for prompt and batch processing (multiple tokens)
-# LLAMA_API void llama_set_n_threads(struct llama_context * ctx, uint32_t n_threads, uint32_t n_threads_batch);
+# LLAMA_API void llama_set_n_threads(struct llama_context * ctx, int32_t n_threads, int32_t n_threads_batch);
 @ctypes_function(
     "llama_set_n_threads",
     [
         llama_context_p_ctypes,
-        ctypes.c_uint32,
-        ctypes.c_uint32,
+        ctypes.c_int32,
+        ctypes.c_int32,
     ],
     None,
 )
 def llama_set_n_threads(
     ctx: llama_context_p,
-    n_threads: Union[ctypes.c_uint32, int],
-    n_threads_batch: Union[ctypes.c_uint32, int],
+    n_threads: Union[ctypes.c_int32, int],
+    n_threads_batch: Union[ctypes.c_int32, int],
     /,
 ):
     """Set the number of threads used for decoding
@@ -2502,16 +2512,16 @@ def llama_set_n_threads(
 
 
 # // Get the number of threads used for generation of a single token.
-# LLAMA_API uint32_t llama_n_threads(struct llama_context * ctx);
-@ctypes_function("llama_n_threads", [llama_context_p_ctypes], ctypes.c_uint32)
+# LLAMA_API int32_t llama_n_threads(struct llama_context * ctx);
+@ctypes_function("llama_n_threads", [llama_context_p_ctypes], ctypes.c_int32)
 def llama_n_threads(ctx: llama_context_p, /) -> int:
     """Get the number of threads used for generation of a single token"""
     ...
 
 
 # // Get the number of threads used for prompt and batch processing (multiple token).
-# LLAMA_API uint32_t llama_n_threads_batch(struct llama_context * ctx);
-@ctypes_function("llama_n_threads_batch", [llama_context_p_ctypes], ctypes.c_uint32)
+# LLAMA_API int32_t llama_n_threads_batch(struct llama_context * ctx);
+@ctypes_function("llama_n_threads_batch", [llama_context_p_ctypes], ctypes.c_int32)
 def llama_n_threads_batch(ctx: llama_context_p, /) -> int:
     """Get the number of threads used for prompt and batch processing (multiple token)"""
     ...
