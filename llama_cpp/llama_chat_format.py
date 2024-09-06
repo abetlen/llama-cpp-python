@@ -3567,7 +3567,7 @@ def chatml_function_calling(
         )
 
     # Case 3: Automatic tool choice
-    assert isinstance(tool_choice, str) and tool_choice == "auto"
+    assert isinstance(tool_choice, str) and tool_choice in ["auto", "required"]
     function_names = " | ".join(
         [f'''"functions.{tool['function']['name']}:"''' for tool in tools]
     )
