@@ -68,7 +68,7 @@ All `llama.cpp` cmake build options can be set via the `CMAKE_ARGS` environment 
 
 ```bash
 # Linux and Mac
-CMAKE_ARGS="-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS" \
+CMAKE_ARGS="-DGGML_BLAS=1 -DGGML_BLAS_VENDOR=OpenBLAS" \
   pip install llama-cpp-python
 ```
 
