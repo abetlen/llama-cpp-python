@@ -68,7 +68,7 @@ All `llama.cpp` cmake build options can be set via the `CMAKE_ARGS` environment 
 
 ```bash
 # Linux and Mac
-CMAKE_ARGS="-DGGML_BLAS=1 -DGGML_BLAS_VENDOR=OpenBLAS" \
+CMAKE_ARGS="-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS" \
   pip install llama-cpp-python
 ```
 
@@ -154,7 +154,7 @@ pip install llama-cpp-python \
 To install with Metal (MPS), set the `GGML_METAL=on` environment variable before installing:
 
 ```bash
-CMAKE_ARGS="-DGGML_METAL=on" pip install llama-cpp-python
+CMAKE_ARGS="-DGGML_METAL=1" pip install llama-cpp-python
 ```
 
 **Pre-built Wheel (New)**
