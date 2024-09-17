@@ -2,11 +2,6 @@
 
 # flake8: noqa
 from pathlib import Path
-import sys
-import ctypes
-import enum
-import typing
-import dataclasses
 
 from itertools import groupby
 from typing import (
@@ -17,8 +12,6 @@ from typing import (
     Tuple,
     Union,
 )
-
-import llama_cpp.llama_cpp as llama_cpp
 
 LLAMA_GRAMMAR_DEFAULT_ROOT = "root"
 
