@@ -15,6 +15,10 @@ import llama_cpp._internals as internals
 MODEL = "./vendor/llama.cpp/models/ggml-vocab-llama-spm.gguf"
 
 
+def test_llama_cpp_version():
+    assert llama_cpp.__version__
+
+
 def test_llama_cpp_tokenization():
     llama = llama_cpp.Llama(model_path=MODEL, vocab_only=True, verbose=False)
 
@@ -50,10 +54,6 @@ def test_llama_cpp_tokenization():
     assert tokens[-1] != llama.token_eos()
     assert tokens == [llama.token_bos()]
     assert text == llama.detokenize(tokens)
-
-
-def test_llama_cpp_version():
-    assert llama_cpp.__version__
 
 
 @pytest.fixture
@@ -150,8 +150,12 @@ root ::= "true" | "false"
     )
     assert output["choices"][0]["text"] == "true"
 
+    suffix = b"rot"
+    tokens = model.tokenize(suffix, add_bos=True, special=True)
     def logit_processor_func(input_ids, logits):
-        return logits * 1
+        for token in tokens:
+            logits[token] *= 1000
+        return logits
 
     logit_processors = llama_cpp.LogitsProcessorList(
         [logit_processor_func]
@@ -166,4 +170,4 @@ root ::= "true" | "false"
         seed=1337,
         logits_processor=logit_processors
     )
-    assert output["choices"][0]["text"].lower().startswith("is")
+    assert output["choices"][0]["text"].lower().startswith("rot")
