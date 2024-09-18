@@ -3078,14 +3078,6 @@ def llama_sampler_clone(smpl: llama_sampler_p, /) -> llama_sampler_p: ...
 
 
 # // important: do not free if the sampler has been added to a llama_sampler_chain (via llama_sampler_chain_add)
-@ctypes_function(
-    "llama_sampler_free",
-    [llama_sampler_p_ctypes],
-    None,
-)
-def llama_sampler_free(smpl: llama_sampler_p, /): ...
-
-
 # LLAMA_API void                   llama_sampler_free  (      struct llama_sampler * smpl);
 @ctypes_function(
     "llama_sampler_free",
