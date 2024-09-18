@@ -16,10 +16,25 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
-      - name: Install dependencies
+
+      - name: Install dependencies (Linux/MacOS)
+        if: runner.os != 'Windows'
         run: |
           python -m pip install --upgrade pip
-          python -m pip install --verbose llama-cpp-python[all]
+          python -m pip install uv
+          RUST_LOG=trace python -m uv pip install llama-cpp-python[all] --verbose 
+        shell: bash
+
+      - name: Install dependencies (Windows)
+        if: runner.os == 'Windows'
+        env:
+          RUST_LOG: trace           
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install uv
+          python -m uv pip install llama-cpp-python[all] --verbose 
+        shell: cmd
+          
       - name: Test with pytest
         run: |
           python -c "import llama_cpp"
@@ -37,10 +52,25 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
-      - name: Install dependencies
+          
+      - name: Install dependencies (Linux/MacOS)
+        if: runner.os != 'Windows'
         run: |
           python -m pip install --upgrade pip
-          python -m pip install --verbose llama-cpp-python[all]
+          python -m pip install uv
+          RUST_LOG=trace python -m uv pip install llama-cpp-python[all] --verbose 
+        shell: bash
+
+      - name: Install dependencies (Windows)
+        if: runner.os == 'Windows'
+        env:
+          RUST_LOG: trace          
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install uv
+          python -m uv pip install llama-cpp-python[all] --verbose 
+        shell: cmd
+          
       - name: Test with pytest
         run: |
           python -c "import llama_cpp"
@@ -57,11 +87,26 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-          cache: 'pip'
-      - name: Install dependencies
+          cache: 'pip'   
+
+      - name: Install dependencies (Linux/MacOS)
+        if: runner.os != 'Windows'
         run: |
           python -m pip install --upgrade pip
-          python -m pip install --verbose llama-cpp-python[all]
+          python -m pip install uv
+          RUST_LOG=trace python -m uv pip install llama-cpp-python[all] --verbose 
+        shell: bash
+
+      - name: Install dependencies (Windows)
+        if: runner.os == 'Windows'
+        env:
+          RUST_LOG: trace  
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install uv
+          python -m uv pip install llama-cpp-python[all] --verbose 
+        shell: cmd
+          
       - name: Test with pytest
         run: |
           python -c "import llama_cpp"
