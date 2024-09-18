@@ -55,12 +55,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
-          RUST_LOG=trace python -m uv pip install -e .[all] --verbose
+          python -m uv pip install -e .[all] --verbose
         shell: bash
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
-        env:
-          RUST_LOG: trace          
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
@@ -98,13 +96,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
-          RUST_LOG=trace python -m uv pip install -e .[all] --verbose
+          python -m uv pip install -e .[all] --verbose
         shell: bash
 
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
-        env:
-          RUST_LOG: trace
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
@@ -143,13 +139,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
-          RUST_LOG=trace python -m uv pip install -e .[all] --verbose
+          python -m uv pip install -e .[all] --verbose
         shell: bash
 
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
-        env:
-          RUST_LOG: trace
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
@@ -184,14 +178,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
-          RUST_LOG=trace CMAKE_ARGS="-DLLAMA_METAL=on" python -m uv pip install .[all] --verbose
+          CMAKE_ARGS="-DLLAMA_METAL=on" python -m uv pip install .[all] --verbose
         shell: bash
 
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
-        env:
-          RUST_LOG: trace
-
         run: |
           python -m pip install --upgrade pip
           CMAKE_ARGS="-DGGML_METAL=on" python -m pip install .[all] --verbose
