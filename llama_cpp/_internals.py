@@ -179,11 +179,11 @@ class _LlamaModel:
         assert self.model is not None
         return llama_cpp.llama_token_eot(self.model)
 
-    def add_bos_token(self) -> int:
+    def add_bos_token(self) -> bool:
         assert self.model is not None
         return llama_cpp.llama_add_bos_token(self.model)
 
-    def add_eos_token(self) -> int:
+    def add_eos_token(self) -> bool:
         assert self.model is not None
         return llama_cpp.llama_add_eos_token(self.model)
 
@@ -511,7 +511,7 @@ class _LlamaContext:
     def grammar_accept_token(self, grammar: LlamaGrammar, token: int):
         assert self.ctx is not None
         assert grammar.grammar is not None
-        llama_cpp.llama_grammar_accept_token(self.ctx, grammar.grammar, token)
+        llama_cpp.llama_grammar_accept_token(grammar.grammar, self.ctx, token)
 
     def reset_timings(self):
         assert self.ctx is not None
@@ -691,8 +691,8 @@ def _detokenize_bpe(model: _LlamaModel, tokens: List[int]) -> str:
 def _should_add_bos(model: _LlamaModel) -> bool:
     assert model.model is not None
     add_bos = llama_cpp.llama_add_bos_token(model.model)
-    if add_bos != -1:
-        return add_bos != 0
+    if add_bos:
+        return add_bos
     else:
         return llama_cpp.llama_vocab_type(model.model) == llama_cpp.LLAMA_VOCAB_TYPE_SPM
 

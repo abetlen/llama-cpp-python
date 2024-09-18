@@ -1009,7 +1009,7 @@ def format_qwen(
     **kwargs: Any,
 ) -> ChatFormatterResponse:
     _roles = dict(user="<|im_start|>user", assistant="<|im_start|>assistant")
-    system_message = "You are a helpful assistant."
+    system_message = _get_system_message(messages) or "You are a helpful assistant."
     system_template = "<|im_start|>system\n{system_message}"
     system_message = system_template.format(system_message=system_message)
     _messages = _map_roles(messages, _roles)
@@ -2707,6 +2707,31 @@ class Llava15ChatHandler:
     def load_image(self, image_url: str) -> bytes:
         return self._load_image(image_url)
 
+    def _embed_image_bytes(self, image_bytes: bytes, n_threads_batch: int = 1):
+        if (
+            self._last_image_embed is not None
+            and self._last_image_hash is not None
+            and hash(image_bytes) == self._last_image_hash
+        ):
+            return self._last_image_embed
+        with suppress_stdout_stderr(disable=self.verbose):
+            # Free the previous image embed
+            if self._last_image_embed is not None:
+                self._llava_cpp.llava_image_embed_free(self._last_image_embed)
+                self._last_image_embed = None
+                self._last_image_hash = None
+            embed = self._llava_cpp.llava_image_embed_make_with_bytes(
+                self.clip_ctx,
+                n_threads_batch,
+                (ctypes.c_uint8 * len(image_bytes)).from_buffer(
+                    bytearray(image_bytes)
+                ),
+                len(image_bytes),
+            )
+            self._last_image_embed = embed
+            self._last_image_hash = hash(image_bytes)
+            return embed
+
     def __call__(
         self,
         *,
@@ -2769,30 +2794,9 @@ class Llava15ChatHandler:
         )
         split_text = self.split_text_on_image_urls(text, image_urls)
 
-        def embed_image_bytes(image_bytes: bytes):
-            if (
-                self._last_image_embed is not None
-                and self._last_image_hash is not None
-                and hash(image_bytes) == self._last_image_hash
-            ):
-                return self._last_image_embed
-            with suppress_stdout_stderr(disable=self.verbose):
-                # Free the previous image embed
-                if self._last_image_embed is not None:
-                    self._llava_cpp.llava_image_embed_free(self._last_image_embed)
-                    self._last_image_embed = None
-                    self._last_image_hash = None
-                embed = self._llava_cpp.llava_image_embed_make_with_bytes(
-                    self.clip_ctx,
-                    llama.context_params.n_threads_batch,
-                    (ctypes.c_uint8 * len(image_bytes)).from_buffer(
-                        bytearray(image_bytes)
-                    ),
-                    len(image_bytes),
-                )
-                self._last_image_embed = embed
-                self._last_image_hash = hash(image_bytes)
-                return embed
+        if self.verbose:
+            print(text, file=sys.stderr)
+
 
         # Evaluate prompt
         llama.reset()
@@ -2809,7 +2813,7 @@ class Llava15ChatHandler:
                 llama.eval(tokens)
             else:
                 image_bytes = self.load_image(value)
-                embed = embed_image_bytes(image_bytes)
+                embed = self._embed_image_bytes(image_bytes, llama.context_params.n_threads_batch)
                 if llama.n_tokens + embed.contents.n_image_pos > llama.n_ctx():
                     raise ValueError(
                         f"Prompt exceeds n_ctx: {llama.n_tokens + embed.contents.n_image_pos} > {llama.n_ctx()}"
@@ -3306,6 +3310,44 @@ class Llama3VisionAlphaChatHandler(Llava15ChatHandler):
 
 # alias
 Llama3VisionAlpha = Llama3VisionAlphaChatHandler
+
+
+class MiniCPMv26ChatHandler(Llava15ChatHandler):
+    DEFAULT_SYSTEM_MESSAGE = "You are a helpful assistant."
+
+    CHAT_FORMAT = (
+        "{% for message in messages %}"
+        "{% if loop.first and messages[0]['role'] != 'system' %}"
+        "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n"
+        "{% endif %}"
+        "<|im_start|>{{ message['role'] }}\n"
+        "{% if message['content'] is iterable %}"
+        "{% for content in message['content'] %}"
+        "{% if content.type == 'image_url' %}"
+        "{% if content.image_url is string %}"
+        "{{ content.image_url }}"
+        "{% endif %}"
+        "{% if content.image_url is mapping %}"
+        "{{ content.image_url.url }}"
+        "{% endif %}"
+        "{% endif %}"
+        "{% endfor %}"
+
+        "{% for content in message['content'] %}"
+        "{% if content.type == 'text' %}"
+        "{{ content.text }}"
+        "{% endif %}"
+        "{% endfor %}"
+        "{% endif %}"
+        "{% if message['content'] is string %}"
+        "{{ message['content'] }}"
+        "{% endif %}"
+        "<|im_end|>\n"
+        "{% endfor %}"
+        "{% if add_generation_prompt %}"
+        "<|im_start|>assistant\n"
+        "{% endif %}"
+    )
 
 
 @register_chat_completion_handler("chatml-function-calling")
