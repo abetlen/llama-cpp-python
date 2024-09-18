@@ -20,7 +20,7 @@ jobs:
         with:
           python-version: "3.9"
       - name: Install huggingface-hub
-        run: pip install huggingface-cli
+        run: pip install huggingface-hub
       - name: Download model
         run: huggingface-cli download ${{ env.REPO_ID }} ${{ env.MODEL_FILE }}
       - name: Cache model
