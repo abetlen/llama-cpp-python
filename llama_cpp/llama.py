@@ -153,7 +153,7 @@ class Llama:
             model_path: Path to the model.
             n_gpu_layers: Number of layers to offload to GPU (-ngl). If -1, all layers are offloaded.
             split_mode: How to split the model across GPUs. See llama_cpp.LLAMA_SPLIT_* for options.
-            main_gpu: main_gpu interpretation depends on split_mode: LLAMA_SPLIT_NONE: the GPU that is used for the entire model. LLAMA_SPLIT_ROW: the GPU that is used for small tensors and intermediate results. LLAMA_SPLIT_LAYER: ignored
+            main_gpu: main_gpu interpretation depends on split_mode: LLAMA_SPLIT_MODE_NONE: the GPU that is used for the entire model. LLAMA_SPLIT_MODE_ROW: the GPU that is used for small tensors and intermediate results. LLAMA_SPLIT_MODE_LAYER: ignored
             tensor_split: How split tensors should be distributed across GPUs. If None, the model is not split.
             rpc_servers: Comma separated list of RPC servers to use for offloading
             vocab_only: Only load the vocabulary no weights.
@@ -578,6 +578,8 @@ class Llama:
 
         Args:
             text: The utf-8 encoded string to tokenize.
+            add_bos: Whether to add a beginning of sequence token.
+            special: Whether to tokenize special tokens.
 
         Raises:
             RuntimeError: If the tokenization failed.
@@ -588,18 +590,19 @@ class Llama:
         return self.tokenizer_.tokenize(text, add_bos, special)
 
     def detokenize(
-        self, tokens: List[int], prev_tokens: Optional[List[int]] = None
+        self, tokens: List[int], prev_tokens: Optional[List[int]] = None, special: bool = False
     ) -> bytes:
         """Detokenize a list of tokens.
 
         Args:
             tokens: The list of tokens to detokenize.
-            prev_tokens: The list of previous tokens. Offset mapping will be performed if provided
+            prev_tokens: The list of previous tokens. Offset mapping will be performed if provided.
+            special: Whether to detokenize special tokens.
 
         Returns:
             The detokenized string.
         """
-        return self.tokenizer_.detokenize(tokens, prev_tokens=prev_tokens)
+        return self.tokenizer_.detokenize(tokens, prev_tokens=prev_tokens, special=special)
 
     def set_cache(self, cache: Optional[BaseLlamaCache]):
         """Set the cache.
