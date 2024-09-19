@@ -255,28 +255,28 @@ class Llama:
             for i, (k, v) in enumerate(kv_overrides.items()):
                 self._kv_overrides_array[i].key = k.encode("utf-8")
                 if isinstance(v, bool):
-                    self._kv_overrides_array[i].tag = (
-                        llama_cpp.LLAMA_KV_OVERRIDE_TYPE_BOOL
-                    )
+                    self._kv_overrides_array[
+                        i
+                    ].tag = llama_cpp.LLAMA_KV_OVERRIDE_TYPE_BOOL
                     self._kv_overrides_array[i].value.val_bool = v
                 elif isinstance(v, int):
-                    self._kv_overrides_array[i].tag = (
-                        llama_cpp.LLAMA_KV_OVERRIDE_TYPE_INT
-                    )
+                    self._kv_overrides_array[
+                        i
+                    ].tag = llama_cpp.LLAMA_KV_OVERRIDE_TYPE_INT
                     self._kv_overrides_array[i].value.val_i64 = v
                 elif isinstance(v, float):
-                    self._kv_overrides_array[i].tag = (
-                        llama_cpp.LLAMA_KV_OVERRIDE_TYPE_FLOAT
-                    )
+                    self._kv_overrides_array[
+                        i
+                    ].tag = llama_cpp.LLAMA_KV_OVERRIDE_TYPE_FLOAT
                     self._kv_overrides_array[i].value.val_f64 = v
                 elif isinstance(v, str):  # type: ignore
                     v_bytes = v.encode("utf-8")
                     if len(v_bytes) > 128:  # TODO: Make this a constant
                         raise ValueError(f"Value for {k} is too long: {v}")
                     v_bytes = v_bytes.ljust(128, b"\0")
-                    self._kv_overrides_array[i].tag = (
-                        llama_cpp.LLAMA_KV_OVERRIDE_TYPE_STR
-                    )
+                    self._kv_overrides_array[
+                        i
+                    ].tag = llama_cpp.LLAMA_KV_OVERRIDE_TYPE_STR
                     # copy min(v_bytes, 128) to str_value
                     address = typing.cast(
                         int,
@@ -292,9 +292,9 @@ class Llama:
                 else:
                     raise ValueError(f"Unknown value type for {k}: {v}")
 
-            self._kv_overrides_array[-1].key = (
-                b"\0"  # ensure sentinel element is zeroed
-            )
+            self._kv_overrides_array[
+                -1
+            ].key = b"\0"  # ensure sentinel element is zeroed
             self.model_params.kv_overrides = self._kv_overrides_array
 
         self.n_batch = min(n_ctx, n_batch)  # ???
@@ -431,9 +431,9 @@ class Llama:
 
         self.chat_format = chat_format
         self.chat_handler = chat_handler
-        self._chat_handlers: Dict[str, llama_chat_format.LlamaChatCompletionHandler] = (
-            {}
-        )
+        self._chat_handlers: Dict[
+            str, llama_chat_format.LlamaChatCompletionHandler
+        ] = {}
 
         self.draft_model = draft_model
 
@@ -580,7 +580,10 @@ class Llama:
         return self.tokenizer_.tokenize(text, add_bos, special)
 
     def detokenize(
-        self, tokens: List[int], prev_tokens: Optional[List[int]] = None, special: bool = False
+        self,
+        tokens: List[int],
+        prev_tokens: Optional[List[int]] = None,
+        special: bool = False,
     ) -> bytes:
         """Detokenize a list of tokens.
 
@@ -592,7 +595,9 @@ class Llama:
         Returns:
             The detokenized string.
         """
-        return self.tokenizer_.detokenize(tokens, prev_tokens=prev_tokens, special=special)
+        return self.tokenizer_.detokenize(
+            tokens, prev_tokens=prev_tokens, special=special
+        )
 
     def set_cache(self, cache: Optional[BaseLlamaCache]):
         """Set the cache.
@@ -681,12 +686,16 @@ class Llama:
                 recarray = np.recarray(
                     shape=(size,),
                     dtype=np.dtype(
-                        [("id", np.intc), ("logit", np.single), ("p", np.single)], align=True
+                        [("id", np.intc), ("logit", np.single), ("p", np.single)],
+                        align=True,
                     ),
-                    buf=(llama_cpp.llama_token_data * size).from_address(data_soa_address),
+                    buf=(llama_cpp.llama_token_data * size).from_address(
+                        data_soa_address
+                    ),
                 )
                 for logit_processor in logits_processor:
                     recarray.logit[:] = logit_processor(self._input_ids, recarray.logit)
+
             sampler.add_custom(apply_func)
 
         sampler.add_penalties(
@@ -698,7 +707,7 @@ class Llama:
             penalty_freq=frequency_penalty,
             penalty_present=presence_penalty,
             penalize_nl=penalize_nl,
-            ignore_eos=False
+            ignore_eos=False,
         )
 
         if grammar is not None:
@@ -841,22 +850,22 @@ class Llama:
         # Reset mirostat sampling
         self._mirostat_mu = ctypes.c_float(2.0 * mirostat_tau)
         self._sampler = self._init_sampler(
-                top_k=top_k,
-                top_p=top_p,
-                min_p=min_p,
-                typical_p=typical_p,
-                temp=temp,
-                repeat_penalty=repeat_penalty,
-                frequency_penalty=frequency_penalty,
-                presence_penalty=presence_penalty,
-                tfs_z=tfs_z,
-                mirostat_mode=mirostat_mode,
-                mirostat_tau=mirostat_tau,
-                mirostat_eta=mirostat_eta,
-                penalize_nl=penalize_nl,
-                logits_processor=logits_processor,
-                grammar=grammar,
-                seed=seed,
+            top_k=top_k,
+            top_p=top_p,
+            min_p=min_p,
+            typical_p=typical_p,
+            temp=temp,
+            repeat_penalty=repeat_penalty,
+            frequency_penalty=frequency_penalty,
+            presence_penalty=presence_penalty,
+            tfs_z=tfs_z,
+            mirostat_mode=mirostat_mode,
+            mirostat_tau=mirostat_tau,
+            mirostat_eta=mirostat_eta,
+            penalize_nl=penalize_nl,
+            logits_processor=logits_processor,
+            grammar=grammar,
+            seed=seed,
         )
 
         # Check for kv cache prefix match
@@ -872,8 +881,11 @@ class Llama:
                 tokens = tokens[longest_prefix:]
                 self.n_tokens = longest_prefix
                 if self.verbose:
-                    print(f"Llama.generate: {longest_prefix} prefix-match hit, "
-                          f"remaining {len(tokens)} prompt tokens to eval", file=sys.stderr)                    
+                    print(
+                        f"Llama.generate: {longest_prefix} prefix-match hit, "
+                        f"remaining {len(tokens)} prompt tokens to eval",
+                        file=sys.stderr,
+                    )
 
         # Reset the model state
         if reset:
@@ -1032,7 +1044,9 @@ class Llama:
                         for j in range(size)
                     ]
                     if normalize:
-                        embedding = [internals.normalize_embedding(e) for e in embedding]
+                        embedding = [
+                            internals.normalize_embedding(e) for e in embedding
+                        ]
                     data.append(embedding)
                     pos += size
             else:

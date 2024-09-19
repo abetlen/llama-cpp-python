@@ -15,6 +15,7 @@ from typing import (
 
 LLAMA_GRAMMAR_DEFAULT_ROOT = "root"
 
+
 class LlamaGrammar:
     def __init__(self, *args, _grammar: str, **kwargs):
         self._grammar = _grammar
@@ -23,7 +24,7 @@ class LlamaGrammar:
     @classmethod
     def from_string(cls, grammar: str, verbose: bool = True) -> "LlamaGrammar":
         return cls(_grammar=grammar)
-    
+
     @classmethod
     def from_file(cls, file: Union[str, Path], verbose: bool = True) -> "LlamaGrammar":
         try:
