@@ -7,6 +7,7 @@ import time
 import json
 import ctypes
 import typing
+import random
 import fnmatch
 import warnings
 import contextlib
@@ -301,9 +302,11 @@ class Llama:
         self.n_threads = n_threads or max(multiprocessing.cpu_count() // 2, 1)
         self.n_threads_batch = n_threads_batch or multiprocessing.cpu_count()
 
+        # Used by the sampler
+        self._seed = seed or llama_cpp.LLAMA_DEFAULT_SEED
+
         # Context Params
         self.context_params = llama_cpp.llama_context_default_params()
-        self.context_params.seed = seed
         self.context_params.n_ctx = n_ctx
         self.context_params.n_batch = self.n_batch
         self.context_params.n_threads = self.n_threads
@@ -613,8 +616,7 @@ class Llama:
         Args:
             seed: The random seed.
         """
-        # TODO: Fix this
-        # llama_cpp.llama_set_rng_seed(self._ctx.ctx, seed)
+        self._seed = seed
 
     def reset(self):
         """Reset the model state."""
@@ -672,7 +674,6 @@ class Llama:
         penalize_nl: bool = True,
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
-        seed: Optional[int] = None,
     ):
         sampler = internals.LlamaSampler()
 
@@ -715,7 +716,7 @@ class Llama:
 
         if temp < 0.0:
             sampler.add_softmax()
-            sampler.add_dist(seed or llama_cpp.LLAMA_DEFAULT_SEED)
+            sampler.add_dist(self._seed)
         elif temp == 0.0:
             sampler.add_greedy()
         else:
@@ -723,14 +724,14 @@ class Llama:
                 mirostat_m = 100
                 sampler.add_mirostat(
                     self._n_vocab,
-                    seed or llama_cpp.LLAMA_DEFAULT_SEED,
+                    self._seed,
                     mirostat_tau,
                     mirostat_eta,
                     mirostat_m,
                 )
             elif mirostat_mode == 2:
                 sampler.add_mirostat_v2(
-                    seed or llama_cpp.LLAMA_DEFAULT_SEED,
+                    self._seed,
                     mirostat_tau,
                     mirostat_eta,
                 )
@@ -743,7 +744,7 @@ class Llama:
                 sampler.add_top_p(top_p, min_keep)
                 sampler.add_min_p(min_p, min_keep)
                 sampler.add_temp(temp)
-                sampler.add_dist(seed or llama_cpp.LLAMA_DEFAULT_SEED)
+                sampler.add_dist(self._seed)
         return sampler
 
     def sample(
@@ -826,7 +827,6 @@ class Llama:
         logits_processor: Optional[LogitsProcessorList] = None,
         stopping_criteria: Optional[StoppingCriteriaList] = None,
         grammar: Optional[LlamaGrammar] = None,
-        seed: Optional[int] = None,
     ) -> Generator[int, Optional[Sequence[int]], None]:
         """Create a generator of tokens from a prompt.
 
@@ -865,7 +865,6 @@ class Llama:
             penalize_nl=penalize_nl,
             logits_processor=logits_processor,
             grammar=grammar,
-            seed=seed,
         )
 
         # Check for kv cache prefix match
@@ -1301,9 +1300,10 @@ class Llama:
                 if self.verbose:
                     print("Llama._create_completion: cache miss", file=sys.stderr)
 
-        # TODO: Fix this
-        # if seed is not None:
-        #     self._ctx.set_rng_seed(seed)
+        if seed is not None:
+            self.set_seed(seed)
+        else:
+            self.set_seed(random.Random(self._seed).randint(0, 2 ** 32))
 
         finish_reason = "length"
         multibyte_fix = 0
@@ -1324,7 +1324,6 @@ class Llama:
             stopping_criteria=stopping_criteria,
             logits_processor=logits_processor,
             grammar=grammar,
-            seed=seed,
         ):
             if llama_cpp.llama_token_is_eog(self._model.model, token):
                 text = self.detokenize(completion_tokens, prev_tokens=prompt_tokens)
@@ -2136,6 +2135,7 @@ class Llama:
             n_tokens=self.n_tokens,
             llama_state=bytes(llama_state_compact),
             llama_state_size=n_bytes,
+            seed=self._seed,
         )
 
     def load_state(self, state: LlamaState) -> None:
@@ -2145,6 +2145,7 @@ class Llama:
         rest[rest > 0] = 0.0
         self.input_ids = state.input_ids.copy()
         self.n_tokens = state.n_tokens
+        self._seed = state.seed
         state_size = state.llama_state_size
         LLamaStateArrayType = ctypes.c_uint8 * state_size
         llama_state = LLamaStateArrayType.from_buffer_copy(state.llama_state)
@@ -2322,12 +2323,14 @@ class LlamaState:
         n_tokens: int,
         llama_state: bytes,
         llama_state_size: int,
+        seed: int,
     ):
         self.input_ids = input_ids
         self.scores = scores
         self.n_tokens = n_tokens
         self.llama_state = llama_state
         self.llama_state_size = llama_state_size
+        self.seed = seed
 
 
 LogitsProcessor = Callable[
