@@ -45,6 +45,7 @@ test = [
     "sse-starlette>=1.6.1",
     "starlette-context>=0.3.6,<0.4",
     "pydantic-settings>=2.0.1",
+    "huggingface-hub>=0.23.0"
 ]
 dev = [
     "black>=23.3.0",

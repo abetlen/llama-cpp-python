@@ -1,5 +1,4 @@
 name: Tests
-
 on:
   pull_request:
     branches:
@@ -8,14 +7,34 @@ on:
     branches:
       - main
 
-jobs:
-  build-linux:
+env:
+  REPO_ID: Qwen/Qwen2-0.5B-Instruct-GGUF
+  MODEL_FILE: qwen2-0_5b-instruct-q8_0.gguf
 
+jobs:
+  download-model:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+      - name: Install huggingface-hub
+        run: pip install huggingface-hub
+      - name: Download model
+        run: huggingface-cli download ${{ env.REPO_ID }} ${{ env.MODEL_FILE }}
+      - name: Cache model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface/hub
+          key: ${{ runner.os }}-model-${{ env.REPO_ID }}-${{ env.MODEL_FILE }}
+
+  build-linux:
+    needs: download-model
     runs-on: ubuntu-latest
     strategy:
       matrix:
         python-version: ["3.9", "3.10", "3.11", "3.12"]
-
     steps:
       - uses: actions/checkout@v4
         with:
@@ -26,36 +45,35 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
-
+      - name: Restore model cache
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/huggingface/hub
+          key: ${{ runner.os }}-model-${{ env.REPO_ID }}-${{ env.MODEL_FILE }}
       - name: Install dependencies (Linux/MacOS)
         if: runner.os != 'Windows'
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
-          RUST_LOG=trace python -m uv pip install -e .[all] --verbose
+          python -m uv pip install -e .[all] --verbose
         shell: bash
-
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
-        env:
-          RUST_LOG: trace          
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
           python -m uv pip install -e .[all] --verbose
-        shell: cmd          
-          
+        shell: cmd
       - name: Test with pytest
         run: |
           python -m pytest
 
   build-windows:
-
+    needs: download-model
     runs-on: windows-latest
     strategy:
       matrix:
         python-version: ["3.9", "3.10", "3.11", "3.12"]
-
     steps:
       - uses: actions/checkout@v4
         with:
@@ -66,19 +84,23 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
+
+      - name: Restore model cache
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/huggingface/hub
+          key: ${{ runner.os }}-model-${{ env.REPO_ID }}-${{ env.MODEL_FILE }}
           
       - name: Install dependencies (Linux/MacOS)
         if: runner.os != 'Windows'
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
-          RUST_LOG=trace python -m uv pip install -e .[all] --verbose
+          python -m uv pip install -e .[all] --verbose
         shell: bash
 
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
-        env:
-          RUST_LOG: trace          
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
@@ -90,12 +112,11 @@ jobs:
           python -m pytest
 
   build-macos:
-
+    needs: download-model
     runs-on: macos-latest
     strategy:
       matrix:
         python-version: ["3.9", "3.10", "3.11", "3.12"]
-
     steps:
       - uses: actions/checkout@v4
         with:
@@ -106,34 +127,36 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
+
+      - name: Restore model cache
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/huggingface/hub
+          key: ${{ runner.os }}-model-${{ env.REPO_ID }}-${{ env.MODEL_FILE }}
           
       - name: Install dependencies (Linux/MacOS)
         if: runner.os != 'Windows'
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
-          RUST_LOG=trace python -m uv pip install -e .[all] --verbose
+          python -m uv pip install -e .[all] --verbose
         shell: bash
 
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
-        env:
-          RUST_LOG: trace          
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
           python -m uv pip install -e .[all] --verbose
-        shell: cmd       
+        shell: cmd
           
       - name: Test with pytest
         run: |
           python -m pytest
 
-
   build-macos-metal:
-
+    needs: download-model
     runs-on: macos-latest
-
     steps:
       - uses: actions/checkout@v4
         with:
@@ -144,18 +167,22 @@ jobs:
         with:
           python-version: "3.9"
 
+      - name: Restore model cache
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/huggingface/hub
+          key: ${{ runner.os }}-model-${{ env.REPO_ID }}-${{ env.MODEL_FILE }}
+
       - name: Install dependencies (Linux/MacOS)
         if: runner.os != 'Windows'
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
-          RUST_LOG=trace CMAKE_ARGS="-DLLAMA_METAL=on" python -m uv pip install .[all] --verbose
+          CMAKE_ARGS="-DLLAMA_METAL=on" python -m uv pip install .[all] --verbose
         shell: bash
 
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
-        env:
-          RUST_LOG: trace             
         run: |
           python -m pip install --upgrade pip
           CMAKE_ARGS="-DGGML_METAL=on" python -m pip install .[all] --verbose
