@@ -19,24 +19,42 @@ jobs:
     - uses: actions/checkout@v4
       with:
         submodules: "recursive"
+        
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: "3.11"
         cache: 'pip'
+        
     - name: Append Dev Version to __version__
       run: |
         DEV_VERSION=${{ github.event.inputs.dev_version }}
         CURRENT_VERSION=$(awk -F= '/__version__ =/ {print $2}' llama_cpp/__init__.py | tr -d ' "')
         NEW_VERSION="${CURRENT_VERSION}.dev${DEV_VERSION}"
         sed -i 's/__version__ = \".*\"/__version__ = \"'"${NEW_VERSION}"'\"/' llama_cpp/__init__.py
-    - name: Install dependencies
+        
+    - name: Install dependencies (Linux/MacOS)
+      if: runner.os != 'Windows'
       run: |
-        python -m pip install --upgrade pip build
-        python -m pip install -e .[all]
+        python -m pip install --upgrade pip
+        python -m pip install uv
+        RUST_LOG=trace python -m uv pip install -e .[all] --verbose
+      shell: bash
+
+    - name: Install dependencies (Windows)
+      if: runner.os == 'Windows'
+      env:
+        RUST_LOG: trace       
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install uv
+        python -m uv pip install -e .[all] --verbose
+      shell: cmd
+        
     - name: Build source distribution
       run: |
         python -m build --sdist
+        
     - name: Publish to Test PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
