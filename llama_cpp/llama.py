@@ -451,7 +451,7 @@ class Llama:
         self.n_tokens = 0
         self.input_ids: npt.NDArray[np.intc] = np.ndarray((n_ctx,), dtype=np.intc)
         self.scores: npt.NDArray[np.single] = np.ndarray(
-            (n_ctx, self._n_vocab), dtype=np.single
+            (n_ctx if logits_all == True else n_batch, self._n_vocab), dtype=np.single
         )
 
         self._mirostat_mu = ctypes.c_float(
@@ -648,12 +648,14 @@ class Llama:
                 )
                 self.scores[n_past : n_past + n_tokens, :].reshape(-1)[::] = logits
             else:
-                rows = 1
-                cols = self._n_vocab
-                logits = np.ctypeslib.as_array(
-                    self._ctx.get_logits(), shape=(rows * cols,)
-                )
-                self.scores[n_past + n_tokens - 1, :].reshape(-1)[::] = logits
+                # rows = 1
+                # cols = self._n_vocab
+                # logits = np.ctypeslib.as_array(
+                #     self._ctx.get_logits(), shape=(rows * cols,)
+                # )
+                # self.scores[n_past + n_tokens - 1, :].reshape(-1)[::] = logits
+                # NOTE: Now that sampling is done inside the sampler, logits are only needed for logprobs which requires logits_all
+                pass
             # Update n_tokens
             self.n_tokens += n_tokens
 
