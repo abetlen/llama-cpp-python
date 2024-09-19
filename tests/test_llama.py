@@ -171,3 +171,8 @@ root ::= "true" | "false"
         logits_processor=logit_processors
     )
     assert output["choices"][0]["text"].lower().startswith("rot")
+
+    # TODO: Add test better test here
+    state = model.save_state()
+    model.load_state(state)
+
