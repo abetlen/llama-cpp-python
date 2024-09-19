@@ -171,3 +171,48 @@ root ::= "true" | "false"
         logits_processor=logit_processors
     )
     assert output["choices"][0]["text"].lower().startswith("rot")
+
+    model.set_seed(1337)
+
+    state = model.save_state()
+
+    output = model.create_completion(
+        "Pick a number from 1 to 10?:\n",
+        max_tokens=4,
+        top_k=50,
+        top_p=0.9,
+        temperature=0.8,
+        grammar=llama_cpp.LlamaGrammar.from_string("""
+root ::= "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10"
+""")
+    )
+    number_1 = output["choices"][0]["text"]
+
+    output = model.create_completion(
+        "Pick a number from 1 to 10?:\n",
+        max_tokens=4,
+        top_k=50,
+        top_p=0.9,
+        temperature=0.8,
+        grammar=llama_cpp.LlamaGrammar.from_string("""
+root ::= "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10"
+""")
+    )
+    number_2 = output["choices"][0]["text"]
+
+    model.load_state(state)
+
+    output = model.create_completion(
+        "Pick a number from 1 to 10?:\n",
+        max_tokens=4,
+        top_k=50,
+        top_p=0.9,
+        temperature=0.8,
+        grammar=llama_cpp.LlamaGrammar.from_string("""
+root ::= "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10"
+""")
+    )
+    number_3 = output["choices"][0]["text"]
+
+    assert number_1 != number_2
+    assert number_1 == number_3
