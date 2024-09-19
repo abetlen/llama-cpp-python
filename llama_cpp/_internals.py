@@ -100,7 +100,6 @@ class LlamaModel:
     def get_tensor(self, name: str) -> ctypes.c_void_p:
         return llama_cpp.llama_get_model_tensor(self.model, name.encode("utf-8"))
 
-
     # Vocab
 
     def token_get_text(self, token: int) -> str:
@@ -460,9 +459,7 @@ class LlamaBatch:
         self.verbose = verbose
         self._exit_stack = ExitStack()
 
-        batch = llama_cpp.llama_batch_init(
-            self._n_tokens, self.embd, self.n_seq_max
-        )
+        batch = llama_cpp.llama_batch_init(self._n_tokens, self.embd, self.n_seq_max)
 
         if batch is None:
             raise ValueError("Failed to create llama_batch")
@@ -540,6 +537,7 @@ class LlamaTokenDataArray:
 
 
 # Embedding functions
+
 
 def normalize_embedding(embedding):
     norm = float(np.linalg.norm(embedding))
@@ -713,11 +711,17 @@ from typing import List, Callable, Optional, Union
 import ctypes
 import llama_cpp
 
+
 class CustomSampler:
-    def __init__(self, apply_func: typing.Callable[[llama_cpp.llama_token_data_array], None]):
+    def __init__(
+        self, apply_func: typing.Callable[[llama_cpp.llama_token_data_array], None]
+    ):
         self.apply_func = apply_func
 
-        def apply_wrapper(sampler: llama_cpp.llama_sampler_p, cur_p: llama_cpp.llama_token_data_array_p):
+        def apply_wrapper(
+            sampler: llama_cpp.llama_sampler_p,
+            cur_p: llama_cpp.llama_token_data_array_p,
+        ):
             self.apply_func(cur_p)
 
         def free_wrapper(sampler: llama_cpp.llama_sampler_p):
@@ -739,6 +743,7 @@ class CustomSampler:
 
     def get_sampler(self) -> llama_cpp.llama_sampler_p:
         return ctypes.pointer(self.sampler)
+
 
 class LlamaSampler:
     def __init__(self):
@@ -788,9 +793,7 @@ class LlamaSampler:
         self._add_sampler(sampler)
 
     def add_mirostat(self, n_vocab: int, seed: int, tau: float, eta: float, m: int):
-        sampler = llama_cpp.llama_sampler_init_mirostat(
-            n_vocab, seed, tau, eta, m
-        )
+        sampler = llama_cpp.llama_sampler_init_mirostat(n_vocab, seed, tau, eta, m)
         self._add_sampler(sampler)
 
     def add_mirostat_v2(self, seed: int, tau: float, eta: float):
@@ -798,23 +801,54 @@ class LlamaSampler:
         self._add_sampler(sampler)
 
     def add_grammar(self, model: LlamaModel, grammar: LlamaGrammar):
-        sampler = llama_cpp.llama_sampler_init_grammar(model.model, grammar._grammar.encode("utf-8"), grammar._root.encode("utf-8"))
+        sampler = llama_cpp.llama_sampler_init_grammar(
+            model.model, grammar._grammar.encode("utf-8"), grammar._root.encode("utf-8")
+        )
         self._add_sampler(sampler)
 
-    def add_penalties(self, n_vocab: int, special_eos_id: int, linefeed_id: int, penalty_last_n: int, penalty_repeat: float, penalty_freq: float, penalty_present: float, penalize_nl: bool, ignore_eos: bool):
-        sampler = llama_cpp.llama_sampler_init_penalties(n_vocab, special_eos_id, linefeed_id, penalty_last_n, penalty_repeat, penalty_freq, penalty_present, penalize_nl, ignore_eos)
+    def add_penalties(
+        self,
+        n_vocab: int,
+        special_eos_id: int,
+        linefeed_id: int,
+        penalty_last_n: int,
+        penalty_repeat: float,
+        penalty_freq: float,
+        penalty_present: float,
+        penalize_nl: bool,
+        ignore_eos: bool,
+    ):
+        sampler = llama_cpp.llama_sampler_init_penalties(
+            n_vocab,
+            special_eos_id,
+            linefeed_id,
+            penalty_last_n,
+            penalty_repeat,
+            penalty_freq,
+            penalty_present,
+            penalize_nl,
+            ignore_eos,
+        )
         self._add_sampler(sampler)
 
-    def init_logit_bias(self, n_vocab: int, n_logit_bias, logit_bias: llama_cpp.llama_logit_bias_p):
-        sampler = llama_cpp.llama_sampler_init_logit_bias(n_vocab, n_logit_bias, logit_bias)
+    def init_logit_bias(
+        self, n_vocab: int, n_logit_bias, logit_bias: llama_cpp.llama_logit_bias_p
+    ):
+        sampler = llama_cpp.llama_sampler_init_logit_bias(
+            n_vocab, n_logit_bias, logit_bias
+        )
         self._add_sampler(sampler)
 
-    def add_custom(self, apply_func: Callable[[llama_cpp.llama_token_data_array], None]):
+    def add_custom(
+        self, apply_func: Callable[[llama_cpp.llama_token_data_array], None]
+    ):
         custom_sampler = CustomSampler(apply_func)
         sampler = custom_sampler.get_sampler()
         self._add_sampler(sampler)
         # NOTE: Must remove custom samplers before free or llama.cpp will try to free them
-        self.custom_samplers.append((llama_cpp.llama_sampler_chain_n(self.sampler) - 1, custom_sampler))
+        self.custom_samplers.append(
+            (llama_cpp.llama_sampler_chain_n(self.sampler) - 1, custom_sampler)
+        )
 
     def _add_sampler(self, sampler: llama_cpp.llama_sampler_p):
         assert self.sampler is not None

@@ -27,7 +27,10 @@ class BaseLlamaTokenizer(abc.ABC):
 
     @abc.abstractmethod
     def detokenize(
-        self, tokens: List[int], prev_tokens: Optional[List[int]] = None, special: bool = False
+        self,
+        tokens: List[int],
+        prev_tokens: Optional[List[int]] = None,
+        special: bool = False,
     ) -> bytes:
         """Detokenize the tokens into text.
 
@@ -49,7 +52,10 @@ class LlamaTokenizer(BaseLlamaTokenizer):
         return self._model.tokenize(text, add_bos=add_bos, special=special)
 
     def detokenize(
-        self, tokens: List[int], prev_tokens: Optional[List[int]] = None, special: bool = False
+        self,
+        tokens: List[int],
+        prev_tokens: Optional[List[int]] = None,
+        special: bool = False,
     ) -> bytes:
         return self._model.detokenize(tokens, special=special)
 
@@ -80,19 +86,24 @@ class LlamaHFTokenizer(BaseLlamaTokenizer):
         )
 
     def detokenize(
-        self, tokens: List[int], prev_tokens: Optional[List[int]] = None, special: bool = False
+        self,
+        tokens: List[int],
+        prev_tokens: Optional[List[int]] = None,
+        special: bool = False,
     ) -> bytes:
-        skip_special_tokens = not special 
+        skip_special_tokens = not special
         if prev_tokens is not None:
-            text = self.hf_tokenizer.decode(prev_tokens + tokens, skip_special_tokens=skip_special_tokens).encode(
-                "utf-8", errors="ignore"
-            )
-            prev_text = self.hf_tokenizer.decode(prev_tokens, skip_special_tokens=skip_special_tokens).encode(
-                "utf-8", errors="ignore"
-            )
+            text = self.hf_tokenizer.decode(
+                prev_tokens + tokens, skip_special_tokens=skip_special_tokens
+            ).encode("utf-8", errors="ignore")
+            prev_text = self.hf_tokenizer.decode(
+                prev_tokens, skip_special_tokens=skip_special_tokens
+            ).encode("utf-8", errors="ignore")
             return text[len(prev_text) :]
         else:
-            return self.hf_tokenizer.decode(tokens, skip_special_tokens=skip_special_tokens).encode("utf-8", errors="ignore")
+            return self.hf_tokenizer.decode(
+                tokens, skip_special_tokens=skip_special_tokens
+            ).encode("utf-8", errors="ignore")
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path: str) -> "LlamaHFTokenizer":
