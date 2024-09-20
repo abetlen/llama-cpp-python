@@ -46,7 +46,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
       - name: Restore model cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cache/huggingface/hub
           key: ${{ runner.os }}-model-${{ env.REPO_ID }}-${{ env.MODEL_FILE }}
@@ -86,7 +86,7 @@ jobs:
           cache: 'pip'
 
       - name: Restore model cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cache/huggingface/hub
           key: ${{ runner.os }}-model-${{ env.REPO_ID }}-${{ env.MODEL_FILE }}
@@ -129,7 +129,7 @@ jobs:
           cache: 'pip'
 
       - name: Restore model cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cache/huggingface/hub
           key: ${{ runner.os }}-model-${{ env.REPO_ID }}-${{ env.MODEL_FILE }}
@@ -168,7 +168,7 @@ jobs:
           python-version: "3.9"
 
       - name: Restore model cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cache/huggingface/hub
           key: ${{ runner.os }}-model-${{ env.REPO_ID }}-${{ env.MODEL_FILE }}
