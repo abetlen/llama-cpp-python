@@ -138,7 +138,7 @@ Where `<cuda-version>` is one of the following:
 - `cu122`: CUDA 12.2
 - `cu123`: CUDA 12.3
 - `cu124`: CUDA 12.4
-- `cu124`: CUDA 12.5
+- `cu125`: CUDA 12.5
 
 For example, to install the CUDA 12.1 wheel:
 

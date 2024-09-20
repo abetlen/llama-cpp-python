@@ -75,6 +75,7 @@ class Llama:
         seed: int = llama_cpp.LLAMA_DEFAULT_SEED,
         n_ctx: int = 512,
         n_batch: int = 512,
+        n_ubatch: int = 512,
         n_threads: Optional[int] = None,
         n_threads_batch: Optional[int] = None,
         rope_scaling_type: Optional[
@@ -156,6 +157,7 @@ class Llama:
             seed: RNG seed, -1 for random
             n_ctx: Text context, 0 = from model
             n_batch: Prompt processing maximum batch size
+            n_ubatch: Physical batch size
             n_threads: Number of threads to use for generation
             n_threads_batch: Number of threads to use for batch processing
             rope_scaling_type: RoPE scaling type, from `enum llama_rope_scaling_type`. ref: https://github.com/ggerganov/llama.cpp/pull/2054
@@ -309,6 +311,7 @@ class Llama:
         self.context_params = llama_cpp.llama_context_default_params()
         self.context_params.n_ctx = n_ctx
         self.context_params.n_batch = self.n_batch
+        self.context_params.n_ubatch = min(self.n_batch, n_ubatch)
         self.context_params.n_threads = self.n_threads
         self.context_params.n_threads_batch = self.n_threads_batch
         self.context_params.rope_scaling_type = (
@@ -380,6 +383,7 @@ class Llama:
             self.n_batch = min(n_ctx, n_batch)
             self.context_params.n_ctx = self._model.n_ctx_train()
             self.context_params.n_batch = self.n_batch
+            self.context_params.n_ubatch = min(self.n_batch, n_ubatch)
 
         self._ctx = self._stack.enter_context(
             contextlib.closing(
@@ -2071,6 +2075,7 @@ class Llama:
             seed=self.context_params.seed,
             n_ctx=self.context_params.n_ctx,
             n_batch=self.n_batch,
+            n_ubatch=self.context_params.n_ubatch,
             n_threads=self.context_params.n_threads,
             n_threads_batch=self.context_params.n_threads_batch,
             rope_scaling_type=self.context_params.rope_scaling_type,
