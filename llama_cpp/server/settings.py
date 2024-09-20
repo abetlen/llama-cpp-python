@@ -70,6 +70,9 @@ class ModelSettings(BaseSettings):
     n_batch: int = Field(
         default=512, ge=1, description="The batch size to use per eval."
     )
+    n_ubatch: int = Field(
+        default=512, ge=1, description="The physical batch size used by llama.cpp"
+    )
     n_threads: int = Field(
         default=max(multiprocessing.cpu_count() // 2, 1),
         ge=1,

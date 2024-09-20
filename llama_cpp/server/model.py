@@ -249,6 +249,7 @@ class LlamaProxy:
             seed=settings.seed,
             n_ctx=settings.n_ctx,
             n_batch=settings.n_batch,
+            n_ubatch=settings.n_ubatch,
             n_threads=settings.n_threads,
             n_threads_batch=settings.n_threads_batch,
             rope_scaling_type=settings.rope_scaling_type,
