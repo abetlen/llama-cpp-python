@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.90]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@1d1ccce67613674c75c9c7e3fa4c1e24e428ba48
+- feat: Add support for `MiniCPMv26ChatHandler` and `minicpm-v-26` in server by @abetlen in f70df824985d875226793b94dacc0c302a4256b2
+
+## [0.2.89]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@cfac111e2b3953cdb6b0126e67a2487687646971
+- fix: Llama.close didn't free lora adapter by @jkawamoto in #1679
+- fix: missing dependencies for test by @jkawamoto in #1680
+
 ## [0.2.88]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@fc4ca27b25464a11b3b86c9dbb5b6ed6065965c2

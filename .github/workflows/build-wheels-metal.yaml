@@ -23,14 +23,27 @@ jobs:
         with:
           python-version: "3.12"
           cache: 'pip'
-
-      - name: Install dependencies
+          
+      - name: Install dependencies (Linux/MacOS)
+        if: runner.os != 'Windows'
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e .[all]
+          python -m pip install uv
+          RUST_LOG=trace python -m uv pip install -e .[all] --verbose
+        shell: bash
+
+      - name: Install dependencies (Windows)
+        if: runner.os == 'Windows'
+        env:
+          RUST_LOG: trace        
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install uv
+          python -m uv pip install -e .[all] --verbose
+        shell: cmd
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.20.0
+        uses: pypa/cibuildwheel@v2.21.1
         env:
           # disable repair
           CIBW_REPAIR_WHEEL_COMMAND: ""
