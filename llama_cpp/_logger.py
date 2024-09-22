@@ -1,6 +1,6 @@
-import sys
 import ctypes
 import logging
+import sys
 
 import llama_cpp
 

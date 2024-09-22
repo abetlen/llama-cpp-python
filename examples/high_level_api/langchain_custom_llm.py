@@ -1,9 +1,10 @@
 import argparse
-
-from llama_cpp import Llama
+from collections.abc import Mapping
+from typing import Any, List, Optional
 
 from langchain.llms.base import LLM
-from typing import Optional, List, Mapping, Any
+
+from llama_cpp import Llama
 
 
 class LlamaLLM(LLM):
@@ -19,7 +20,7 @@ class LlamaLLM(LLM):
         llm = Llama(model_path=model_path)
         super().__init__(model_path=model_path, llm=llm, **kwargs)
 
-    def _call(self, prompt: str, stop: Optional[List[str]] = None) -> str:
+    def _call(self, prompt: str, stop: list[str] | None = None) -> str:
         response = self.llm(prompt, stop=stop or [])
         return response["choices"][0]["text"]
 
@@ -37,13 +38,13 @@ llm = LlamaLLM(model_path=args.model)
 
 # Basic Q&A
 answer = llm(
-    "Question: What is the capital of France? Answer: ", stop=["Question:", "\n"]
+    "Question: What is the capital of France? Answer: ", stop=["Question:", "\n"],
 )
 print(f"Answer: {answer.strip()}")
 
 # Using in a chain
-from langchain.prompts import PromptTemplate
 from langchain.chains import LLMChain
+from langchain.prompts import PromptTemplate
 
 prompt = PromptTemplate(
     input_variables=["product"],

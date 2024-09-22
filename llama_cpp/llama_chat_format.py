@@ -1,39 +1,35 @@
 from __future__ import annotations
 
-import os
-import sys
-import json
 import ctypes
 import dataclasses
+import json
+import os
 import random
 import string
-
+import sys
+from collections.abc import Iterator
 from contextlib import ExitStack
 from typing import (
     Any,
     Dict,
-    Iterator,
     List,
     Literal,
     Optional,
+    Protocol,
     Tuple,
     Union,
-    Protocol,
     cast,
 )
 
 import jinja2
-from jinja2.sandbox import ImmutableSandboxedEnvironment
-
 import numpy as np
 import numpy.typing as npt
+from jinja2.sandbox import ImmutableSandboxedEnvironment
 
-import llama_cpp.llama as llama
-import llama_cpp.llama_types as llama_types
-import llama_cpp.llama_grammar as llama_grammar
+from llama_cpp import llama, llama_grammar, llama_types
 
 from ._logger import logger
-from ._utils import suppress_stdout_stderr, Singleton
+from ._utils import Singleton, suppress_stdout_stderr
 
 ### Common Chat Templates and Special Tokens ###
 
@@ -69,26 +65,24 @@ class LlamaChatCompletionHandler(Protocol):
         # llama.cpp instance
         llama: llama.Llama,
         # openai api parameters
-        messages: List[llama_types.ChatCompletionRequestMessage],
-        functions: Optional[List[llama_types.ChatCompletionFunction]] = None,
-        function_call: Optional[llama_types.ChatCompletionRequestFunctionCall] = None,
-        tools: Optional[List[llama_types.ChatCompletionTool]] = None,
-        tool_choice: Optional[llama_types.ChatCompletionToolChoiceOption] = None,
+        messages: list[llama_types.ChatCompletionRequestMessage],
+        functions: list[llama_types.ChatCompletionFunction] | None = None,
+        function_call: llama_types.ChatCompletionRequestFunctionCall | None = None,
+        tools: list[llama_types.ChatCompletionTool] | None = None,
+        tool_choice: llama_types.ChatCompletionToolChoiceOption | None = None,
         temperature: float = 0.2,
         top_p: float = 0.95,
         top_k: int = 40,
         stream: bool = False,
-        stop: Optional[Union[str, List[str]]] = [],
-        seed: Optional[int] = None,
-        response_format: Optional[
-            llama_types.ChatCompletionRequestResponseFormat
-        ] = None,
-        max_tokens: Optional[int] = None,
+        stop: str | list[str] | None = [],
+        seed: int | None = None,
+        response_format: llama_types.ChatCompletionRequestResponseFormat | None = None,
+        max_tokens: int | None = None,
         presence_penalty: float = 0.0,
         frequency_penalty: float = 0.0,
         repeat_penalty: float = 1.1,
-        model: Optional[str] = None,
-        logit_bias: Optional[Dict[str, float]] = None,
+        model: str | None = None,
+        logit_bias: dict[str, float] | None = None,
         # llama.cpp parameters
         min_p: float = 0.05,
         typical_p: float = 1.0,
@@ -96,15 +90,12 @@ class LlamaChatCompletionHandler(Protocol):
         mirostat_mode: int = 0,
         mirostat_tau: float = 5.0,
         mirostat_eta: float = 0.1,
-        logits_processor: Optional[llama.LogitsProcessorList] = None,
-        grammar: Optional[llama.LlamaGrammar] = None,
-        logprobs: Optional[bool] = None,
-        top_logprobs: Optional[int] = None,
+        logits_processor: llama.LogitsProcessorList | None = None,
+        grammar: llama.LlamaGrammar | None = None,
+        logprobs: bool | None = None,
+        top_logprobs: int | None = None,
         **kwargs,  # type: ignore
-    ) -> Union[
-        llama_types.CreateChatCompletionResponse,
-        Iterator[llama_types.CreateChatCompletionStreamResponse],
-    ]: ...
+    ) -> llama_types.CreateChatCompletionResponse | Iterator[llama_types.CreateChatCompletionStreamResponse]: ...
 
 
 class LlamaChatCompletionHandlerNotFoundException(Exception):
@@ -112,7 +103,7 @@ class LlamaChatCompletionHandlerNotFoundException(Exception):
 
 
 class LlamaChatCompletionHandlerRegistry(Singleton):
-    _chat_handlers: Dict[str, LlamaChatCompletionHandler] = {}
+    _chat_handlers: dict[str, LlamaChatCompletionHandler] = {}
 
     def register_chat_completion_handler(
         self,
@@ -122,7 +113,7 @@ class LlamaChatCompletionHandlerRegistry(Singleton):
     ):
         if not overwrite and name in self._chat_handlers:
             raise ValueError(
-                f"Formatter with name '{name}' is already registered. Use `overwrite=True` to overwrite it."
+                f"Formatter with name '{name}' is already registered. Use `overwrite=True` to overwrite it.",
             )
         self._chat_handlers[name] = chat_handler
 
@@ -133,20 +124,20 @@ class LlamaChatCompletionHandlerRegistry(Singleton):
             raise ValueError(f"No formatter registered under the name '{name}'.")
 
     def get_chat_completion_handler_by_name(
-        self, name: str
+        self, name: str,
     ) -> LlamaChatCompletionHandler:
         try:
             chat_handler = self._chat_handlers[name]
             return chat_handler
         except KeyError:
             raise LlamaChatCompletionHandlerNotFoundException(
-                f"Invalid chat handler: {name} (valid formats: {list(self._chat_handlers.keys())})"
+                f"Invalid chat handler: {name} (valid formats: {list(self._chat_handlers.keys())})",
             )
 
 
 def get_chat_completion_handler(name: str) -> LlamaChatCompletionHandler:
     return LlamaChatCompletionHandlerRegistry().get_chat_completion_handler_by_name(
-        name
+        name,
     )
 
 
@@ -170,8 +161,8 @@ class ChatFormatterResponse:
     stop contains the stop token or list of stop tokens to use for the chat format."""
 
     prompt: str
-    stop: Optional[Union[str, List[str]]] = None
-    stopping_criteria: Optional[llama.StoppingCriteriaList] = None
+    stop: str | list[str] | None = None
+    stopping_criteria: llama.StoppingCriteriaList | None = None
     added_special: bool = False
 
 
@@ -184,7 +175,7 @@ class ChatFormatter(Protocol):
     def __call__(
         self,
         *,
-        messages: List[llama_types.ChatCompletionRequestMessage],
+        messages: list[llama_types.ChatCompletionRequestMessage],
         **kwargs: Any,
     ) -> ChatFormatterResponse: ...
 
@@ -196,7 +187,7 @@ class Jinja2ChatFormatter(ChatFormatter):
         eos_token: str,
         bos_token: str,
         add_generation_prompt: bool = True,
-        stop_token_ids: Optional[List[int]] = None,
+        stop_token_ids: list[int] | None = None,
     ):
         """A chat formatter that uses jinja2 templates to format the prompt."""
         self.template = template
@@ -216,11 +207,11 @@ class Jinja2ChatFormatter(ChatFormatter):
     def __call__(
         self,
         *,
-        messages: List[llama_types.ChatCompletionRequestMessage],
-        functions: Optional[List[llama_types.ChatCompletionFunction]] = None,
-        function_call: Optional[llama_types.ChatCompletionRequestFunctionCall] = None,
-        tools: Optional[List[llama_types.ChatCompletionTool]] = None,
-        tool_choice: Optional[llama_types.ChatCompletionToolChoiceOption] = None,
+        messages: list[llama_types.ChatCompletionRequestMessage],
+        functions: list[llama_types.ChatCompletionFunction] | None = None,
+        function_call: llama_types.ChatCompletionRequestFunctionCall | None = None,
+        tools: list[llama_types.ChatCompletionTool] | None = None,
+        tool_choice: llama_types.ChatCompletionToolChoiceOption | None = None,
         **kwargs: Any,
     ) -> ChatFormatterResponse:
         def raise_exception(message: str):
@@ -242,7 +233,7 @@ class Jinja2ChatFormatter(ChatFormatter):
         if self.stop_token_ids is not None:
 
             def stop_on_last_token(
-                tokens: npt.NDArray[np.intc], logits: npt.NDArray[np.single]
+                tokens: npt.NDArray[np.intc], logits: npt.NDArray[np.single],
             ) -> bool:
                 return tokens[-1] in self.stop_token_ids
 
@@ -277,7 +268,7 @@ def _convert_text_completion_to_chat(
                 },
                 "logprobs": completion["choices"][0]["logprobs"],
                 "finish_reason": completion["choices"][0]["finish_reason"],
-            }
+            },
         ],
         "usage": completion["usage"],
     }
@@ -301,7 +292,7 @@ def _convert_text_completion_chunks_to_chat(
                         },
                         "logprobs": None,
                         "finish_reason": None,
-                    }
+                    },
                 ],
             }
         yield {
@@ -321,34 +312,25 @@ def _convert_text_completion_chunks_to_chat(
                     ),
                     "logprobs": chunk["choices"][0]["logprobs"],
                     "finish_reason": chunk["choices"][0]["finish_reason"],
-                }
+                },
             ],
         }
 
 
 def _convert_completion_to_chat(
-    completion_or_chunks: Union[
-        llama_types.CreateCompletionResponse,
-        Iterator[llama_types.CreateCompletionStreamResponse],
-    ],
+    completion_or_chunks: llama_types.CreateCompletionResponse | Iterator[llama_types.CreateCompletionStreamResponse],
     stream: bool = False,
-) -> Union[
-    llama_types.CreateChatCompletionResponse, Iterator[llama_types.ChatCompletionChunk]
-]:
+) -> llama_types.CreateChatCompletionResponse | Iterator[llama_types.ChatCompletionChunk]:
     if stream:
         chunks: Iterator[llama_types.CreateCompletionStreamResponse] = completion_or_chunks  # type: ignore
         return _convert_text_completion_chunks_to_chat(chunks)
-    else:
-        completion: llama_types.Completion = completion_or_chunks  # type: ignore
-        return _convert_text_completion_to_chat(completion)
+    completion: llama_types.Completion = completion_or_chunks  # type: ignore
+    return _convert_text_completion_to_chat(completion)
 
 
 def _convert_completion_to_chat_function(
     tool_name: str,
-    completion_or_chunks: Union[
-        llama_types.CreateCompletionResponse,
-        Iterator[llama_types.CreateCompletionStreamResponse],
-    ],
+    completion_or_chunks: llama_types.CreateCompletionResponse | Iterator[llama_types.CreateCompletionStreamResponse],
     stream: bool,
 ):
     if not stream:
@@ -379,90 +361,52 @@ def _convert_completion_to_chat_function(
                                     "name": tool_name,
                                     "arguments": completion["choices"][0]["text"],
                                 },
-                            }
+                            },
                         ],
                     },
                     "logprobs": completion["choices"][0]["logprobs"],
                     "finish_reason": "tool_calls",
-                }
+                },
             ],
             "usage": completion["usage"],
         }
         return chat_completion
-    else:
-        chunks: Iterator[llama_types.CreateCompletionStreamResponse] = completion_or_chunks  # type: ignore
+    chunks: Iterator[llama_types.CreateCompletionStreamResponse] = completion_or_chunks  # type: ignore
 
-        def _stream_response_to_function_stream(
-            chunks: Iterator[llama_types.CreateCompletionStreamResponse],
-        ) -> Iterator[llama_types.CreateChatCompletionStreamResponse]:
-            # blank first message
-            first = True
-            id_ = None
-            created = None
-            model = None
-            tool_id = None
-            for chunk in chunks:
-                if first:
-                    id_ = "chat" + chunk["id"]
-                    created = chunk["created"]
-                    model = chunk["model"]
-                    tool_id = "call_" + "_0_" + tool_name + "_" + chunk["id"]
-                    yield {
-                        "id": id_,
-                        "object": "chat.completion.chunk",
-                        "created": created,
-                        "model": model,
-                        "choices": [
-                            {
-                                "index": 0,
-                                "finish_reason": None,
-                                "logprobs": None,
-                                "delta": {
-                                    "role": "assistant",
-                                    "content": None,
-                                    "function_call": None,
-                                    "tool_calls": None,
-                                },
-                            }
-                        ],
-                    }
-                    yield {
-                        "id": "chat" + chunk["id"],
-                        "object": "chat.completion.chunk",
-                        "created": chunk["created"],
-                        "model": chunk["model"],
-                        "choices": [
-                            {
-                                "index": 0,
-                                "finish_reason": None,
-                                "logprobs": chunk["choices"][0]["logprobs"],
-                                "delta": {
-                                    "role": None,
-                                    "content": None,
-                                    "function_call": {
-                                        "name": tool_name,
-                                        "arguments": chunk["choices"][0]["text"],
-                                    },
-                                    "tool_calls": [
-                                        {
-                                            "index": 0,
-                                            "id": tool_id,
-                                            "type": "function",
-                                            "function": {
-                                                "name": tool_name,
-                                                "arguments": chunk["choices"][0][
-                                                    "text"
-                                                ],
-                                            },
-                                        }
-                                    ],
-                                },
-                            }
-                        ],
-                    }
-                    first = False
-                    continue
-                assert tool_id is not None
+    def _stream_response_to_function_stream(
+        chunks: Iterator[llama_types.CreateCompletionStreamResponse],
+    ) -> Iterator[llama_types.CreateChatCompletionStreamResponse]:
+        # blank first message
+        first = True
+        id_ = None
+        created = None
+        model = None
+        tool_id = None
+        for chunk in chunks:
+            if first:
+                id_ = "chat" + chunk["id"]
+                created = chunk["created"]
+                model = chunk["model"]
+                tool_id = "call_" + "_0_" + tool_name + "_" + chunk["id"]
+                yield {
+                    "id": id_,
+                    "object": "chat.completion.chunk",
+                    "created": created,
+                    "model": model,
+                    "choices": [
+                        {
+                            "index": 0,
+                            "finish_reason": None,
+                            "logprobs": None,
+                            "delta": {
+                                "role": "assistant",
+                                "content": None,
+                                "function_call": None,
+                                "tool_calls": None,
+                            },
+                        },
+                    ],
+                }
                 yield {
                     "id": "chat" + chunk["id"],
                     "object": "chat.completion.chunk",
@@ -487,37 +431,74 @@ def _convert_completion_to_chat_function(
                                         "type": "function",
                                         "function": {
                                             "name": tool_name,
-                                            "arguments": chunk["choices"][0]["text"],
+                                            "arguments": chunk["choices"][0][
+                                                "text"
+                                            ],
                                         },
-                                    }
+                                    },
                                 ],
                             },
-                        }
+                        },
                     ],
                 }
-
-            if id_ is not None and created is not None and model is not None:
-                yield {
-                    "id": id_,
-                    "object": "chat.completion.chunk",
-                    "created": created,
-                    "model": model,
-                    "choices": [
-                        {
-                            "index": 0,
-                            "finish_reason": "tool_calls",
-                            "logprobs": None,
-                            "delta": {
-                                "role": None,
-                                "content": None,
-                                "function_call": None,
-                                "tool_calls": None,
+                first = False
+                continue
+            assert tool_id is not None
+            yield {
+                "id": "chat" + chunk["id"],
+                "object": "chat.completion.chunk",
+                "created": chunk["created"],
+                "model": chunk["model"],
+                "choices": [
+                    {
+                        "index": 0,
+                        "finish_reason": None,
+                        "logprobs": chunk["choices"][0]["logprobs"],
+                        "delta": {
+                            "role": None,
+                            "content": None,
+                            "function_call": {
+                                "name": tool_name,
+                                "arguments": chunk["choices"][0]["text"],
                             },
-                        }
-                    ],
-                }
+                            "tool_calls": [
+                                {
+                                    "index": 0,
+                                    "id": tool_id,
+                                    "type": "function",
+                                    "function": {
+                                        "name": tool_name,
+                                        "arguments": chunk["choices"][0]["text"],
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                ],
+            }
 
-        return _stream_response_to_function_stream(chunks)
+        if id_ is not None and created is not None and model is not None:
+            yield {
+                "id": id_,
+                "object": "chat.completion.chunk",
+                "created": created,
+                "model": model,
+                "choices": [
+                    {
+                        "index": 0,
+                        "finish_reason": "tool_calls",
+                        "logprobs": None,
+                        "delta": {
+                            "role": None,
+                            "content": None,
+                            "function_call": None,
+                            "tool_calls": None,
+                        },
+                    },
+                ],
+            }
+
+    return _stream_response_to_function_stream(chunks)
 
 
 def chat_formatter_to_chat_completion_handler(
@@ -526,23 +507,21 @@ def chat_formatter_to_chat_completion_handler(
     def chat_completion_handler(
         *,
         llama: llama.Llama,
-        messages: List[llama_types.ChatCompletionRequestMessage],
-        functions: Optional[List[llama_types.ChatCompletionFunction]] = None,
-        function_call: Optional[llama_types.ChatCompletionRequestFunctionCall] = None,
-        tools: Optional[List[llama_types.ChatCompletionTool]] = None,
-        tool_choice: Optional[llama_types.ChatCompletionToolChoiceOption] = None,
+        messages: list[llama_types.ChatCompletionRequestMessage],
+        functions: list[llama_types.ChatCompletionFunction] | None = None,
+        function_call: llama_types.ChatCompletionRequestFunctionCall | None = None,
+        tools: list[llama_types.ChatCompletionTool] | None = None,
+        tool_choice: llama_types.ChatCompletionToolChoiceOption | None = None,
         temperature: float = 0.2,
         top_p: float = 0.95,
         top_k: int = 40,
         min_p: float = 0.05,
         typical_p: float = 1.0,
         stream: bool = False,
-        stop: Optional[Union[str, List[str]]] = [],
-        seed: Optional[int] = None,
-        response_format: Optional[
-            llama_types.ChatCompletionRequestResponseFormat
-        ] = None,
-        max_tokens: Optional[int] = None,
+        stop: str | list[str] | None = [],
+        seed: int | None = None,
+        response_format: llama_types.ChatCompletionRequestResponseFormat | None = None,
+        max_tokens: int | None = None,
         presence_penalty: float = 0.0,
         frequency_penalty: float = 0.0,
         repeat_penalty: float = 1.1,
@@ -550,17 +529,14 @@ def chat_formatter_to_chat_completion_handler(
         mirostat_mode: int = 0,
         mirostat_tau: float = 5.0,
         mirostat_eta: float = 0.1,
-        model: Optional[str] = None,
-        logits_processor: Optional[llama.LogitsProcessorList] = None,
-        grammar: Optional[llama.LlamaGrammar] = None,
-        logit_bias: Optional[Dict[str, float]] = None,
-        logprobs: Optional[bool] = None,
-        top_logprobs: Optional[int] = None,
+        model: str | None = None,
+        logits_processor: llama.LogitsProcessorList | None = None,
+        grammar: llama.LlamaGrammar | None = None,
+        logit_bias: dict[str, float] | None = None,
+        logprobs: bool | None = None,
+        top_logprobs: int | None = None,
         **kwargs,  # type: ignore
-    ) -> Union[
-        llama_types.CreateChatCompletionResponse,
-        Iterator[llama_types.CreateChatCompletionStreamResponse],
-    ]:
+    ) -> llama_types.CreateChatCompletionResponse | Iterator[llama_types.CreateChatCompletionStreamResponse]:
         result = chat_formatter(
             messages=messages,
             functions=functions,
@@ -584,7 +560,7 @@ def chat_formatter_to_chat_completion_handler(
 
         if response_format is not None and response_format["type"] == "json_object":
             grammar = _grammar_for_response_format(
-                response_format, verbose=llama.verbose
+                response_format, verbose=llama.verbose,
             )
 
         # Convert legacy functions to tools
@@ -625,13 +601,13 @@ def chat_formatter_to_chat_completion_handler(
             try:
                 # create grammar from json schema
                 grammar = llama_grammar.LlamaGrammar.from_json_schema(
-                    json.dumps(schema), verbose=llama.verbose
+                    json.dumps(schema), verbose=llama.verbose,
                 )
             except Exception as e:
                 if llama.verbose:
                     print(str(e), file=sys.stderr)
                 grammar = llama_grammar.LlamaGrammar.from_string(
-                    llama_grammar.JSON_GBNF, verbose=llama.verbose
+                    llama_grammar.JSON_GBNF, verbose=llama.verbose,
                 )
 
         completion_or_chunks = llama.create_completion(
@@ -662,7 +638,7 @@ def chat_formatter_to_chat_completion_handler(
         if tool is not None:
             tool_name = tool["function"]["name"]
             return _convert_completion_to_chat_function(
-                tool_name, completion_or_chunks, stream
+                tool_name, completion_or_chunks, stream,
             )
         return _convert_completion_to_chat(completion_or_chunks, stream=stream)
 
@@ -670,7 +646,7 @@ def chat_formatter_to_chat_completion_handler(
 
 
 def hf_autotokenizer_to_chat_formatter(
-    pretrained_model_name_or_path: Union[str, os.PathLike[str]]
+    pretrained_model_name_or_path: str | os.PathLike[str],
 ) -> ChatFormatter:
     # https://huggingface.co/docs/transformers/main/chat_templating
     # https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.1#instruction-format
@@ -680,7 +656,7 @@ def hf_autotokenizer_to_chat_formatter(
     tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name_or_path)  # type: ignore
 
     def format_autotokenizer(
-        messages: List[llama_types.ChatCompletionRequestMessage],
+        messages: list[llama_types.ChatCompletionRequestMessage],
         **kwargs: Any,
     ) -> ChatFormatterResponse:
         tokenizer.use_default_system_prompt = False  # type: ignore
@@ -688,21 +664,21 @@ def hf_autotokenizer_to_chat_formatter(
         assert isinstance(prompt, str)
         # Return formatted prompt and eos token by default
         return ChatFormatterResponse(
-            prompt=prompt, stop=tokenizer.eos_token, added_special=True
+            prompt=prompt, stop=tokenizer.eos_token, added_special=True,
         )
 
     return format_autotokenizer
 
 
 def hf_autotokenizer_to_chat_completion_handler(
-    pretrained_model_name_or_path: Union[str, os.PathLike[str]]
+    pretrained_model_name_or_path: str | os.PathLike[str],
 ) -> LlamaChatCompletionHandler:
     chat_formatter = hf_autotokenizer_to_chat_formatter(pretrained_model_name_or_path)
     return chat_formatter_to_chat_completion_handler(chat_formatter)
 
 
 def hf_tokenizer_config_to_chat_formatter(
-    tokenizer_config: Dict[str, Any],
+    tokenizer_config: dict[str, Any],
     add_generation_prompt: bool = True,
 ) -> ChatFormatter:
     assert isinstance(tokenizer_config, dict)
@@ -725,7 +701,7 @@ def hf_tokenizer_config_to_chat_formatter(
     ).from_string(chat_template)
 
     def format_tokenizer_config(
-        messages: List[llama_types.ChatCompletionRequestMessage],
+        messages: list[llama_types.ChatCompletionRequestMessage],
         **kwargs: Any,
     ) -> ChatFormatterResponse:
         # TODO: veryify this is correct
@@ -734,7 +710,7 @@ def hf_tokenizer_config_to_chat_formatter(
             messages = [
                 *messages,
                 llama_types.ChatCompletionRequestAssistantMessage(
-                    role="assistant", content=""
+                    role="assistant", content="",
                 ),
             ]
         prompt = env.render(
@@ -743,23 +719,23 @@ def hf_tokenizer_config_to_chat_formatter(
             eos_token=eos_token,
         )
         return ChatFormatterResponse(
-            prompt=prompt, stop=[eos_token, bos_token], added_special=True
+            prompt=prompt, stop=[eos_token, bos_token], added_special=True,
         )
 
     return format_tokenizer_config
 
 
 def hf_tokenizer_config_to_chat_completion_handler(
-    tokenizer_config: Dict[str, Any],
+    tokenizer_config: dict[str, Any],
     add_generation_prompt: bool = True,
 ) -> LlamaChatCompletionHandler:
     chat_formatter = hf_tokenizer_config_to_chat_formatter(
-        tokenizer_config, add_generation_prompt=add_generation_prompt
+        tokenizer_config, add_generation_prompt=add_generation_prompt,
     )
     return chat_formatter_to_chat_completion_handler(chat_formatter)
 
 
-def guess_chat_format_from_gguf_metadata(metadata: Dict[str, str]) -> Optional[str]:
+def guess_chat_format_from_gguf_metadata(metadata: dict[str, str]) -> str | None:
     if "tokenizer.chat_template" not in metadata:
         return None
 
@@ -783,7 +759,7 @@ def guess_chat_format_from_gguf_metadata(metadata: Dict[str, str]) -> Optional[s
 
 
 def _get_system_message(
-    messages: List[llama_types.ChatCompletionRequestMessage],
+    messages: list[llama_types.ChatCompletionRequestMessage],
 ) -> str:
     """Get the first system message."""
     for message in messages:
@@ -793,11 +769,11 @@ def _get_system_message(
 
 
 def _map_roles(
-    messages: List[llama_types.ChatCompletionRequestMessage],
-    role_map: Dict[str, str],
-) -> List[Tuple[str, Optional[str]]]:
+    messages: list[llama_types.ChatCompletionRequestMessage],
+    role_map: dict[str, str],
+) -> list[tuple[str, str | None]]:
     """Map the message roles."""
-    output: List[Tuple[str, Optional[str]]] = []
+    output: list[tuple[str, str | None]] = []
     for message in messages:
         role = message["role"]
         if role in role_map:
@@ -809,7 +785,7 @@ def _map_roles(
 
 
 def _format_llama2(
-    system_message: str, messages: List[Tuple[str, Optional[str]]], sep: str, sep2: str
+    system_message: str, messages: list[tuple[str, str | None]], sep: str, sep2: str,
 ) -> str:
     """Format the prompt with the llama2 style."""
     seps = [sep, sep2]
@@ -826,7 +802,7 @@ def _format_llama2(
 
 
 def _format_add_colon_single(
-    system_message: str, messages: List[Tuple[str, Optional[str]]], sep: str
+    system_message: str, messages: list[tuple[str, str | None]], sep: str,
 ) -> str:
     """Format the prompt with the add-colon-single style."""
     ret = system_message + sep
@@ -839,7 +815,7 @@ def _format_add_colon_single(
 
 
 def _format_add_colon_two(
-    system_message: str, messages: List[Tuple[str, Optional[str]]], sep: str, sep2: str
+    system_message: str, messages: list[tuple[str, str | None]], sep: str, sep2: str,
 ) -> str:
     """Format the prompt with the add-colon-two style."""
     seps = [sep, sep2]
@@ -853,7 +829,7 @@ def _format_add_colon_two(
 
 
 def _format_no_colon_single(
-    system_message: str, messages: List[Tuple[str, Optional[str]]], sep: str
+    system_message: str, messages: list[tuple[str, str | None]], sep: str,
 ) -> str:
     """Format the prompt with the no-colon-single style."""
     ret = system_message
@@ -866,7 +842,7 @@ def _format_no_colon_single(
 
 
 def _format_add_colon_space_single(
-    system_message: str, messages: List[Tuple[str, Optional[str]]], sep: str
+    system_message: str, messages: list[tuple[str, str | None]], sep: str,
 ) -> str:
     """Format the prompt with the add-colon-space-single style."""
     ret = system_message + sep
@@ -879,7 +855,7 @@ def _format_add_colon_space_single(
 
 
 def _format_chatml(
-    system_message: str, messages: List[Tuple[str, Optional[str]]], sep: str
+    system_message: str, messages: list[tuple[str, str | None]], sep: str,
 ) -> str:
     """Format the prompt with the chatml style."""
     ret = "" if system_message == "" else system_message + sep + "\n"
@@ -892,7 +868,7 @@ def _format_chatml(
 
 
 def _format_chatglm3(
-    system_message: str, messages: List[Tuple[str, Optional[str]]], sep: str
+    system_message: str, messages: list[tuple[str, str | None]], sep: str,
 ) -> str:
     """Format the prompt with the chatglm3 style."""
     ret = ""
@@ -908,20 +884,19 @@ def _format_chatglm3(
 
 def _grammar_for_json(verbose: bool = False):
     return llama_grammar.LlamaGrammar.from_string(
-        llama_grammar.JSON_GBNF, verbose=verbose
+        llama_grammar.JSON_GBNF, verbose=verbose,
     )
 
 
 def _grammar_for_json_schema(
-    schema: str, verbose: bool = False, fallback_to_json: bool = True
+    schema: str, verbose: bool = False, fallback_to_json: bool = True,
 ):
     try:
         return llama_grammar.LlamaGrammar.from_json_schema(schema, verbose=verbose)
     except Exception as e:
         if fallback_to_json:
             return _grammar_for_json(verbose=verbose)
-        else:
-            raise e
+        raise e
 
 
 def _grammar_for_response_format(
@@ -933,10 +908,9 @@ def _grammar_for_response_format(
 
     if "schema" in response_format:
         return _grammar_for_json_schema(
-            json.dumps(response_format["schema"]), verbose=verbose
+            json.dumps(response_format["schema"]), verbose=verbose,
         )
-    else:
-        return _grammar_for_json(verbose=verbose)
+    return _grammar_for_json(verbose=verbose)
 
 
 ### Chat Formats ###
@@ -946,7 +920,7 @@ def register_chat_format(name: str):
     def decorator(f: ChatFormatter):
         chat_completion_handler = chat_formatter_to_chat_completion_handler(f)
         LlamaChatCompletionHandlerRegistry().register_chat_completion_handler(
-            name, chat_completion_handler
+            name, chat_completion_handler,
         )
         return f
 
@@ -957,7 +931,7 @@ def register_chat_format(name: str):
 # system prompt is "embedded" in the first message
 @register_chat_format("llama-2")
 def format_llama2(
-    messages: List[llama_types.ChatCompletionRequestMessage],
+    messages: list[llama_types.ChatCompletionRequestMessage],
     **kwargs: Any,
 ) -> ChatFormatterResponse:
     _system_template = "[INST] <<SYS>>\n{system_message}\n<</SYS>>"
@@ -974,7 +948,7 @@ def format_llama2(
 # https://github.com/meta-llama/llama3/blob/main/llama/tokenizer.py#L202-L229
 @register_chat_format("llama-3")
 def format_llama3(
-    messages: List[llama_types.ChatCompletionRequestMessage],
+    messages: list[llama_types.ChatCompletionRequestMessage],
     **kwargs: Any,
 ) -> ChatFormatterResponse:
     _roles = dict(
@@ -991,7 +965,7 @@ def format_llama3(
 
 @register_chat_format("alpaca")
 def format_alpaca(
-    messages: List[llama_types.ChatCompletionRequestMessage],
+    messages: list[llama_types.ChatCompletionRequestMessage],
     **kwargs: Any,
 ) -> ChatFormatterResponse:
     _roles = dict(user="### Instruction", assistant="### Response")
@@ -1005,7 +979,7 @@ def format_alpaca(
 
 @register_chat_format("qwen")
 def format_qwen(
-    messages: List[llama_types.ChatCompletionRequestMessage],
+    messages: list[llama_types.ChatCompletionRequestMessage],
     **kwargs: Any,
 ) -> ChatFormatterResponse:
     _roles = dict(user="<|im_start|>user", assistant="<|im_start|>assistant")
@@ -1022,7 +996,7 @@ def format_qwen(
 
 @register_chat_format("vicuna")
 def format(
-    messages: List[llama_types.ChatCompletionRequestMessage],
+    messages: list[llama_types.ChatCompletionRequestMessage],
     **kwargs: Any,
 ) -> ChatFormatterResponse:
     _system_message = "A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions."
@@ -1038,7 +1012,7 @@ def format(
 
 @register_chat_format("oasst_llama")
 def format_oasst_llama(
-    messages: List[llama_types.ChatCompletionRequestMessage],
+    messages: list[llama_types.ChatCompletionRequestMessage],
     **kwargs: Any,
 ) -> ChatFormatterResponse:
     _system_template = "[INST] <<SYS>>\n{system_message}\n<</SYS>>\n\n"
@@ -1054,7 +1028,7 @@ def format_oasst_llama(
 
 @register_chat_format("baichuan-2")
 def format_baichuan2(
-    messages: List[llama_types.ChatCompletionRequestMessage],
+    messages: list[llama_types.ChatCompletionRequestMessage],
     **kwargs: Any,
 ) -> ChatFormatterResponse:
     _system_template = "{system_message}"
@@ -1070,7 +1044,7 @@ def format_baichuan2(
 
 @register_chat_format("baichuan")
 def format_baichuan(
-    messages: List[llama_types.ChatCompletionRequestMessage],
+    messages: list[llama_types.ChatCompletionRequestMessage],
     **kwargs: Any,
 ) -> ChatFormatterResponse:
     _system_template = "{system_message}"
@@ -1086,7 +1060,7 @@ def format_baichuan(
 
 @register_chat_format("openbuddy")
 def format_openbuddy(
-    messages: List[llama_types.ChatCompletionRequestMessage],
+    messages: list[llama_types.ChatCompletionRequestMessage],
     **kwargs: Any,
 ) -> ChatFormatterResponse:
     _system_message = """You are a helpful, respectful and honest INTP-T AI Assistant named Buddy. You are talking to a human User.
@@ -1108,7 +1082,7 @@ You are trained by OpenBuddy team, (https://openbuddy.ai, https://github.com/Ope
 
 @register_chat_format("redpajama-incite")
 def format_redpajama_incite(
-    messages: List[llama_types.ChatCompletionRequestMessage],
+    messages: list[llama_types.ChatCompletionRequestMessage],
     **kwargs: Any,
 ) -> ChatFormatterResponse:
     _system_message = _get_system_message(messages)
@@ -1124,7 +1098,7 @@ def format_redpajama_incite(
 
 @register_chat_format("snoozy")
 def format_snoozy(
-    messages: List[llama_types.ChatCompletionRequestMessage],
+    messages: list[llama_types.ChatCompletionRequestMessage],
     **kwargs: Any,
 ) -> ChatFormatterResponse:
     system_template = "### Instruction:\n{system_message}"
@@ -1146,7 +1120,7 @@ def format_snoozy(
 
 @register_chat_format("phind")
 def format_phind(
-    messages: List[llama_types.ChatCompletionRequestMessage],
+    messages: list[llama_types.ChatCompletionRequestMessage],
     **kwargs: Any,
 ) -> ChatFormatterResponse:
     _roles = dict(user="### User Message", assistant="### Assistant")
@@ -1160,7 +1134,7 @@ def format_phind(
 
 @register_chat_format("intel")
 def format_intel(
-    messages: List[llama_types.ChatCompletionRequestMessage],
+    messages: list[llama_types.ChatCompletionRequestMessage],
     **kwargs: Any,
 ) -> ChatFormatterResponse:
     _roles = dict(user="### User:", assistant="### Assistant:")
@@ -1174,7 +1148,7 @@ def format_intel(
 
 @register_chat_format("open-orca")
 def format_open_orca(
-    messages: List[llama_types.ChatCompletionRequestMessage],
+    messages: list[llama_types.ChatCompletionRequestMessage],
     **kwargs: Any,
 ) -> ChatFormatterResponse:
     system_template = "{system_message}"
@@ -1193,7 +1167,7 @@ def format_open_orca(
     # stop_token_ids=[32000, 32001],  # "<|end_of_turn|>"
     stop_str = "User"
     system_message = system_template.format(system_message=system_message)
-    _messages = _map_roles(messages, dict(zip(roles, roles)))
+    _messages = _map_roles(messages, dict(zip(roles, roles, strict=False)))
     _messages.append((roles[1], None))
     _prompt = _format_add_colon_space_single(system_message, _messages, sep)
     return ChatFormatterResponse(prompt=_prompt, stop=stop_str)
@@ -1201,7 +1175,7 @@ def format_open_orca(
 
 @register_chat_format("mistrallite")
 def format_mistrallite(
-    messages: List[llama_types.ChatCompletionRequestMessage],
+    messages: list[llama_types.ChatCompletionRequestMessage],
     **kwargs: Any,
 ) -> ChatFormatterResponse:
     _roles = dict(user="<|prompter|>", assistant="</s>\n<|assistant|>")
@@ -1217,7 +1191,7 @@ def format_mistrallite(
 
 @register_chat_format("zephyr")
 def format_zephyr(
-    messages: List[llama_types.ChatCompletionRequestMessage],
+    messages: list[llama_types.ChatCompletionRequestMessage],
     **kwargs: Any,
 ) -> ChatFormatterResponse:
     system_template = """<|system|>
@@ -1234,7 +1208,7 @@ def format_zephyr(
 
 @register_chat_format("pygmalion")
 def format_pygmalion(
-    messages: List[llama_types.ChatCompletionRequestMessage],
+    messages: list[llama_types.ChatCompletionRequestMessage],
     **kwargs: Any,
 ) -> ChatFormatterResponse:
     system_template = """<|system|>{system_message}"""
@@ -1250,7 +1224,7 @@ def format_pygmalion(
 
 @register_chat_format("chatml")
 def format_chatml(
-    messages: List[llama_types.ChatCompletionRequestMessage],
+    messages: list[llama_types.ChatCompletionRequestMessage],
     **kwargs: Any,
 ) -> ChatFormatterResponse:
     system_template = """<|im_start|>system
@@ -1267,7 +1241,7 @@ def format_chatml(
 
 @register_chat_format("mistral-instruct")
 def format_mistral_instruct(
-    messages: List[llama_types.ChatCompletionRequestMessage],
+    messages: list[llama_types.ChatCompletionRequestMessage],
     **kwargs: Any,
 ) -> ChatFormatterResponse:
     eos = "</s>"
@@ -1288,7 +1262,7 @@ def format_mistral_instruct(
 
 @register_chat_format("chatglm3")
 def format_chatglm3(
-    messages: List[llama_types.ChatCompletionRequestMessage],
+    messages: list[llama_types.ChatCompletionRequestMessage],
     **kwargs: Any,
 ) -> ChatFormatterResponse:
     system_template = """<|system|>
@@ -1305,14 +1279,14 @@ def format_chatglm3(
 
 @register_chat_format("openchat")
 def format_openchat(
-    messages: List[llama_types.ChatCompletionRequestMessage],
+    messages: list[llama_types.ChatCompletionRequestMessage],
     **kwargs: Any,
 ) -> ChatFormatterResponse:
     system_template = "{system_message}<|end_of_turn|>"
     system_message = _get_system_message(messages)
     system_message = system_template.format(system_message=system_message)
     _roles = dict(
-        user="GPT4 Correct User: ", assistant="<|end_of_turn|>GPT4 Correct Assistant: "
+        user="GPT4 Correct User: ", assistant="<|end_of_turn|>GPT4 Correct Assistant: ",
     )
     _sep = "<|end_of_turn|>"
     _messages = _map_roles(messages, _roles)
@@ -1347,13 +1321,13 @@ def format_saiga(
 # https://huggingface.co/collections/google/gemma-release-65d5efbccdbb8c4202ec078b
 @register_chat_format("gemma")
 def format_gemma(
-    messages: List[llama_types.ChatCompletionRequestMessage],
+    messages: list[llama_types.ChatCompletionRequestMessage],
     **kwargs: Any,
 ) -> ChatFormatterResponse:
     system_message = _get_system_message(messages)
     if system_message != "":
         logger.debug(
-            "`role='system'` messages are not allowed on Google's Gemma models."
+            "`role='system'` messages are not allowed on Google's Gemma models.",
         )
     _roles = dict(user="<start_of_turn>user\n", assistant="<start_of_turn>model\n")
     _sep = "<end_of_turn>\n"
@@ -1369,20 +1343,20 @@ def format_gemma(
 @register_chat_completion_handler("functionary")
 def functionary_chat_handler(
     llama: llama.Llama,
-    messages: List[llama_types.ChatCompletionRequestMessage],
-    functions: Optional[List[llama_types.ChatCompletionFunction]] = None,
-    function_call: Optional[llama_types.ChatCompletionRequestFunctionCall] = None,
-    tools: Optional[List[llama_types.ChatCompletionTool]] = None,
-    tool_choice: Optional[llama_types.ChatCompletionToolChoiceOption] = None,
+    messages: list[llama_types.ChatCompletionRequestMessage],
+    functions: list[llama_types.ChatCompletionFunction] | None = None,
+    function_call: llama_types.ChatCompletionRequestFunctionCall | None = None,
+    tools: list[llama_types.ChatCompletionTool] | None = None,
+    tool_choice: llama_types.ChatCompletionToolChoiceOption | None = None,
     temperature: float = 0.2,
     top_p: float = 0.95,
     top_k: int = 40,
     min_p: float = 0.05,
     typical_p: float = 1.0,
     stream: bool = False,
-    stop: Optional[Union[str, List[str]]] = [],
-    response_format: Optional[llama_types.ChatCompletionRequestResponseFormat] = None,
-    max_tokens: Optional[int] = None,
+    stop: str | list[str] | None = [],
+    response_format: llama_types.ChatCompletionRequestResponseFormat | None = None,
+    max_tokens: int | None = None,
     presence_penalty: float = 0.0,
     frequency_penalty: float = 0.0,
     repeat_penalty: float = 1.1,
@@ -1390,15 +1364,15 @@ def functionary_chat_handler(
     mirostat_mode: int = 0,
     mirostat_tau: float = 5.0,
     mirostat_eta: float = 0.1,
-    model: Optional[str] = None,
-    logits_processor: Optional[llama.LogitsProcessorList] = None,
-    grammar: Optional[llama.LlamaGrammar] = None,
+    model: str | None = None,
+    logits_processor: llama.LogitsProcessorList | None = None,
+    grammar: llama.LlamaGrammar | None = None,
     **kwargs,  # type: ignore
-) -> Union[llama_types.ChatCompletion, Iterator[llama_types.ChatCompletionChunk]]:
+) -> llama_types.ChatCompletion | Iterator[llama_types.ChatCompletionChunk]:
     SYSTEM_MESSAGE = """A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. The assistant calls functions with appropriate input when necessary"""
 
     def generate_type_definition(
-        param: Dict[str, llama_types.JsonType], indent_level: int, shared_defs
+        param: dict[str, llama_types.JsonType], indent_level: int, shared_defs,
     ) -> str:
         indent = "  " * indent_level
         if "$ref" in param:
@@ -1407,28 +1381,27 @@ def functionary_chat_handler(
                 -1
             ]  # Extract the type name from the reference
             return ref_name
-        elif param.get("type") == "array":
+        if param.get("type") == "array":
             items = param.get("items", {})
             item_type = generate_type_definition(items, indent_level + 1, shared_defs)
             return f"Array<{item_type}>"
-        elif param.get("type") == "object":
+        if param.get("type") == "object":
             properties = param.get("properties", {})
             nested_schema = "{\n"
             for nested_param_name, nested_param in properties.items():
                 nested_param_type = generate_type_definition(
-                    nested_param, indent_level + 1, shared_defs
+                    nested_param, indent_level + 1, shared_defs,
                 )
                 nested_schema += (
                     f"{indent}  {nested_param_name}: {nested_param_type},\n"
                 )
             nested_schema += indent + "}"
             return nested_schema
-        elif "enum" in param:
+        if "enum" in param:
             # Enum type
             return " | ".join([f'"{enum_value}"' for enum_value in param["enum"]])
-        else:
-            # Simple type
-            return param.get("type", "any")
+        # Simple type
+        return param.get("type", "any")
 
     def generate_shared_definitions(shared_defs, indent_level: int) -> str:
         indent = "  " * indent_level
@@ -1437,12 +1410,12 @@ def functionary_chat_handler(
             shared_definitions += f"{indent}type {def_name} = "
             if def_properties.get("type") == "object":
                 shared_definitions += generate_type_definition(
-                    def_properties, indent_level, shared_defs
+                    def_properties, indent_level, shared_defs,
                 )
             elif "enum" in def_properties:
                 # Enum type
                 shared_definitions += " | ".join(
-                    [f'"{enum_value}"' for enum_value in def_properties["enum"]]
+                    [f'"{enum_value}"' for enum_value in def_properties["enum"]],
                 )
             shared_definitions += ";\n"
         return shared_definitions
@@ -1478,20 +1451,20 @@ def functionary_chat_handler(
                 schema += f"    {param_name}{optional_indicator}: {param_type},\n"
             schema += "  }) => any;\n\n"
 
-        schema += "}} // namespace {}\n".format(namespace)
+        schema += f"}} // namespace {namespace}\n"
         return schema
 
     def prepare_messages_for_inference(
-        messages: List[llama_types.ChatCompletionRequestMessage],
-        functions: Optional[List[llama_types.ChatCompletionFunctions]] = None,
-        tools: Optional[List[llama_types.ChatCompletionTool]] = None,
+        messages: list[llama_types.ChatCompletionRequestMessage],
+        functions: list[llama_types.ChatCompletionFunctions] | None = None,
+        tools: list[llama_types.ChatCompletionTool] | None = None,
     ):
-        all_messages: List[llama_types.ChatCompletionRequestMessage] = []
+        all_messages: list[llama_types.ChatCompletionRequestMessage] = []
         if functions is not None:
             all_messages.append(
                 llama_types.ChatCompletionRequestSystemMessage(
-                    role="system", content=generate_schema_from_functions(functions)
-                )
+                    role="system", content=generate_schema_from_functions(functions),
+                ),
             )
 
         if tools is not None:
@@ -1503,15 +1476,15 @@ def functionary_chat_handler(
                             tool["function"]
                             for tool in tools
                             if tool["type"] == "function"
-                        ]
+                        ],
                     ),
-                )
+                ),
             )
 
         all_messages.append(
             llama_types.ChatCompletionRequestSystemMessage(
-                role="system", content=SYSTEM_MESSAGE
-            )
+                role="system", content=SYSTEM_MESSAGE,
+            ),
         )
 
         for message in messages:
@@ -1527,34 +1500,32 @@ def functionary_chat_handler(
 
         all_messages.append(
             llama_types.ChatCompletionRequestAssistantMessage(
-                role="assistant", content=None
-            )
+                role="assistant", content=None,
+            ),
         )
 
         def message_to_str(msg: llama_types.ChatCompletionRequestMessage):
             if msg["role"] == "system":
                 return f"system:\n{msg['content']}\n"
 
-            elif msg["role"] == "function" and "name" in msg:
+            if msg["role"] == "function" and "name" in msg:
                 return f"function name={msg['name']}:\n{msg['content']}\n"
-            elif msg["role"] == "function" and "function_call" in msg:
+            if msg["role"] == "function" and "function_call" in msg:
                 return f"function name={msg['function_call']['name']}:\n{msg['function_call']['arguments']}\n"
-            elif msg["role"] == "tool":
+            if msg["role"] == "tool":
                 if msg["content"] is not None:
                     return f"function name={msg['tool_call_id']}:\n{msg['content']}\n"
-                else:
-                    return f"function name={msg['tool_call_id']}\n"
-            elif msg["role"] == "user":
+                return f"function name={msg['tool_call_id']}\n"
+            if msg["role"] == "user":
                 if msg["content"] is None:
                     return "user:\n</s></s>\n"
-                else:
-                    return f"user:\n</s>{msg['content']}</s>\n"
-            elif msg["role"] == "assistant":
+                return f"user:\n</s>{msg['content']}</s>\n"
+            if msg["role"] == "assistant":
                 if msg["content"] is not None and "function_call" in msg:
                     return f"assistant:\n{msg['content']}\nassistant to={msg['function_call']['name']}:\n{msg['function_call']['arguments']}</s>\n"
-                elif "function_call" in msg:
+                if "function_call" in msg:
                     return f"assistant to={msg['function_call']['name']}:\n{msg['function_call']['arguments']}</s>\n"
-                elif "tool_calls" in msg and len(msg["tool_calls"]) > 0:
+                if "tool_calls" in msg and len(msg["tool_calls"]) > 0:
                     for tool_call in msg[
                         "tool_calls"
                     ]:  # NOTE: probably doesn't work with the functionary model
@@ -1607,7 +1578,7 @@ def functionary_chat_handler(
     ):
         stop = "\n"
         completion: llama_types.Completion = llama.create_completion(
-            prompt=prompt, stop=stop, stream=False
+            prompt=prompt, stop=stop, stream=False,
         )  # type: ignore
         completion_text = completion["choices"][0]["text"]
         # strip " to=functions." and ending ":"
@@ -1635,7 +1606,7 @@ def functionary_chat_handler(
         try:
             with suppress_stdout_stderr(disable=llama.verbose):
                 grammar_text = llama_grammar.json_schema_to_gbnf(
-                    json.dumps(function_body)
+                    json.dumps(function_body),
                 )
                 grammar = llama_grammar.LlamaGrammar.from_string(
                     llama_grammar.json_schema_to_gbnf(json.dumps(function_body)),
@@ -1645,7 +1616,7 @@ def functionary_chat_handler(
         except Exception as e:
             if llama.verbose:
                 print(
-                    "Failed to parse function body as JSON schema, falling back to default grammar"
+                    "Failed to parse function body as JSON schema, falling back to default grammar",
                 )
                 print(e)
             with suppress_stdout_stderr(disable=llama.verbose):
@@ -1656,7 +1627,7 @@ def functionary_chat_handler(
     else:
         with suppress_stdout_stderr(disable=llama.verbose):
             grammar = llama_grammar.LlamaGrammar.from_string(
-                llama_grammar.JSON_GBNF, verbose=llama.verbose
+                llama_grammar.JSON_GBNF, verbose=llama.verbose,
             )
 
     completion: llama_types.Completion = llama.create_completion(
@@ -1713,12 +1684,12 @@ def functionary_chat_handler(
                                 "name": function_call,
                                 "arguments": completion["choices"][0]["text"],
                             },
-                        }
+                        },
                     ],
                 },
                 "logprobs": completion["choices"][0]["logprobs"],
                 "finish_reason": "tool_calls",
-            }
+            },
         ],
         usage=completion["usage"],
     )
@@ -1728,20 +1699,20 @@ def functionary_chat_handler(
 @register_chat_completion_handler("functionary-v2")
 def functionary_v1_v2_chat_handler(
     llama: llama.Llama,
-    messages: List[llama_types.ChatCompletionRequestMessage],
-    functions: Optional[List[llama_types.ChatCompletionFunction]] = None,
-    function_call: Optional[llama_types.ChatCompletionRequestFunctionCall] = None,
-    tools: Optional[List[llama_types.ChatCompletionTool]] = None,
-    tool_choice: Optional[llama_types.ChatCompletionToolChoiceOption] = None,
+    messages: list[llama_types.ChatCompletionRequestMessage],
+    functions: list[llama_types.ChatCompletionFunction] | None = None,
+    function_call: llama_types.ChatCompletionRequestFunctionCall | None = None,
+    tools: list[llama_types.ChatCompletionTool] | None = None,
+    tool_choice: llama_types.ChatCompletionToolChoiceOption | None = None,
     temperature: float = 0.2,
     top_p: float = 0.95,
     top_k: int = 40,
     min_p: float = 0.05,
     typical_p: float = 1.0,
     stream: bool = False,
-    stop: Optional[Union[str, List[str]]] = [],
-    response_format: Optional[llama_types.ChatCompletionRequestResponseFormat] = None,
-    max_tokens: Optional[int] = None,
+    stop: str | list[str] | None = [],
+    response_format: llama_types.ChatCompletionRequestResponseFormat | None = None,
+    max_tokens: int | None = None,
     presence_penalty: float = 0.0,
     frequency_penalty: float = 0.0,
     repeat_penalty: float = 1.1,
@@ -1749,16 +1720,16 @@ def functionary_v1_v2_chat_handler(
     mirostat_mode: int = 0,
     mirostat_tau: float = 5.0,
     mirostat_eta: float = 0.1,
-    model: Optional[str] = None,
-    logits_processor: Optional[llama.LogitsProcessorList] = None,
-    grammar: Optional[llama.LlamaGrammar] = None,
+    model: str | None = None,
+    logits_processor: llama.LogitsProcessorList | None = None,
+    grammar: llama.LlamaGrammar | None = None,
     **kwargs,  # type: ignore
-) -> Union[llama_types.ChatCompletion, Iterator[llama_types.ChatCompletionChunk]]:
+) -> llama_types.ChatCompletion | Iterator[llama_types.ChatCompletionChunk]:
     SYSTEM_MESSAGE = """A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. The assistant calls functions with appropriate input when necessary"""
 
     tokenizer = llama.tokenizer_
     assert hasattr(
-        tokenizer, "hf_tokenizer"
+        tokenizer, "hf_tokenizer",
     ), "Please provide a valid hf_tokenizer_path from https://huggingface.co/meetkai when initializing the Llama class"
     from transformers import AutoTokenizer
 
@@ -1778,7 +1749,7 @@ def functionary_v1_v2_chat_handler(
         CONTENT_TOKEN = "<|content|>"
 
     def generate_type_definition(
-        param: Dict[str, llama_types.JsonType], indent_level: int, shared_defs
+        param: dict[str, llama_types.JsonType], indent_level: int, shared_defs,
     ) -> str:
         indent = "  " * indent_level
         if "$ref" in param:
@@ -1787,28 +1758,27 @@ def functionary_v1_v2_chat_handler(
                 -1
             ]  # Extract the type name from the reference
             return ref_name
-        elif param.get("type") == "array":
+        if param.get("type") == "array":
             items = param.get("items", {})
             item_type = generate_type_definition(items, indent_level + 1, shared_defs)
             return f"Array<{item_type}>"
-        elif param.get("type") == "object":
+        if param.get("type") == "object":
             properties = param.get("properties", {})
             nested_schema = "{\n"
             for nested_param_name, nested_param in properties.items():
                 nested_param_type = generate_type_definition(
-                    nested_param, indent_level + 1, shared_defs
+                    nested_param, indent_level + 1, shared_defs,
                 )
                 nested_schema += (
                     f"{indent}  {nested_param_name}: {nested_param_type},\n"
                 )
             nested_schema += indent + "}"
             return nested_schema
-        elif "enum" in param:
+        if "enum" in param:
             # Enum type
             return " | ".join([f'"{enum_value}"' for enum_value in param["enum"]])
-        else:
-            # Simple type
-            return param.get("type", "any")
+        # Simple type
+        return param.get("type", "any")
 
     def generate_shared_definitions(shared_defs, indent_level: int) -> str:
         indent = "  " * indent_level
@@ -1817,12 +1787,12 @@ def functionary_v1_v2_chat_handler(
             shared_definitions += f"{indent}type {def_name} = "
             if def_properties.get("type") == "object":
                 shared_definitions += generate_type_definition(
-                    def_properties, indent_level, shared_defs
+                    def_properties, indent_level, shared_defs,
                 )
             elif "enum" in def_properties:
                 # Enum type
                 shared_definitions += " | ".join(
-                    [f'"{enum_value}"' for enum_value in def_properties["enum"]]
+                    [f'"{enum_value}"' for enum_value in def_properties["enum"]],
                 )
             shared_definitions += ";\n"
         return shared_definitions
@@ -1858,49 +1828,48 @@ def functionary_v1_v2_chat_handler(
                 schema += f"{param_name}{optional_indicator}: {param_type},\n"
             schema += "}) => any;\n\n"
 
-        schema += "}} // namespace {}".format(namespace)
+        schema += f"}} // namespace {namespace}"
         return schema
 
     def prepare_messages_for_inference(
-        messages: List[llama_types.ChatCompletionRequestMessage],
+        messages: list[llama_types.ChatCompletionRequestMessage],
         tokenizer: AutoTokenizer,
         version: Literal["v1", "v2"],
-        functions: Optional[List[llama_types.ChatCompletionFunctions]] = None,
-        tools: Optional[List[llama_types.ChatCompletionTool]] = None,
-        tool_choice: Union[Dict, str] = "auto",
+        functions: list[llama_types.ChatCompletionFunctions] | None = None,
+        tools: list[llama_types.ChatCompletionTool] | None = None,
+        tool_choice: dict | str = "auto",
     ):
-        all_messages: List[llama_types.ChatCompletionRequestMessage] = []
+        all_messages: list[llama_types.ChatCompletionRequestMessage] = []
         if tool_choice == "none":
             all_messages.append(
                 llama_types.ChatCompletionRequestSystemMessage(
-                    role="system", content=generate_schema_from_functions([])
-                )
+                    role="system", content=generate_schema_from_functions([]),
+                ),
             )
-        else:
-            if functions is not None:
-                all_messages.append(
-                    llama_types.ChatCompletionRequestSystemMessage(
-                        role="system", content=generate_schema_from_functions(functions)
-                    )
-                )
-            elif tools is not None and tool_choice != "none":
-                all_messages.append(
-                    llama_types.ChatCompletionRequestSystemMessage(
-                        role="system",
-                        content=generate_schema_from_functions(
-                            [
-                                tool["function"]
-                                for tool in tools
-                                if tool["type"] == "function"
-                            ]
-                        ),
-                    )
-                )
+        elif functions is not None:
+            all_messages.append(
+                llama_types.ChatCompletionRequestSystemMessage(
+                    role="system", content=generate_schema_from_functions(functions),
+                ),
+            )
+        elif tools is not None and tool_choice != "none":
+            all_messages.append(
+                llama_types.ChatCompletionRequestSystemMessage(
+                    role="system",
+                    content=generate_schema_from_functions(
+                        [
+                            tool["function"]
+                            for tool in tools
+                            if tool["type"] == "function"
+                        ],
+                    ),
+                 ),
+            )
 
         all_messages.append(
             llama_types.ChatCompletionRequestSystemMessage(
-                role="system", content=SYSTEM_MESSAGE
-            )
+                role="system", content=SYSTEM_MESSAGE,
+            ),
         )
 
         for message in messages:
@@ -1937,7 +1906,7 @@ def functionary_v1_v2_chat_handler(
         function_call = "auto"
 
     prompt = prepare_messages_for_inference(
-        messages, tokenizer, version, functions, tools, function_call
+        messages, tokenizer, version, functions, tools, function_call,
     )
 
     # If no tools/functions are provided
@@ -1989,21 +1958,21 @@ def functionary_v1_v2_chat_handler(
         try:
             with suppress_stdout_stderr(disable=llama.verbose):
                 grammar_text = llama_grammar.json_schema_to_gbnf(
-                    json.dumps(function_body)
+                    json.dumps(function_body),
                 )
                 grammar = llama_grammar.LlamaGrammar.from_string(
-                    llama_grammar.json_schema_to_gbnf(json.dumps(function_body))
+                    llama_grammar.json_schema_to_gbnf(json.dumps(function_body)),
                 )
                 print(grammar_text)
         except Exception as e:
             if llama.verbose:
                 print(
-                    "Failed to parse function body as JSON schema, falling back to default grammar"
+                    "Failed to parse function body as JSON schema, falling back to default grammar",
                 )
                 print(e)
             with suppress_stdout_stderr(disable=llama.verbose):
                 grammar = llama_grammar.LlamaGrammar.from_string(
-                    llama_grammar.JSON_GBNF, verbose=llama.verbose
+                    llama_grammar.JSON_GBNF, verbose=llama.verbose,
                 )
 
         return grammar
@@ -2051,7 +2020,7 @@ def functionary_v1_v2_chat_handler(
             grammar = get_grammar(function_call["name"])
             stops = [STOP_TOKEN, FROM_TOKEN]
             tool_id = "".join(
-                [random.choice(string.ascii_letters + string.digits) for _ in range(24)]
+                [random.choice(string.ascii_letters + string.digits) for _ in range(24)],
             )
             completion = create_completion(prompt=prompt, stop=stops, grammar=grammar)
             completion_text = ""
@@ -2070,15 +2039,15 @@ def functionary_v1_v2_chat_handler(
                                         "name": function_call["name"],
                                         "arguments": "",
                                     },
-                                }
-                            ]
+                                },
+                            ],
                         }
                     else:
                         func_call_dict = {
                             "function_call": {
                                 "name": function_call["name"],
                                 "arguments": "",
-                            }
+                            },
                         }
                     yield llama_types.CreateChatCompletionStreamResponse(
                         id="chat" + chunk["id"],
@@ -2094,7 +2063,7 @@ def functionary_v1_v2_chat_handler(
                                     "content": None,
                                     **func_call_dict,
                                 },
-                            }
+                            },
                         ],
                     )
                     first = False
@@ -2109,15 +2078,15 @@ def functionary_v1_v2_chat_handler(
                                     "name": None,
                                     "arguments": chunk["choices"][0]["text"].rstrip(),
                                 },
-                            }
-                        ]
+                            },
+                        ],
                     }
                 else:
                     func_call_dict = {
                         "function_call": {
                             "name": None,
                             "arguments": chunk["choices"][0]["text"].rstrip(),
-                        }
+                        },
                     }
                 if len(chunk["choices"][0]["text"].rstrip()) > 0:
                     yield llama_types.CreateChatCompletionStreamResponse(
@@ -2134,7 +2103,7 @@ def functionary_v1_v2_chat_handler(
                                     "content": None,
                                     **func_call_dict,
                                 },
-                            }
+                            },
                         ],
                     )
             # Yield tool_call/function_call stop message
@@ -2156,7 +2125,7 @@ def functionary_v1_v2_chat_handler(
                             "function_call": None,
                             "tool_calls": None,
                         },
-                    }
+                    },
                 ],
             )
         # If "auto" or no tool_choice/function_call
@@ -2167,7 +2136,7 @@ def functionary_v1_v2_chat_handler(
                 grammar = None
                 stops = CONTENT_TOKEN
                 completion = create_completion(
-                    prompt=prompt, stop=stops, grammar=grammar
+                    prompt=prompt, stop=stops, grammar=grammar,
                 )
                 completion_text = ""
                 for chunk in completion:
@@ -2191,7 +2160,7 @@ def functionary_v1_v2_chat_handler(
                                 "delta": {"role": "assistant", "content": ""},
                                 "logprobs": None,
                                 "finish_reason": None,
-                            }
+                            },
                         ],
                     )
                 else:
@@ -2201,7 +2170,7 @@ def functionary_v1_v2_chat_handler(
                         [
                             random.choice(string.ascii_letters + string.digits)
                             for _ in range(24)
-                        ]
+                        ],
                     )
                     if tools is not None:
                         func_call_dict = {
@@ -2214,12 +2183,12 @@ def functionary_v1_v2_chat_handler(
                                         "name": function_name,
                                         "arguments": "",
                                     },
-                                }
-                            ]
+                                },
+                            ],
                         }
                     else:
                         func_call_dict = {
-                            "function_call": {"name": function_name, "arguments": ""}
+                            "function_call": {"name": function_name, "arguments": ""},
                         }
                     # Stream function name
                     yield llama_types.CreateChatCompletionStreamResponse(
@@ -2236,13 +2205,13 @@ def functionary_v1_v2_chat_handler(
                                     "content": None,
                                     **func_call_dict,
                                 },
-                            }
+                            },
                         ],
                     )
                 # Generate content
                 stops = [RECIPIENT_TOKEN, STOP_TOKEN]
                 completion = create_completion(
-                    prompt=prompt, stop=stops, grammar=grammar
+                    prompt=prompt, stop=stops, grammar=grammar,
                 )
                 if function_name == "all":
                     completion_text = ""
@@ -2275,7 +2244,7 @@ def functionary_v1_v2_chat_handler(
                                                     "role": "assistant",
                                                     "content": buffer.pop(0),
                                                 },
-                                            }
+                                            },
                                         ],
                                     )
                                 is_end = False
@@ -2304,7 +2273,7 @@ def functionary_v1_v2_chat_handler(
                                                 ].lstrip()
                                             ),
                                         },
-                                    }
+                                    },
                                 ],
                             )
                     # Check whether the model wants to generate another turn
@@ -2336,7 +2305,7 @@ def functionary_v1_v2_chat_handler(
                                     "delta": {},
                                     "logprobs": None,
                                     "finish_reason": "stop",
-                                }
+                                },
                             ],
                         )
                         break
@@ -2359,8 +2328,8 @@ def functionary_v1_v2_chat_handler(
                                                     "text"
                                                 ].rstrip(),
                                             },
-                                        }
-                                    ]
+                                        },
+                                    ],
                                 }
                             else:
                                 func_call_dict = {
@@ -2369,7 +2338,7 @@ def functionary_v1_v2_chat_handler(
                                         "arguments": chunk["choices"][0][
                                             "text"
                                         ].rstrip(),
-                                    }
+                                    },
                                 }
                             yield llama_types.CreateChatCompletionStreamResponse(
                                 id="chat" + chunk_id,
@@ -2385,16 +2354,16 @@ def functionary_v1_v2_chat_handler(
                                             "content": None,
                                             **func_call_dict,
                                         },
-                                    }
+                                    },
                                 ],
                             )
                     prompt += completion_text.strip()
                     grammar = None
                     completion = create_completion(
-                        prompt=prompt, stop=stops, grammar=grammar
+                        prompt=prompt, stop=stops, grammar=grammar,
                     )
                     completion_text += "".join(
-                        [chunk["choices"][0]["text"] for chunk in completion]
+                        [chunk["choices"][0]["text"] for chunk in completion],
                     )
                     if (
                         "<|from|> assistant" in completion_text
@@ -2424,210 +2393,201 @@ def functionary_v1_v2_chat_handler(
                                         "function_call": None,
                                         "tool_calls": None,
                                     },
-                                }
+                                },
                             ],
                         )
                         break
 
     if stream is not False:
         return generate_streaming(
-            tools=tools, functions=functions, function_call=function_call, prompt=prompt
+            tools=tools, functions=functions, function_call=function_call, prompt=prompt,
         )
-    else:
-        if version == "v1":
-            # If no or "auto" tool_choice/function_call
-            if isinstance(function_call, str) and function_call == "auto":
-                stops = ["\n", END_ASSISTANT_TOKEN]
-            # If tool_choice/function_call is provided
-            elif isinstance(function_call, dict):
-                prompt += f"{START_FUNCTION_CALL_TOKEN}{function_call['name']}:\n"
-                stops = END_FUNCTION_CALL_TOKEN
-                function_call = function_call["name"]
-                function_calls.append(function_call)
-                grammar = get_grammar(function_call)
-            else:
-                prompt = prompt
-                stops = ["\n", END_ASSISTANT_TOKEN]
+    if version == "v1":
+        # If no or "auto" tool_choice/function_call
+        if isinstance(function_call, str) and function_call == "auto":
+            stops = ["\n", END_ASSISTANT_TOKEN]
+        # If tool_choice/function_call is provided
+        elif isinstance(function_call, dict):
+            prompt += f"{START_FUNCTION_CALL_TOKEN}{function_call['name']}:\n"
+            stops = END_FUNCTION_CALL_TOKEN
+            function_call = function_call["name"]
+            function_calls.append(function_call)
+            grammar = get_grammar(function_call)
+        else:
+            prompt = prompt
+            stops = ["\n", END_ASSISTANT_TOKEN]
 
-            completion = create_completion(prompt=prompt, stop=stops, grammar=grammar)
+        completion = create_completion(prompt=prompt, stop=stops, grammar=grammar)
+        completion_text = completion["choices"][0]["text"]
+        completion_tokens += completion["usage"]["completion_tokens"]
+
+        # If the generation does not involve a function call
+        if (
+            START_FUNCTION_CALL_TOKEN not in prompt
+            and START_FUNCTION_CALL_TOKEN not in completion_text
+        ):
+            completion["usage"]["completion_tokens"] = completion_tokens
+            return _convert_completion_to_chat(completion, stream=stream)  # type: ignore
+        # If the generation involves a function call in completion, generate the parameters
+        if (
+            START_FUNCTION_CALL_TOKEN not in prompt
+            and START_FUNCTION_CALL_TOKEN in completion_text
+        ):
+            prompt += (
+                completion_text.replace(
+                    f"{START_FUNCTION_CALL_TOKEN} ", START_FUNCTION_CALL_TOKEN,
+                )
+                + "\n"
+            )
+            function_calls.append(
+                completion_text.split(START_FUNCTION_CALL_TOKEN)[-1][:-1].strip(),
+            )
+            grammar = get_grammar(function_calls[-1])
+            completion = create_completion(
+                prompt=prompt, stop=END_FUNCTION_CALL_TOKEN, grammar=grammar,
+            )
+            completion_tokens += completion["usage"]["completion_tokens"]
+            function_bodies.append(completion["choices"][0]["text"].strip())
+        # If the prompt involves a function call, just append generated parameters to function_bodies
+        else:
+            function_bodies.append(completion_text.strip())
+    elif isinstance(function_call, dict):
+        prompt += f"{function_call['name']}\n{CONTENT_TOKEN}"
+        function_call = function_call["name"]
+        function_calls.append(function_call)
+        grammar = get_grammar(function_call)
+        stops = [STOP_TOKEN, FROM_TOKEN]
+        completion = create_completion(
+            prompt=prompt, stop=stops, grammar=grammar,
+        )
+        completion_text = completion["choices"][0]["text"]
+        completion_tokens += completion["usage"]["completion_tokens"]
+        function_bodies.append(completion_text.strip())
+    # If "auto" or no tool_choice/function_call
+    elif isinstance(function_call, str) and function_call == "auto":
+        while True:
+            # Generate function name first
+            grammar = None
+            stops = CONTENT_TOKEN
+            completion = create_completion(
+                prompt=prompt, stop=stops, grammar=grammar,
+            )
             completion_text = completion["choices"][0]["text"]
             completion_tokens += completion["usage"]["completion_tokens"]
-
-            # If the generation does not involve a function call
-            if (
-                START_FUNCTION_CALL_TOKEN not in prompt
-                and START_FUNCTION_CALL_TOKEN not in completion_text
-            ):
-                completion["usage"]["completion_tokens"] = completion_tokens
-                return _convert_completion_to_chat(completion, stream=stream)  # type: ignore
-            # If the generation involves a function call in completion, generate the parameters
-            elif (
-                START_FUNCTION_CALL_TOKEN not in prompt
-                and START_FUNCTION_CALL_TOKEN in completion_text
-            ):
-                prompt += (
-                    completion_text.replace(
-                        f"{START_FUNCTION_CALL_TOKEN} ", START_FUNCTION_CALL_TOKEN
-                    )
-                    + "\n"
-                )
-                function_calls.append(
-                    completion_text.split(START_FUNCTION_CALL_TOKEN)[-1][:-1].strip()
-                )
-                grammar = get_grammar(function_calls[-1])
-                completion = create_completion(
-                    prompt=prompt, stop=END_FUNCTION_CALL_TOKEN, grammar=grammar
-                )
-                completion_tokens += completion["usage"]["completion_tokens"]
-                function_bodies.append(completion["choices"][0]["text"].strip())
-            # If the prompt involves a function call, just append generated parameters to function_bodies
+            function_name = completion_text.strip()
+            if function_name == "all":
+                prompt += "all\n<|content|>"
             else:
-                function_bodies.append(completion_text.strip())
-        else:
-            # If tool_choice/function_call is provided
-            if isinstance(function_call, dict):
-                prompt += f"{function_call['name']}\n{CONTENT_TOKEN}"
-                function_call = function_call["name"]
+                function_call = completion_text.strip()
+                prompt += f"{function_call}\n<|content|>"
                 function_calls.append(function_call)
                 grammar = get_grammar(function_call)
-                stops = [STOP_TOKEN, FROM_TOKEN]
-                completion = create_completion(
-                    prompt=prompt, stop=stops, grammar=grammar
-                )
-                completion_text = completion["choices"][0]["text"]
-                completion_tokens += completion["usage"]["completion_tokens"]
-                function_bodies.append(completion_text.strip())
-            # If "auto" or no tool_choice/function_call
-            elif isinstance(function_call, str) and function_call == "auto":
-                while True:
-                    # Generate function name first
-                    grammar = None
-                    stops = CONTENT_TOKEN
-                    completion = create_completion(
-                        prompt=prompt, stop=stops, grammar=grammar
-                    )
-                    completion_text = completion["choices"][0]["text"]
-                    completion_tokens += completion["usage"]["completion_tokens"]
-                    function_name = completion_text.strip()
-                    if function_name == "all":
-                        prompt += "all\n<|content|>"
-                    else:
-                        function_call = completion_text.strip()
-                        prompt += f"{function_call}\n<|content|>"
-                        function_calls.append(function_call)
-                        grammar = get_grammar(function_call)
-                    # Generate content
-                    stops = [RECIPIENT_TOKEN, STOP_TOKEN]
-                    completion = create_completion(
-                        prompt=prompt, stop=stops, grammar=grammar
-                    )
-                    completion_text = completion["choices"][0]["text"]
-                    completion_tokens += completion["usage"]["completion_tokens"]
-                    if function_name == "all":
-                        if completion_text.endswith("\n<|from|>assistant\n"):
-                            content += completion_text[: -len("\n<|from|>assistant\n")]
-                        if completion_text.endswith("\n<|from|> assistant\n"):
-                            content += completion_text[-len("\n<|from|> assistant\n")]
-                        else:
-                            content += completion_text
-                        content = content.lstrip()
-                        # Check whether the model wants to generate another turn
-                        if (
-                            "<|from|> assistant" in completion_text
-                            or "<|from|>assistant" in completion_text
-                        ):
-                            if completion_text.endswith("\n<|from|>assistant\n"):
-                                cleaned_completion_text = completion_text[
-                                    : -len("\n<|from|>assistant\n")
-                                ].strip()
-                            elif completion_text.endswith("\n<|from|> assistant\n"):
-                                cleaned_completion_text = completion_text[
-                                    -len("\n<|from|> assistant\n")
-                                ].strip()
-                            else:
-                                cleaned_completion_text = completion_text.strip()
-                            prompt += f"{cleaned_completion_text}\n<|from|>assistant\n<|recipient|>"
-                        else:
-                            break
-                    else:
-                        function_bodies.append(completion_text.strip())
-                        # Check whether the model wants to generate another turn
-                        prompt += completion_text.strip()
-                        grammar = None
-                        completion = create_completion(
-                            prompt=prompt, stop=stops, grammar=grammar
-                        )
-                        completion_tokens += completion["usage"]["completion_tokens"]
-                        if (
-                            "<|from|> assistant" in completion["choices"][0]["text"]
-                            or "<|from|>assistant" in completion["choices"][0]["text"]
-                        ):
-                            prompt += "\n<|from|>assistant\n<|recipient|>"
-                        else:
-                            break
-
-        assert "usage" in completion
-        assert len(function_calls) == len(function_bodies)
-
-        tool_calls: List[llama_types.ChatCompletionMessageToolCall] = []
-        for function_call, function_body in zip(function_calls, function_bodies):
-            tool_calls.append(
-                {
-                    "id": "call_"
-                    + "".join(
-                        [
-                            random.choice(string.ascii_letters + string.digits)
-                            for _ in range(24)
-                        ]
-                    ),
-                    "type": "function",
-                    "function": {
-                        "name": function_call,
-                        "arguments": function_body,
-                    },
-                }
+            # Generate content
+            stops = [RECIPIENT_TOKEN, STOP_TOKEN]
+            completion = create_completion(
+                prompt=prompt, stop=stops, grammar=grammar,
             )
-
-        # TODO: support stream mode
-        function_call_dict: Union[
-            Dict[str, str],
-            Dict[
-                Literal["function_call"],
-                llama_types.ChatCompletionRequestAssistantMessageFunctionCall,
-            ],
-        ] = {}
-        if len(tool_calls) > 0:
-            if tools is not None:
-                function_call_dict["tool_calls"] = tool_calls
+            completion_text = completion["choices"][0]["text"]
+            completion_tokens += completion["usage"]["completion_tokens"]
+            if function_name == "all":
+                if completion_text.endswith("\n<|from|>assistant\n"):
+                    content += completion_text[: -len("\n<|from|>assistant\n")]
+                if completion_text.endswith("\n<|from|> assistant\n"):
+                    content += completion_text[-len("\n<|from|> assistant\n")]
+                else:
+                    content += completion_text
+                content = content.lstrip()
+                # Check whether the model wants to generate another turn
+                if (
+                    "<|from|> assistant" in completion_text
+                    or "<|from|>assistant" in completion_text
+                ):
+                    if completion_text.endswith("\n<|from|>assistant\n"):
+                        cleaned_completion_text = completion_text[
+                            : -len("\n<|from|>assistant\n")
+                        ].strip()
+                    elif completion_text.endswith("\n<|from|> assistant\n"):
+                        cleaned_completion_text = completion_text[
+                            -len("\n<|from|> assistant\n")
+                        ].strip()
+                    else:
+                        cleaned_completion_text = completion_text.strip()
+                    prompt += f"{cleaned_completion_text}\n<|from|>assistant\n<|recipient|>"
+                else:
+                    break
             else:
-                function_call_dict["function_call"] = {
-                    "name": tool_calls[0]["function"]["name"],
-                    "arguments": tool_calls[0]["function"]["arguments"],
-                }
-        completion["usage"]["completion_tokens"] = completion_tokens
-        return llama_types.CreateChatCompletionResponse(
-            id="chat" + completion["id"],
-            object="chat.completion",
-            created=completion["created"],
-            model=completion["model"],
-            choices=[
-                {
-                    "index": 0,
-                    "logprobs": completion["choices"][0]["logprobs"],
-                    "message": {
-                        "role": "assistant",
-                        "content": None if content == "" else content,
-                        **function_call_dict,
-                    },
-                    "finish_reason": "tool_calls" if len(tool_calls) > 0 else "stop",
-                }
-            ],
-            usage=completion["usage"],
+                function_bodies.append(completion_text.strip())
+                # Check whether the model wants to generate another turn
+                prompt += completion_text.strip()
+                grammar = None
+                completion = create_completion(
+                    prompt=prompt, stop=stops, grammar=grammar,
+                )
+                completion_tokens += completion["usage"]["completion_tokens"]
+                if (
+                    "<|from|> assistant" in completion["choices"][0]["text"]
+                    or "<|from|>assistant" in completion["choices"][0]["text"]
+                ):
+                    prompt += "\n<|from|>assistant\n<|recipient|>"
+                else:
+                    break
+
+    assert "usage" in completion
+    assert len(function_calls) == len(function_bodies)
+
+    tool_calls: list[llama_types.ChatCompletionMessageToolCall] = []
+    for function_call, function_body in zip(function_calls, function_bodies, strict=False):
+        tool_calls.append(
+            {
+                "id": "call_"
+                + "".join(
+                    [
+                        random.choice(string.ascii_letters + string.digits)
+                        for _ in range(24)
+                    ],
+                ),
+                "type": "function",
+                "function": {
+                    "name": function_call,
+                    "arguments": function_body,
+                },
+            },
         )
+
+    # TODO: support stream mode
+    function_call_dict: dict[str, str] | dict[Literal["function_call"], llama_types.ChatCompletionRequestAssistantMessageFunctionCall] = {}
+    if len(tool_calls) > 0:
+        if tools is not None:
+            function_call_dict["tool_calls"] = tool_calls
+        else:
+            function_call_dict["function_call"] = {
+                "name": tool_calls[0]["function"]["name"],
+                "arguments": tool_calls[0]["function"]["arguments"],
+            }
+    completion["usage"]["completion_tokens"] = completion_tokens
+    return llama_types.CreateChatCompletionResponse(
+        id="chat" + completion["id"],
+        object="chat.completion",
+        created=completion["created"],
+        model=completion["model"],
+        choices=[
+            {
+                "index": 0,
+                "logprobs": completion["choices"][0]["logprobs"],
+                "message": {
+                    "role": "assistant",
+                    "content": None if content == "" else content,
+                    **function_call_dict,
+                },
+                "finish_reason": "tool_calls" if len(tool_calls) > 0 else "stop",
+            },
+        ],
+        usage=completion["usage"],
+    )
 
 
 class Llava15ChatHandler:
-    DEFAULT_SYSTEM_MESSAGE: Optional[str] = (
+    DEFAULT_SYSTEM_MESSAGE: str | None = (
         "A chat between a curious human and an artificial intelligence assistant.  The assistant gives helpful, detailed, and polite answers to the human's questions."
     )
 
@@ -2667,17 +2627,15 @@ class Llava15ChatHandler:
     )
 
     def __init__(self, clip_model_path: str, verbose: bool = True):
-        import llama_cpp.llava_cpp as llava_cpp
+        from llama_cpp import llava_cpp
 
         self.clip_model_path = clip_model_path
         self.verbose = verbose
 
         self._llava_cpp = llava_cpp  # TODO: Fix
         self._exit_stack = ExitStack()
-        self._last_image_embed: Optional[
-            llava_cpp.CtypesPointer[llava_cpp.llava_image_embed]
-        ] = None
-        self._last_image_hash: Optional[int] = None
+        self._last_image_embed: llava_cpp.CtypesPointer[llava_cpp.llava_image_embed] | None = None
+        self._last_image_hash: int | None = None
 
         if not os.path.exists(clip_model_path):
             raise ValueError(f"Clip model path does not exist: {clip_model_path}")
@@ -2736,23 +2694,21 @@ class Llava15ChatHandler:
         self,
         *,
         llama: llama.Llama,
-        messages: List[llama_types.ChatCompletionRequestMessage],
-        functions: Optional[List[llama_types.ChatCompletionFunction]] = None,
-        function_call: Optional[llama_types.ChatCompletionRequestFunctionCall] = None,
-        tools: Optional[List[llama_types.ChatCompletionTool]] = None,
-        tool_choice: Optional[llama_types.ChatCompletionToolChoiceOption] = None,
+        messages: list[llama_types.ChatCompletionRequestMessage],
+        functions: list[llama_types.ChatCompletionFunction] | None = None,
+        function_call: llama_types.ChatCompletionRequestFunctionCall | None = None,
+        tools: list[llama_types.ChatCompletionTool] | None = None,
+        tool_choice: llama_types.ChatCompletionToolChoiceOption | None = None,
         temperature: float = 0.2,
         top_p: float = 0.95,
         top_k: int = 40,
         min_p: float = 0.05,
         typical_p: float = 1.0,
         stream: bool = False,
-        stop: Optional[Union[str, List[str]]] = [],
-        seed: Optional[int] = None,
-        response_format: Optional[
-            llama_types.ChatCompletionRequestResponseFormat
-        ] = None,
-        max_tokens: Optional[int] = None,
+        stop: str | list[str] | None = [],
+        seed: int | None = None,
+        response_format: llama_types.ChatCompletionRequestResponseFormat | None = None,
+        max_tokens: int | None = None,
         presence_penalty: float = 0.0,
         frequency_penalty: float = 0.0,
         repeat_penalty: float = 1.1,
@@ -2760,25 +2716,22 @@ class Llava15ChatHandler:
         mirostat_mode: int = 0,
         mirostat_tau: float = 5.0,
         mirostat_eta: float = 0.1,
-        model: Optional[str] = None,
-        logits_processor: Optional[llama.LogitsProcessorList] = None,
-        grammar: Optional[llama.LlamaGrammar] = None,
-        logit_bias: Optional[Dict[str, float]] = None,
-        logprobs: Optional[bool] = None,
-        top_logprobs: Optional[int] = None,
+        model: str | None = None,
+        logits_processor: llama.LogitsProcessorList | None = None,
+        grammar: llama.LlamaGrammar | None = None,
+        logit_bias: dict[str, float] | None = None,
+        logprobs: bool | None = None,
+        top_logprobs: int | None = None,
         **kwargs,  # type: ignore
-    ) -> Union[
-        llama_types.CreateChatCompletionResponse,
-        Iterator[llama_types.CreateChatCompletionStreamResponse],
-    ]:
+    ) -> llama_types.CreateChatCompletionResponse | Iterator[llama_types.CreateChatCompletionStreamResponse]:
         assert self.clip_ctx is not None
 
         system_prompt = _get_system_message(messages)
         if system_prompt == "" and self.DEFAULT_SYSTEM_MESSAGE is not None:
             messages = [
                 llama_types.ChatCompletionRequestSystemMessage(
-                    role="system", content=self.DEFAULT_SYSTEM_MESSAGE
-                )
+                    role="system", content=self.DEFAULT_SYSTEM_MESSAGE,
+                ),
             ] + messages
 
         image_urls = self.get_image_urls(messages)
@@ -2804,11 +2757,11 @@ class Llava15ChatHandler:
         for type_, value in split_text:
             if type_ == "text":
                 tokens = llama.tokenize(
-                    value.encode("utf8"), add_bos=False, special=True
+                    value.encode("utf8"), add_bos=False, special=True,
                 )
                 if llama.n_tokens + len(tokens) > llama.n_ctx():
                     raise ValueError(
-                        f"Prompt exceeds n_ctx: {llama.n_tokens + len(tokens)} > {llama.n_ctx()}"
+                        f"Prompt exceeds n_ctx: {llama.n_tokens + len(tokens)} > {llama.n_ctx()}",
                     )
                 llama.eval(tokens)
             else:
@@ -2816,7 +2769,7 @@ class Llava15ChatHandler:
                 embed = self._embed_image_bytes(image_bytes, llama.context_params.n_threads_batch)
                 if llama.n_tokens + embed.contents.n_image_pos > llama.n_ctx():
                     raise ValueError(
-                        f"Prompt exceeds n_ctx: {llama.n_tokens + embed.contents.n_image_pos} > {llama.n_ctx()}"
+                        f"Prompt exceeds n_ctx: {llama.n_tokens + embed.contents.n_image_pos} > {llama.n_ctx()}",
                     )
                 n_past = ctypes.c_int(llama.n_tokens)
                 n_past_p = ctypes.pointer(n_past)
@@ -2875,13 +2828,13 @@ class Llava15ChatHandler:
             try:
                 # create grammar from json schema
                 grammar = llama_grammar.LlamaGrammar.from_json_schema(
-                    json.dumps(schema), verbose=llama.verbose
+                    json.dumps(schema), verbose=llama.verbose,
                 )
             except Exception as e:
                 if llama.verbose:
                     print(str(e), file=sys.stderr)
                 grammar = llama_grammar.LlamaGrammar.from_string(
-                    llama_grammar.JSON_GBNF, verbose=llama.verbose
+                    llama_grammar.JSON_GBNF, verbose=llama.verbose,
                 )
 
         completion_or_chunks = llama.create_completion(
@@ -2911,7 +2864,7 @@ class Llava15ChatHandler:
         if tool is not None:
             tool_name = tool["function"]["name"]
             return _convert_completion_to_chat_function(
-                tool_name, completion_or_chunks, stream
+                tool_name, completion_or_chunks, stream,
             )
         return _convert_completion_to_chat(completion_or_chunks, stream=stream)
 
@@ -2923,16 +2876,15 @@ class Llava15ChatHandler:
 
             image_bytes = base64.b64decode(image_url.split(",")[1])
             return image_bytes
-        else:
-            import urllib.request
+        import urllib.request
 
-            with urllib.request.urlopen(image_url) as f:
-                image_bytes = f.read()
-                return image_bytes
+        with urllib.request.urlopen(image_url) as f:
+            image_bytes = f.read()
+            return image_bytes
 
     @staticmethod
-    def get_image_urls(messages: List[llama_types.ChatCompletionRequestMessage]):
-        image_urls: List[str] = []
+    def get_image_urls(messages: list[llama_types.ChatCompletionRequestMessage]):
+        image_urls: list[str] = []
         for message in messages:
             if message["role"] == "user":
                 if message["content"] is None:
@@ -2950,15 +2902,15 @@ class Llava15ChatHandler:
         return image_urls
 
     @staticmethod
-    def split_text_on_image_urls(text: str, image_urls: List[str]):
-        def find_first(s: str, substrs: List[str]):
+    def split_text_on_image_urls(text: str, image_urls: list[str]):
+        def find_first(s: str, substrs: list[str]):
             for i, substr in enumerate(substrs):
                 pos = s.find(substr)
                 if pos != -1:
                     return pos, i
             return None, None
 
-        split_text: List[Tuple[Literal["text", "image_url"], str]] = []
+        split_text: list[tuple[Literal["text", "image_url"], str]] = []
         remaining = text
         while remaining:
             # Find first image_url
@@ -2977,22 +2929,22 @@ class Llava15ChatHandler:
     def from_pretrained(
         cls,
         repo_id: str,
-        filename: Optional[str],
-        local_dir: Optional[Union[str, os.PathLike[str]]] = None,
-        local_dir_use_symlinks: Union[bool, Literal["auto"]] = "auto",
-        cache_dir: Optional[Union[str, os.PathLike[str]]] = None,
+        filename: str | None,
+        local_dir: str | os.PathLike[str] | None = None,
+        local_dir_use_symlinks: bool | Literal["auto"] = "auto",
+        cache_dir: str | os.PathLike[str] | None = None,
         **kwargs: Any,
-    ) -> "Llava15ChatHandler":
+    ) -> Llava15ChatHandler:
         import fnmatch
         from pathlib import Path
 
         try:
-            from huggingface_hub import hf_hub_download, HfFileSystem  # type: ignore
+            from huggingface_hub import HfFileSystem, hf_hub_download  # type: ignore
             from huggingface_hub.utils import validate_repo_id  # type: ignore
         except ImportError:
             raise ImportError(
                 "Llama.from_pretrained requires the huggingface-hub package. "
-                "You can install it with `pip install huggingface-hub`."
+                "You can install it with `pip install huggingface-hub`.",
             )
 
         validate_repo_id(repo_id)
@@ -3005,7 +2957,7 @@ class Llava15ChatHandler:
         ]
 
         # split each file into repo_id, subfolder, filename
-        file_list: List[str] = []
+        file_list: list[str] = []
         for file in files:
             rel_path = Path(file).relative_to(repo_id)
             file_list.append(str(rel_path))
@@ -3015,13 +2967,13 @@ class Llava15ChatHandler:
         if len(matching_files) == 0:
             raise ValueError(
                 f"No file found in {repo_id} that match {filename}\n\n"
-                f"Available Files:\n{json.dumps(file_list)}"
+                f"Available Files:\n{json.dumps(file_list)}",
             )
 
         if len(matching_files) > 1:
             raise ValueError(
                 f"Multiple files found in {repo_id} matching {filename}\n\n"
-                f"Available Files:\n{json.dumps(files)}"
+                f"Available Files:\n{json.dumps(files)}",
             )
 
         (matching_file,) = matching_files
@@ -3034,9 +2986,9 @@ class Llava15ChatHandler:
             repo_id=repo_id,
             filename=filename,
             subfolder=subfolder,
-            local_dir=cast(Union[str, Path, None], local_dir),
+            local_dir=cast(str | Path | None, local_dir),
             local_dir_use_symlinks=local_dir_use_symlinks,
-            cache_dir=cast(Union[str, Path, None], cache_dir),
+            cache_dir=cast(str | Path | None, cache_dir),
         )
 
         if local_dir is None:
@@ -3046,7 +2998,7 @@ class Llava15ChatHandler:
                 subfolder=subfolder,
                 local_dir=local_dir,
                 local_dir_use_symlinks=local_dir_use_symlinks,
-                cache_dir=cast(Union[str, Path, None], cache_dir),
+                cache_dir=cast(str | Path | None, cache_dir),
                 local_files_only=True,
             )
         else:
@@ -3353,20 +3305,20 @@ class MiniCPMv26ChatHandler(Llava15ChatHandler):
 @register_chat_completion_handler("chatml-function-calling")
 def chatml_function_calling(
     llama: llama.Llama,
-    messages: List[llama_types.ChatCompletionRequestMessage],
-    functions: Optional[List[llama_types.ChatCompletionFunction]] = None,
-    function_call: Optional[llama_types.ChatCompletionRequestFunctionCall] = None,
-    tools: Optional[List[llama_types.ChatCompletionTool]] = None,
-    tool_choice: Optional[llama_types.ChatCompletionToolChoiceOption] = None,
+    messages: list[llama_types.ChatCompletionRequestMessage],
+    functions: list[llama_types.ChatCompletionFunction] | None = None,
+    function_call: llama_types.ChatCompletionRequestFunctionCall | None = None,
+    tools: list[llama_types.ChatCompletionTool] | None = None,
+    tool_choice: llama_types.ChatCompletionToolChoiceOption | None = None,
     temperature: float = 0.2,
     top_p: float = 0.95,
     top_k: int = 40,
     min_p: float = 0.05,
     typical_p: float = 1.0,
     stream: bool = False,
-    stop: Optional[Union[str, List[str]]] = [],
-    response_format: Optional[llama_types.ChatCompletionRequestResponseFormat] = None,
-    max_tokens: Optional[int] = None,
+    stop: str | list[str] | None = [],
+    response_format: llama_types.ChatCompletionRequestResponseFormat | None = None,
+    max_tokens: int | None = None,
     presence_penalty: float = 0.0,
     frequency_penalty: float = 0.0,
     repeat_penalty: float = 1.1,
@@ -3374,16 +3326,13 @@ def chatml_function_calling(
     mirostat_mode: int = 0,
     mirostat_tau: float = 5.0,
     mirostat_eta: float = 0.1,
-    model: Optional[str] = None,
-    logits_processor: Optional[llama.LogitsProcessorList] = None,
-    grammar: Optional[llama.LlamaGrammar] = None,
-    logprobs: Optional[bool] = None,
-    top_logprobs: Optional[int] = None,
+    model: str | None = None,
+    logits_processor: llama.LogitsProcessorList | None = None,
+    grammar: llama.LlamaGrammar | None = None,
+    logprobs: bool | None = None,
+    top_logprobs: int | None = None,
     **kwargs,  # type: ignore
-) -> Union[
-    llama_types.CreateChatCompletionResponse,
-    Iterator[llama_types.CreateChatCompletionStreamResponse],
-]:
+) -> llama_types.CreateChatCompletionResponse | Iterator[llama_types.CreateChatCompletionStreamResponse]:
     function_calling_template = (
         "{% for message in messages %}"
         "<|im_start|>{{ message.role }}\n"
@@ -3517,7 +3466,7 @@ def chatml_function_calling(
     if isinstance(tool_choice, dict):
         tool_name = tool_choice["function"]["name"]
         tool = next(
-            (tool for tool in tools if tool["function"]["name"] == tool_name), None
+            (tool for tool in tools if tool["function"]["name"] == tool_name), None,
         )
         if tool is None:
             raise ValueError(f"Tool with name '{tool_name}' not found in tools")
@@ -3530,15 +3479,15 @@ def chatml_function_calling(
         prompt += f"functions.{tool_name}:\n"
         try:
             grammar = llama_grammar.LlamaGrammar.from_json_schema(
-                json.dumps(tool["function"]["parameters"]), verbose=llama.verbose
+                json.dumps(tool["function"]["parameters"]), verbose=llama.verbose,
             )
         except Exception as e:
             grammar = llama_grammar.LlamaGrammar.from_string(
-                llama_grammar.JSON_GBNF, verbose=llama.verbose
+                llama_grammar.JSON_GBNF, verbose=llama.verbose,
             )
             if llama.verbose:
                 print(
-                    "Failed to parse function body as JSON schema, falling back to default grammar"
+                    "Failed to parse function body as JSON schema, falling back to default grammar",
                 )
                 print(e)
         completion_or_chunks = llama.create_completion(
@@ -3563,13 +3512,13 @@ def chatml_function_calling(
             grammar=grammar,
         )
         return _convert_completion_to_chat_function(
-            tool_name, completion_or_chunks, stream
+            tool_name, completion_or_chunks, stream,
         )
 
     # Case 3: Automatic tool choice
     assert isinstance(tool_choice, str) and tool_choice == "auto"
     function_names = " | ".join(
-        [f'''"functions.{tool['function']['name']}:"''' for tool in tools]
+        [f'''"functions.{tool['function']['name']}:"''' for tool in tools],
     )
     initial_gbnf_tool_grammar = (
         """root   ::= functions | "message:"\n"""
@@ -3605,7 +3554,7 @@ def chatml_function_calling(
         model=model,
         logits_processor=logits_processor,
         grammar=llama_grammar.LlamaGrammar.from_string(
-            initial_gbnf_tool_grammar, verbose=llama.verbose
+            initial_gbnf_tool_grammar, verbose=llama.verbose,
         ),
     )
     completion: llama_types.CreateCompletionResponse = completion_or_chunks  # type: ignore
@@ -3633,7 +3582,7 @@ def chatml_function_calling(
                 model=model,
                 logits_processor=logits_processor,
                 grammar=llama_grammar.LlamaGrammar.from_string(
-                    follow_up_gbnf_tool_grammar, verbose=llama.verbose
+                    follow_up_gbnf_tool_grammar, verbose=llama.verbose,
                 ),
             ),
             stream=stream,
@@ -3643,21 +3592,21 @@ def chatml_function_calling(
     tool_name = text[len("functions.") :]
     tool = next((tool for tool in tools if tool["function"]["name"] == tool_name), None)
     if not stream:
-        completions: List[llama_types.CreateCompletionResponse] = []
-        completions_tool_name: List[str] = []
+        completions: list[llama_types.CreateCompletionResponse] = []
+        completions_tool_name: list[str] = []
         while tool is not None:
             prompt += f"functions.{tool_name}:\n"
             try:
                 grammar = llama_grammar.LlamaGrammar.from_json_schema(
-                    json.dumps(tool["function"]["parameters"]), verbose=llama.verbose
+                    json.dumps(tool["function"]["parameters"]), verbose=llama.verbose,
                 )
             except Exception as e:
                 grammar = llama_grammar.LlamaGrammar.from_string(
-                    llama_grammar.JSON_GBNF, verbose=llama.verbose
+                    llama_grammar.JSON_GBNF, verbose=llama.verbose,
                 )
                 if llama.verbose:
                     print(
-                        "Failed to parse function body as JSON schema, falling back to default grammar"
+                        "Failed to parse function body as JSON schema, falling back to default grammar",
                     )
                     print(e)
             completion_or_chunks = llama.create_completion(
@@ -3682,7 +3631,7 @@ def chatml_function_calling(
                 grammar=grammar,
             )
             completion_or_chunks = cast(
-                llama_types.CreateCompletionResponse, completion_or_chunks
+                llama_types.CreateCompletionResponse, completion_or_chunks,
             )
             completions.append(completion_or_chunks)
             completions_tool_name.append(tool_name)
@@ -3709,29 +3658,23 @@ def chatml_function_calling(
                 model=model,
                 logits_processor=logits_processor,
                 grammar=llama_grammar.LlamaGrammar.from_string(
-                    follow_up_gbnf_tool_grammar, verbose=llama.verbose
+                    follow_up_gbnf_tool_grammar, verbose=llama.verbose,
                 ),
             )
             response = cast(llama_types.CreateCompletionResponse, response)
 
             tool_name = response["choices"][0]["text"][len("functions.") :]
             tool = next(
-                (tool for tool in tools if tool["function"]["name"] == tool_name), None
+                (tool for tool in tools if tool["function"]["name"] == tool_name), None,
             )
 
         # Merge completions
-        function_call_dict: Union[
-            Dict[str, str],
-            Dict[
-                Literal["function_call"],
-                llama_types.ChatCompletionRequestAssistantMessageFunctionCall,
-            ],
-        ] = (
+        function_call_dict: dict[str, str] | dict[Literal["function_call"], llama_types.ChatCompletionRequestAssistantMessageFunctionCall] = (
             {
                 "function_call": {
                     "name": tool_name,
                     "arguments": completions[0]["choices"][0]["text"],
-                }
+                },
             }
             if len(completions) == 1
             else {}
@@ -3763,12 +3706,12 @@ def chatml_function_calling(
                                 },
                             }
                             for i, (tool_name, completion) in enumerate(
-                                zip(completions_tool_name, completions)
+                                zip(completions_tool_name, completions, strict=False),
                             )
                         ],
                         **function_call_dict,
                     },
-                }
+                },
             ],
             "usage": {
                 "completion_tokens": sum(

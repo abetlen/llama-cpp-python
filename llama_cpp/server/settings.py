@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import multiprocessing
-
-from typing import Optional, List, Literal, Union, Dict, cast
-from typing_extensions import Self
+from typing import Dict, List, Literal, Optional, Union, cast
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings
+from typing_extensions import Self
 
 import llama_cpp
 
@@ -18,7 +17,7 @@ class ModelSettings(BaseSettings):
     """Model settings used to load a Llama model."""
 
     model: str = Field(
-        description="The path to the model to use for generating completions."
+        description="The path to the model to use for generating completions.",
     )
     model_alias: Optional[str] = Field(
         default=None,
@@ -44,7 +43,7 @@ class ModelSettings(BaseSettings):
         description="Split layers across multiple GPUs in proportion.",
     )
     vocab_only: bool = Field(
-        default=False, description="Whether to only return the vocabulary."
+        default=False, description="Whether to only return the vocabulary.",
     )
     use_mmap: bool = Field(
         default=llama_cpp.llama_supports_mmap(),
@@ -64,11 +63,11 @@ class ModelSettings(BaseSettings):
     )
     # Context Params
     seed: int = Field(
-        default=llama_cpp.LLAMA_DEFAULT_SEED, description="Random seed. -1 for random."
+        default=llama_cpp.LLAMA_DEFAULT_SEED, description="Random seed. -1 for random.",
     )
     n_ctx: int = Field(default=2048, ge=0, description="The context size.")
     n_batch: int = Field(
-        default=512, ge=1, description="The batch size to use per eval."
+        default=512, ge=1, description="The batch size to use per eval.",
     )
     n_ubatch: int = Field(
         default=512, ge=1, description="The physical batch size used by llama.cpp"
@@ -84,11 +83,11 @@ class ModelSettings(BaseSettings):
         description="The number of threads to use when batch processing. Use -1 for max cpu threads",
     )
     rope_scaling_type: int = Field(
-        default=llama_cpp.LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED
+        default=llama_cpp.LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED,
     )
     rope_freq_base: float = Field(default=0.0, description="RoPE base frequency")
     rope_freq_scale: float = Field(
-        default=0.0, description="RoPE frequency scaling factor"
+        default=0.0, description="RoPE frequency scaling factor",
     )
     yarn_ext_factor: float = Field(default=-1.0)
     yarn_attn_factor: float = Field(default=1.0)
@@ -96,15 +95,15 @@ class ModelSettings(BaseSettings):
     yarn_beta_slow: float = Field(default=1.0)
     yarn_orig_ctx: int = Field(default=0)
     mul_mat_q: bool = Field(
-        default=True, description="if true, use experimental mul_mat_q kernels"
+        default=True, description="if true, use experimental mul_mat_q kernels",
     )
     logits_all: bool = Field(default=True, description="Whether to return logits.")
     embedding: bool = Field(default=False, description="Whether to use embeddings.")
     offload_kqv: bool = Field(
-        default=True, description="Whether to offload kqv to the GPU."
+        default=True, description="Whether to offload kqv to the GPU.",
     )
     flash_attn: bool = Field(
-        default=False, description="Whether to use flash attention."
+        default=False, description="Whether to use flash attention.",
     )
     # Sampling Params
     last_n_tokens_size: int = Field(
@@ -182,11 +181,11 @@ class ModelSettings(BaseSettings):
     )
     # Misc
     verbose: bool = Field(
-        default=True, description="Whether to print debug information."
+        default=True, description="Whether to print debug information.",
     )
 
     @model_validator(
-        mode="before"
+        mode="before",
     )  # pre=True to ensure this runs before any other validation
     def set_dynamic_defaults(self) -> Self:
         # If n_threads or n_threads_batch is -1, set it to multiprocessing.cpu_count()
@@ -206,10 +205,10 @@ class ServerSettings(BaseSettings):
     host: str = Field(default="localhost", description="Listen address")
     port: int = Field(default=8000, description="Listen port")
     ssl_keyfile: Optional[str] = Field(
-        default=None, description="SSL key file for HTTPS"
+        default=None, description="SSL key file for HTTPS",
     )
     ssl_certfile: Optional[str] = Field(
-        default=None, description="SSL certificate file for HTTPS"
+        default=None, description="SSL certificate file for HTTPS",
     )
     # FastAPI Settings
     api_key: Optional[str] = Field(

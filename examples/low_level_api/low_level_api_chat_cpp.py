@@ -13,12 +13,13 @@ Quirks:
 
 import ctypes
 import sys
-from time import time
 from os import cpu_count, path
+from time import time
+
+import util
+from common import GptParams, gpt_params_parse, gpt_random_prompt
 
 import llama_cpp
-from common import GptParams, gpt_params_parse, gpt_random_prompt
-import util
 
 
 # A LLaMA interactive session
@@ -35,14 +36,14 @@ class LLaMAInteract:
             raise NotImplementedError(
                 """************
 please use the 'perplexity' tool for perplexity calculations
-************"""
+************""",
             )
 
         if self.params.embedding:
             raise NotImplementedError(
                 """************
 please use the 'embedding' tool for embedding calculations
-************"""
+************""",
             )
 
         if self.params.n_ctx > 2048:
@@ -80,7 +81,7 @@ specified) expect poor results""",
         self.lparams.use_mmap = self.params.use_mmap
 
         self.model = llama_cpp.llama_load_model_from_file(
-            self.params.model.encode("utf8"), self.lparams
+            self.params.model.encode("utf8"), self.lparams,
         )
 
         # Context Params.
@@ -174,7 +175,7 @@ specified) expect poor results""",
                     file=sys.stderr,
                 )
             else:
-                print(f"session file does not exist, will create", file=sys.stderr)
+                print("session file does not exist, will create", file=sys.stderr)
 
         # tokenize the prompt
         self.embd = []
@@ -182,7 +183,7 @@ specified) expect poor results""",
 
         if len(self.embd_inp) > self.n_ctx - 4:
             raise RuntimeError(
-                f"error: prompt is too long ({len(self.embd_inp)} tokens, max {self.params.n_ctx - 4})"
+                f"error: prompt is too long ({len(self.embd_inp)} tokens, max {self.params.n_ctx - 4})",
             )
 
         # debug message about similarity of saved session, if applicable
@@ -197,18 +198,18 @@ specified) expect poor results""",
                 self.n_matching_session_tokens += 1
 
             if self.n_matching_session_tokens >= len(self.embd_inp):
-                print(f"session file has exact match for prompt!")
+                print("session file has exact match for prompt!")
             elif self.n_matching_session_tokens < (len(self.embd_inp) / 2):
                 print(
-                    f"warning: session file has low similarity to prompt ({self.n_matching_session_tokens} / {len(self.embd_inp)} tokens); will mostly be reevaluated"
+                    f"warning: session file has low similarity to prompt ({self.n_matching_session_tokens} / {len(self.embd_inp)} tokens); will mostly be reevaluated",
                 )
             else:
                 print(
-                    f"session file matches {self.n_matching_session_tokens} / {len(self.embd_inp)} tokens of prompt"
+                    f"session file matches {self.n_matching_session_tokens} / {len(self.embd_inp)} tokens of prompt",
                 )
 
         self.need_to_save_session = len(
-            self.params.path_session
+            self.params.path_session,
         ) > 0 and self.n_matching_session_tokens < (len(self.embd_inp) * 3 / 4)
 
         # number of tokens to keep when resetting context
@@ -423,7 +424,7 @@ n_keep = {self.params.n_keep}
                         self.ctx,
                         self.params.path_session.encode("utf8"),
                         (llama_cpp.llama_token * len(self.session_tokens))(
-                            *self.session_tokens
+                            *self.session_tokens,
                         ),
                         len(self.session_tokens),
                     )
@@ -441,10 +442,10 @@ n_keep = {self.params.n_keep}
                     *[
                         llama_cpp.llama_token_data(token_id, logits[token_id], 0.0)
                         for token_id in range(n_vocab)
-                    ]
+                    ],
                 )
                 candidates_p = llama_cpp.ctypes.pointer(
-                    llama_cpp.llama_token_data_array(_arr, len(_arr), False)
+                    llama_cpp.llama_token_data_array(_arr, len(_arr), False),
                 )
 
                 # Apply penalties
@@ -452,7 +453,7 @@ n_keep = {self.params.n_keep}
                 last_n_repeat = min(len(self.last_n_tokens), repeat_last_n, self.n_ctx)
 
                 _arr = (llama_cpp.llama_token * last_n_repeat)(
-                    *self.last_n_tokens[len(self.last_n_tokens) - last_n_repeat :]
+                    *self.last_n_tokens[len(self.last_n_tokens) - last_n_repeat :],
                 )
                 llama_cpp.llama_sample_repetition_penalties(
                     ctx=self.ctx,
@@ -475,63 +476,62 @@ n_keep = {self.params.n_keep}
                 if self.params.temp <= 0:
                     # Greedy sampling
                     id = llama_cpp.llama_sample_token_greedy(self.ctx, candidates_p)
+                elif self.params.mirostat == 1:
+                    mirostat_mu = 2.0 * self.params.mirostat_tau
+                    mirostat_m = 100
+                    llama_cpp.llama_sample_temperature(
+                        self.ctx, candidates_p, llama_cpp.c_float(self.params.temp),
+                    )
+                    id = llama_cpp.llama_sample_token_mirostat(
+                        self.ctx,
+                        candidates_p,
+                        llama_cpp.c_float(self.params.mirostat_tau),
+                        llama_cpp.c_float(self.params.mirostat_eta),
+                        llama_cpp.c_int(mirostat_m),
+                        llama_cpp.c_float(mirostat_mu),
+                    )
+                elif self.params.mirostat == 2:
+                    mirostat_mu = 2.0 * self.params.mirostat_tau
+                    llama_cpp.llama_sample_temperature(
+                        self.ctx, candidates_p, llama_cpp.c_float(self.params.temp),
+                    )
+                    id = llama_cpp.llama_sample_token_mirostat_v2(
+                        self.ctx,
+                        candidates_p,
+                        llama_cpp.c_float(self.params.mirostat_tau),
+                        llama_cpp.c_float(self.params.mirostat_eta),
+                        llama_cpp.c_float(mirostat_mu),
+                    )
                 else:
-                    if self.params.mirostat == 1:
-                        mirostat_mu = 2.0 * self.params.mirostat_tau
-                        mirostat_m = 100
-                        llama_cpp.llama_sample_temperature(
-                            self.ctx, candidates_p, llama_cpp.c_float(self.params.temp)
-                        )
-                        id = llama_cpp.llama_sample_token_mirostat(
-                            self.ctx,
-                            candidates_p,
-                            llama_cpp.c_float(self.params.mirostat_tau),
-                            llama_cpp.c_float(self.params.mirostat_eta),
-                            llama_cpp.c_int(mirostat_m),
-                            llama_cpp.c_float(mirostat_mu),
-                        )
-                    elif self.params.mirostat == 2:
-                        mirostat_mu = 2.0 * self.params.mirostat_tau
-                        llama_cpp.llama_sample_temperature(
-                            self.ctx, candidates_p, llama_cpp.c_float(self.params.temp)
-                        )
-                        id = llama_cpp.llama_sample_token_mirostat_v2(
-                            self.ctx,
-                            candidates_p,
-                            llama_cpp.c_float(self.params.mirostat_tau),
-                            llama_cpp.c_float(self.params.mirostat_eta),
-                            llama_cpp.c_float(mirostat_mu),
-                        )
-                    else:
-                        # Temperature sampling
-                        llama_cpp.llama_sample_top_k(
-                            self.ctx,
-                            candidates_p,
-                            top_k,
-                            min_keep=llama_cpp.c_size_t(1),
-                        )
-                        llama_cpp.llama_sample_tail_free(
-                            self.ctx,
-                            candidates_p,
-                            llama_cpp.c_float(self.params.tfs_z),
-                            min_keep=llama_cpp.c_size_t(1),
-                        )
-                        llama_cpp.llama_sample_typical(
-                            self.ctx,
-                            candidates_p,
-                            llama_cpp.c_float(self.params.typical_p),
-                            min_keep=llama_cpp.c_size_t(1),
-                        )
-                        llama_cpp.llama_sample_top_p(
-                            self.ctx,
-                            candidates_p,
-                            llama_cpp.c_float(self.params.top_p),
-                            min_keep=llama_cpp.c_size_t(1),
-                        )
-                        llama_cpp.llama_sample_temperature(
-                            self.ctx, candidates_p, llama_cpp.c_float(self.params.temp)
-                        )
-                        id = llama_cpp.llama_sample_token(self.ctx, candidates_p)
+                    # Temperature sampling
+                    llama_cpp.llama_sample_top_k(
+                        self.ctx,
+                        candidates_p,
+                        top_k,
+                        min_keep=llama_cpp.c_size_t(1),
+                    )
+                    llama_cpp.llama_sample_tail_free(
+                        self.ctx,
+                        candidates_p,
+                        llama_cpp.c_float(self.params.tfs_z),
+                        min_keep=llama_cpp.c_size_t(1),
+                    )
+                    llama_cpp.llama_sample_typical(
+                        self.ctx,
+                        candidates_p,
+                        llama_cpp.c_float(self.params.typical_p),
+                        min_keep=llama_cpp.c_size_t(1),
+                    )
+                    llama_cpp.llama_sample_top_p(
+                        self.ctx,
+                        candidates_p,
+                        llama_cpp.c_float(self.params.top_p),
+                        min_keep=llama_cpp.c_size_t(1),
+                    )
+                    llama_cpp.llama_sample_temperature(
+                        self.ctx, candidates_p, llama_cpp.c_float(self.params.temp),
+                    )
+                    id = llama_cpp.llama_sample_token(self.ctx, candidates_p)
                 # print("`{}`".format(candidates_p.size))
 
                 self.last_n_tokens.pop(0)
@@ -600,7 +600,7 @@ n_keep = {self.params.n_keep}
 
             # end of text token
             if len(self.embd) > 0 and self.embd[-1] == llama_cpp.llama_token_eos(
-                self.ctx
+                self.ctx,
             ):
                 if not self.params.instruct:
                     for i in self.llama_token_eot:
@@ -636,7 +636,7 @@ n_keep = {self.params.n_keep}
         size = 32
         buffer = (ctypes.c_char * size)()
         n = llama_cpp.llama_token_to_piece(
-            self.model, llama_cpp.llama_token(token_id), buffer, size
+            self.model, llama_cpp.llama_token(token_id), buffer, size,
         )
         assert n <= size
         return bytes(buffer[:n])
@@ -668,7 +668,7 @@ n_keep = {self.params.n_keep}
                 self.multibyte_fix[self.multibyte_fix.index(None)] = cur_char
 
             # Return completed utf char
-            if len(self.multibyte_fix) > 0 and not None in self.multibyte_fix:
+            if len(self.multibyte_fix) > 0 and None not in self.multibyte_fix:
                 yield (b"".join(self.multibyte_fix)).decode("utf8")
                 self.multibyte_fix = []
                 continue
@@ -709,7 +709,7 @@ n_keep = {self.params.n_keep}
             else:
                 print(self.params.input_prefix, end="")
                 self.input(
-                    f"{self.params.input_prefix}{self.read_input()}{self.params.input_suffix}"
+                    f"{self.params.input_prefix}{self.read_input()}{self.params.input_suffix}",
                 )
                 print(self.params.input_suffix, end="")
             self.set_color(util.CONSOLE_COLOR_DEFAULT)

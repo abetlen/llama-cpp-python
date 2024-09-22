@@ -1,22 +1,22 @@
 from __future__ import annotations
 
-import sys
-import os
 import ctypes
 import functools
+import os
 import pathlib
-
+import sys
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
+    Generic,
     List,
-    Union,
     NewType,
     Optional,
-    TYPE_CHECKING,
     TypeVar,
-    Generic,
+    Union,
 )
+
 from typing_extensions import TypeAlias
 
 
@@ -962,7 +962,7 @@ It might not exist for progress report where '.' is output repeatedly."""
 #     int32_t nthread;                     // number of threads to use for quantizing, if <=0 will use std::thread::hardware_concurrency()
 #     enum llama_ftype ftype;              // quantize to this llama_ftype
 #     enum ggml_type output_tensor_type;   // output tensor type
-#     enum ggml_type token_embedding_type; // token embeddings tensor type
+#     enum ggml_type token_embedding_type; // itoken embeddings tensor type
 #     bool allow_requantize;               // allow quantizing non-f32/f16 tensors
 #     bool quantize_output_tensor;         // quantize output.weight
 #     bool only_copy;                      // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
@@ -978,7 +978,7 @@ class llama_model_quantize_params(ctypes.Structure):
         nthread (int): number of threads to use for quantizing, if <=0 will use std::thread::hardware_concurrency()
         ftype (int): quantize to this llama_ftype
         output_tensor_type (int): output tensor type
-        token_embedding_type (int): token embeddings tensor type
+        token_embedding_type (int): itoken embeddings tensor type
         allow_requantize (bool): allow quantizing non-f32/f16 tensors
         quantize_output_tensor (bool): quantize output.weight
         only_copy (bool): only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
@@ -1493,14 +1493,6 @@ def llama_model_has_encoder(model: llama_model_p, /) -> bool:
     ...
 
 
-# // Returns true if the model contains a decoder that requires llama_decode() call
-# LLAMA_API bool llama_model_has_decoder(const struct llama_model * model);
-@ctypes_function("llama_model_has_decoder", [llama_model_p_ctypes], ctypes.c_bool)
-def llama_model_has_decoder(model: llama_model_p, /) -> bool:
-    """Returns true if the model contains a decoder that requires llama_decode() call"""
-    ...
-
-
 # // For encoder-decoder models, this function returns id of the token that must be provided
 # // to the decoder to start generating output sequence. For other models, it returns -1.
 # LLAMA_API llama_token llama_model_decoder_start_token(const struct llama_model * model);
@@ -1771,7 +1763,7 @@ def llama_kv_cache_view_init(
 # // Free a KV cache view. (use only for debugging purposes)
 # LLAMA_API void llama_kv_cache_view_free(struct llama_kv_cache_view * view);
 @ctypes_function("llama_kv_cache_view_free", [llama_kv_cache_view_p], None)
-def llama_kv_cache_view_free(view: "ctypes.pointer[llama_kv_cache_view]", /):  # type: ignore
+def llama_kv_cache_view_free(view: ctypes.pointer[llama_kv_cache_view], /):  # type: ignore
     """Free a KV cache view. (use only for debugging purposes)"""
     ...
 

@@ -1,35 +1,35 @@
 from __future__ import annotations
 
-import sys
-import os
 import ctypes
 import functools
+import os
+import pathlib
+import sys
+from collections.abc import Callable
 from ctypes import (
+    POINTER,
+    Structure,
+    _Pointer,  # type: ignore
     c_bool,
     c_char_p,
+    c_float,
     c_int,
     c_uint8,
-    c_float,
     c_void_p,
-    POINTER,
-    _Pointer,  # type: ignore
-    Structure,
 )
-import pathlib
 from typing import (
+    TYPE_CHECKING,
+    Any,
+    Generic,
     List,
-    Union,
     NewType,
     Optional,
+    TypeAlias,
     TypeVar,
-    Callable,
-    Any,
-    TYPE_CHECKING,
-    Generic,
+    Union,
 )
-from typing_extensions import TypeAlias
 
-import llama_cpp.llama_cpp as llama_cpp
+from llama_cpp import llama_cpp
 
 
 # Load the library
@@ -38,7 +38,7 @@ def _load_shared_library(lib_base_name: str):
     _base_path = pathlib.Path(os.path.abspath(os.path.dirname(__file__))) / "lib"
     # Searching for the library in the current directory under the name "libllama" (default name
     # for llamacpp) and "llama" (default name for this repo)
-    _lib_paths: List[pathlib.Path] = []
+    _lib_paths: list[pathlib.Path] = []
     # Determine the file extension based on the platform
     if sys.platform.startswith("linux"):
         _lib_paths += [
@@ -81,7 +81,7 @@ def _load_shared_library(lib_base_name: str):
                 raise RuntimeError(f"Failed to load shared library '{_lib_path}': {e}")
 
     raise FileNotFoundError(
-        f"Shared library with base name '{lib_base_name}' not found"
+        f"Shared library with base name '{lib_base_name}' not found",
     )
 
 
@@ -105,9 +105,7 @@ if TYPE_CHECKING:
     class CtypesRef(Generic[CtypesCData]):
         pass
 
-    CtypesPointerOrRef: TypeAlias = Union[
-        CtypesPointer[CtypesCData], CtypesRef[CtypesCData]
-    ]
+    CtypesPointerOrRef: TypeAlias = CtypesPointer[CtypesCData] | CtypesRef[CtypesCData]
 
     CtypesFuncPointer: TypeAlias = ctypes._FuncPointer  # type: ignore
 
@@ -116,7 +114,7 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 def ctypes_function_for_shared_library(lib: ctypes.CDLL):
     def ctypes_function(
-        name: str, argtypes: List[Any], restype: Any, enabled: bool = True
+        name: str, argtypes: list[Any], restype: Any, enabled: bool = True,
     ):
         def decorator(f: F) -> F:
             if enabled:
@@ -125,8 +123,8 @@ def ctypes_function_for_shared_library(lib: ctypes.CDLL):
                 func.restype = restype
                 functools.wraps(f)(func)
                 return func
-            else:
-                return f
+
+            return f
 
         return decorator
 
@@ -178,9 +176,9 @@ def llava_validate_embed_size(
 )
 def llava_image_embed_make_with_bytes(
     ctx_clip: clip_ctx_p,
-    n_threads: Union[c_int, int],
+    n_threads: c_int | int,
     image_bytes: CtypesArray[c_uint8],
-    image_bytes_length: Union[c_int, int],
+    image_bytes_length: c_int | int,
     /,
 ) -> "_Pointer[llava_image_embed]":
     ...
@@ -220,9 +218,9 @@ def llava_image_embed_free(embed: "_Pointer[llava_image_embed]", /):
 )
 def llava_eval_image_embed(
     ctx_llama: llama_cpp.llama_context_p,
-    embed: "_Pointer[llava_image_embed]",
-    n_batch: Union[c_int, int],
-    n_past: "_Pointer[c_int]",
+    embed: _Pointer[llava_image_embed],
+    n_batch: c_int | int,
+    n_past: _Pointer[c_int],
     /,
 ) -> bool:
     ...

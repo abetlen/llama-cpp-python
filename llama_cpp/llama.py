@@ -1,48 +1,32 @@
 from __future__ import annotations
 
+import contextlib
+import ctypes
+import fnmatch
+import json
+import multiprocessing
 import os
 import sys
-import uuid
 import time
-import json
-import ctypes
 import typing
 import random
 import fnmatch
 import warnings
-import contextlib
-import multiprocessing
-
+from collections import deque
+from pathlib import Path
 from typing import (
     Any,
+    Callable,
+    Deque,
+    Dict,
+    Generator,
+    Iterator,
     List,
     Literal,
     Optional,
-    Union,
-    Generator,
     Sequence,
-    Iterator,
-    Deque,
-    Callable,
-    Dict,
+    Union,
 )
-from collections import deque
-from pathlib import Path
-
-
-from .llama_types import *
-from .llama_grammar import LlamaGrammar
-from .llama_cache import (
-    BaseLlamaCache,
-    LlamaCache,  # type: ignore
-    LlamaDiskCache,  # type: ignore
-    LlamaRAMCache,  # type: ignore
-)
-from .llama_tokenizer import BaseLlamaTokenizer, LlamaTokenizer
-import llama_cpp.llama_cpp as llama_cpp
-import llama_cpp.llama_chat_format as llama_chat_format
-
-from llama_cpp.llama_speculative import LlamaDraftModel
 
 import numpy as np
 import numpy.typing as npt
@@ -50,6 +34,12 @@ import numpy.typing as npt
 import llama_cpp._internals as internals
 from ._logger import set_verbose
 from ._utils import suppress_stdout_stderr
+from .llama_cache import (
+    BaseLlamaCache,  # type: ignore
+)
+from .llama_grammar import LlamaGrammar
+from .llama_tokenizer import BaseLlamaTokenizer, LlamaTokenizer
+from .llama_types import *
 
 
 class Llama:
@@ -882,6 +872,8 @@ class Llama:
                 else:
                     break
             if longest_prefix > 0:
+                if self.verbose:
+                    print("Llama.generate: prefix-match hit", file=sys.stderr)
                 reset = False
                 tokens = tokens[longest_prefix:]
                 self.n_tokens = longest_prefix
@@ -1146,7 +1138,7 @@ class Llama:
     ]:
         assert suffix is None or suffix.__class__ is str
 
-        completion_id: str = f"cmpl-{str(uuid.uuid4())}"
+        completion_id: str = f"cmpl-{uuid.uuid4()!s}"
         created: int = int(time.time())
         bos_token_id: int = self.token_bos()
         cls_token_id: int = self._model.token_cls()
@@ -1414,12 +1406,10 @@ class Llama:
                         token_offset = len(prompt_tokens) + returned_tokens
                         logits = self._scores[token_offset - 1, :]
                         current_logprobs = Llama.logits_to_logprobs(logits).tolist()
-                        sorted_logprobs = list(
-                            sorted(
+                        sorted_logprobs = sorted(
                                 zip(current_logprobs, range(len(current_logprobs))),
                                 reverse=True,
                             )
-                        )
                         top_logprob = {
                             self.detokenize([i]).decode(
                                 "utf-8", errors="ignore"
@@ -1553,12 +1543,10 @@ class Llama:
                     token_offset = len(prompt_tokens) + returned_tokens - 1
                     logits = self._scores[token_offset, :]
                     current_logprobs = Llama.logits_to_logprobs(logits).tolist()
-                    sorted_logprobs = list(
-                        sorted(
+                    sorted_logprobs = sorted(
                             zip(current_logprobs, range(len(current_logprobs))),
                             reverse=True,
                         )
-                    )
                     top_logprob = {
                         self.detokenize([i]).decode("utf-8", errors="ignore"): logprob
                         for logprob, i in sorted_logprobs[:logprobs]
@@ -1630,8 +1618,7 @@ class Llama:
                 if self.verbose:
                     print("Llama._create_completion: cache save", file=sys.stderr)
                 self.cache[prompt_tokens + completion_tokens] = self.save_state()
-                if self.verbose:
-                    print("Llama._create_completion: cache saved", file=sys.stderr)
+                print("Llama._create_completion: cache saved", file=sys.stderr)
             return
 
         if self.cache:
@@ -1687,11 +1674,9 @@ class Llama:
                     )
                 )
                 tokens.append(token_str)
-                sorted_logprobs = list(
-                    sorted(
+                sorted_logprobs = sorted(
                         zip(logprobs_token, range(len(logprobs_token))), reverse=True
                     )
-                )
                 token_logprobs.append(logprobs_token[int(token)])
                 top_logprob: Optional[Dict[str, float]] = {
                     self.detokenize([i], prev_tokens=all_tokens[:idx]).decode(
@@ -2237,7 +2222,7 @@ class Llama:
         local_dir_use_symlinks: Union[bool, Literal["auto"]] = "auto",
         cache_dir: Optional[Union[str, os.PathLike[str]]] = None,
         **kwargs: Any,
-    ) -> "Llama":
+    ) -> Llama:
         """Create a Llama model from a pretrained model name or path.
         This method requires the huggingface-hub package.
         You can install it with `pip install huggingface-hub`.
@@ -2253,7 +2238,7 @@ class Llama:
         Returns:
             A Llama model."""
         try:
-            from huggingface_hub import hf_hub_download, HfFileSystem
+            from huggingface_hub import HfFileSystem, hf_hub_download
             from huggingface_hub.utils import validate_repo_id
         except ImportError:
             raise ImportError(
@@ -2267,7 +2252,7 @@ class Llama:
 
         files = [
             file["name"] if isinstance(file, dict) else file
-            for file in hffs.ls(repo_id, recursive=True)
+            for file in hffs.ls(repo_id)
         ]
 
         # split each file into repo_id, subfolder, filename

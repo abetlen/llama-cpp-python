@@ -1,11 +1,11 @@
 import sys
 from abc import ABC, abstractmethod
+from collections import OrderedDict
 from typing import (
     Optional,
     Sequence,
     Tuple,
 )
-from collections import OrderedDict
 
 import diskcache
 
@@ -41,7 +41,7 @@ class BaseLlamaCache(ABC):
 
     @abstractmethod
     def __setitem__(
-        self, key: Sequence[int], value: "llama_cpp.llama.LlamaState"
+        self, key: Sequence[int], value: "llama_cpp.llama.LlamaState",
     ) -> None:
         raise NotImplementedError
 
@@ -105,7 +105,7 @@ class LlamaDiskCache(BaseLlamaCache):
     """Cache for a llama.cpp model using disk."""
 
     def __init__(
-        self, cache_dir: str = ".cache/llama_cache", capacity_bytes: int = (2 << 30)
+        self, cache_dir: str = ".cache/llama_cache", capacity_bytes: int = (2 << 30),
     ):
         super().__init__(capacity_bytes)
         self.cache = diskcache.Cache(cache_dir)
@@ -132,7 +132,7 @@ class LlamaDiskCache(BaseLlamaCache):
         _key = self._find_longest_prefix_key(key)
         if _key is None:
             raise KeyError("Key not found")
-        value: "llama_cpp.llama.LlamaState" = self.cache.pop(_key)  # type: ignore
+        value: llama_cpp.llama.LlamaState = self.cache.pop(_key)  # type: ignore
         # NOTE: This puts an integer as key in cache, which breaks,
         # Llama.longest_token_prefix(k, key) above since k is not a tuple of ints/tokens
         # self.cache.push(_key, side="front")  # type: ignore

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import abc
 from typing import (
+    Any,
     List,
     Optional,
-    Any,
 )
 
 import llama_cpp
@@ -14,7 +14,7 @@ from llama_cpp.llama_types import List
 class BaseLlamaTokenizer(abc.ABC):
     @abc.abstractmethod
     def tokenize(
-        self, text: bytes, add_bos: bool = True, special: bool = True
+        self, text: bytes, add_bos: bool = True, special: bool = True,
     ) -> List[int]:
         """Tokenize the text into tokens.
 
@@ -47,7 +47,7 @@ class LlamaTokenizer(BaseLlamaTokenizer):
         self._model = llama._model  # type: ignore
 
     def tokenize(
-        self, text: bytes, add_bos: bool = True, special: bool = True
+        self, text: bytes, add_bos: bool = True, special: bool = True,
     ) -> List[int]:
         return self._model.tokenize(text, add_bos=add_bos, special=special)
 
@@ -60,17 +60,17 @@ class LlamaTokenizer(BaseLlamaTokenizer):
         return self._model.detokenize(tokens, special=special)
 
     def encode(
-        self, text: str, add_bos: bool = True, special: bool = True
+        self, text: str, add_bos: bool = True, special: bool = True,
     ) -> List[int]:
         return self.tokenize(
-            text.encode("utf-8", errors="ignore"), add_bos=add_bos, special=special
+            text.encode("utf-8", errors="ignore"), add_bos=add_bos, special=special,
         )
 
     def decode(self, tokens: List[int]) -> str:
         return self.detokenize(tokens).decode("utf-8", errors="ignore")
 
     @classmethod
-    def from_ggml_file(cls, path: str) -> "LlamaTokenizer":
+    def from_ggml_file(cls, path: str) -> LlamaTokenizer:
         return cls(llama_cpp.Llama(model_path=path, vocab_only=True))
 
 
@@ -79,10 +79,10 @@ class LlamaHFTokenizer(BaseLlamaTokenizer):
         self.hf_tokenizer = hf_tokenizer
 
     def tokenize(
-        self, text: bytes, add_bos: bool = True, special: bool = True
+        self, text: bytes, add_bos: bool = True, special: bool = True,
     ) -> List[int]:
         return self.hf_tokenizer.encode(
-            text.decode("utf-8", errors="ignore"), add_special_tokens=special
+            text.decode("utf-8", errors="ignore"), add_special_tokens=special,
         )
 
     def detokenize(
@@ -106,15 +106,15 @@ class LlamaHFTokenizer(BaseLlamaTokenizer):
             ).encode("utf-8", errors="ignore")
 
     @classmethod
-    def from_pretrained(cls, pretrained_model_name_or_path: str) -> "LlamaHFTokenizer":
+    def from_pretrained(cls, pretrained_model_name_or_path: str) -> LlamaHFTokenizer:
         try:
             from transformers import AutoTokenizer
         except ImportError:
             raise ImportError(
                 "The `transformers` library is required to use the `HFTokenizer`."
-                "You can install it with `pip install transformers`."
+                "You can install it with `pip install transformers`.",
             )
         hf_tokenizer = AutoTokenizer.from_pretrained(
-            pretrained_model_name_or_path=pretrained_model_name_or_path
+            pretrained_model_name_or_path=pretrained_model_name_or_path,
         )
         return cls(hf_tokenizer)
