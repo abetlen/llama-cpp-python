@@ -1,14 +1,14 @@
 repos:
   # auto update
   - repo: https://gitlab.com/vojko.pribudic.foss/pre-commit-update
-    rev: "v0.4.0post1"
+    rev: "v0.5.0"
     hooks:
       - id: pre-commit-update
         args: [--dry-run, --all-versions]
 
   # ruff
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: "v0.6.4"
+    rev: "v0.6.7"
     hooks:
       # Run the linter.
       - id: ruff
