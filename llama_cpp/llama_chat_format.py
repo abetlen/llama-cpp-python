@@ -3714,7 +3714,7 @@ def chatml_function_calling(
             )
             response = cast(llama_types.CreateCompletionResponse, response)
 
-            tool_name = response["choices"][0]["text"][len("functions.") :]
+            tool_name = response["choices"][0]["text"][len("functions.") :-1]
             tool = next(
                 (tool for tool in tools if tool["function"]["name"] == tool_name), None
             )
