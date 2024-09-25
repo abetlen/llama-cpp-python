@@ -92,7 +92,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: "recursive"
-          
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.9"
@@ -103,6 +103,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install uv
           RUST_LOG=trace python -m uv pip install -e .[all] --verbose
+          python -m uv pip install build
         shell: bash
 
       - name: Install dependencies (Windows)
@@ -113,12 +114,13 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install uv
           python -m uv pip install -e .[all] --verbose
+          python -m uv pip install build
         shell: cmd
-          
+
       - name: Build source distribution
         run: |
           python -m build --sdist
-          
+
       - uses: actions/upload-artifact@v4
         with:
           name: sdist
