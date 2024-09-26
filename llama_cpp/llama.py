@@ -807,8 +807,10 @@ class Llama:
                 grammar=grammar,
             )
 
+        ridx = idx - self.n_tokens if idx is not None else -1
+
         assert self.ctx is not None
-        token = self._sampler.sample(self._ctx, -1)
+        token = self._sampler.sample(self._ctx, ridx)
         if tmp_sampler:
             self._sampler = None
         return token
