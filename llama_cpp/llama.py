@@ -930,7 +930,7 @@ class Llama:
 
                 sample_idx += 1
                 if stopping_criteria is not None and stopping_criteria(
-                    self._input_ids, self._scores[-1, :]
+                    self._input_ids[: sample_idx], self._scores[sample_idx - self.n_tokens, :]
                 ):
                     return
                 tokens_or_none = yield token
