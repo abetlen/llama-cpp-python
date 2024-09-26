@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@ea9c32be71b91b42ecc538bd902e93cbb5fb36cb
+- feat: Enable detokenizing special tokens with special=True by @benniekiss in #1596
+- feat(ci): Speed up CI workflows using uv, add support for CUDA 12.5 wheels by @Smartappli in e529940f45d42ed8aa31334123b8d66bc67b0e78
+- feat: Add loading sharded GGUF files from HuggingFace with Llama.from_pretrained(additional_files=[...]) by @Gnurro in 84c092063e8f222758dd3d60bdb2d1d342ac292e
+- feat: Add option to configure n_ubatch by @abetlen in 6c44a3f36b089239cb6396bb408116aad262c702
+- feat: Update sampling API for llama.cpp. Sampling now uses sampler chain by @abetlen in f8fcb3ea3424bcfba3a5437626a994771a02324b
+- fix: Don't store scores internally unless logits_all=True. Reduces memory requirements for large context by @abetlen in 29afcfdff5e75d7df4c13bad0122c98661d251ab
+- fix: Fix memory allocation of ndarray in by @xu-song in #1704
+- fix: Use system message in og qwen format by @abetlen in 98eb092d3c6e7c142c4ba2faaca6c091718abbb3
+
+
 ## [0.2.90]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@1d1ccce67613674c75c9c7e3fa4c1e24e428ba48

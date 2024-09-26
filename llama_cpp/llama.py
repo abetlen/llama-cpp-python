@@ -75,6 +75,7 @@ class Llama:
         seed: int = llama_cpp.LLAMA_DEFAULT_SEED,
         n_ctx: int = 512,
         n_batch: int = 512,
+        n_ubatch: int = 512,
         n_threads: Optional[int] = None,
         n_threads_batch: Optional[int] = None,
         rope_scaling_type: Optional[
@@ -156,6 +157,7 @@ class Llama:
             seed: RNG seed, -1 for random
             n_ctx: Text context, 0 = from model
             n_batch: Prompt processing maximum batch size
+            n_ubatch: Physical batch size
             n_threads: Number of threads to use for generation
             n_threads_batch: Number of threads to use for batch processing
             rope_scaling_type: RoPE scaling type, from `enum llama_rope_scaling_type`. ref: https://github.com/ggerganov/llama.cpp/pull/2054
@@ -309,6 +311,7 @@ class Llama:
         self.context_params = llama_cpp.llama_context_default_params()
         self.context_params.n_ctx = n_ctx
         self.context_params.n_batch = self.n_batch
+        self.context_params.n_ubatch = min(self.n_batch, n_ubatch)
         self.context_params.n_threads = self.n_threads
         self.context_params.n_threads_batch = self.n_threads_batch
         self.context_params.rope_scaling_type = (
@@ -380,6 +383,7 @@ class Llama:
             self.n_batch = min(n_ctx, n_batch)
             self.context_params.n_ctx = self._model.n_ctx_train()
             self.context_params.n_batch = self.n_batch
+            self.context_params.n_ubatch = min(self.n_batch, n_ubatch)
 
         self._ctx = self._stack.enter_context(
             contextlib.closing(
@@ -451,7 +455,7 @@ class Llama:
         self.n_tokens = 0
         self.input_ids: npt.NDArray[np.intc] = np.ndarray((n_ctx,), dtype=np.intc)
         self.scores: npt.NDArray[np.single] = np.ndarray(
-            (n_ctx, self._n_vocab), dtype=np.single
+            (n_ctx if logits_all == True else n_batch, self._n_vocab), dtype=np.single
         )
 
         self._mirostat_mu = ctypes.c_float(
@@ -648,12 +652,14 @@ class Llama:
                 )
                 self.scores[n_past : n_past + n_tokens, :].reshape(-1)[::] = logits
             else:
-                rows = 1
-                cols = self._n_vocab
-                logits = np.ctypeslib.as_array(
-                    self._ctx.get_logits(), shape=(rows * cols,)
-                )
-                self.scores[n_past + n_tokens - 1, :].reshape(-1)[::] = logits
+                # rows = 1
+                # cols = self._n_vocab
+                # logits = np.ctypeslib.as_array(
+                #     self._ctx.get_logits(), shape=(rows * cols,)
+                # )
+                # self.scores[n_past + n_tokens - 1, :].reshape(-1)[::] = logits
+                # NOTE: Now that sampling is done inside the sampler, logits are only needed for logprobs which requires logits_all
+                pass
             # Update n_tokens
             self.n_tokens += n_tokens
 
@@ -801,8 +807,10 @@ class Llama:
                 grammar=grammar,
             )
 
+        ridx = idx - self.n_tokens if idx is not None else -1
+
         assert self.ctx is not None
-        token = self._sampler.sample(self._ctx, -1)
+        token = self._sampler.sample(self._ctx, ridx)
         if tmp_sampler:
             self._sampler = None
         return token
@@ -2069,6 +2077,7 @@ class Llama:
             seed=self.context_params.seed,
             n_ctx=self.context_params.n_ctx,
             n_batch=self.n_batch,
+            n_ubatch=self.context_params.n_ubatch,
             n_threads=self.context_params.n_threads,
             n_threads_batch=self.context_params.n_threads_batch,
             rope_scaling_type=self.context_params.rope_scaling_type,
@@ -2225,6 +2234,7 @@ class Llama:
         cls,
         repo_id: str,
         filename: Optional[str],
+        additional_files: Optional[List] = None,
         local_dir: Optional[Union[str, os.PathLike[str]]] = None,
         local_dir_use_symlinks: Union[bool, Literal["auto"]] = "auto",
         cache_dir: Optional[Union[str, os.PathLike[str]]] = None,
@@ -2237,6 +2247,7 @@ class Llama:
         Args:
             repo_id: The model repo id.
             filename: A filename or glob pattern to match the model file in the repo.
+            additional_files: A list of filenames or glob patterns to match additional model files in the repo.
             local_dir: The local directory to save the model to.
             local_dir_use_symlinks: Whether to use symlinks when downloading the model.
             **kwargs: Additional keyword arguments to pass to the Llama constructor.
@@ -2267,6 +2278,7 @@ class Llama:
             rel_path = Path(file).relative_to(repo_id)
             file_list.append(str(rel_path))
 
+        # find the only/first shard file:
         matching_files = [file for file in file_list if fnmatch.fnmatch(file, filename)]  # type: ignore
 
         if len(matching_files) == 0:
@@ -2296,6 +2308,35 @@ class Llama:
             cache_dir=cache_dir,
         )
 
+        if additional_files:
+            for additonal_file_name in additional_files:
+                # find the additional shard file:
+                matching_additional_files = [file for file in file_list if fnmatch.fnmatch(file, additonal_file_name)]
+
+                if len(matching_additional_files) == 0:
+                    raise ValueError(
+                        f"No file found in {repo_id} that match {additonal_file_name}\n\n"
+                        f"Available Files:\n{json.dumps(file_list)}"
+                    )
+
+                if len(matching_additional_files) > 1:
+                    raise ValueError(
+                        f"Multiple files found in {repo_id} matching {additonal_file_name}\n\n"
+                        f"Available Files:\n{json.dumps(files)}"
+                    )
+
+                (matching_additional_file,) = matching_additional_files
+
+                # download the additional file
+                hf_hub_download(
+                    repo_id=repo_id,
+                    filename=matching_additional_file,
+                    subfolder=subfolder,
+                    local_dir=local_dir,
+                    local_dir_use_symlinks=local_dir_use_symlinks,
+                    cache_dir=cache_dir,
+                )
+
         if local_dir is None:
             model_path = hf_hub_download(
                 repo_id=repo_id,
@@ -2309,6 +2350,7 @@ class Llama:
         else:
             model_path = os.path.join(local_dir, filename)
 
+        # loading the first file of a sharded GGUF loads all remaining shard files in the subfolder
         return cls(
             model_path=model_path,
             **kwargs,
