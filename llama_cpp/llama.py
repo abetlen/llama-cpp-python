@@ -807,8 +807,10 @@ class Llama:
                 grammar=grammar,
             )
 
+        ridx = idx - self.n_tokens if idx is not None else -1
+
         assert self.ctx is not None
-        token = self._sampler.sample(self._ctx, -1)
+        token = self._sampler.sample(self._ctx, ridx)
         if tmp_sampler:
             self._sampler = None
         return token
@@ -928,7 +930,7 @@ class Llama:
 
                 sample_idx += 1
                 if stopping_criteria is not None and stopping_criteria(
-                    self._input_ids, self._scores[-1, :]
+                    self._input_ids[: sample_idx], self._scores[sample_idx - self.n_tokens, :]
                 ):
                     return
                 tokens_or_none = yield token
@@ -1517,15 +1519,15 @@ class Llama:
 
         if stream:
             remaining_tokens = completion_tokens[returned_tokens:]
-            all_text = self.detokenize(
+            remaining_text = self.detokenize(
                 remaining_tokens,
                 prev_tokens=prompt_tokens + completion_tokens[:returned_tokens],
             )
-            any_stop = [s for s in stop_sequences if s in all_text]
+            any_stop = [s for s in stop_sequences if s in remaining_text]
             if len(any_stop) > 0:
-                end = min(all_text.index(stop) for stop in any_stop)
+                end = min(remaining_text.index(stop) for stop in any_stop)
             else:
-                end = len(all_text)
+                end = len(remaining_text)
 
             token_end_position = 0
             for token in remaining_tokens:
