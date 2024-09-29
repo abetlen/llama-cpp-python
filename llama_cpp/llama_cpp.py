@@ -220,6 +220,7 @@ LLAMA_VOCAB_TYPE_RWKV = 5
 #     LLAMA_VOCAB_PRE_TYPE_BLOOM          = 23,
 #     LLAMA_VOCAB_PRE_TYPE_GPT3_FINNISH   = 24,
 #     LLAMA_VOCAB_PRE_TYPE_EXAONE         = 25,
+#     LLAMA_VOCAB_PRE_TYPE_CHAMELEON      = 26,
 # };
 LLAMA_VOCAB_PRE_TYPE_DEFAULT = 0
 LLAMA_VOCAB_PRE_TYPE_LLAMA3 = 1
@@ -247,6 +248,7 @@ LLAMA_VOCAB_PRE_TYPE_CODESHELL = 22
 LLAMA_VOCAB_PRE_TYPE_BLOOM = 23
 LLAMA_VOCAB_PRE_TYPE_GPT3_FINNISH = 24
 LLAMA_VOCAB_PRE_TYPE_EXAONE = 25
+LLAMA_VOCAB_PRE_TYPE_CHAMELEON = 26
 
 
 # // note: these values should be synchronized with ggml_rope
@@ -404,12 +406,14 @@ LLAMA_ROPE_SCALING_TYPE_MAX_VALUE = LLAMA_ROPE_SCALING_TYPE_YARN
 #     LLAMA_POOLING_TYPE_MEAN = 1,
 #     LLAMA_POOLING_TYPE_CLS  = 2,
 #     LLAMA_POOLING_TYPE_LAST = 3,
+#     LLAMA_POOLING_TYPE_RANK = 4, // used by reranking models to attach the classification head to the graph
 # };
 LLAMA_POOLING_TYPE_UNSPECIFIED = -1
 LLAMA_POOLING_TYPE_NONE = 0
 LLAMA_POOLING_TYPE_MEAN = 1
 LLAMA_POOLING_TYPE_CLS = 2
 LLAMA_POOLING_TYPE_LAST = 3
+LLAMA_POOLING_TYPE_RANK = 4
 
 # enum llama_attention_type {
 #     LLAMA_ATTENTION_TYPE_UNSPECIFIED = -1,
@@ -420,10 +424,11 @@ LLAMA_ATTENTION_TYPE_UNSPECIFIED = -1
 LLAMA_ATTENTION_TYPE_CAUSAL = 0
 LLAMA_ATTENTION_TYPE_NON_CAUSAL = 1
 
+
 # enum llama_split_mode {
-#     LLAMA_SPLIT_MODE_NONE    = 0, // single GPU
-#     LLAMA_SPLIT_MODE_LAYER   = 1, // split layers and KV across GPUs
-#     LLAMA_SPLIT_MODE_ROW     = 2, // split rows across GPUs
+#     LLAMA_SPLIT_MODE_NONE  = 0, // single GPU
+#     LLAMA_SPLIT_MODE_LAYER = 1, // split layers and KV across GPUs
+#     LLAMA_SPLIT_MODE_ROW   = 2, // split rows across GPUs
 # };
 LLAMA_SPLIT_MODE_NONE = 0
 LLAMA_SPLIT_MODE_LAYER = 1
@@ -2520,7 +2525,8 @@ def llama_get_embeddings_ith(
 
 # // Get the embeddings for a sequence id
 # // Returns NULL if pooling_type is LLAMA_POOLING_TYPE_NONE
-# // shape: [n_embd] (1-dimensional)
+# // when pooling_type == LLAMA_POOLING_TYPE_RANK, returns float[1] with the rank of the sequence
+# // otherwise: float[n_embd] (1-dimensional)
 # LLAMA_API float * llama_get_embeddings_seq(struct llama_context * ctx, llama_seq_id seq_id);
 @ctypes_function(
     "llama_get_embeddings_seq",
@@ -2671,6 +2677,8 @@ def llama_token_eot(model: llama_model_p, /) -> int:
 
 # //
 # // Tokenization
+# //
+# // The API is thread-safe.
 # //
 
 
