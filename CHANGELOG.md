@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@c919d5db39c8a7fcb64737f008e4b105ee0acd20
+- feat: Expose libggml in internal APIs by @abetlen in #1761
+- fix: Fix speculative decoding by @abetlen in 9992c5084a3df2f533e265d10f81d4269b97a1e6 and e975dabf74b3ad85689c9a07719cbb181313139b
+- misc: Rename all_text to remaining_text by @xu-song in #1658
+
 ## [0.3.0]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@ea9c32be71b91b42ecc538bd902e93cbb5fb36cb
