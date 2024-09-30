@@ -366,6 +366,43 @@ Chat completion is available through the [`create_chat_completion`](https://llam
 
 For OpenAI API v1 compatibility, you use the [`create_chat_completion_openai_v1`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.create_chat_completion_openai_v1) method which will return pydantic models instead of dicts.
 
+#### Contribute
+
+You may need to have your own chat format completion handler, outside the llama-cpp package. External packages can contribute by
+declaring an [entry-points](https://setuptools.pypa.io/en/latest/userguide/entry_point.html). 
+
+Here is an example for `pycharm.toml`
+
+```toml(
+[project.entry-points."llama_cpp_python.register_chat_format"]
+load = "timmins-plugin-fancy.llama_cpp_python:load"
+```
+
+Inside your timmins-plugin-fancy package you could have the following 
+```
+timmins-plugin-fancy
+├── pyproject.toml        # and/or setup.cfg, setup.py
+└── timmins_plugin_fancy
+    └── __init__.py
+```
+
+and inside the `__init__.py`
+
+```python
+import llama_cpp.llama as llama
+from llama_cpp.llama_chat_format import LlamaChatCompletionHandlerRegistry
+
+def load(registry: LlamaChatCompletionHandlerRegistry):
+    registry.register_chat_completion_handler('custom-chat-format', custom_chat_handler)
+
+def custom_chat_handler(
+        llama: llama.Llama,
+        **kwargs,  # type: ignore
+):
+    pass
+```
+
+You may take example in [llama_cpp/llama_chat_format.py](https://github.com/abetlen/llama-cpp-python/blob/main/llama_cpp/llama_chat_format.py) for example.
 
 ### JSON and JSON Schema Mode
 
