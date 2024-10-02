@@ -3352,7 +3352,7 @@ class MiniCPMv26ChatHandler(Llava15ChatHandler):
     )
 
 
-class PaligemmaChatHandler(Llava15ChatHandler):
+class PaliGemmaChatHandler(Llava15ChatHandler):
     def __call__(
         self,
         *,
