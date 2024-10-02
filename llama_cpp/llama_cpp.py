@@ -2836,6 +2836,47 @@ def llama_detokenize(
     ...
 
 
+# // @details Get the input embeddings for a sequence of tokens
+# // @param tokens The tokens to embed
+# // @param n_tokens The number of tokens
+# // @param embeddings The embeddings pointer must be large enough to hold the resulting embeddings.
+# // @param n_embd The number of embeddings per token
+# // @return Returns a negative number on failure
+# LLAMA_API int32_t llama_token_inp_embd(
+#           struct llama_context * ctx,
+#                    llama_token * tokens,
+#                        int32_t   n_tokens,
+#                          float * embeddings);
+@ctypes_function(
+    "llama_token_inp_embd",
+    [
+        llama_context_p_ctypes,
+        llama_token_p,
+        ctypes.c_int32,
+        ctypes.POINTER(ctypes.c_float),
+    ],
+    ctypes.c_int32,
+)
+def llama_token_inp_embd(
+    ctx: llama_context_p,
+    tokens: CtypesArray[llama_token],
+    n_tokens: Union[ctypes.c_int32, int],
+    embeddings: CtypesArray[ctypes.c_float],
+    /,
+) -> int:
+    """Get the input embeddings for a sequence of tokens
+
+    Args:
+        ctx: The model context.
+        tokens: The tokens to embed.
+        n_tokens: The number of tokens.
+        embeddings: The embeddings pointer must be large enough to hold the resulting embeddings.
+
+    Returns:
+        Returns a negative number on failure"""
+    ...
+
+
 # //
 # // Chat templates
 # //
