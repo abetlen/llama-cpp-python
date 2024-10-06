@@ -269,13 +269,15 @@ def _convert_text_completion_logprobs_to_chat(
         "content": [
             {
                 "token": token,
+                "bytes": None,
                 "logprob": logprob,
                 "top_logprobs": [
                     {
                         "token": top_token,
                         "logprob": top_logprob,
+                        "bytes": None,
                     }
-                    for (top_token, top_logprob) in top_logprobs
+                    for top_token, top_logprob in top_logprobs.items()
                 ],
             } for (token, logprob, top_logprobs) in zip(logprobs["tokens"], logprobs["token_logprobs"], logprobs["top_logprobs"])
         ],

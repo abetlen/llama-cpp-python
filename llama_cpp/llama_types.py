@@ -96,8 +96,8 @@ class ChatCompletionLogprobToken(ChatCompletionTopLogprobToken):
 
 
 class ChatCompletionLogprobs(TypedDict):
-    content: List[ChatCompletionLogprobToken]
-    refusal: List[ChatCompletionLogprobToken]
+    content: Optional[List[ChatCompletionLogprobToken]]
+    refusal: Optional[List[ChatCompletionLogprobToken]]
 
 
 class ChatCompletionResponseChoice(TypedDict):
