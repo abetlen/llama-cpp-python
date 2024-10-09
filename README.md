@@ -337,7 +337,7 @@ The high-level API also provides a simple interface for chat completion.
 Chat completion requires that the model knows how to format the messages into a single prompt.
 The `Llama` class does this using pre-registered chat formats (ie. `chatml`, `llama-2`, `gemma`, etc) or by providing a custom chat handler object.
 
-The model will will format the messages into a single prompt using the following order of precedence:
+The model will format the messages into a single prompt using the following order of precedence:
   - Use the `chat_handler` if provided
   - Use the `chat_format` if provided
   - Use the `tokenizer.chat_template` from the `gguf` model's metadata (should work for most new models, older models may not have this)
