@@ -344,6 +344,7 @@ async def create_completion(
             ping_message_factory=_ping_message_factory,
         )
     else:
+        exit_stack.close()
         return iterator_or_completion
 
 
