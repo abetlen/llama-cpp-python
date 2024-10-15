@@ -326,7 +326,7 @@ async def create_completion(
         def iterator() -> Iterator[llama_cpp.CreateCompletionStreamResponse]:
             yield first_response
             yield from iterator_or_completion
-            exit_stack.close()
+            exit_stack.aclose()
 
         send_chan, recv_chan = anyio.create_memory_object_stream(10)
         return EventSourceResponse(
@@ -336,12 +336,13 @@ async def create_completion(
                 request=request,
                 inner_send_chan=send_chan,
                 iterator=iterator(),
-                on_complete=exit_stack.close,
+                on_complete=exit_stack.aclose,
             ),
             sep="\n",
             ping_message_factory=_ping_message_factory,
         )
     else:
+        await exit_stack.aclose()
         return iterator_or_completion
 
 
@@ -517,7 +518,7 @@ async def create_chat_completion(
         def iterator() -> Iterator[llama_cpp.ChatCompletionChunk]:
             yield first_response
             yield from iterator_or_completion
-            exit_stack.close()
+            exit_stack.aclose()
 
         send_chan, recv_chan = anyio.create_memory_object_stream(10)
         return EventSourceResponse(
@@ -527,13 +528,13 @@ async def create_chat_completion(
                 request=request,
                 inner_send_chan=send_chan,
                 iterator=iterator(),
-                on_complete=exit_stack.close,
+                on_complete=exit_stack.aclose,
             ),
             sep="\n",
             ping_message_factory=_ping_message_factory,
         )
     else:
-        exit_stack.close()
+        await exit_stack.aclose()
         return iterator_or_completion
 
 
