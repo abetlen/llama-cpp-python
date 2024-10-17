@@ -1414,8 +1414,8 @@ class Llama:
                 break
 
             if stream:
-                if stream_options is not None and "include_usage" in stream_options:
-                    include_usage = True if stream_options["include_usage"] else False
+                if stream_options and "include_usage" in stream_options:
+                    include_usage = stream_options["include_usage"]
                 else:
                     include_usage = False    
                                 
