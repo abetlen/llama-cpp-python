@@ -464,6 +464,8 @@ llama_token_data_p = ctypes.POINTER(llama_token_data)
 
 
 # typedef struct llama_token_data_array {
+#     // TODO: consider SoA
+#     // NOTE: this pointer can be modified by the samplers
 #     llama_token_data * data;
 #     size_t size;
 #     int64_t selected; // this is the index in the data array (i.e. not the token id)
@@ -507,8 +509,11 @@ llama_progress_callback = ctypes.CFUNCTYPE(
 # // - token  : the token ids of the input (used when embd is NULL)
 # // - embd   : token embeddings (i.e. float vector of size n_embd) (used when token is NULL)
 # // - pos    : the positions of the respective token in the sequence
+# //            (if set to NULL, the token position will be tracked automatically by llama_decode)
 # // - seq_id : the sequence to which the respective token belongs
+# //            (if set to NULL, the sequence ID will be assumed to be 0)
 # // - logits : if zero, the logits (and/or the embeddings) for the respective token will not be output
+# //            (if set to NULL, only the logits for last token will be returned)
 # //
 # typedef struct llama_batch {
 #     int32_t n_tokens;
@@ -519,16 +524,6 @@ llama_progress_callback = ctypes.CFUNCTYPE(
 #     int32_t      *  n_seq_id;
 #     llama_seq_id ** seq_id;
 #     int8_t       *  logits; // TODO: rename this to "output"
-
-
-#     // NOTE: helpers for smooth API transition - can be deprecated in the future
-#     //       for future-proof code, use the above fields instead and ignore everything below
-#     //
-#     // pos[i] = all_pos_0 + i*all_pos_1
-#     //
-#     llama_pos    all_pos_0;  // used if pos == NULL
-#     llama_pos    all_pos_1;  // used if pos == NULL
-#     llama_seq_id all_seq_id; // used if seq_id == NULL
 # } llama_batch;
 class llama_batch(ctypes.Structure):
     """Input data for llama_decode
@@ -563,9 +558,6 @@ class llama_batch(ctypes.Structure):
         ("n_seq_id", ctypes.POINTER(ctypes.c_int32)),
         ("seq_id", ctypes.POINTER(ctypes.POINTER(llama_seq_id))),
         ("logits", ctypes.POINTER(ctypes.c_int8)),
-        ("all_pos_0", llama_pos),
-        ("all_pos_1", llama_pos),
-        ("all_seq_id", llama_seq_id),
     ]
 
 
@@ -1167,6 +1159,12 @@ def llama_supports_mlock() -> bool:
 # LLAMA_API bool llama_supports_gpu_offload(void);
 @ctypes_function("llama_supports_gpu_offload", [], ctypes.c_bool)
 def llama_supports_gpu_offload() -> bool:
+    ...
+
+
+# LLAMA_API bool llama_supports_rpc        (void);
+@ctypes_function("llama_supports_rpc", [], ctypes.c_bool)
+def llama_supports_rpc() -> bool:
     ...
 
 
@@ -2255,30 +2253,26 @@ def llama_state_seq_load_file(
 # //
 
 
-# // Return batch for single sequence of tokens starting at pos_0
+# // Return batch for single sequence of tokens
+# // The sequence ID will be fixed to 0
+# // The position of the tokens will be tracked automatically by llama_decode
 # //
 # // NOTE: this is a helper function to facilitate transition to the new batch API - avoid using it
 # //
 # LLAMA_API struct llama_batch llama_batch_get_one(
 #               llama_token * tokens,
-#                   int32_t   n_tokens,
-#                 llama_pos   pos_0,
-#              llama_seq_id   seq_id);
+#                   int32_t   n_tokens);
 @ctypes_function(
     "llama_batch_get_one",
     [
         llama_token_p,
-        ctypes.c_int,
-        llama_pos,
-        llama_seq_id,
+        ctypes.c_int32,
     ],
     llama_batch,
 )
 def llama_batch_get_one(
     tokens: CtypesArray[llama_token],
     n_tokens: Union[ctypes.c_int, int],
-    pos_0: Union[llama_pos, int],
-    seq_id: llama_seq_id,
     /,
 ) -> llama_batch:
     """Return batch for single sequence of tokens starting at pos_0
@@ -2616,6 +2610,13 @@ def llama_token_eos(model: llama_model_p, /) -> int:
     ...
 
 
+# LLAMA_API llama_token llama_token_eot(const struct llama_model * model); // end-of-turn
+@ctypes_function("llama_token_eot", [llama_model_p_ctypes], llama_token)
+def llama_token_eot(model: llama_model_p, /) -> int:
+    """end-of-turn"""
+    ...
+
+
 # LLAMA_API llama_token llama_token_cls(const struct llama_model * model); // classification
 @ctypes_function("llama_token_cls", [llama_model_p_ctypes], llama_token)
 def llama_token_cls(model: llama_model_p, /) -> int:
@@ -2650,30 +2651,54 @@ def llama_add_eos_token(model: llama_model_p, /) -> bool:
 
 
 # // Codellama infill tokens
-# LLAMA_API llama_token llama_token_prefix(const struct llama_model * model); // Beginning of infill prefix
+# DEPRECATED(LLAMA_API llama_token llama_token_prefix(const struct llama_model * model), "use llama_token_fim_pre instead");
 @ctypes_function("llama_token_prefix", [llama_model_p_ctypes], llama_token)
 def llama_token_prefix(model: llama_model_p) -> int:
     """codellama infill tokens"""
     ...
 
 
-# LLAMA_API llama_token llama_token_middle(const struct llama_model * model); // Beginning of infill middle
+# DEPRECATED(LLAMA_API llama_token llama_token_middle(const struct llama_model * model), "use llama_token_fim_mid instead");
 @ctypes_function("llama_token_middle", [llama_model_p_ctypes], llama_token)
 def llama_token_middle(model: llama_model_p, /) -> int:
     ...
 
 
-# LLAMA_API llama_token llama_token_suffix(const struct llama_model * model); // Beginning of infill suffix
+# DEPRECATED(LLAMA_API llama_token llama_token_suffix(const struct llama_model * model), "use llama_token_fim_suf instead");
 @ctypes_function("llama_token_suffix", [llama_model_p_ctypes], llama_token)
 def llama_token_suffix(model: llama_model_p, /) -> int:
     ...
 
 
-# LLAMA_API llama_token llama_token_eot   (const struct llama_model * model); // End of infill middle
-@ctypes_function("llama_token_eot", [llama_model_p_ctypes], llama_token)
-def llama_token_eot(model: llama_model_p, /) -> int:
+# LLAMA_API llama_token llama_token_fim_pre(const struct llama_model * model);
+@ctypes_function("llama_token_fim_pre", [llama_model_p_ctypes], llama_token)
+def llama_token_fim_pre(model: llama_model_p, /) -> int:
     ...
 
+# LLAMA_API llama_token llama_token_fim_suf(const struct llama_model * model);
+@ctypes_function("llama_token_fim_suf", [llama_model_p_ctypes], llama_token)
+def llama_token_fim_suf(model: llama_model_p, /) -> int:
+    ...
+
+# LLAMA_API llama_token llama_token_fim_mid(const struct llama_model * model);
+@ctypes_function("llama_token_fim_mid", [llama_model_p_ctypes], llama_token)
+def llama_token_fim_mid(model: llama_model_p, /) -> int:
+    ...
+
+# LLAMA_API llama_token llama_token_fim_pad(const struct llama_model * model);
+@ctypes_function("llama_token_fim_pad", [llama_model_p_ctypes], llama_token)
+def llama_token_fim_pad(model: llama_model_p, /) -> int:
+    ...
+
+# LLAMA_API llama_token llama_token_fim_rep(const struct llama_model * model);
+@ctypes_function("llama_token_fim_rep", [llama_model_p_ctypes], llama_token)
+def llama_token_fim_rep(model: llama_model_p, /) -> int:
+    ...
+
+# LLAMA_API llama_token llama_token_fim_sep(const struct llama_model * model);
+@ctypes_function("llama_token_fim_sep", [llama_model_p_ctypes], llama_token)
+def llama_token_fim_sep(model: llama_model_p, /) -> int:
+    ...
 
 # //
 # // Tokenization
@@ -2784,6 +2809,23 @@ def llama_token_to_piece(
         lstrip: The number of leading spaces to skip.
         special: If true, special tokens are rendered in the output."""
     ...
+
+
+# # // check if token0 is contained as a prefix in token1
+# # LLAMA_API bool llama_token_is_prefix(
+# #           const struct llama_model * model,
+# #                        llama_token   token0,
+# #                        llama_token   token1);
+# @ctypes_function(
+#     "llama_token_is_prefix",
+#     [llama_model_p_ctypes, llama_token, llama_token],
+#     ctypes.c_bool,
+# )
+# def llama_token_is_prefix(
+#     model: llama_model_p, token0: Union[llama_token, int], token1: Union[llama_token, int], /
+# ) -> bool:
+#     """Check if token0 is contained as a prefix in token1"""
+#     ...
 
 
 # /// @details Convert the provided tokens into text (inverse of llama_tokenize()).
@@ -3099,20 +3141,22 @@ def llama_sampler_chain_remove(
 
 # // available samplers:
 #
-# LLAMA_API struct llama_sampler * llama_sampler_init_greedy     (void);
+# LLAMA_API struct llama_sampler * llama_sampler_init_greedy(void);
 @ctypes_function("llama_sampler_init_greedy", [], llama_sampler_p_ctypes)
 def llama_sampler_init_greedy() -> llama_sampler_p:
     ...
 
 
-# LLAMA_API struct llama_sampler * llama_sampler_init_dist       (uint32_t seed);
+# LLAMA_API struct llama_sampler * llama_sampler_init_dist  (uint32_t seed);
 @ctypes_function("llama_sampler_init_dist", [ctypes.c_uint32], llama_sampler_p_ctypes)
 def llama_sampler_init_dist(seed: int) -> llama_sampler_p:
     ...
 
 
 # /// @details Sorts candidate tokens by their logits in descending order and calculate probabilities based on logits.
-# LLAMA_API struct llama_sampler * llama_sampler_init_softmax    (void);
+# /// NOTE: Avoid using on the full vocabulary as the sorting can become slow. For example, apply top-k or top-p sampling first.
+# DEPRECATED(LLAMA_API struct llama_sampler * llama_sampler_init_softmax    (void),
+#     "will be removed in the future (see https://github.com/ggerganov/llama.cpp/pull/9896#discussion_r1800920915)");
 @ctypes_function("llama_sampler_init_softmax", [], llama_sampler_p_ctypes)
 def llama_sampler_init_softmax() -> llama_sampler_p:
     ...
@@ -3184,6 +3228,19 @@ def llama_sampler_init_temp(t: float) -> llama_sampler_p:
 )
 def llama_sampler_init_temp_ext(
     t: float, delta: float, exponent: float
+) -> llama_sampler_p:
+    ...
+
+
+# /// @details XTC sampler as described in https://github.com/oobabooga/text-generation-webui/pull/6335
+# LLAMA_API struct llama_sampler * llama_sampler_init_xtc        (float   p, float   t,     size_t min_keep, uint32_t seed);
+@ctypes_function(
+    "llama_sampler_init_xtc",
+    [ctypes.c_float, ctypes.c_float, ctypes.c_size_t, ctypes.c_uint32],
+    llama_sampler_p_ctypes,
+)
+def llama_sampler_init_xtc(
+    p: float, t: float, min_keep: int, seed: int, /
 ) -> llama_sampler_p:
     ...
 
@@ -3298,6 +3355,39 @@ def llama_sampler_init_penalties(
 def llama_sampler_init_logit_bias(
     n_vocab: int, n_logit_bias: int, logit_bias: CtypesArray[llama_logit_bias], /
 ) -> llama_sampler_p:
+    ...
+
+
+# // this sampler is meant to be used for fill-in-the-middle infilling
+# // it's supposed to be used after top_k + top_p sampling
+# //
+# // 1. if the sum of the EOG probs times the number of candidates is higher than the sum of the other probs -> pick EOG
+# // 2. combine probs of tokens that have the same prefix
+# //
+# // example:
+# //
+# // - before:
+# //   "hel":   0.5
+# //   "hell":  0.2
+# //   "hello": 0.1
+# //   "dummy": 0.1
+# //
+# // - after:
+# //   "hel":   0.8
+# //   "dummy": 0.1
+# //
+# // 3. discard non-EOG tokens with low prob
+# // 4. if no tokens are left -> pick EOT
+# //
+# LLAMA_API struct llama_sampler * llama_sampler_init_infill(const struct llama_model * model);
+@ctypes_function(
+    "llama_sampler_init_infill",
+    [llama_model_p_ctypes],
+    llama_sampler_p_ctypes,
+)
+def llama_sampler_init_infill(model: llama_model_p, /) -> llama_sampler_p:
+    """This sampler is meant to be used for fill-in-the-middle infilling.
+    """
     ...
 
 
