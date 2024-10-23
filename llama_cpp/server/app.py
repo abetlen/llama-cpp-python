@@ -301,6 +301,7 @@ async def create_completion(
             if body.logit_bias_type == "tokens"
             else body.logit_bias
         )
+    # Set usage when streaming (if defined)
 
     if body.grammar is not None:
         kwargs["grammar"] = llama_cpp.LlamaGrammar.from_string(body.grammar)

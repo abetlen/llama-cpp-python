@@ -54,6 +54,12 @@ stream_field = Field(
     description="Whether to stream the results as they are generated. Useful for chatbots.",
 )
 
+# I'm currently not sure, how to best give this as settings. 
+include_usage_field = Field(
+    default=False,
+    description="If set, an additional chunk will be streamed before the data: [DONE] message. The usage field on this chunk shows the token usage statistics for the entire request, and the choices field will always be an empty array. All other chunks will also include a usage field, but with a null value.",
+)
+
 top_k_field = Field(
     default=40,
     ge=0,
@@ -105,7 +111,6 @@ grammar = Field(
     description="A CBNF grammar (as string) to be used for formatting the model's output.",
 )
 
-
 class CreateCompletionRequest(BaseModel):
     prompt: Union[str, List[str]] = Field(
         default="", description="The prompt to generate completions for."
@@ -127,6 +132,10 @@ class CreateCompletionRequest(BaseModel):
     )
     stop: Optional[Union[str, List[str]]] = stop_field
     stream: bool = stream_field
+    stream_options: Optional[llama_cpp.StreamOptions] = Field(
+        default=None,
+        description="Options for streaming response. Only set this when you set stream: true.",
+    )
     logprobs: Optional[int] = Field(
         default=None,
         ge=0,
@@ -228,6 +237,10 @@ class CreateChatCompletionRequest(BaseModel):
     min_p: float = min_p_field
     stop: Optional[Union[str, List[str]]] = stop_field
     stream: bool = stream_field
+    stream_options: Optional[llama_cpp.StreamOptions] = Field(
+        default=None,
+        description="Options for streaming response. Only set this when you set stream: true.",
+    )
     presence_penalty: Optional[float] = presence_penalty_field
     frequency_penalty: Optional[float] = frequency_penalty_field
     logit_bias: Optional[Dict[str, float]] = Field(None)
