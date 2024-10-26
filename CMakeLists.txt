@@ -55,6 +55,9 @@ if (LLAMA_BUILD)
     set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
     set(CMAKE_SKIP_RPATH FALSE)
 
+    # Enable building of the common library
+    set(LLAMA_BUILD_COMMON ON CACHE BOOL "Build llama.cpp common library" FORCE)
+
     # Building llama
     if (APPLE AND NOT CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
         # Need to disable these llama.cpp flags on Apple x86_64,
@@ -106,7 +109,7 @@ if (LLAMA_BUILD)
         # Building llava
         add_subdirectory(vendor/llama.cpp/examples/llava)
         set_target_properties(llava_shared PROPERTIES OUTPUT_NAME "llava")
-        # Set CUDA_ARCHITECTURES to OFF on windows
+        # Set CUDA_ARCHITECTURES to OFF on Windows
         if (WIN32)
             set_target_properties(llava_shared PROPERTIES CUDA_ARCHITECTURES OFF)
         endif()
@@ -121,5 +124,18 @@ if (LLAMA_BUILD)
                 DESTINATION ${SKBUILD_PLATLIB_DIR}/llama_cpp/lib
             )
         endif()
+
+        # Fix for llava build: Add include directory for llama.h
+        # Move these commands after the add_subdirectory call
+        target_include_directories(llava PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/vendor/llama.cpp/include)
+        target_include_directories(llava PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/vendor/llama.cpp/ggml/include)
+
+        if (BUILD_SHARED_LIBS)
+            target_include_directories(llava_shared PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/vendor/llama.cpp/include)
+            target_include_directories(llava_shared PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/vendor/llama.cpp/ggml/include)
+        endif()
+
+        target_include_directories(llama-llava-cli PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/vendor/llama.cpp/include)
+        target_include_directories(llama-minicpmv-cli PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/vendor/llama.cpp/include)
     endif()
 endif()
