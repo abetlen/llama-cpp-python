@@ -362,13 +362,6 @@ class LlamaContext:
             self.ctx, llama_cpp.byref(candidates.candidates), p, min_keep
         )
 
-    def sample_tail_free(
-        self, candidates: "_LlamaTokenDataArray", z: float, min_keep: int
-    ):
-        llama_cpp.llama_sample_tail_free(
-            self.ctx, llama_cpp.byref(candidates.candidates), z, min_keep
-        )
-
     def sample_typical(
         self, candidates: "_LlamaTokenDataArray", p: float, min_keep: int
     ):
@@ -685,9 +678,6 @@ class LlamaSamplingContext:
                 ctx_main.sample_top_k(
                     token_data_array, self.params.top_k, min_keep=min_keep
                 )
-                ctx_main.sample_tail_free(
-                    token_data_array, self.params.tfs_z, min_keep=min_keep
-                )
                 ctx_main.sample_typical(
                     token_data_array, self.params.typical_p, min_keep=min_keep
                 )
@@ -774,10 +764,6 @@ class LlamaSampler:
 
     def add_min_p(self, p: float, min_keep: int):
         sampler = llama_cpp.llama_sampler_init_min_p(p, min_keep)
-        self._add_sampler(sampler)
-
-    def add_tail_free(self, z: float, min_keep: int):
-        sampler = llama_cpp.llama_sampler_init_tail_free(z, min_keep)
         self._add_sampler(sampler)
 
     def add_typical(self, p: float, min_keep: int):

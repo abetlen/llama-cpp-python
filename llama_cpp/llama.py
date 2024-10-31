@@ -745,7 +745,6 @@ class Llama:
                 n_probs = 0
                 min_keep = max(1, n_probs)
                 sampler.add_top_k(top_k)
-                sampler.add_tail_free(tfs_z, min_keep)
                 sampler.add_typical(typical_p, min_keep)
                 sampler.add_top_p(top_p, min_keep)
                 sampler.add_min_p(min_p, min_keep)

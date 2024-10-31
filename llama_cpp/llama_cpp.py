@@ -3191,17 +3191,6 @@ def llama_sampler_init_min_p(p: float, min_keep: int) -> llama_sampler_p:
     ...
 
 
-# /// @details Tail Free Sampling described in https://www.trentonbricken.com/Tail-Free-Sampling/.
-# LLAMA_API struct llama_sampler * llama_sampler_init_tail_free  (float   z, size_t min_keep);
-@ctypes_function(
-    "llama_sampler_init_tail_free",
-    [ctypes.c_float, ctypes.c_size_t],
-    llama_sampler_p_ctypes,
-)
-def llama_sampler_init_tail_free(z: float, min_keep: int) -> llama_sampler_p:
-    ...
-
-
 # /// @details Locally Typical Sampling implementation described in the paper https://arxiv.org/abs/2202.00666.
 # LLAMA_API struct llama_sampler * llama_sampler_init_typical    (float   p, size_t min_keep);
 @ctypes_function(
@@ -3338,6 +3327,41 @@ def llama_sampler_init_penalties(
     penalty_present: float,
     penalize_nl: bool,
     ignore_eos: bool,
+    /,
+) -> llama_sampler_p:
+    ...
+
+
+# ///  @details DRY sampler, designed by p-e-w, as described in: https://github.com/oobabooga/text-generation-webui/pull/5677, porting Koboldcpp implementation authored by pi6am: https://github.com/LostRuins/koboldcpp/pull/982
+# LLAMA_API struct llama_sampler *    llama_sampler_init_dry(
+#         const struct llama_model *  model,
+#                            float    dry_multiplier,
+#                            float    dry_base,
+#                          int32_t    dry_allowed_length,
+#                          int32_t    dry_penalty_last_n,
+#                       const char ** seq_breakers,
+#                           size_t    num_breakers);
+@ctypes_function(
+    "llama_sampler_init_dry",
+    [
+        llama_model_p_ctypes,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.c_int32,
+        ctypes.c_int32,
+        ctypes.POINTER(ctypes.c_char_p),
+        ctypes.c_size_t,
+    ],
+    llama_sampler_p_ctypes,
+)
+def llama_sampler_init_dry(
+    model: llama_model_p,
+    dry_multiplier: float,
+    dry_base: float,
+    dry_allowed_length: int,
+    dry_penalty_last_n: int,
+    seq_breakers: CtypesArray[bytes],
+    num_breakers: int,
     /,
 ) -> llama_sampler_p:
     ...
