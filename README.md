@@ -46,7 +46,7 @@ pip install llama-cpp-python
 
 This will also build `llama.cpp` from source and install it alongside this python package.
 
-If this fails, add `--verbose` to the `pip install` see the full cmake build log.
+If this fails, add `--verbose` to the `pip install`. See the full cmake build log.
 
 **Pre-built Wheel (New)**
 
@@ -337,7 +337,7 @@ The high-level API also provides a simple interface for chat completion.
 Chat completion requires that the model knows how to format the messages into a single prompt.
 The `Llama` class does this using pre-registered chat formats (ie. `chatml`, `llama-2`, `gemma`, etc) or by providing a custom chat handler object.
 
-The model will will format the messages into a single prompt using the following order of precedence:
+The model will format the messages into a single prompt using the following order of precedence:
   - Use the `chat_handler` if provided
   - Use the `chat_format` if provided
   - Use the `tokenizer.chat_template` from the `gguf` model's metadata (should work for most new models, older models may not have this)
@@ -472,7 +472,7 @@ llm.create_chat_completion(
 <details>
 <summary>Functionary v2</summary>
 
-The various gguf-converted files for this set of models can be found [here](https://huggingface.co/meetkai). Functionary is able to intelligently call functions and also analyze any provided function outputs to generate coherent responses. All v2 models of functionary supports **parallel function calling**. You can provide either `functionary-v1` or `functionary-v2` for the `chat_format` when initializing the Llama class.
+The various gguf-converted files for this set of models can be found [here](https://huggingface.co/meetkai). Functionary is able to intelligently call functions and also analyze any provided function outputs to generate coherent responses. All v2 models of functionary support **parallel function calling**. You can provide either `functionary-v1` or `functionary-v2` for the `chat_format` when initializing the Llama class.
 
 Due to discrepancies between llama.cpp and HuggingFace's tokenizers, it is required to provide HF Tokenizer for functionary. The `LlamaHFTokenizer` class can be initialized and passed into the Llama class. This will override the default llama.cpp tokenizer used in Llama class. The tokenizer files are already included in the respective HF repositories hosting the gguf files.
 
@@ -492,7 +492,7 @@ llm = Llama.from_pretrained(
 
 ### Multi-modal Models
 
-`llama-cpp-python` supports such as llava1.5 which allow the language model to read information from both text and images.
+`llama-cpp-python` supports such as llava1.5, which allows the language model to read information from both text and images.
 
 Below are the supported multi-modal models and their respective chat handlers (Python API) and chat formats (Server API).
 
@@ -506,7 +506,7 @@ Below are the supported multi-modal models and their respective chat handlers (P
 | [llama-3-vision-alpha](https://huggingface.co/abetlen/llama-3-vision-alpha-gguf) | `Llama3VisionAlphaChatHandler` | `llama-3-vision-alpha` |
 | [minicpm-v-2.6](https://huggingface.co/openbmb/MiniCPM-V-2_6-gguf) | `MiniCPMv26ChatHandler` | `minicpm-v-2.6` |
 
-Then you'll need to use a custom chat handler to load the clip model and process the chat messages and images.
+Then, you'll need to use a custom chat handler to load the clip model and process the chat messages and images.
 
 ```python
 from llama_cpp import Llama
@@ -600,7 +600,7 @@ messages = [
 
 ### Speculative Decoding
 
-`llama-cpp-python` supports speculative decoding which allows the model to generate completions based on a draft model.
+`llama-cpp-python` supports speculative decoding, which allows the model to generate completions based on a draft model.
 
 The fastest way to use speculative decoding is through the `LlamaPromptLookupDecoding` class.
 
@@ -660,7 +660,7 @@ pip install 'llama-cpp-python[server]'
 python3 -m llama_cpp.server --model models/7B/llama-model.gguf
 ```
 
-Similar to Hardware Acceleration section above, you can also install with GPU (cuBLAS) support like this:
+Similar to the Hardware Acceleration section above, you can also install with GPU (cuBLAS) support like this:
 
 ```bash
 CMAKE_ARGS="-DGGML_CUDA=on" FORCE_CMAKE=1 pip install 'llama-cpp-python[server]'
@@ -769,10 +769,10 @@ changes to the `llama_cpp/llama_cpp.py` file to match the new API (additional ch
 ### Are there pre-built binaries / binary wheels available?
 
 The recommended installation method is to install from source as described above.
-The reason for this is that `llama.cpp` is built with compiler optimizations that are specific to your system.
-Using pre-built binaries would require disabling these optimizations or supporting a large number of pre-built binaries for each platform.
+This is because `llama.cpp` is built with compiler optimizations specific to your system.
+Using pre-built binaries would require disabling these optimizations or supporting many pre-built binaries for each platform.
 
-That being said there are some pre-built binaries available through the Releases as well as some community provided wheels.
+That being said, there are some pre-built binaries available through the Releases, as well as some community provided wheels.
 
 In the future, I would like to provide pre-built binaries and wheels for common platforms and I'm happy to accept any useful contributions in this area.
 This is currently being tracked in [#741](https://github.com/abetlen/llama-cpp-python/issues/741)
