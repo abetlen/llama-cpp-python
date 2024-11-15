@@ -75,7 +75,21 @@ if (LLAMA_BUILD)
     add_subdirectory(vendor/llama.cpp)
     llama_cpp_python_install_target(llama)
     llama_cpp_python_install_target(ggml)
-    
+    llama_cpp_python_install_target(ggml-cpu)
+    llama_cpp_python_install_target(ggml-base)
+
+    if (GGML_METAL)
+        llama_cpp_python_install_target(ggml-metal)
+    endif()
+
+    if (GGML_CUDA)
+        llama_cpp_python_install_target(ggml-cuda)
+    endif()
+
+    if (GGML_VULKAN)
+        llama_cpp_python_install_target(ggml-vulkan)
+    endif()
+
     # Workaround for Windows + CUDA https://github.com/abetlen/llama-cpp-python/issues/563
     if (WIN32)
         install(
