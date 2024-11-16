@@ -77,6 +77,7 @@ if (LLAMA_BUILD)
     llama_cpp_python_install_target(ggml)
     llama_cpp_python_install_target(ggml-cpu)
     llama_cpp_python_install_target(ggml-base)
+    llama_cpp_python_install_target(ggml-amx)
 
     if (GGML_METAL)
         llama_cpp_python_install_target(ggml-metal)
