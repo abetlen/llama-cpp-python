@@ -6,6 +6,10 @@ option(LLAMA_BUILD "Build llama.cpp shared library and install alongside python 
 option(LLAVA_BUILD "Build llava shared library and install alongside python package" ON)
 
 function(llama_cpp_python_install_target target)
+    if(NOT TARGET ${target})
+        return()
+    endif()
+
     install(
         TARGETS ${target}
         LIBRARY DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/lib
@@ -75,7 +79,22 @@ if (LLAMA_BUILD)
     add_subdirectory(vendor/llama.cpp)
     llama_cpp_python_install_target(llama)
     llama_cpp_python_install_target(ggml)
-    
+
+    llama_cpp_python_install_target(ggml-base)
+
+    llama_cpp_python_install_target(ggml-amx)
+    llama_cpp_python_install_target(ggml-blas)
+    llama_cpp_python_install_target(ggml-can)
+    llama_cpp_python_install_target(ggml-cpu)
+    llama_cpp_python_install_target(ggml-cuda)
+    llama_cpp_python_install_target(ggml-hip)
+    llama_cpp_python_install_target(ggml-kompute)
+    llama_cpp_python_install_target(ggml-metal)
+    llama_cpp_python_install_target(ggml-musa)
+    llama_cpp_python_install_target(ggml-rpc)
+    llama_cpp_python_install_target(ggml-sycl)
+    llama_cpp_python_install_target(ggml-vulkan)
+
     # Workaround for Windows + CUDA https://github.com/abetlen/llama-cpp-python/issues/563
     if (WIN32)
         install(
