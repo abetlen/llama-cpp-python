@@ -1,5 +1,6 @@
 import sys
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import (
     Optional,
     Sequence,
@@ -13,12 +14,30 @@ import llama_cpp.llama
 
 from .llama_types import *
 
+@dataclass(eq=True, frozen=True)
+class LlamaCacheKey:
+    """A key in a LlamaCache. Stores tokens to key by. Also stores
+    information about active LoRA adapters, because we need different
+    cached values for different active adapters, even for the same tokens."""
+    active_lora_adapters: Tuple[Tuple[str, float], ...]
+    tokens: Tuple[int, ...]
+
+    def __post_init__(self):
+        if not isinstance(self.tokens, tuple):
+            raise ValueError("tokens must be a tuple")
 
 class BaseLlamaCache(ABC):
     """Base cache class for a llama.cpp model."""
 
     def __init__(self, capacity_bytes: int = (2 << 30)):
         self.capacity_bytes = capacity_bytes
+
+    def _convert_to_cache_key(self, key: Union[Sequence[int], LlamaCacheKey]) -> LlamaCacheKey:
+        """Convert raw tokens to a key if needed"""
+        if type(key) == LlamaCacheKey:
+            return key
+        else:
+            return LlamaCacheKey(active_lora_adapters=(), tokens=tuple(key))
 
     @property
     @abstractmethod
@@ -27,24 +46,61 @@ class BaseLlamaCache(ABC):
 
     def _find_longest_prefix_key(
         self,
-        key: Tuple[int, ...],
-    ) -> Optional[Tuple[int, ...]]:
+        key: LlamaCacheKey,
+    ) -> Optional[LlamaCacheKey]:
+        """Find the cached key with the longest matching token prefix. A match also requires that the active
+        LoRA adapters match exactly.
+
+        Args:
+            key (LlamaCacheKey): The key to find a prefix match for.
+
+        Returns:
+            Optional[LlamaCacheKey]: The key with the longest matching prefix, or None if no match found.
+        """
         pass
 
     @abstractmethod
-    def __getitem__(self, key: Sequence[int]) -> "llama_cpp.llama.LlamaState":
+    def __getitem__(self, key: Union[Sequence[int], LlamaCacheKey]) -> "llama_cpp.llama.LlamaState":
+        """Retrieve a cached state by key, matching on the longest common token prefix. A match also requires
+        that the active LoRA adapters match exactly.
+
+        Args:
+            key: Key to look up. Raw token sequences are supported for backwards compatibility
+                 and assume no active LoRA adapters.
+
+        Returns:
+            llama_cpp.llama.LlamaState: The cached state for the entry sharing the longest token prefix.
+
+        Raises:
+            KeyError: If no prefix match is found.
+        """
         raise NotImplementedError
 
     @abstractmethod
-    def __contains__(self, key: Sequence[int]) -> bool:
+    def __contains__(self, key: Union[Sequence[int], LlamaCacheKey]) -> bool:
+        """Check if any cached key shares a token prefix with the given key.
+
+        Args:
+            key: Key to look up. Raw token sequences are supported for backwards compatibility
+                 and assume no active LoRA adapters.
+
+        Returns:
+            bool: True if any cached key shares a token prefix with this key.
+        """
         raise NotImplementedError
 
     @abstractmethod
     def __setitem__(
-        self, key: Sequence[int], value: "llama_cpp.llama.LlamaState"
+        self, key: Union[Sequence[int], LlamaCacheKey], value: "llama_cpp.llama.LlamaState"
     ) -> None:
-        raise NotImplementedError
+        """Store a state keyed on its tokens and information about active LoRA adapters.
 
+        Args:
+            key: Key to store. Raw token sequences are supported for backwards compatibility
+                and assume no active LoRA adapters
+            value: The state to cache
+        """
+        raise NotImplementedError
 
 class LlamaRAMCache(BaseLlamaCache):
     """Cache for a llama.cpp model using RAM."""
@@ -53,7 +109,7 @@ class LlamaRAMCache(BaseLlamaCache):
         super().__init__(capacity_bytes)
         self.capacity_bytes = capacity_bytes
         self.cache_state: OrderedDict[
-            Tuple[int, ...], "llama_cpp.llama.LlamaState"
+            LlamaCacheKey, "llama_cpp.llama.LlamaState"
         ] = OrderedDict()
 
     @property
@@ -62,22 +118,21 @@ class LlamaRAMCache(BaseLlamaCache):
 
     def _find_longest_prefix_key(
         self,
-        key: Tuple[int, ...],
-    ) -> Optional[Tuple[int, ...]]:
+        key: LlamaCacheKey,
+    ) -> Optional[LlamaCacheKey]:
         min_len = 0
-        min_key = None
-        keys = (
-            (k, llama_cpp.llama.Llama.longest_token_prefix(k, key))
-            for k in self.cache_state.keys()
-        )
-        for k, prefix_len in keys:
+        min_key: Optional[LlamaCacheKey] = None
+        for k in self.cache_state.keys():
+            if k.active_lora_adapters != key.active_lora_adapters: continue
+            if len(k.tokens) < min_len: continue # Optimization
+            prefix_len = llama_cpp.llama.Llama.longest_token_prefix(k.tokens, key.tokens)
             if prefix_len > min_len:
                 min_len = prefix_len
                 min_key = k
         return min_key
 
-    def __getitem__(self, key: Sequence[int]) -> "llama_cpp.llama.LlamaState":
-        key = tuple(key)
+    def __getitem__(self, key: Union[Sequence[int], LlamaCacheKey]) -> "llama_cpp.llama.LlamaState":
+        key = self._convert_to_cache_key(key)
         _key = self._find_longest_prefix_key(key)
         if _key is None:
             raise KeyError("Key not found")
@@ -85,11 +140,11 @@ class LlamaRAMCache(BaseLlamaCache):
         self.cache_state.move_to_end(_key)
         return value
 
-    def __contains__(self, key: Sequence[int]) -> bool:
+    def __contains__(self, key: Union[Sequence[int], LlamaCacheKey]) -> bool:
         return self._find_longest_prefix_key(tuple(key)) is not None
 
-    def __setitem__(self, key: Sequence[int], value: "llama_cpp.llama.LlamaState"):
-        key = tuple(key)
+    def __setitem__(self, key: Union[Sequence[int], LlamaCacheKey], value: "llama_cpp.llama.LlamaState"):
+        key = self._convert_to_cache_key(key)
         if key in self.cache_state:
             del self.cache_state[key]
         self.cache_state[key] = value
@@ -116,19 +171,24 @@ class LlamaDiskCache(BaseLlamaCache):
 
     def _find_longest_prefix_key(
         self,
-        key: Tuple[int, ...],
-    ) -> Optional[Tuple[int, ...]]:
+        key: LlamaCacheKey,
+    ) -> Optional[LlamaCacheKey]:
         min_len = 0
         min_key: Optional[Tuple[int, ...]] = None
         for k in self.cache.iterkeys():  # type: ignore
-            prefix_len = llama_cpp.llama.Llama.longest_token_prefix(k, key)
+            if not isinstance(k, LlamaCacheKey):
+                print("LlamaDiskCache: Disk cache keys must be LlamaCacheKey objects: skipping")
+                continue
+            if k.active_lora_adapters != key.active_lora_adapters: continue
+            if len(k.tokens) < min_len: continue # Optimization
+            prefix_len = llama_cpp.llama.Llama.longest_token_prefix(k.tokens, key.tokens)
             if prefix_len > min_len:
                 min_len = prefix_len
-                min_key = k  # type: ignore
+                min_key = k
         return min_key
 
-    def __getitem__(self, key: Sequence[int]) -> "llama_cpp.llama.LlamaState":
-        key = tuple(key)
+    def __getitem__(self, key: Union[Sequence[int], LlamaCacheKey]) -> "llama_cpp.llama.LlamaState":
+        key = self._convert_to_cache_key(key)
         _key = self._find_longest_prefix_key(key)
         if _key is None:
             raise KeyError("Key not found")
@@ -138,12 +198,12 @@ class LlamaDiskCache(BaseLlamaCache):
         # self.cache.push(_key, side="front")  # type: ignore
         return value
 
-    def __contains__(self, key: Sequence[int]) -> bool:
-        return self._find_longest_prefix_key(tuple(key)) is not None
+    def __contains__(self, key: Union[Sequence[int], LlamaCacheKey]) -> bool:
+        return self._find_longest_prefix_key(self._convert_to_cache_key(key)) is not None
 
-    def __setitem__(self, key: Sequence[int], value: "llama_cpp.llama.LlamaState"):
+    def __setitem__(self, key: Union[Sequence[int], LlamaCacheKey], value: "llama_cpp.llama.LlamaState"):
         print("LlamaDiskCache.__setitem__: called", file=sys.stderr)
-        key = tuple(key)
+        key = self._convert_to_cache_key(key)
         if key in self.cache:
             print("LlamaDiskCache.__setitem__: delete", file=sys.stderr)
             del self.cache[key]

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from typing import Dict, Optional, Union, List
+from typing import Any, Dict, Optional, Union, List
 
 import llama_cpp
 import llama_cpp.llama_speculative as llama_speculative
@@ -19,6 +19,12 @@ class LlamaProxy:
         for model in models:
             if not model.model_alias:
                 model.model_alias = model.model
+            if model.model_alias in self._model_settings_dict:
+                raise ValueError(
+                    f"Please specify a unique model alias for each model: {model.model_alias}"
+                )
+            if model.verbose:
+                print(f"Registering model: {model.model_alias}")
             self._model_settings_dict[model.model_alias] = model
 
         self._current_model: Optional[llama_cpp.Llama] = None
@@ -28,12 +34,19 @@ class LlamaProxy:
         self._default_model_alias: str = self._default_model_settings.model_alias  # type: ignore
 
         # Load default model
+
+        if self._default_model_settings.verbose:
+            print(f"Loading default model {self._default_model_alias}")
         self._current_model = self.load_llama_from_model_settings(
             self._default_model_settings
         )
         self._current_model_alias = self._default_model_alias
 
     def __call__(self, model: Optional[str] = None) -> llama_cpp.Llama:
+        """Get the Llama model for the given alias, or the default model otherwise.
+        This may result in model loading, or in hot-swapping if a compatible model
+        is already loaded and only LoRA adapters need to be changed.
+        """
         if model is None:
             model = self._default_model_alias
 
@@ -44,12 +57,49 @@ class LlamaProxy:
             if self._current_model is not None:
                 return self._current_model
 
+        new_settings = self._model_settings_dict[model]
+        
+        if self._current_model is not None and self._current_model_alias is not None:
+            current_settings = self._model_settings_dict[self._current_model_alias]
+
+            def hot_swappable_settings(settings: ModelSettings) -> Dict[str, Any]:
+                """Subset of settings used to check if models can be hot-swapped"""
+                values = settings.model_dump()
+                values.pop('model_alias', None) # The model alias doesn't matter
+                values.pop('lora_adapters', None) # Different LoRA adapters can be hot-swapped
+                return values
+            
+            if hot_swappable_settings(new_settings) == hot_swappable_settings(current_settings):
+                # We can hot-swap! First, zero out existing LoRAs
+                if current_settings.verbose:
+                    print(f"Hot-swapping model, setting existing LoRA adapter scales to 0.0.")
+                if self._current_model.lora_adapters is not None:
+                    for lora_path in self._current_model.lora_adapters:
+                        self._current_model.set_lora_adapter_scale(lora_path, 0.0)
+                
+                # Now enable new LoRAs
+                if new_settings.lora_adapters is not None:
+                    if new_settings.verbose:
+                        print(f"Hot-swapping model, setting LoRA adapter scales for {model}.")
+                    for lora_path, scale in new_settings.lora_adapters.items():
+                        self._current_model.set_lora_adapter_scale(
+                            lora_path, 
+                            scale, 
+                            load_if_needed=True
+                        )
+                
+                self._current_model_alias = model
+                return self._current_model
+
         if self._current_model:
+            if current_settings.verbose:
+                print(f"Switching model, unloading current model {self._current_model}")
             self._current_model.close()
         self._current_model = None
 
-        settings = self._model_settings_dict[model]
-        self._current_model = self.load_llama_from_model_settings(settings)
+        if new_settings.verbose:
+            print(f"Switching model, loading new model {model}")
+        self._current_model = self.load_llama_from_model_settings(new_settings)
         self._current_model_alias = model
         return self._current_model
 
@@ -268,8 +318,7 @@ class LlamaProxy:
             # Sampling Params
             last_n_tokens_size=settings.last_n_tokens_size,
             # LoRA Params
-            lora_base=settings.lora_base,
-            lora_path=settings.lora_path,
+            lora_adapters=settings.lora_adapters,
             # Backend Params
             numa=settings.numa,
             # Chat Format Params

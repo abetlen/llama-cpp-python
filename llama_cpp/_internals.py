@@ -285,6 +285,18 @@ class LlamaContext:
     def kv_cache_seq_shift(self, seq_id: int, p0: int, p1: int, shift: int):
         llama_cpp.llama_kv_cache_seq_add(self.ctx, seq_id, p0, p1, shift)
 
+    def lora_adapter_set(self, adapter: LlamaLoraAdapter, scale: float):
+        return_code = llama_cpp.llama_lora_adapter_set(self.ctx, adapter.lora_adapter, scale)
+        if return_code != 0:
+            raise RuntimeError(f"lora_adapter_set returned {return_code}")
+
+    def lora_adapter_remove(self, adapter: LlamaLoraAdapter) -> bool:
+        return_code = llama_cpp.llama_lora_adapter_remove(self.ctx, adapter.lora_adapter)
+        return return_code != 0
+
+    def lora_adapter_clear(self):
+        llama_cpp.llama_lora_adapter_clear(self.ctx)
+
     def get_state_size(self) -> int:
         return llama_cpp.llama_get_state_size(self.ctx)
 
@@ -861,3 +873,45 @@ class LlamaSampler:
 
     def __del__(self):
         self.close()
+
+class LlamaLoraAdapter:
+    """Intermediate Python wrapper for a llama.cpp llama_lora_adapter.
+    NOTE: For stability it's recommended you use the Llama class instead."""
+
+    def __init__(
+        self,
+        model: LlamaModel,
+        lora_path: str,
+        *,
+        verbose: bool = True,
+    ):
+        self.model = model
+        self.lora_path = lora_path
+
+        lora_adapter = None
+
+        if not os.path.exists(lora_path):
+            raise ValueError(f"LoRA adapter path does not exist: {lora_path}")
+
+        with suppress_stdout_stderr(disable=verbose):
+            lora_adapter = llama_cpp.llama_lora_adapter_init(
+                self.model.model,
+                self.lora_path.encode("utf-8"),
+            )
+
+        if lora_adapter is None:
+            raise RuntimeError(
+                f"Failed to initialize LoRA adapter from lora path: {self.lora_path}"
+            )
+
+        # The llama_lora_adapter will be freed by the llama_model as part of its
+        # lifecycle. The llama_model destructor destroys each llama_lora_adapter,
+        # and the destructor for llama_lora_adapter calls llama_lora_adapter_free.
+        # All we do here is clear the wrapped reference when the LlamaModel wrapper
+        # is closed, so that the LlamaLoraAdapter wrapper reference is cleared to
+        # when the llama_lora_adapters are freed.
+        def clear_lora_adapter():
+            self.lora_adapter = None
+        self.model._exit_stack.callback(clear_lora_adapter)
+
+        self.lora_adapter = lora_adapter

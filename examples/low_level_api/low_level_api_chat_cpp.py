@@ -93,22 +93,14 @@ specified) expect poor results""",
         if self.params.ignore_eos:
             self.params.logit_bias[llama_cpp.llama_token_eos()] = -float("inf")
 
-        if len(self.params.lora_adapter) > 0:
-            if (
-                llama_cpp.llama_apply_lora_from_file(
-                    self.ctx,
-                    self.params.lora_adapter.encode("utf8"),
-                    (
-                        self.params.lora_base.encode("utf8")
-                        if len(self.params.lora_base) > 0
-                        else None
-                    ),
-                    self.params.n_threads,
-                )
-                != 0
-            ):
-                print("error: failed to apply lora adapter")
-                return
+        for lora_path, scale in [(pth, 1.0) for pth in self.params.lora] + self.params.lora_scaled:
+            lora_adapter = llama_cpp.llama_lora_adapter_init(
+                self.model,
+                lora_path.encode("utf8"))
+            if lora_adapter is None:
+                raise RuntimeError(f"error: failed to load lora adapter '{lora_path}'")
+            if scale != 0.0:
+                llama_cpp.llama_lora_adapter_set(self.ctx, lora_adapter, scale)
 
         print(file=sys.stderr)
         print(

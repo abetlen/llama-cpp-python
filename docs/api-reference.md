@@ -22,6 +22,7 @@ High-level Python bindings for llama.cpp.
             - __call__
             - create_chat_completion
             - create_chat_completion_openai_v1
+            - set_lora_adapter_scale
             - set_cache
             - save_state
             - load_state
