@@ -1,5 +1,5 @@
 ### Install Docker Server
-> [!IMPORTANT]  
+> [!IMPORTANT]
 > This was tested with Docker running on Linux. <br>If you can get it working on Windows or MacOS, please update this `README.md` with a PR!<br>
 
 [Install Docker Engine](https://docs.docker.com/engine/install)
@@ -16,7 +16,7 @@ docker run --cap-add SYS_RESOURCE -e USE_MLOCK=0 -e MODEL=/var/model/<model-path
 where `<model-root-path>/<model-path>` is the full path to the model file on the Docker host system.
 
 ### cuda_simple
-> [!WARNING]  
+> [!WARNING]
 > Nvidia GPU CuBLAS support requires an Nvidia GPU with sufficient VRAM (approximately as much as the size in the table below) and Docker Nvidia support (see [container-toolkit/install-guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)) <br>
 
 A simple Dockerfile for CUDA-accelerated CuBLAS, where the model is located outside the Docker image:
@@ -25,6 +25,21 @@ A simple Dockerfile for CUDA-accelerated CuBLAS, where the model is located outs
 cd ./cuda_simple
 docker build -t cuda_simple .
 docker run --gpus=all --cap-add SYS_RESOURCE -e USE_MLOCK=0 -e MODEL=/var/model/<model-path> -v <model-root-path>:/var/model -t cuda_simple
+```
+where `<model-root-path>/<model-path>` is the full path to the model file on the Docker host system.
+
+--------------------------------------------------------------------------
+
+### musa_simple
+> [!WARNING]
+> Moore Threads GPU MuBLAS support requires an MTT GPU with sufficient VRAM (approximately as much as the size in the table below) and MT CloudNative Toolkits support (see [download](https://developer.mthreads.com/sdk/download/CloudNative)) <br>
+
+A simple Dockerfile for MUSA-accelerated MuBLAS, where the model is located outside the Docker image:
+
+```
+cd ./musa_simple
+docker build -t musa_simple .
+docker run --cap-add SYS_RESOURCE -e USE_MLOCK=0 -e MODEL=/var/model/<model-path> -v <model-root-path>:/var/model -t musa_simple
 ```
 where `<model-root-path>/<model-path>` is the full path to the model file on the Docker host system.
 
@@ -47,7 +62,7 @@ docker $ ls -lh *.bin
 lrwxrwxrwx 1 user user   24 May 23 18:30 model.bin -> <downloaded-model-file>q5_1.bin
 ```
 
-> [!NOTE]  
+> [!NOTE]
 > Make sure you have enough disk space to download the model. As the model is then copied into the image you will need at least
 **TWICE** as much disk space as the size of the model:<br>
 
@@ -60,5 +75,5 @@ lrwxrwxrwx 1 user user   24 May 23 18:30 model.bin -> <downloaded-model-file>q5_
 |   65B |           50 GB |
 
 
-> [!NOTE]  
+> [!NOTE]
 > If you want to pass or tune additional parameters, customise `./start_server.sh` before running `docker build ...`
