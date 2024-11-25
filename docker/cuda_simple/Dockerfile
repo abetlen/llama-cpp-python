@@ -17,7 +17,7 @@ COPY . .
 ENV CUDA_DOCKER_ARCH=all
 ENV GGML_CUDA=1
 
-# Install depencencies
+# Install dependencies
 RUN python3 -m pip install --upgrade pip pytest cmake scikit-build setuptools fastapi uvicorn sse-starlette pydantic-settings starlette-context
 
 # Install llama-cpp-python (build with cuda)
