@@ -200,7 +200,7 @@ CMAKE_ARGS="-DGGML_VULKAN=on" pip install llama-cpp-python
 To install with SYCL support, set the `GGML_SYCL=on` environment variable before installing:
 
 ```bash
-source /opt/intel/oneapi/setvars.sh   
+source /opt/intel/oneapi/setvars.sh
 CMAKE_ARGS="-DGGML_SYCL=on -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx" pip install llama-cpp-python
 ```
 </details>
@@ -211,11 +211,20 @@ CMAKE_ARGS="-DGGML_SYCL=on -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx" pip
 To install with RPC support, set the `GGML_RPC=on` environment variable before installing:
 
 ```bash
-source /opt/intel/oneapi/setvars.sh   
+source /opt/intel/oneapi/setvars.sh
 CMAKE_ARGS="-DGGML_RPC=on" pip install llama-cpp-python
 ```
 </details>
 
+<details>
+<summary>MUSA</summary>
+
+To install with MUSA support, set the `GGML_MUSA=on` environment variable before installing:
+
+```bash
+CMAKE_ARGS="-DGGML_MUSA=on" pip install llama-cpp-python
+```
+</details>
 
 ### Windows Notes
 
