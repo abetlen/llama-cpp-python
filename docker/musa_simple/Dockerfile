@@ -14,7 +14,7 @@ RUN apt-get update && apt-get upgrade -y \
 COPY . .
 
 # setting build related env vars
-ENV MUSA_DOCKER_ARCH=all
+ENV MUSA_DOCKER_ARCH=default
 ENV GGML_MUSA=1
 
 # Install dependencies
