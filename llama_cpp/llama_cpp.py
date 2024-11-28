@@ -615,6 +615,9 @@ class llama_model_kv_override(ctypes.Structure):
 
 
 # struct llama_model_params {
+#     // NULL-terminated list of devices to use for offloading (if NULL, all available devices are used)
+#     ggml_backend_dev_t * devices;
+
 #     int32_t n_gpu_layers; // number of layers to store in VRAM
 #     enum llama_split_mode split_mode; // how to split the model across multiple GPUs
 
@@ -680,6 +683,7 @@ class llama_model_params(ctypes.Structure):
         check_tensors: bool
 
     _fields_ = [
+        ("devices", ctypes.c_void_p), # NOTE: unnused
         ("n_gpu_layers", ctypes.c_int32),
         ("split_mode", ctypes.c_int),
         ("main_gpu", ctypes.c_int32),
@@ -1895,6 +1899,14 @@ def llama_kv_cache_defrag(ctx: llama_context_p, /):
 @ctypes_function("llama_kv_cache_update", [llama_context_p_ctypes], None)
 def llama_kv_cache_update(ctx: llama_context_p, /):
     """Apply the KV cache updates (such as K-shifts, defragmentation, etc.)"""
+    ...
+
+
+# // Check if the context supports KV cache shifting
+# LLAMA_API bool llama_kv_cache_can_shift(struct llama_context * ctx);
+@ctypes_function("llama_kv_cache_can_shift", [llama_context_p_ctypes], ctypes.c_bool)
+def llama_kv_cache_can_shift(ctx: llama_context_p, /) -> bool:
+    """Check if the context supports KV cache shifting"""
     ...
 
 
@@ -3621,13 +3633,3 @@ def llama_perf_sampler_reset(chain: llama_sampler_p, /):
     ...
 
 
-# LLAMA_API void llama_perf_dump_yaml(FILE * stream, const struct llama_context * ctx);
-@ctypes_function(
-    "llama_perf_dump_yaml",
-    [ctypes.POINTER(ctypes.c_void_p), llama_context_p_ctypes],
-    None,
-)
-def llama_perf_dump_yaml(
-    stream: ctypes.POINTER(ctypes.c_void_p), ctx: llama_context_p, /
-):
-    ...
