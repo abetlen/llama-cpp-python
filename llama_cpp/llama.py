@@ -12,6 +12,11 @@ import fnmatch
 import warnings
 import contextlib
 import multiprocessing
+from sentence_transformers import CrossEncoder
+from pathlib import Path
+from nltk import sent_tokenize
+import nltk
+import os
 
 from typing import (
     Any,
@@ -50,6 +55,84 @@ import numpy.typing as npt
 import llama_cpp._internals as internals
 from ._logger import set_verbose
 from ._utils import suppress_stdout_stderr
+
+def models():
+    try:
+        model = CrossEncoder(model_name="cross-encoder/ms-marco-TinyBERT-L-2")
+        return model
+    except Exception as e:
+        print("Please add your cross-encoder model.")
+
+def nlLoader():
+    # Uncomment the code below to download the nltk punkt corpus. You may then store it in the directory defined below or change it to a directory of your choice.
+    # nltk.download('punkt')
+    username = os.getenv("USERNAME")
+    nltkData = f"C:\\Users\\{username}\\data"
+    nltk_data_dir = Path(nltkData)
+    nltk.data.path.append(str(nltk_data_dir))
+    
+def sentSplit():
+        
+        username = os.getenv('USERNAME')
+        path = f'C:\\Users\\{username}\\Documents\\Data'
+        if os.path.exists(path) == False:
+            print('Creating new directory called `Data` in your Documents directory. Please ensure that you add your RAG ingested data to the directory as a .txt file. Thank you!')
+            os.mkdir(f'C:\\Users\\{username}\\Documents\\Data')
+
+        context_dir = path #"context_dir"
+        for filename in os.listdir(context_dir):
+            file_path = os.path.join(context_dir, filename)
+            if filename.endswith('.txt'):
+                with open(file_path, encoding='utf-8') as file:
+                    document = file.read()
+
+        ## We split this article into paragraphs and then every paragraph into sentences
+        paragraphs = []
+        try:
+            for paragraph in document.replace("\r\n", "\n").split("\n\n"):
+                if len(paragraph.strip()) > 0:
+                    paragraphs.append(sent_tokenize(paragraph.strip()))
+                    return paragraphs
+        except Exception as e:
+            print('''
+        IMPORTANT NOTICE:
+        Please add your text dataset to the Data directory. Before continuing. Thank you!''')
+            print(e)
+
+def passSearch():
+    window_size = 3
+    passages = []
+    for paragraph in sentSplit():
+        for start_idx in range(0, len(paragraph), window_size):
+            end_idx = min(start_idx + window_size, len(paragraph))
+            passages.append(" ".join(paragraph[start_idx:end_idx]))
+            return passages
+
+
+def searchQuery(question):
+    query = []
+    query.append(question)
+    docs = []
+
+    for que in query:
+        try:
+            model = models()
+            # Concatenate the query and all passages and predict the scores for the pairs [query, passage]
+            model_inputs = [[que, passage] for passage in passSearch()]
+            scores = model.predict(model_inputs)
+
+            # Sort the scores in decreasing order
+            results = [{"input": inp, "score": score} for inp, score in zip(model_inputs, scores)]
+            results = sorted(results, key=lambda x: x["score"], reverse=True)
+            for hit in results[0:1]:
+                print("")
+                docs.append(hit["input"][1])
+                print("Performing in-document search...")
+                print("")
+                return docs
+        except Exception as e:
+            print("Oh no!, It seems that you have not added you text dataset to the Data directory.")
+            print(e)
 
 
 class Llama:
