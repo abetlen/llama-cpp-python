@@ -110,6 +110,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
+          architecture: "arm64"
 
       - name: System Info
         run: |
@@ -137,7 +138,7 @@ jobs:
 
   build-macos-metal:
     needs: download-model
-    runs-on: macos-14
+    runs-on: macos-13
     steps:
       - uses: actions/checkout@v4
         with:
@@ -163,10 +164,10 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          CMAKE_ARGS="-DLLAMA_METAL=on" python -m pip install .[all] --verbose
+          python3 -m pip install --upgrade pip
+          CMAKE_ARGS="-DLLAMA_METAL=on" python3 -m pip install .[all] --verbose
         shell: bash
 
       - name: Test with pytest
         run: |
-          python -m pytest
+          python3 -m pytest
