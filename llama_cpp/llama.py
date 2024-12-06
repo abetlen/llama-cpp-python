@@ -18,6 +18,7 @@ from typing import (
     List,
     Literal,
     Optional,
+    Tuple,
     Union,
     Generator,
     Sequence,
@@ -33,6 +34,7 @@ from pathlib import Path
 from .llama_types import *
 from .llama_grammar import LlamaGrammar
 from .llama_cache import (
+    LlamaCacheKey,
     BaseLlamaCache,
     LlamaCache,  # type: ignore
     LlamaDiskCache,  # type: ignore
@@ -96,9 +98,7 @@ class Llama:
         # Sampling Params
         last_n_tokens_size: int = 64,
         # LoRA Params
-        lora_base: Optional[str] = None,
-        lora_scale: float = 1.0,
-        lora_path: Optional[str] = None,
+        lora_adapters: Optional[Dict[str, float]] = None,
         # Backend Params
         numa: Union[bool, int] = False,
         # Chat Format Params
@@ -174,8 +174,7 @@ class Llama:
             offload_kqv: Offload K, Q, V to GPU.
             flash_attn: Use flash attention.
             last_n_tokens_size: Maximum number of tokens to keep in the last_n_tokens deque.
-            lora_base: Optional path to base model, useful if using a quantized base model and you want to apply LoRA to an f16 model.
-            lora_path: Path to a LoRA file to apply to the model.
+            lora_adapters: Paths to LoRA adapter files and the scale to apply to them at (scale of 0.0 will not be used during inference).
             numa: numa policy
             chat_format: String specifying the chat format to use when calling create_chat_completion.
             chat_handler: Optional chat handler to use when calling create_chat_completion.
@@ -243,7 +242,7 @@ class Llama:
             )  # keep a reference to the array so it is not gc'd
             self.model_params.tensor_split = self._c_tensor_split
         self.model_params.vocab_only = vocab_only
-        self.model_params.use_mmap = use_mmap if lora_path is None else False
+        self.model_params.use_mmap = use_mmap
         self.model_params.use_mlock = use_mlock
 
         # kv_overrides is the original python dict
@@ -355,9 +354,9 @@ class Llama:
 
         self.cache: Optional[BaseLlamaCache] = None
 
-        self.lora_base = lora_base
-        self.lora_scale = lora_scale
-        self.lora_path = lora_path
+        self.lora_adapters = (
+            lora_adapters if lora_adapters is None else {}
+        )
 
         self.spm_infill = spm_infill
 
@@ -406,32 +405,14 @@ class Llama:
             )
         )
 
-        self._lora_adapter: Optional[llama_cpp.llama_lora_adapter_p] = None
+        # Dict from LoRA path to wrapper
+        self._lora_adapters_paths: Dict[str, internals.LlamaLoraAdapter] = {}
+        # Immutable value representing active adapters for use as a key
+        self._lora_adapters_active: Tuple[Tuple[str, float], ...] = ()
 
-        if self.lora_path:
-            self._lora_adapter = llama_cpp.llama_lora_adapter_init(
-                self._model.model,
-                self.lora_path.encode("utf-8"),
-            )
-            if self._lora_adapter is None:
-                raise RuntimeError(
-                    f"Failed to initialize LoRA adapter from lora path: {self.lora_path}"
-                )
-
-            def free_lora_adapter():
-                if self._lora_adapter is None:
-                    return
-                llama_cpp.llama_lora_adapter_free(self._lora_adapter)
-                self._lora_adapter = None
-
-            self._stack.callback(free_lora_adapter)
-
-            if llama_cpp.llama_lora_adapter_set(
-                self._ctx.ctx, self._lora_adapter, self.lora_scale
-            ):
-                raise RuntimeError(
-                    f"Failed to set LoRA adapter from lora path: {self.lora_path}"
-                )
+        if self.lora_adapters:
+            for lora_path, scale in self.lora_adapters.copy().items():
+                self.set_lora_adapter_scale(lora_path, scale, load_if_needed=True)
 
         if self.verbose:
             print(llama_cpp.llama_print_system_info().decode("utf-8"), file=sys.stderr)
@@ -453,6 +434,7 @@ class Llama:
         self._candidates = internals.LlamaTokenDataArray(n_vocab=self._n_vocab)
 
         self.n_tokens = 0
+        self.tokens_lora_adapters: Tuple[Tuple[str, float]] = () # Adapters that processed tokens
         self.input_ids: npt.NDArray[np.intc] = np.ndarray((n_ctx,), dtype=np.intc)
         self.scores: npt.NDArray[np.single] = np.ndarray(
             (n_ctx if logits_all == True else n_batch, self._n_vocab), dtype=np.single
@@ -621,10 +603,52 @@ class Llama:
             seed: The random seed.
         """
         self._seed = seed
+    
+    def set_lora_adapter_scale(self, lora_path: str, scale: float, *, load_if_needed=False):
+        """
+        Set the scale for a LoRA adapter or 0.0 to disable it for inference. If the LoRA adapter file
+        has previously been loaded then this method will set its scale. If the LoRA adapter file has
+        not been previously loaded, this method will raise an exception, unless load_if_needed is set.
+        
+        Args:
+            lora_path: The path to the LoRA adapter. This path must have been loaded when the `Llama` object was created.
+            scale: The scaling factor to apply to the LoRA adapter. If 0.0, the LoRA adapter will be disabled so it won't be used during inference.
+            load_if_needed: Whether or not to load the adapter if it has not been previously been loaded. If True, this
+                method will attempt to load the adapter from the lora_path if needed. If False, loading an adapter that
+                hasn't already been loaded will raise an exception.
+        """
+        # Load adapter if needed (even if scale 0.0)
+        lora_adapter = self._lora_adapters_paths.get(lora_path)
+        if lora_adapter is None:
+            lora_adapter = internals.LlamaLoraAdapter(
+                self._model,
+                lora_path,
+                verbose=self.verbose,
+            )
+            if lora_adapter is None:
+                raise RuntimeError(
+                    f"Failed to initialize LoRA adapter from lora path: {lora_path}"
+                )
+            self._lora_adapters_paths[lora_path] = lora_adapter
+
+        if scale == 0.0:
+            # Remove from context; safe to call even if not in context
+            self._ctx.lora_adapter_remove(lora_adapter)
+        else:
+            # Set scale in context
+            self._ctx.lora_adapter_set(lora_adapter, scale)
+
+        if self.lora_adapters is None:
+            self.lora_adapters = {}
+        self.lora_adapters[lora_path] = scale
+        self._lora_adapters_active = tuple(sorted(
+            filter(lambda path_scale: path_scale[1] != 0.0, self.lora_adapters.items())
+        ))
 
     def reset(self):
         """Reset the model state."""
         self.n_tokens = 0
+        self.tokens_lora_adapters = self._lora_adapters_active
 
     def eval(self, tokens: Sequence[int]):
         """Evaluate a list of tokens.
@@ -875,7 +899,7 @@ class Llama:
         )
 
         # Check for kv cache prefix match
-        if reset and self.n_tokens > 0:
+        if reset and self.n_tokens > 0 and self.tokens_lora_adapters == self._lora_adapters_active:
             longest_prefix = 0
             for a, b in zip(self._input_ids, tokens[:-1]):
                 if a == b:
@@ -1292,7 +1316,8 @@ class Llama:
 
         if self.cache:
             try:
-                cache_item = self.cache[prompt_tokens]
+                cache_key = LlamaCacheKey(active_lora_adapters=self._lora_adapters_active, tokens=tuple(prompt_tokens))
+                cache_item = self.cache[cache_key]
                 cache_prefix_len = Llama.longest_token_prefix(
                     cache_item.input_ids.tolist(), prompt_tokens
                 )
@@ -1630,7 +1655,8 @@ class Llama:
             if self.cache:
                 if self.verbose:
                     print("Llama._create_completion: cache save", file=sys.stderr)
-                self.cache[prompt_tokens + completion_tokens] = self.save_state()
+                cache_key = LlamaCacheKey(active_lora_adapters=self._lora_adapters_active, tokens=tuple(prompt_tokens + completion_tokens))
+                self.cache[cache_key] = self.save_state()
                 if self.verbose:
                     print("Llama._create_completion: cache saved", file=sys.stderr)
             return
@@ -1638,7 +1664,8 @@ class Llama:
         if self.cache:
             if self.verbose:
                 print("Llama._create_completion: cache save", file=sys.stderr)
-            self.cache[prompt_tokens + completion_tokens] = self.save_state()
+            cache_key = LlamaCacheKey(active_lora_adapters=self._lora_adapters_active, tokens=tuple(prompt_tokens + completion_tokens))
+            self.cache[cache_key] = self.save_state()
 
         text_str = text.decode("utf-8", errors="ignore")
 
@@ -2095,9 +2122,7 @@ class Llama:
             # Sampling Params
             last_n_tokens_size=self.last_n_tokens_size,
             # LoRA Params
-            lora_base=self.lora_base,
-            lora_scale=self.lora_scale,
-            lora_path=self.lora_path,
+            lora_adapters=self.lora_adapters,
             # Backend Params
             numa=self.numa,
             # Chat Format Params

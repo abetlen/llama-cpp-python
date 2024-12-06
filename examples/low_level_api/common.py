@@ -3,10 +3,11 @@ import argparse
 import re
 
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Sequence, Tuple
+import typing
 
-# Based on https://github.com/ggerganov/llama.cpp/blob/master/examples/common.cpp
-
+# Based on https://github.com/ggerganov/llama.cpp/blob/master/common/common.cpp
+# and https://github.com/ggerganov/llama.cpp/blob/master/common/arg.cpp
 
 @dataclass
 class GptParams:
@@ -40,8 +41,8 @@ class GptParams:
     input_suffix: str = ""
     antiprompt: List[str] = field(default_factory=list)
 
-    lora_adapter: str = ""
-    lora_base: str = ""
+    lora: List[str] = None
+    lora_scaled: List[Tuple[str, float]] = None
 
     memory_f16: bool = True
     random_prompt: bool = False
@@ -257,16 +258,56 @@ def gpt_params_parse(argv=None):
     parser.add_argument(
         "--lora",
         type=str,
-        default="",
-        help="apply LoRA adapter (implies --no-mmap)",
-        dest="lora_adapter",
+        action="append",
+        default=[],
+        help="path to LoRA adapter (can be repeated to use multiple adapters)",
+        metavar="FNAME",
+        dest="lora",
     )
+
+    class MultiTupleAction(argparse.Action):
+        """Action for handling multiple arguments as tuples with type conversion"""
+        def __init__(self, 
+                        option_strings: Sequence[str],
+                        dest: str,
+                        nargs: int = None,
+                        type: Tuple = None,
+                        metavar: Tuple = None,
+                        **kwargs):
+            self.tuple_type = type
+            super().__init__(
+                option_strings=option_strings,
+                dest=dest,
+                type=str, # We will fix
+                nargs=nargs,
+                metavar=metavar,
+                **kwargs
+            )
+
+        def __call__(self, parser, namespace, values, option_string=None):
+            if len(values) != self.nargs:
+                parser.error(
+                    f'{option_string} requires {len(self.metavar)} arguments: '
+                    f'{" ".join(self.metavar)}'
+                )
+
+            converted_values = tuple(value_type(value) for value_type, value in zip(typing.get_args(self.tuple_type), values))
+            # Initialize list if needed
+            if not hasattr(namespace, self.dest):
+                setattr(namespace, self.dest, [])
+                
+            # Add the converted tuple to the list
+            getattr(namespace, self.dest).append(converted_values)
+
     parser.add_argument(
-        "--lora-base",
-        type=str,
-        default="",
-        help="optional model to use as a base for the layers modified by the LoRA adapter",
-        dest="lora_base",
+        "--lora-scaled",
+        action=MultiTupleAction,
+        nargs=2,
+        type=Tuple[str, float],
+        help="path to LoRA adapter with user defined scaling (can be repeated to use multiple adapters)",
+        metavar=('FNAME', 'SCALE'),
+        dest='lora_scaled',
+        default=[],
     )
 
     parser.add_argument(
@@ -374,9 +415,6 @@ def gpt_params_parse(argv=None):
     logit_bias_str = args.logit_bias_str
     delattr(args, "logit_bias_str")
     params = GptParams(**vars(args))
-
-    if params.lora_adapter:
-        params.use_mmap = False
 
     if logit_bias_str != None:
         for i in logit_bias_str:

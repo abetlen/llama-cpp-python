@@ -113,13 +113,9 @@ class ModelSettings(BaseSettings):
         description="Last n tokens to keep for repeat penalty calculation.",
     )
     # LoRA Params
-    lora_base: Optional[str] = Field(
+    lora_adapters: Optional[Dict[str, float]]= Field(
         default=None,
-        description="Optional path to base model, useful if using a quantized base model and you want to apply LoRA to an f16 model.",
-    )
-    lora_path: Optional[str] = Field(
-        default=None,
-        description="Path to a LoRA file to apply to the model.",
+        description="Paths to LoRA adapter files and the scale to apply to them at (scale of 0.0 will not be used during inference).",
     )
     # Backend Params
     numa: Union[bool, int] = Field(
