@@ -71,7 +71,7 @@ docker:
 	docker build -t llama-cpp-python:latest -f docker/simple/Dockerfile .
 
 run-server:
-	python llama_cpp/server --model ${MODEL}
+	python3 -m llama_cpp.server --model ${MODEL}
 
 clean:
 	- cd vendor/llama.cpp && make clean
