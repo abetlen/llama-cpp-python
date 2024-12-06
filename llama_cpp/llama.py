@@ -2073,7 +2073,7 @@ class Llama:
             use_mlock=self.model_params.use_mlock,
             kv_overrides=self.kv_overrides,
             # Context Params
-            seed=self.context_params.seed,
+            seed=self._seed,
             n_ctx=self.context_params.n_ctx,
             n_batch=self.n_batch,
             n_ubatch=self.context_params.n_ubatch,
