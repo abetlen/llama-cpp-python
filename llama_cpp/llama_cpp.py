@@ -221,6 +221,7 @@ LLAMA_VOCAB_TYPE_RWKV = 5
 #     LLAMA_VOCAB_PRE_TYPE_GPT3_FINNISH   = 24,
 #     LLAMA_VOCAB_PRE_TYPE_EXAONE         = 25,
 #     LLAMA_VOCAB_PRE_TYPE_CHAMELEON      = 26,
+#     LLAMA_VOCAB_PRE_TYPE_MINERVA        = 27,
 # };
 LLAMA_VOCAB_PRE_TYPE_DEFAULT = 0
 LLAMA_VOCAB_PRE_TYPE_LLAMA3 = 1
@@ -249,6 +250,7 @@ LLAMA_VOCAB_PRE_TYPE_BLOOM = 23
 LLAMA_VOCAB_PRE_TYPE_GPT3_FINNISH = 24
 LLAMA_VOCAB_PRE_TYPE_EXAONE = 25
 LLAMA_VOCAB_PRE_TYPE_CHAMELEON = 26
+LLAMA_VOCAB_PRE_TYPE_MINERVA = 27
 
 
 # // note: these values should be synchronized with ggml_rope
@@ -392,12 +394,14 @@ LLAMA_FTYPE_GUESSED = 1024
 #     LLAMA_ROPE_SCALING_TYPE_NONE        = 0,
 #     LLAMA_ROPE_SCALING_TYPE_LINEAR      = 1,
 #     LLAMA_ROPE_SCALING_TYPE_YARN        = 2,
+#     LLAMA_ROPE_SCALING_TYPE_LONGROPE    = 3,
 #     LLAMA_ROPE_SCALING_TYPE_MAX_VALUE   = LLAMA_ROPE_SCALING_TYPE_YARN,
 # };
 LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED = -1
 LLAMA_ROPE_SCALING_TYPE_NONE = 0
 LLAMA_ROPE_SCALING_TYPE_LINEAR = 1
 LLAMA_ROPE_SCALING_TYPE_YARN = 2
+LLAMA_ROPE_SCALING_TYPE_LONGROPE = 3
 LLAMA_ROPE_SCALING_TYPE_MAX_VALUE = LLAMA_ROPE_SCALING_TYPE_YARN
 
 # enum llama_pooling_type {
@@ -2930,6 +2934,34 @@ def llama_chat_apply_template(
     n_msg: int,
     /,
 ) -> int:
+    ...
+
+
+# // Get list of built-in chat templates
+# LLAMA_API int32_t llama_chat_builtin_templates(const char ** output, size_t len);
+@ctypes_function(
+    "llama_chat_builtin_templates",
+    [
+        ctypes.POINTER(ctypes.c_char_p),
+        ctypes.c_size_t,
+    ],
+    ctypes.c_int32,
+)
+def llama_chat_builtin_templates(
+    output: CtypesArray[bytes],
+    len: Union[ctypes.c_size_t, int],
+    /,
+) -> int:
+    """Get list of built-in chat templates.
+
+    Args:
+        output: Output buffer to store template names.
+        len: Length of the output buffer.
+
+    Returns:
+        Number of templates available.
+        Returns a negative number on error.
+    """
     ...
 
 

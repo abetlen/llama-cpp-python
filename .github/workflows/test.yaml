@@ -113,7 +113,7 @@ jobs:
 
   build-macos:
     needs: download-model
-    runs-on: macos-latest
+    runs-on: macos-14
     strategy:
       matrix:
         python-version: ["3.9", "3.10", "3.11", "3.12"]
@@ -126,6 +126,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          architecture: "arm64"
           cache: 'pip'
 
       - name: Restore model cache
@@ -156,7 +157,7 @@ jobs:
 
   build-macos-metal:
     needs: download-model
-    runs-on: macos-latest
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
         with:
@@ -166,6 +167,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.9"
+          architecture: "arm64"
 
       - name: Restore model cache
         uses: actions/cache@v4

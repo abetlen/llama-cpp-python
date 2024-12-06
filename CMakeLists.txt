@@ -70,6 +70,8 @@ if (LLAMA_BUILD)
         set(GGML_AVX2 "Off" CACHE BOOL "ggml: enable AVX2" FORCE)
         set(GGML_FMA "Off" CACHE BOOL "gml: enable FMA" FORCE)
         set(GGML_F16C "Off" CACHE BOOL "gml: enable F16C" FORCE)
+
+        set(CMAKE_OSX_ARCHITECTURES "arm64" CACHE STRING "Build architecture for OS X" FORCE)
     endif()
 
     if (APPLE)
