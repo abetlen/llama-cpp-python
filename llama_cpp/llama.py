@@ -1141,7 +1141,7 @@ class Llama:
         stopping_criteria: Optional[StoppingCriteriaList] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
-        logit_bias: Optional[Dict[str, float]] = None,
+        logit_bias: Optional[Dict[int, float]] = None,
     ) -> Union[
         Iterator[CreateCompletionResponse], Iterator[CreateCompletionStreamResponse]
     ]:
@@ -1761,7 +1761,7 @@ class Llama:
         stopping_criteria: Optional[StoppingCriteriaList] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
-        logit_bias: Optional[Dict[str, float]] = None,
+        logit_bias: Optional[Dict[int, float]] = None,
     ) -> Union[CreateCompletionResponse, Iterator[CreateCompletionStreamResponse]]:
         """Generate text from a prompt.
 
@@ -1858,7 +1858,7 @@ class Llama:
         stopping_criteria: Optional[StoppingCriteriaList] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
-        logit_bias: Optional[Dict[str, float]] = None,
+        logit_bias: Optional[Dict[int, float]] = None,
     ) -> Union[CreateCompletionResponse, Iterator[CreateCompletionStreamResponse]]:
         """Generate text from a prompt.
 
@@ -1951,7 +1951,7 @@ class Llama:
         model: Optional[str] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
-        logit_bias: Optional[Dict[str, float]] = None,
+        logit_bias: Optional[Dict[int, float]] = None,
         logprobs: Optional[bool] = None,
         top_logprobs: Optional[int] = None,
     ) -> Union[
@@ -2073,7 +2073,7 @@ class Llama:
             use_mlock=self.model_params.use_mlock,
             kv_overrides=self.kv_overrides,
             # Context Params
-            seed=self.context_params.seed,
+            seed=self._seed,
             n_ctx=self.context_params.n_ctx,
             n_batch=self.n_batch,
             n_ubatch=self.context_params.n_ubatch,
