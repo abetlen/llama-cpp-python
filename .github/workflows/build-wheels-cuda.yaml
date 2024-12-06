@@ -59,7 +59,7 @@ jobs:
           cache: 'pip'
 
       - name: Setup Mamba
-        uses: conda-incubator/setup-miniconda@v3.0.4
+        uses: conda-incubator/setup-miniconda@v3.1.0
         with:
           activate-environment: "build"
           python-version: ${{ matrix.pyver }}

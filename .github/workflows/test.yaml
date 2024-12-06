@@ -51,19 +51,11 @@ jobs:
           path: ~/.cache/huggingface/hub
           key: ${{ runner.os }}-model-${{ env.REPO_ID }}-${{ env.MODEL_FILE }}
       - name: Install dependencies (Linux/MacOS)
-        if: runner.os != 'Windows'
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
           python -m uv pip install -e .[all] --verbose
         shell: bash
-      - name: Install dependencies (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install uv
-          python -m uv pip install -e .[all] --verbose
-        shell: cmd
       - name: Test with pytest
         run: |
           python -m pytest
@@ -90,22 +82,13 @@ jobs:
         with:
           path: ~/.cache/huggingface/hub
           key: ${{ runner.os }}-model-${{ env.REPO_ID }}-${{ env.MODEL_FILE }}
-          
-      - name: Install dependencies (Linux/MacOS)
-        if: runner.os != 'Windows'
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install uv
-          python -m uv pip install -e .[all] --verbose
-        shell: bash
 
       - name: Install dependencies (Windows)
-        if: runner.os == 'Windows'
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
           python -m uv pip install -e .[all] --verbose
-        shell: cmd     
+        shell: cmd
           
       - name: Test with pytest
         run: |
@@ -113,7 +96,7 @@ jobs:
 
   build-macos:
     needs: download-model
-    runs-on: macos-latest
+    runs-on: macos-13
     strategy:
       matrix:
         python-version: ["3.9", "3.10", "3.11", "3.12"]
@@ -128,6 +111,12 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
 
+      - name: System Info
+        run: |
+          uname -a
+          sysctl -n machdep.cpu.brand_string
+          python3 -c "import platform; print(platform.machine(), platform.architecture())"
+
       - name: Restore model cache
         uses: actions/cache@v4
         with:
@@ -135,28 +124,20 @@ jobs:
           key: ${{ runner.os }}-model-${{ env.REPO_ID }}-${{ env.MODEL_FILE }}
           
       - name: Install dependencies (Linux/MacOS)
-        if: runner.os != 'Windows'
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install uv
-          python -m uv pip install -e .[all] --verbose
+          python3 -m pip install --upgrade pip
+          python3 -m pip install uv
+          python3 -m uv pip install -e .[all] --verbose
+          CMAKE_ARGS="-DLLAMA_METAL=off" python3 -m uv pip install .[all] --verbose
         shell: bash
 
-      - name: Install dependencies (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install uv
-          python -m uv pip install -e .[all] --verbose
-        shell: cmd
-          
       - name: Test with pytest
         run: |
-          python -m pytest
+          python3 -m pytest
 
   build-macos-metal:
     needs: download-model
-    runs-on: macos-latest
+    runs-on: macos-13
     steps:
       - uses: actions/checkout@v4
         with:
@@ -167,25 +148,24 @@ jobs:
         with:
           python-version: "3.9"
 
+      - name: System Info
+        run: |
+          uname -a
+          sysctl -n machdep.cpu.brand_string
+          python3 -c "import platform; print(platform.machine(), platform.architecture())"
+
       - name: Restore model cache
         uses: actions/cache@v4
         with:
           path: ~/.cache/huggingface/hub
           key: ${{ runner.os }}-model-${{ env.REPO_ID }}-${{ env.MODEL_FILE }}
 
-      - name: Install dependencies (Linux/MacOS)
-        if: runner.os != 'Windows'
+      - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install uv
-          CMAKE_ARGS="-DLLAMA_METAL=on" python -m uv pip install .[all] --verbose
+          python3 -m pip install --upgrade pip
+          CMAKE_ARGS="-DLLAMA_METAL=on" python3 -m pip install .[all] --verbose
         shell: bash
 
-      - name: Install dependencies (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          python -m pip install --upgrade pip
-          CMAKE_ARGS="-DGGML_METAL=on" python -m pip install .[all] --verbose
       - name: Test with pytest
         run: |
-          python -m pytest
+          python3 -m pytest
