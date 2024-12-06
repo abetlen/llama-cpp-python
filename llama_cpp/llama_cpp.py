@@ -772,7 +772,7 @@ class llama_context_params(ctypes.Structure):
         cb_eval_user_data (ctypes.ctypes.c_void_p): user data for cb_eval
         type_k (int): data type for K cache
         type_v (int): data type for V cache
-        logits_all (bool): the llama_eval() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
+        logits_all (bool): the llama_decode() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
         embeddings (bool): if true, extract embeddings (together with logits)
         offload_kqv (bool): whether to offload the KQV ops (including the KV cache) to GPU
         flash_attn (bool): whether to use flash attention
@@ -2469,10 +2469,10 @@ def llama_synchronize(ctx: llama_context_p, /):
     "llama_get_logits", [llama_context_p_ctypes], ctypes.POINTER(ctypes.c_float)
 )
 def llama_get_logits(ctx: llama_context_p, /) -> CtypesArray[ctypes.c_float]:
-    """Token logits obtained from the last call to llama_eval()
-    The logits for the last token are stored in the last row
-    Logits for which llama_batch.logits[i] == 0 are undefined
-    Rows: n_tokens provided with llama_batch
+    """Token logits obtained from the last call to llama_decode()
+    The logits for which llama_batch.logits[i] != 0 are stored contiguously
+    in the order they have appeared in the batch.
+    Rows: number of tokens for which llama_batch.logits[i] != 0
     Cols: n_vocab
 
     Returns:
