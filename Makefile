@@ -71,7 +71,7 @@ docker:
 	docker build -t llama-cpp-python:latest -f docker/simple/Dockerfile .
 
 run-server:
-	uvicorn --factory llama.server:app --host ${HOST} --port ${PORT}
+	python llama_cpp/server --model ${MODEL}
 
 clean:
 	- cd vendor/llama.cpp && make clean
