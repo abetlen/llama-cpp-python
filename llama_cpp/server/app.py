@@ -314,10 +314,14 @@ async def create_completion(
         else:
             kwargs["logits_processor"].extend(_min_tokens_logits_processor)
 
-    iterator_or_completion: Union[
-        llama_cpp.CreateCompletionResponse,
-        Iterator[llama_cpp.CreateCompletionStreamResponse],
-    ] = await run_in_threadpool(llama, **kwargs)
+    try:
+        iterator_or_completion: Union[
+            llama_cpp.CreateCompletionResponse,
+            Iterator[llama_cpp.CreateCompletionStreamResponse],
+        ] = await run_in_threadpool(llama, **kwargs)
+    except Exception as err:
+        exit_stack.close()
+        raise err
 
     if isinstance(iterator_or_completion, Iterator):
         # EAFP: It's easier to ask for forgiveness than permission
@@ -344,6 +348,7 @@ async def create_completion(
             ping_message_factory=_ping_message_factory,
         )
     else:
+        exit_stack.close()
         return iterator_or_completion
 
 
@@ -508,9 +513,13 @@ async def create_chat_completion(
         else:
             kwargs["logits_processor"].extend(_min_tokens_logits_processor)
 
-    iterator_or_completion: Union[
-        llama_cpp.ChatCompletion, Iterator[llama_cpp.ChatCompletionChunk]
-    ] = await run_in_threadpool(llama.create_chat_completion, **kwargs)
+    try:
+        iterator_or_completion: Union[
+            llama_cpp.ChatCompletion, Iterator[llama_cpp.ChatCompletionChunk]
+        ] = await run_in_threadpool(llama.create_chat_completion, **kwargs)
+    except Exception as err:
+        exit_stack.close()
+        raise err
 
     if isinstance(iterator_or_completion, Iterator):
         # EAFP: It's easier to ask for forgiveness than permission
