@@ -126,15 +126,15 @@ jobs:
           
       - name: Install dependencies (Linux/MacOS)
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install uv
-          python -m uv pip install -e .[all] --verbose
-          CMAKE_ARGS="-DLLAMA_METAL=off" python -m uv pip install .[all] --verbose
+          python3 -m pip install --upgrade pip
+          python3 -m pip install uv
+          python3 -m uv pip install -e .[all] --verbose
+          CMAKE_ARGS="-DLLAMA_METAL=off" python3 -m uv pip install .[all] --verbose
         shell: bash
 
       - name: Test with pytest
         run: |
-          python -m pytest
+          python3 -m pytest
 
   build-macos-metal:
     needs: download-model
