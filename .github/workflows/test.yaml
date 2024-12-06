@@ -113,7 +113,7 @@ jobs:
 
   build-macos:
     needs: download-model
-    runs-on: macos-14-arm64
+    runs-on: macos-14
     strategy:
       matrix:
         python-version: ["3.9", "3.10", "3.11", "3.12"]
@@ -157,7 +157,7 @@ jobs:
 
   build-macos-metal:
     needs: download-model
-    runs-on: macos-14-arm64
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
         with:
