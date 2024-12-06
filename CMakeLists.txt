@@ -62,18 +62,35 @@ if (LLAMA_BUILD)
     # Enable building of the common library
     set(LLAMA_BUILD_COMMON ON CACHE BOOL "Build llama.cpp common library" FORCE)
 
-    # Building llama
-    if (APPLE AND NOT CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
-        # Need to disable these llama.cpp flags on Apple x86_64,
-        # otherwise users may encounter invalid instruction errors
-        set(GGML_AVX "Off" CACHE BOOL "ggml: enable AVX" FORCE)
-        set(GGML_AVX2 "Off" CACHE BOOL "ggml: enable AVX2" FORCE)
-        set(GGML_FMA "Off" CACHE BOOL "gml: enable FMA" FORCE)
-        set(GGML_F16C "Off" CACHE BOOL "gml: enable F16C" FORCE)
-    endif()
-
+    # Architecture detection and settings for Apple platforms
     if (APPLE)
-        set(GGML_METAL_EMBED_LIBRARY "On" CACHE BOOL "llama: embed metal library" FORCE)
+        # Get the target architecture
+        execute_process(
+            COMMAND uname -m
+            OUTPUT_VARIABLE HOST_ARCH
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+
+        # If CMAKE_OSX_ARCHITECTURES is not set, use the host architecture
+        if(NOT CMAKE_OSX_ARCHITECTURES)
+            set(CMAKE_OSX_ARCHITECTURES ${HOST_ARCH} CACHE STRING "Build architecture for macOS" FORCE)
+        endif()
+
+        message(STATUS "Host architecture: ${HOST_ARCH}")
+        message(STATUS "Target architecture: ${CMAKE_OSX_ARCHITECTURES}")
+
+        # Configure based on target architecture
+        if(CMAKE_OSX_ARCHITECTURES STREQUAL "x86_64")
+            # Intel Mac settings
+            set(GGML_AVX "OFF" CACHE BOOL "ggml: enable AVX" FORCE)
+            set(GGML_AVX2 "OFF" CACHE BOOL "ggml: enable AVX2" FORCE)
+            set(GGML_FMA "OFF" CACHE BOOL "ggml: enable FMA" FORCE)
+            set(GGML_F16C "OFF" CACHE BOOL "ggml: enable F16C" FORCE)
+        endif()
+
+        # Metal settings (enable for both architectures)
+        set(GGML_METAL "ON" CACHE BOOL "ggml: enable Metal" FORCE)
+        set(GGML_METAL_EMBED_LIBRARY "ON" CACHE BOOL "ggml: embed metal library" FORCE)
     endif()
 
     add_subdirectory(vendor/llama.cpp)
@@ -128,7 +145,7 @@ if (LLAMA_BUILD)
         # Building llava
         add_subdirectory(vendor/llama.cpp/examples/llava)
         set_target_properties(llava_shared PROPERTIES OUTPUT_NAME "llava")
-        # Set CUDA_ARCHITECTURES to OFF on Windows
+
         if (WIN32)
             set_target_properties(llava_shared PROPERTIES CUDA_ARCHITECTURES OFF)
         endif()
