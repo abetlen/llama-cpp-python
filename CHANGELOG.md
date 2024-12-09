@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.5]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@26a8406ba9198eb6fdd8329fa717555b4f77f05f
+- fix(ci): Fix release by updating macos runner image to non-deprecated version by @abetlen in afedfc888462f9a6e809dc9455eb3b663764cc3f
+- fix(server): add missing await statements for async exit_stack handling by @gjpower in #1858
+
 ## [0.3.4]
 
 - fix(ci): Build wheels for macos 13-15, cuda 12.1-12.4 by @abetlen in ca808028bd16b8327bd84128d48015a4b1304690
