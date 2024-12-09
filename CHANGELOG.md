@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.4]
+
+- fix(ci): Build wheels for macos 13-15, cuda 12.1-12.4 by @abetlen in ca808028bd16b8327bd84128d48015a4b1304690
+
 ## [0.3.3]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@ce8784bdb153ff7794dde5a50b0ebfa51baa6171
