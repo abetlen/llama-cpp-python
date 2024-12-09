@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.3]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@ce8784bdb153ff7794dde5a50b0ebfa51baa6171
+- fix: chat API logprobs format by @domdomegg in #1788
+- feat: Add support for CUDA 12.6, fix CUDA 12.5 by @Smartappli in #1775
+- fix: Make content not required in ChatCompletionRequestAssistantMessage by @feloy in #1807
+- fix: Fix pickling of Llama class by setting seed from _seed member by @abetlen in 2523472c3eccb9ab9277117cc4ff705212b6888a
+- fix: Fix logit-bias type hint by @ddh0 in #1802
+- fix(server): Avoid thread starvation on many concurrent requests by making use of asyncio to lock llama_proxy context by @gjpower in #1798
+- fix(server): Added missing exit_stack.close() to /v1/chat/completions by @Ian321 in #1796
+- fix(examples): Refactor Batching notebook to use new sampler chain API by @lukestanley in #1793
+- fix(docs): Update development instructions by @Florents-Tselai in #1833
+- fix(docs): Remove ref to llama_eval in llama_cpp.py docs by @richdougherty in #1819
+
 ## [0.3.2]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@74d73dc85cc2057446bf63cc37ff649ae7cebd80
