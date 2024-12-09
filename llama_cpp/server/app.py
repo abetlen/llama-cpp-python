@@ -318,7 +318,7 @@ async def create_completion(
             Iterator[llama_cpp.CreateCompletionStreamResponse],
         ] = await run_in_threadpool(llama, **kwargs)
     except Exception as err:
-        exit_stack.close()
+        await exit_stack.aclose()
         raise err
 
     if isinstance(iterator_or_completion, Iterator):
@@ -475,7 +475,7 @@ async def create_chat_completion(
     # is complete.
     # https://github.com/tiangolo/fastapi/issues/11143
     exit_stack = contextlib.AsyncExitStack()
-    llama_proxy = exit_stack.enter_async_context(contextlib.asynccontextmanager(get_llama_proxy)())
+    llama_proxy = await exit_stack.enter_async_context(contextlib.asynccontextmanager(get_llama_proxy)())
     if llama_proxy is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -513,7 +513,7 @@ async def create_chat_completion(
             llama_cpp.ChatCompletion, Iterator[llama_cpp.ChatCompletionChunk]
         ] = await run_in_threadpool(llama.create_chat_completion, **kwargs)
     except Exception as err:
-        exit_stack.close()
+        await exit_stack.aclose()
         raise err
 
     if isinstance(iterator_or_completion, Iterator):
