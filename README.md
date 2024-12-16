@@ -173,12 +173,12 @@ pip install llama-cpp-python \
 </details>
 
 <details>
-<summary>hipBLAS (ROCm)</summary>
+<summary>HIP (ROCm)</summary>
 
-To install with hipBLAS / ROCm support for AMD cards, set the `GGML_HIPBLAS=on` environment variable before installing:
+To install with HIP / ROCm support for AMD cards, set the `GGML_HIP=on` environment variable before installing:
 
 ```bash
-CMAKE_ARGS="-DGGML_HIPBLAS=on" pip install llama-cpp-python
+CMAKE_ARGS="-DGGML_HIP=on" pip install llama-cpp-python
 ```
 
 </details>
