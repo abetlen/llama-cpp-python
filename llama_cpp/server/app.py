@@ -5,7 +5,7 @@ import json
 import typing
 import contextlib
 
-from anyio import Lock
+from asyncio import Lock
 from functools import partial
 from typing import Iterator, List, Optional, Union, Dict
 
