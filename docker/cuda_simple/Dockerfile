@@ -1,8 +1,8 @@
-ARG CUDA_IMAGE="12.5.0-devel-ubuntu22.04"
+ARG CUDA_IMAGE="12.6.3-devel-ubuntu22.04"
 FROM nvidia/cuda:${CUDA_IMAGE}
 
 # We need to set the host to 0.0.0.0 to allow outside access
-ENV HOST 0.0.0.0
+ENV HOST=0.0.0.0
 
 RUN apt-get update && apt-get upgrade -y \
     && apt-get install -y git build-essential \
