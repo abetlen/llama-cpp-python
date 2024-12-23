@@ -7,7 +7,7 @@ import contextlib
 
 from anyio import Lock
 from functools import partial
-from typing import Iterator, List, Optional, Union, Dict
+from typing import List, Optional, Union, Dict
 
 import llama_cpp
 
@@ -154,11 +154,13 @@ def create_app(
 
     return app
 
+
 def prepare_request_resources(
     body: CreateCompletionRequest | CreateChatCompletionRequest,
     llama_proxy: LlamaProxy,
     body_model: str,
-    kwargs) -> llama_cpp.Llama:
+    kwargs,
+) -> llama_cpp.Llama:
     if llama_proxy is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -199,7 +201,9 @@ async def get_event_publisher(
         server_settings.interrupt_requests if server_settings else False
     )
     async with contextlib.AsyncExitStack() as exit_stack:
-        llama_proxy: LlamaProxy = await exit_stack.enter_async_context(contextlib.asynccontextmanager(get_llama_proxy)())
+        llama_proxy: LlamaProxy = await exit_stack.enter_async_context(
+            contextlib.asynccontextmanager(get_llama_proxy)()
+        )
         llama = prepare_request_resources(body, llama_proxy, body_model, kwargs)
         async with inner_send_chan:
             try:
@@ -215,7 +219,9 @@ async def get_event_publisher(
             except anyio.get_cancelled_exc_class() as e:
                 print("disconnected")
                 with anyio.move_on_after(1, shield=True):
-                    print(f"Disconnected from client (via refresh/close) {request.client}")
+                    print(
+                        f"Disconnected from client (via refresh/close) {request.client}"
+                    )
                     raise e
 
 
@@ -340,11 +346,15 @@ async def create_completion(
 
     # handle regular request
     async with contextlib.AsyncExitStack() as exit_stack:
-        llama_proxy: LlamaProxy = await exit_stack.enter_async_context(contextlib.asynccontextmanager(get_llama_proxy)())
+        llama_proxy: LlamaProxy = await exit_stack.enter_async_context(
+            contextlib.asynccontextmanager(get_llama_proxy)()
+        )
         llama = prepare_request_resources(body, llama_proxy, body_model, kwargs)
 
         if await request.is_disconnected():
-            print(f"Disconnected from client (via refresh/close) before llm invoked {request.client}")
+            print(
+                f"Disconnected from client (via refresh/close) before llm invoked {request.client}"
+            )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Client closed request",
@@ -507,12 +517,16 @@ async def create_chat_completion(
         )
 
     # handle regular request
-    with contextlib.AsyncExitStack() as exit_stack:
-        llama_proxy: LlamaProxy = await exit_stack.enter_async_context(contextlib.asynccontextmanager(get_llama_proxy)())
+    async with contextlib.AsyncExitStack() as exit_stack:
+        llama_proxy: LlamaProxy = await exit_stack.enter_async_context(
+            contextlib.asynccontextmanager(get_llama_proxy)()
+        )
         llama = prepare_request_resources(body, llama_proxy, body_model, kwargs)
 
         if await request.is_disconnected():
-            print(f"Disconnected from client (via refresh/close) before llm invoked {request.client}")
+            print(
+                f"Disconnected from client (via refresh/close) before llm invoked {request.client}"
+            )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Client closed request",
