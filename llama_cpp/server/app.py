@@ -158,7 +158,7 @@ def create_app(
 def prepare_request_resources(
     body: CreateCompletionRequest | CreateChatCompletionRequest,
     llama_proxy: LlamaProxy,
-    body_model: str,
+    body_model: str | None,
     kwargs,
 ) -> llama_cpp.Llama:
     if llama_proxy is None:
@@ -192,7 +192,7 @@ async def get_event_publisher(
     request: Request,
     inner_send_chan: MemoryObjectSendStream[typing.Any],
     body: CreateCompletionRequest | CreateChatCompletionRequest,
-    body_model: str,
+    body_model: str | None,
     llama_call,
     kwargs,
 ):
@@ -200,10 +200,7 @@ async def get_event_publisher(
     interrupt_requests = (
         server_settings.interrupt_requests if server_settings else False
     )
-    async with contextlib.AsyncExitStack() as exit_stack:
-        llama_proxy: LlamaProxy = await exit_stack.enter_async_context(
-            contextlib.asynccontextmanager(get_llama_proxy)()
-        )
+    async with contextlib.asynccontextmanager(get_llama_proxy)() as llama_proxy:
         llama = prepare_request_resources(body, llama_proxy, body_model, kwargs)
         async with inner_send_chan:
             try:
@@ -345,10 +342,7 @@ async def create_completion(
         )
 
     # handle regular request
-    async with contextlib.AsyncExitStack() as exit_stack:
-        llama_proxy: LlamaProxy = await exit_stack.enter_async_context(
-            contextlib.asynccontextmanager(get_llama_proxy)()
-        )
+    async with contextlib.asynccontextmanager(get_llama_proxy)() as llama_proxy:
         llama = prepare_request_resources(body, llama_proxy, body_model, kwargs)
 
         if await request.is_disconnected():
@@ -517,10 +511,7 @@ async def create_chat_completion(
         )
 
     # handle regular request
-    async with contextlib.AsyncExitStack() as exit_stack:
-        llama_proxy: LlamaProxy = await exit_stack.enter_async_context(
-            contextlib.asynccontextmanager(get_llama_proxy)()
-        )
+    async with contextlib.asynccontextmanager(get_llama_proxy)() as llama_proxy:
         llama = prepare_request_resources(body, llama_proxy, body_model, kwargs)
 
         if await request.is_disconnected():
