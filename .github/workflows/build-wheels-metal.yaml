@@ -1,0 +1,79 @@
+name: Build Wheels (Metal)
+
+on: workflow_dispatch
+
+permissions:
+  contents: write
+
+jobs:
+  build_wheels:
+    name: Build wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-13, macos-14, macos-15]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
+
+      # Used to host cibuildwheel
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: 'pip'
+          
+      - name: Install dependencies (Linux/MacOS)
+        if: runner.os != 'Windows'
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install uv
+          RUST_LOG=trace python -m uv pip install -e .[all] --verbose
+        shell: bash
+
+      - name: Install dependencies (Windows)
+        if: runner.os == 'Windows'
+        env:
+          RUST_LOG: trace        
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install uv
+          python -m uv pip install -e .[all] --verbose
+        shell: cmd
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.22.0
+        env:
+          # disable repair
+          CIBW_REPAIR_WHEEL_COMMAND: ""
+          CIBW_ARCHS: "arm64"
+          CIBW_ENVIRONMENT: CMAKE_ARGS="-DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_APPLE_SILICON_PROCESSOR=arm64 -DGGML_METAL=on"
+          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-*"
+        with:
+          package-dir: .
+          output-dir: wheelhouse2
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-mac_${{ matrix.os }}
+          path: ./wheelhouse2/*.whl
+
+  release:
+    name: Release
+    needs: [build_wheels]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: dist2
+          
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist2/*
+          # set release name to <tag>-metal
+          tag_name: ${{ github.ref_name }}-metal
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

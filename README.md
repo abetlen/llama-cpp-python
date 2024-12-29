@@ -1,4 +1,8 @@
-# 🦙 Python Bindings for [`llama.cpp`](https://github.com/ggerganov/llama.cpp)
+<p align="center">
+  <img src="https://raw.githubusercontent.com/abetlen/llama-cpp-python/main/docs/icon.svg" style="height: 5rem; width: 5rem">
+</p>
+
+#  Python Bindings for [`llama.cpp`](https://github.com/ggerganov/llama.cpp)
 
 [![Documentation Status](https://readthedocs.org/projects/llama-cpp-python/badge/?version=latest)](https://llama-cpp-python.readthedocs.io/en/latest/?badge=latest)
 [![Tests](https://github.com/abetlen/llama-cpp-python/actions/workflows/test.yaml/badge.svg?branch=main)](https://github.com/abetlen/llama-cpp-python/actions/workflows/test.yaml)
@@ -121,7 +125,7 @@ CMAKE_ARGS="-DGGML_CUDA=on" pip install llama-cpp-python
 
 It is also possible to install a pre-built wheel with CUDA support. As long as your system meets some requirements:
 
-- CUDA Version is 12.1, 12.2, 12.3, or 12.4
+- CUDA Version is 12.1, 12.2, 12.3, 12.4 or 12.5
 - Python Version is 3.10, 3.11 or 3.12
 
 ```bash
@@ -134,6 +138,7 @@ Where `<cuda-version>` is one of the following:
 - `cu122`: CUDA 12.2
 - `cu123`: CUDA 12.3
 - `cu124`: CUDA 12.4
+- `cu125`: CUDA 12.5
 
 For example, to install the CUDA 12.1 wheel:
 
@@ -499,6 +504,7 @@ Below are the supported multi-modal models and their respective chat handlers (P
 | [moondream2](https://huggingface.co/vikhyatk/moondream2) | `MoondreamChatHandler` | `moondream2` |
 | [nanollava](https://huggingface.co/abetlen/nanollava-gguf) | `NanollavaChatHandler` | `nanollava` |
 | [llama-3-vision-alpha](https://huggingface.co/abetlen/llama-3-vision-alpha-gguf) | `Llama3VisionAlphaChatHandler` | `llama-3-vision-alpha` |
+| [minicpm-v-2.6](https://huggingface.co/openbmb/MiniCPM-V-2_6-gguf) | `MiniCPMv26ChatHandler` | `minicpm-v-2.6` |
 
 Then you'll need to use a custom chat handler to load the clip model and process the chat messages and images.
 
@@ -746,13 +752,27 @@ pip install --upgrade pip
 pip install -e .
 
 # if you want to use the fastapi / openapi server
-pip install -e .[server]
+pip install -e '.[server]'
 
 # to install all optional dependencies
-pip install -e .[all]
+pip install -e '.[all]'
 
 # to clear the local build cache
 make clean
+```
+
+Now try running the tests
+
+```bash
+pytest
+```
+
+There's a `Makefile` available with useful targets.
+A typical workflow would look like this:
+
+```bash
+make build
+make test
 ```
 
 You can also test out specific commits of `llama.cpp` by checking out the desired commit in the `vendor/llama.cpp` submodule and then running `make clean` and `pip install -e .` again. Any changes in the `llama.h` API will require
