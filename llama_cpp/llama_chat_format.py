@@ -3453,7 +3453,7 @@ def _stream_tool_calls(
     completions: List[llama_types.CreateCompletionResponse] = []
     completions_tool_name: List[str] = []
     finish_reason_chat_chunk = None
-    while tool is not None:
+    while tool is not None and len(completions) <= 16:
         # Generate the parameter values for the selected tool
         prompt += f"functions.{tool_name}:\n"
         try:
@@ -3726,9 +3726,12 @@ def chatml_function_calling(
 
     # Case 2 step 2A: Respond with a message
     if tool_name is None:
+        prompt = template_renderer.render(
+            messages=messages, tools=[], tool_calls=None, add_generation_prompt=True
+        )
         return _convert_completion_to_chat(
             llama.create_completion(
-                prompt=prompt + "message:\n",
+                prompt=prompt,
                 **completion_kwargs,  # type: ignore[arg-type]
                 logprobs=top_logprobs if logprobs else None,
             ),
@@ -3748,7 +3751,7 @@ def chatml_function_calling(
     tool = next((tool for tool in tools if tool["function"]["name"] == tool_name), None)
     completions: List[llama_types.CreateCompletionResponse] = []
     completions_tool_name: List[str] = []
-    while tool is not None:
+    while tool is not None and len(completions) <= 16:
         # Generate the parameter values for the selected tool
         prompt += f"functions.{tool_name}:\n"
         try:
