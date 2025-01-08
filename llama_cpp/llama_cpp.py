@@ -222,6 +222,7 @@ LLAMA_VOCAB_TYPE_RWKV = 5
 #     LLAMA_VOCAB_PRE_TYPE_EXAONE         = 25,
 #     LLAMA_VOCAB_PRE_TYPE_CHAMELEON      = 26,
 #     LLAMA_VOCAB_PRE_TYPE_MINERVA        = 27,
+#     LLAMA_VOCAB_PRE_TYPE_DEEPSEEK3_LLM  = 28,
 # };
 LLAMA_VOCAB_PRE_TYPE_DEFAULT = 0
 LLAMA_VOCAB_PRE_TYPE_LLAMA3 = 1
@@ -251,6 +252,7 @@ LLAMA_VOCAB_PRE_TYPE_GPT3_FINNISH = 24
 LLAMA_VOCAB_PRE_TYPE_EXAONE = 25
 LLAMA_VOCAB_PRE_TYPE_CHAMELEON = 26
 LLAMA_VOCAB_PRE_TYPE_MINERVA = 27
+LLAMA_VOCAB_PRE_TYPE_DEEPSEEK3_LLM = 28
 
 
 # // note: these values should be synchronized with ggml_rope
@@ -1090,15 +1092,30 @@ def llama_backend_free():
     ...
 
 
-# LLAMA_API struct llama_model * llama_load_model_from_file(
+# DEPRECATED(LLAMA_API struct llama_model * llama_load_model_from_file(
 #                          const char * path_model,
-#           struct llama_model_params   params);
+#           struct llama_model_params   params),
+#         "use llama_model_load_from_file instead");
 @ctypes_function(
     "llama_load_model_from_file",
     [ctypes.c_char_p, llama_model_params],
     llama_model_p_ctypes,
 )
 def llama_load_model_from_file(
+    path_model: bytes, params: llama_model_params, /
+) -> Optional[llama_model_p]:
+    ...
+
+
+# LLAMA_API struct llama_model * llama_model_load_from_file(
+#                          const char * path_model,
+#           struct llama_model_params   params);
+@ctypes_function(
+    "llama_model_load_from_file",
+    [ctypes.c_char_p, llama_model_params],
+    llama_model_p_ctypes,
+)
+def llama_model_load_from_file(
     path_model: bytes, params: llama_model_params, /
 ) -> Optional[llama_model_p]:
     ...
@@ -1111,6 +1128,16 @@ def llama_load_model_from_file(
     None,
 )
 def llama_free_model(model: llama_model_p, /):
+    ...
+
+
+# LLAMA_API void llama_model_free(struct llama_model * model);
+@ctypes_function(
+    "llama_model_free",
+    [llama_model_p_ctypes],
+    None,
+)
+def llama_model_free(model: llama_model_p, /):
     ...
 
 
