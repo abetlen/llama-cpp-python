@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.6]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@f7cd13301c2a88f97073fd119072b4cc92c08df1
+- fix(server): streaming resource lock by @gjpower in #1879
+
 ## [0.3.5]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@26a8406ba9198eb6fdd8329fa717555b4f77f05f
