@@ -94,6 +94,7 @@ class Llama:
         offload_kqv: bool = True,
         flash_attn: bool = False,
         # Sampling Params
+        no_perf: bool = False,
         last_n_tokens_size: int = 64,
         # LoRA Params
         lora_base: Optional[str] = None,
@@ -173,6 +174,7 @@ class Llama:
             embedding: Embedding mode only.
             offload_kqv: Offload K, Q, V to GPU.
             flash_attn: Use flash attention.
+            no_perf: Measure performance timings.
             last_n_tokens_size: Maximum number of tokens to keep in the last_n_tokens deque.
             lora_base: Optional path to base model, useful if using a quantized base model and you want to apply LoRA to an f16 model.
             lora_path: Path to a LoRA file to apply to the model.
@@ -351,6 +353,7 @@ class Llama:
         if type_v is not None:
             self.context_params.type_v = type_v
         # Sampling Params
+        self.context_params.no_perf = no_perf
         self.last_n_tokens_size = last_n_tokens_size
 
         self.cache: Optional[BaseLlamaCache] = None
@@ -2093,6 +2096,7 @@ class Llama:
             offload_kqv=self.context_params.offload_kqv,
             flash_attn=self.context_params.flash_attn,
             # Sampling Params
+            no_perf=self.context_params.no_perf,
             last_n_tokens_size=self.last_n_tokens_size,
             # LoRA Params
             lora_base=self.lora_base,
