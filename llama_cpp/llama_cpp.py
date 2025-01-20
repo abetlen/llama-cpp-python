@@ -222,6 +222,7 @@ LLAMA_VOCAB_TYPE_RWKV = 5
 #     LLAMA_VOCAB_PRE_TYPE_EXAONE         = 25,
 #     LLAMA_VOCAB_PRE_TYPE_CHAMELEON      = 26,
 #     LLAMA_VOCAB_PRE_TYPE_MINERVA        = 27,
+#     LLAMA_VOCAB_PRE_TYPE_DEEPSEEK3_LLM  = 28,
 # };
 LLAMA_VOCAB_PRE_TYPE_DEFAULT = 0
 LLAMA_VOCAB_PRE_TYPE_LLAMA3 = 1
@@ -251,18 +252,23 @@ LLAMA_VOCAB_PRE_TYPE_GPT3_FINNISH = 24
 LLAMA_VOCAB_PRE_TYPE_EXAONE = 25
 LLAMA_VOCAB_PRE_TYPE_CHAMELEON = 26
 LLAMA_VOCAB_PRE_TYPE_MINERVA = 27
+LLAMA_VOCAB_PRE_TYPE_DEEPSEEK3_LLM = 28
 
 
 # // note: these values should be synchronized with ggml_rope
 # // TODO: maybe move this enum to ggml.h (ggml_rope_type)
 # enum llama_rope_type {
-#     LLAMA_ROPE_TYPE_NONE = -1,
-#     LLAMA_ROPE_TYPE_NORM =  0,
-#     LLAMA_ROPE_TYPE_NEOX = GGML_ROPE_TYPE_NEOX,
+#     LLAMA_ROPE_TYPE_NONE   = -1,
+#     LLAMA_ROPE_TYPE_NORM   = 0,
+#     LLAMA_ROPE_TYPE_NEOX   = GGML_ROPE_TYPE_NEOX,
+#     LLAMA_ROPE_TYPE_MROPE  = GGML_ROPE_TYPE_MROPE,
+#     LLAMA_ROPE_TYPE_VISION = GGML_ROPE_TYPE_VISION,
 # };
 LLAMA_ROPE_TYPE_NONE = -1
 LLAMA_ROPE_TYPE_NORM = 0
 LLAMA_ROPE_TYPE_NEOX = GGML_ROPE_TYPE_NEOX = 2
+LLAMA_ROPE_TYPE_MROPE = GGML_ROPE_TYPE_MROPE = 8
+LLAMA_ROPE_TYPE_VISION = GGML_ROPE_TYPE_VISION = 24
 
 
 # enum llama_token_type { //TODO: remove, required until per token attributes are available from GGUF file
@@ -1086,15 +1092,30 @@ def llama_backend_free():
     ...
 
 
-# LLAMA_API struct llama_model * llama_load_model_from_file(
+# DEPRECATED(LLAMA_API struct llama_model * llama_load_model_from_file(
 #                          const char * path_model,
-#           struct llama_model_params   params);
+#           struct llama_model_params   params),
+#         "use llama_model_load_from_file instead");
 @ctypes_function(
     "llama_load_model_from_file",
     [ctypes.c_char_p, llama_model_params],
     llama_model_p_ctypes,
 )
 def llama_load_model_from_file(
+    path_model: bytes, params: llama_model_params, /
+) -> Optional[llama_model_p]:
+    ...
+
+
+# LLAMA_API struct llama_model * llama_model_load_from_file(
+#                          const char * path_model,
+#           struct llama_model_params   params);
+@ctypes_function(
+    "llama_model_load_from_file",
+    [ctypes.c_char_p, llama_model_params],
+    llama_model_p_ctypes,
+)
+def llama_model_load_from_file(
     path_model: bytes, params: llama_model_params, /
 ) -> Optional[llama_model_p]:
     ...
@@ -1107,6 +1128,16 @@ def llama_load_model_from_file(
     None,
 )
 def llama_free_model(model: llama_model_p, /):
+    ...
+
+
+# LLAMA_API void llama_model_free(struct llama_model * model);
+@ctypes_function(
+    "llama_model_free",
+    [llama_model_p_ctypes],
+    None,
+)
+def llama_model_free(model: llama_model_p, /):
     ...
 
 
@@ -1265,6 +1296,7 @@ def llama_rope_freq_scale_train(model: llama_model_p, /) -> float:
 # // Functions to access the model's GGUF metadata scalar values
 # // - The functions return the length of the string on success, or -1 on failure
 # // - The output string is always null-terminated and cleared on failure
+# // - When retrieving a string, an extra byte must be allocated to account for the null terminator
 # // - GGUF array values are not supported by these functions
 
 
@@ -1375,18 +1407,6 @@ def llama_model_size(model: llama_model_p, /) -> int:
 @ctypes_function("llama_model_n_params", [llama_model_p_ctypes], ctypes.c_uint64)
 def llama_model_n_params(model: llama_model_p, /) -> int:
     """Returns the total number of parameters in the model"""
-    ...
-
-
-# // Get a llama model tensor
-# LLAMA_API struct ggml_tensor * llama_get_model_tensor(struct llama_model * model, const char * name);
-@ctypes_function(
-    "llama_get_model_tensor", [llama_model_p_ctypes, ctypes.c_char_p], ctypes.c_void_p
-)
-def llama_get_model_tensor(
-    model: llama_model_p, name: Union[ctypes.c_char_p, bytes], /
-) -> ctypes.c_void_p:
-    """Get a llama model tensor"""
     ...
 
 
@@ -3336,41 +3356,22 @@ def llama_sampler_init_grammar(
     ...
 
 
+# /// NOTE: Avoid using on the full vocabulary as searching for repeated tokens can become slow. For example, apply top-k or top-p sampling first.
 # LLAMA_API struct llama_sampler * llama_sampler_init_penalties(
-#                          int32_t   n_vocab,         // llama_n_vocab()
-#                      llama_token   special_eos_id,  // llama_token_eos()
-#                      llama_token   linefeed_id,     // llama_token_nl()
-#                          int32_t   penalty_last_n,  // last n tokens to penalize (0 = disable penalty, -1 = context size)
-#                            float   penalty_repeat,  // 1.0 = disabled
-#                            float   penalty_freq,    // 0.0 = disabled
-#                            float   penalty_present, // 0.0 = disabled
-#                             bool   penalize_nl,     // consider newlines as a repeatable token
-#                             bool   ignore_eos);     // ignore the end-of-sequence token
+#                          int32_t   penalty_last_n,   // last n tokens to penalize (0 = disable penalty, -1 = context size)
+#                            float   penalty_repeat,   // 1.0 = disabled
+#                            float   penalty_freq,     // 0.0 = disabled
+#                            float   penalty_present); // 0.0 = disabled
 @ctypes_function(
     "llama_sampler_init_penalties",
-    [
-        ctypes.c_int32,
-        llama_token,
-        llama_token,
-        ctypes.c_int32,
-        ctypes.c_float,
-        ctypes.c_float,
-        ctypes.c_float,
-        ctypes.c_bool,
-        ctypes.c_bool,
-    ],
+    [ctypes.c_int32, ctypes.c_float, ctypes.c_float, ctypes.c_float],
     llama_sampler_p_ctypes,
 )
 def llama_sampler_init_penalties(
-    n_vocab: int,
-    special_eos_id: int,
-    linefeed_id: int,
     penalty_last_n: int,
     penalty_repeat: float,
     penalty_freq: float,
     penalty_present: float,
-    penalize_nl: bool,
-    ignore_eos: bool,
     /,
 ) -> llama_sampler_p:
     ...
