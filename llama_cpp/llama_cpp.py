@@ -1191,12 +1191,12 @@ def llama_init_from_model(
 #                              size_t    n_paths,
 #           struct llama_model_params    params);
 @ctypes_function(
-    "llama_init_from_model",
+    "llama_model_load_from_splits",
     [ctypes.c_char_p, llama_model_params],
     ctypes.c_int32,
     llama_context_p_ctypes,
 )
-def llama_init_from_model(
+def llama_model_load_from_splits(
     paths: bytes, n_paths:int , params: llama_model_params, /
 ) -> Optional[llama_context_p]:
     ...
