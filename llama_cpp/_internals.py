@@ -168,13 +168,13 @@ class LlamaModel:
         n_ctx = self.n_ctx_train()
         tokens = (llama_cpp.llama_token * n_ctx)()
         n_tokens = llama_cpp.llama_tokenize(
-            self.model, text, len(text), tokens, n_ctx, add_bos, special
+            self.vocab, text, len(text), tokens, n_ctx, add_bos, special
         )
         if n_tokens < 0:
             n_tokens = abs(n_tokens)
             tokens = (llama_cpp.llama_token * n_tokens)()
             n_tokens = llama_cpp.llama_tokenize(
-                self.model, text, len(text), tokens, n_tokens, add_bos, special
+                self.vocab, text, len(text), tokens, n_tokens, add_bos, special
             )
             if n_tokens < 0:
                 raise RuntimeError(
