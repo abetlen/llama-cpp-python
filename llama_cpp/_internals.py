@@ -43,12 +43,13 @@ class LlamaModel:
         self._exit_stack = ExitStack()
 
         model = None
+        vocab = None
 
         if not os.path.exists(path_model):
             raise ValueError(f"Model path does not exist: {path_model}")
 
         with suppress_stdout_stderr(disable=verbose):
-            model = llama_cpp.llama_load_model_from_file(
+            model = llama_cpp.llama_model_load_from_file(
                 self.path_model.encode("utf-8"), self.params
             )
 
@@ -57,11 +58,23 @@ class LlamaModel:
 
         self.model = model
 
+        vocab = llama_cpp.llama_model_get_vocab(self.model)
+
+        if vocab is None:
+            raise ValueError(f"Failed to load vocab from file: {path_model}")
+
+        self.vocab = vocab
+
         def free_model():
             if self.model is None:
                 return
-            llama_cpp.llama_free_model(self.model)
+            llama_cpp.llama_model_free(self.model)
             self.model = None
+
+            if self.vocab is None:
+                return
+            llama_cpp.llama_model_free(self.vocab)
+            self.vocab = None
 
         self._exit_stack.callback(free_model)
 
@@ -72,19 +85,19 @@ class LlamaModel:
         self.close()
 
     def vocab_type(self) -> int:
-        return llama_cpp.llama_vocab_type(self.model)
+        return llama_cpp.llama_vocab_type(self.vocab)
 
     def n_vocab(self) -> int:
-        return llama_cpp.llama_n_vocab(self.model)
+        return llama_cpp.llama_vocab_n_tokens(self.vocab)
 
     def n_ctx_train(self) -> int:
-        return llama_cpp.llama_n_ctx_train(self.model)
+        return llama_cpp.llama_model_n_ctx_train(self.model)
 
     def n_embd(self) -> int:
-        return llama_cpp.llama_n_embd(self.model)
+        return llama_cpp.llama_model_n_embd(self.model)
 
     def rope_freq_scale_train(self) -> float:
-        return llama_cpp.llama_rope_freq_scale_train(self.model)
+        return llama_cpp.llama_model_rope_freq_scale_train(self.model)
 
     def desc(self) -> str:
         buf = ctypes.create_string_buffer(1024)
@@ -114,37 +127,40 @@ class LlamaModel:
     # Special tokens
 
     def token_bos(self) -> int:
-        return llama_cpp.llama_token_bos(self.model)
+        return llama_cpp.llama_vocab_bos(self.vocab)
 
     def token_eos(self) -> int:
-        return llama_cpp.llama_token_eos(self.model)
-
-    def token_cls(self) -> int:
-        return llama_cpp.llama_token_cls(self.model)
-
-    def token_sep(self) -> int:
-        return llama_cpp.llama_token_sep(self.model)
-
-    def token_nl(self) -> int:
-        return llama_cpp.llama_token_nl(self.model)
-
-    def token_prefix(self) -> int:
-        return llama_cpp.llama_token_prefix(self.model)
-
-    def token_middle(self) -> int:
-        return llama_cpp.llama_token_middle(self.model)
-
-    def token_suffix(self) -> int:
-        return llama_cpp.llama_token_suffix(self.model)
+        return llama_cpp.llama_vocab_eos(self.vocab)
 
     def token_eot(self) -> int:
-        return llama_cpp.llama_token_eot(self.model)
+        return llama_cpp.llama_vocab_eot(self.vocab)
+
+    def token_cls(self) -> int:
+        return llama_cpp.llama_vocab_cls(self.vocab)
+
+    def token_sep(self) -> int:
+        return llama_cpp.llama_vocab_sep(self.vocab)
+
+    def token_nl(self) -> int:
+        return llama_cpp.llama_vocab_nl(self.vocab)
+
+    def token_pad(self) -> int:
+        return llama_cpp.llama_vocab_pad(self.vocab)
+
+    def token_prefix(self) -> int:
+        return llama_cpp.llama_vocab_fim_pre(self.vocab)
+
+    def token_middle(self) -> int:
+        return llama_cpp.llama_vocab_fim_mid(self.vocab)
+
+    def token_suffix(self) -> int:
+        return llama_cpp.llama_vocab_fim_suf(self.vocab)
 
     def add_bos_token(self) -> bool:
-        return llama_cpp.llama_add_bos_token(self.model)
+        return llama_cpp.llama_vocab_get_add_bos(self.vocab)
 
     def add_eos_token(self) -> bool:
-        return llama_cpp.llama_add_eos_token(self.model)
+        return llama_cpp.llama_vocab_get_add_eos(self.vocab)
 
     # Tokenization
 

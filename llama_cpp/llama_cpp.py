@@ -157,6 +157,10 @@ llama_model_p_ctypes = ctypes.c_void_p
 llama_context_p = NewType("llama_context_p", int)
 llama_context_p_ctypes = ctypes.c_void_p
 
+# struct llama_vocab;
+llama_vocab_p = NewType("llama_vocab_p", int)
+llama_vocab_p_ctypes = ctypes.c_int32
+
 # # struct llama_sampler;
 # llama_sampler_p = NewType("llama_sampler_p", int)
 # llama_sampler_p_ctypes = ctypes.c_void_p
@@ -1167,6 +1171,37 @@ def llama_free(ctx: llama_context_p, /):
     ...
 
 
+# LLAMA_API struct llama_context * llama_init_from_model(
+#                      struct llama_model * model,
+#             struct llama_context_params   params);
+@ctypes_function(
+    "llama_init_from_model",
+    [llama_model_p_ctypes, llama_context_params],
+    llama_context_p_ctypes,
+)
+def llama_init_from_model(
+    model: llama_model_p, params: llama_context_params, /
+) -> Optional[llama_context_p]:
+    ...
+
+# // Load the model from multiple splits (support custom naming scheme)
+# // The paths must be in the correct order
+# LLAMA_API struct llama_model * llama_model_load_from_splits(
+#                          const char ** paths,
+#                              size_t    n_paths,
+#           struct llama_model_params    params);
+@ctypes_function(
+    "llama_init_from_model",
+    [ctypes.c_char_p, llama_model_params],
+    ctypes.c_int32,
+    llama_context_p_ctypes,
+)
+def llama_init_from_model(
+    paths: bytes, n_paths:int , params: llama_model_params, /
+) -> Optional[llama_context_p]:
+    ...
+
+
 # LLAMA_API int64_t llama_time_us(void);
 @ctypes_function(
     "llama_time_us",
@@ -1231,33 +1266,33 @@ def llama_n_seq_max(ctx: llama_context_p, /) -> int:
     ...
 
 
-# LLAMA_API int32_t llama_n_vocab    (const struct llama_model * model);
-@ctypes_function("llama_n_vocab", [llama_model_p_ctypes], ctypes.c_int32)
-def llama_n_vocab(model: llama_model_p, /) -> int:
+# LLAMA_API int32_t llama_vocab_n_tokens(const struct llama_vocab * vocab);
+@ctypes_function("llama_vocab_n_tokens", [llama_vocab_p_ctypes], ctypes.c_int32)
+def llama_vocab_n_tokens(vocab: llama_vocab_p, /) -> int:
     ...
 
 
-# LLAMA_API int32_t llama_n_ctx_train(const struct llama_model * model);
-@ctypes_function("llama_n_ctx_train", [llama_model_p_ctypes], ctypes.c_int32)
-def llama_n_ctx_train(model: llama_model_p, /) -> int:
+# LLAMA_API int32_t llama_model_n_ctx_train(const struct llama_model * model);
+@ctypes_function("llama_model_n_ctx_train", [llama_model_p_ctypes], ctypes.c_int32)
+def llama_model_n_ctx_train(model: llama_model_p, /) -> int:
     ...
 
 
-# LLAMA_API int32_t llama_n_embd     (const struct llama_model * model);
-@ctypes_function("llama_n_embd", [llama_model_p_ctypes], ctypes.c_int32)
-def llama_n_embd(model: llama_model_p, /) -> int:
+# LLAMA_API int32_t llama_model_n_embd     (const struct llama_model * model);
+@ctypes_function("llama_model_n_embd", [llama_model_p_ctypes], ctypes.c_int32)
+def llama_model_n_embd(model: llama_model_p, /) -> int:
     ...
 
 
-# LLAMA_API int32_t llama_n_layer    (const struct llama_model * model);
-@ctypes_function("llama_n_layer", [llama_model_p_ctypes], ctypes.c_int32)
-def llama_n_layer(model: llama_model_p, /) -> int:
+# LLAMA_API int32_t llama_model_n_layer    (const struct llama_model * model);
+@ctypes_function("llama_model_n_layer", [llama_model_p_ctypes], ctypes.c_int32)
+def llama_model_n_layer(model: llama_model_p, /) -> int:
     ...
 
 
-# LLAMA_API int32_t llama_n_head     (const struct llama_model * model);
-@ctypes_function("llama_n_head", [llama_model_p_ctypes], ctypes.c_int32)
-def llama_n_head(model: llama_model_p, /) -> int:
+# LLAMA_API int32_t llama_model_n_head     (const struct llama_model * model);
+@ctypes_function("llama_model_n_head", [llama_model_p_ctypes], ctypes.c_int32)
+def llama_model_n_head(model: llama_model_p, /) -> int:
     ...
 
 
@@ -1272,24 +1307,31 @@ def llama_get_model(ctx: llama_context_p, /) -> Optional[llama_model_p]:
 def llama_pooling_type(ctx: llama_context_p, /) -> int:
     ...
 
-
-# LLAMA_API enum llama_vocab_type   llama_vocab_type  (const struct llama_model * model);
-@ctypes_function("llama_vocab_type", [llama_model_p_ctypes], ctypes.c_int)
-def llama_vocab_type(model: llama_model_p, /) -> int:
+# LLAMA_API const struct llama_vocab * llama_model_get_vocab(const struct llama_model * model);
+@ctypes_function("llama_model_get_vocab", [llama_model_p_ctypes], ctypes.c_int32)
+def llama_model_get_vocab(model: llama_vocab_p, /) -> Optional[llama_vocab_p]:
     ...
 
-
-# LLAMA_API enum llama_rope_type    llama_rope_type   (const struct llama_model * model);
-@ctypes_function("llama_rope_type", [llama_model_p_ctypes], ctypes.c_int)
-def llama_rope_type(model: llama_model_p, /) -> int:
+# LLAMA_API enum llama_rope_type       llama_model_rope_type(const struct llama_model * model);
+@ctypes_function("llama_model_rope_type", [llama_model_p_ctypes], ctypes.c_int)
+def llama_model_rope_type(model: llama_model_p, /) -> int:
     ...
 
-
-# // Get the model's RoPE frequency scaling factor
-# LLAMA_API float llama_rope_freq_scale_train(const struct llama_model * model);
-@ctypes_function("llama_rope_freq_scale_train", [llama_model_p_ctypes], ctypes.c_float)
-def llama_rope_freq_scale_train(model: llama_model_p, /) -> float:
+# LLAMA_API float llama_model_rope_freq_scale_train(const struct llama_model * model);
+@ctypes_function("llama_model_rope_freq_scale_train", [llama_model_p_ctypes], ctypes.c_float)
+def llama_model_rope_freq_scale_train(model: llama_model_p, /) -> float:
     """Get the model's RoPE frequency scaling factor"""
+    ...
+
+# LLAMA_API enum llama_vocab_type llama_vocab_type(const struct llama_vocab * vocab);
+@ctypes_function("llama_vocab_type", [llama_vocab_p_ctypes], ctypes.c_int)
+def llama_vocab_type(vocab: llama_vocab_p, /) -> int:
+    ...
+
+
+# LLAMA_API int32_t llama_vocab_n_tokens(const struct llama_vocab * vocab);
+@ctypes_function("llama_vocab_n_tokens", [llama_vocab_p_ctypes], ctypes.c_int)
+def llama_vocab_n_tokens(vocab: llama_vocab_p, /) -> int:
     ...
 
 
@@ -1473,15 +1515,15 @@ def llama_model_quantize(
 
 # // Load a LoRA adapter from file
 # // The loaded adapter will be associated to the given model, and will be free when the model is deleted
-# LLAMA_API struct llama_lora_adapter * llama_lora_adapter_init(
+# LLAMA_API struct llama_lora_adapter * llama_adapter_lora_init(
 #         struct llama_model * model,
 #         const char * path_lora);
 @ctypes_function(
-    "llama_lora_adapter_init",
+    "llama_adapter_lora_init",
     [llama_model_p_ctypes, ctypes.c_char_p],
     llama_lora_adapter_p_ctypes,
 )
-def llama_lora_adapter_init(
+def llama_adapter_lora_init(
     model: llama_model_p, path_lora: bytes, /
 ) -> Optional[llama_lora_adapter_p]:
     """Load a LoRA adapter from file
@@ -1490,18 +1532,31 @@ def llama_lora_adapter_init(
     ...
 
 
+# // Manually free a LoRA adapter
+# // Note: loaded adapters will be free when the associated model is deleted
+# LLAMA_API void llama_adapter_lora_free(struct llama_lora_adapter * adapter);
+@ctypes_function(
+    "llama_adapter_lora_free",
+    [llama_lora_adapter_p_ctypes],
+    None,
+)
+def llama_adapter_lora_free(adapter: llama_lora_adapter_p, /):
+    """Manually free a LoRA adapter
+    Note: loaded adapters will be free when the associated model is deleted"""
+    ...
+
 # // Add a loaded LoRA adapter to given context
 # // This will not modify model's weight
-# LLAMA_API int32_t llama_lora_adapter_set(
+# LLAMA_API int32_t llama_set_adapter_lora(
 #         struct llama_context * ctx,
 #         struct llama_lora_adapter * adapter,
 #         float scale);
 @ctypes_function(
-    "llama_lora_adapter_set",
+    "llama_set_adapter_lora",
     [llama_context_p_ctypes, llama_lora_adapter_p_ctypes, ctypes.c_float],
     ctypes.c_int32,
 )
-def llama_lora_adapter_set(
+def llama_set_adapter_lora(
     ctx: llama_context_p, adapter: llama_lora_adapter_p, scale: float, /
 ) -> int:
     """Add a loaded LoRA adapter to given context
@@ -1509,17 +1564,17 @@ def llama_lora_adapter_set(
     ...
 
 
-# // Remove a specific LoRA adapter from given context
-# // Return -1 if the adapter is not present in the context
-# LLAMA_API int32_t llama_lora_adapter_remove(
-#         struct llama_context * ctx,
-#         struct llama_lora_adapter * adapter);
+#    // Remove a specific LoRA adapter from given context
+#    // Return -1 if the adapter is not present in the context
+#    LLAMA_API int32_t llama_rm_adapter_lora(
+#            struct llama_context * ctx,
+#            struct llama_adapter_lora * adapter);
 @ctypes_function(
-    "llama_lora_adapter_remove",
+    "llama_rm_adapter_lora",
     [llama_context_p_ctypes, llama_lora_adapter_p_ctypes],
     ctypes.c_int32,
 )
-def llama_lora_adapter_remove(
+def llama_rm_adapter_lora(
     ctx: llama_context_p, adapter: llama_lora_adapter_p, /
 ) -> int:
     """Remove a LoRA adapter from given context
@@ -1528,30 +1583,18 @@ def llama_lora_adapter_remove(
 
 
 # // Remove all LoRA adapters from given context
-# LLAMA_API void llama_lora_adapter_clear(
+# LLAMA_API void llama_clear_adapter_lora(
 #         struct llama_context * ctx);
 @ctypes_function(
-    "llama_lora_adapter_clear",
+    "llama_clear_adapter_lora",
     [llama_context_p_ctypes],
     None,
 )
-def llama_lora_adapter_clear(ctx: llama_context_p, /):
+def llama_clear_adapter_lora(ctx: llama_context_p, /):
     """Remove all LoRA adapters from given context"""
     ...
 
 
-# // Manually free a LoRA adapter
-# // Note: loaded adapters will be free when the associated model is deleted
-# LLAMA_API void llama_lora_adapter_free(struct llama_lora_adapter * adapter);
-@ctypes_function(
-    "llama_lora_adapter_free",
-    [llama_lora_adapter_p_ctypes],
-    None,
-)
-def llama_lora_adapter_free(adapter: llama_lora_adapter_p, /):
-    """Manually free a LoRA adapter
-    Note: loaded adapters will be free when the associated model is deleted"""
-    ...
 
 
 # // Apply a loaded control vector to a llama_context, or if data is NULL, clear
@@ -1560,15 +1603,15 @@ def llama_lora_adapter_free(adapter: llama_lora_adapter_p, /):
 # // to an n_embd x n_layers buffer starting from layer 1.
 # // il_start and il_end are the layer range the vector should apply to (both inclusive)
 # // See llama_control_vector_load in common to load a control vector.
-# LLAMA_API int32_t llama_control_vector_apply(
-#         struct llama_context * lctx,
+# LLAMA_API int32_t llama_apply_adapter_cvec(
+#         struct llama_context * ctx,
 #                  const float * data,
 #                       size_t   len,
 #                      int32_t   n_embd,
 #                      int32_t   il_start,
 #                      int32_t   il_end);
 @ctypes_function(
-    "llama_control_vector_apply",
+    "llama_apply_adapter_cvec",
     [
         llama_context_p_ctypes,
         ctypes.POINTER(ctypes.c_float),
@@ -1579,7 +1622,7 @@ def llama_lora_adapter_free(adapter: llama_lora_adapter_p, /):
     ],
     ctypes.c_int32,
 )
-def llama_control_vector_apply(
+def llama_apply_adapter_cvec(
     lctx: llama_context_p,
     data: CtypesPointerOrRef[ctypes.c_float],
     len: int,
@@ -2577,52 +2620,52 @@ def llama_get_embeddings_seq(
 # //
 
 
-# LLAMA_API const char * llama_token_get_text(const struct llama_model * model, llama_token token);
+# LLAMA_API const char * llama_vocab_get_text(const struct llama_vocab * vocab, llama_token token);
 @ctypes_function(
-    "llama_token_get_text", [llama_model_p_ctypes, llama_token], ctypes.c_char_p
+    "llama_vocab_get_text", [llama_vocab_p_ctypes, llama_token], ctypes.c_char_p
 )
-def llama_token_get_text(
+def llama_vocab_get_text(
     model: llama_model_p, token: Union[llama_token, int], /
 ) -> bytes:
     ...
 
 
-# LLAMA_API float llama_token_get_score(const struct llama_model * model, llama_token token);
+# LLAMA_API float llama_vocab_get_score(const struct llama_vocab * vocab, llama_token token);
 @ctypes_function(
-    "llama_token_get_score", [llama_model_p_ctypes, llama_token], ctypes.c_float
+    "llama_vocab_get_score", [llama_vocab_p_ctypes, llama_token], ctypes.c_float
 )
-def llama_token_get_score(
+def llama_vocab_get_score(
     model: llama_model_p, token: Union[llama_token, int], /
 ) -> float:
     ...
 
 
-# LLAMA_API enum llama_token_attr llama_token_get_attr(const struct llama_model * model, llama_token token);
+# LLAMA_API enum llama_token_attr llama_vocab_get_attr(const struct llama_vocab * vocab, llama_token token);
 @ctypes_function(
-    "llama_token_get_attr", [llama_model_p_ctypes, llama_token], ctypes.c_int
+    "llama_vocab_get_attr", [llama_vocab_p_ctypes, llama_token], ctypes.c_int
 )
-def llama_token_get_attr(
+def llama_vocab_get_attr(
     model: llama_model_p, token: Union[llama_token, int], /
 ) -> int:
     ...
 
 
 # // Check if the token is supposed to end generation (end-of-generation, eg. EOS, EOT, etc.)
-# LLAMA_API bool llama_token_is_eog(const struct llama_model * model, llama_token token);
+# LLAMA_API bool llama_vocab_is_eog(const struct llama_vocab * vocab, llama_token token);
 @ctypes_function(
-    "llama_token_is_eog", [llama_model_p_ctypes, llama_token], ctypes.c_bool
+    "llama_vocab_is_eog", [llama_vocab_p_ctypes, llama_token], ctypes.c_bool
 )
-def llama_token_is_eog(model: llama_model_p, token: Union[llama_token, int], /) -> bool:
+def llama_vocab_is_eog(model: llama_model_p, token: Union[llama_token, int], /) -> bool:
     """Check if the token is supposed to end generation (end-of-generation, eg. EOS, EOT, etc.)"""
     ...
 
 
 # // Identify if Token Id is a control token or a render-able token
-# LLAMA_API bool llama_token_is_control(const struct llama_model * model, llama_token token);
+# LLAMA_API bool llama_vocab_is_control(const struct llama_vocab * vocab, llama_token token);
 @ctypes_function(
-    "llama_token_is_control", [llama_model_p_ctypes, llama_token], ctypes.c_bool
+    "llama_vocab_is_control", [llama_vocab_p_ctypes, llama_token], ctypes.c_bool
 )
-def llama_token_is_control(
+def llama_vocab_is_control(
     model: llama_model_p, token: Union[llama_token, int], /
 ) -> bool:
     """Identify if Token Id is a control token or a render-able token"""
@@ -2632,109 +2675,96 @@ def llama_token_is_control(
 # // Special tokens
 
 
-# LLAMA_API llama_token llama_token_bos(const struct llama_model * model); // beginning-of-sentence
-@ctypes_function("llama_token_bos", [llama_model_p_ctypes], llama_token)
-def llama_token_bos(model: llama_model_p, /) -> int:
+# LLAMA_API llama_token llama_vocab_bos(const struct llama_vocab * vocab); // beginning-of-sentence
+@ctypes_function("llama_vocab_bos", [llama_vocab_p_ctypes], llama_token)
+def llama_vocab_bos(model: llama_model_p, /) -> int:
     """beginning-of-sentence"""
     ...
 
 
-# LLAMA_API llama_token llama_token_eos(const struct llama_model * model); // end-of-sentence
-@ctypes_function("llama_token_eos", [llama_model_p_ctypes], llama_token)
-def llama_token_eos(model: llama_model_p, /) -> int:
+# LLAMA_API llama_token llama_vocab_eos(const struct llama_vocab * vocab); // end-of-sentence
+@ctypes_function("llama_vocab_eos", [llama_vocab_p_ctypes], llama_token)
+def llama_vocab_eos(model: llama_model_p, /) -> int:
     """end-of-sentence"""
     ...
 
 
-# LLAMA_API llama_token llama_token_eot(const struct llama_model * model); // end-of-turn
-@ctypes_function("llama_token_eot", [llama_model_p_ctypes], llama_token)
-def llama_token_eot(model: llama_model_p, /) -> int:
+# LLAMA_API llama_token llama_vocab_eot(const struct llama_vocab * vocab); // end-of-turn
+@ctypes_function("llama_vocab_eot", [llama_vocab_p_ctypes], llama_token)
+def llama_vocab_eot(model: llama_model_p, /) -> int:
     """end-of-turn"""
     ...
 
-
-# LLAMA_API llama_token llama_token_cls(const struct llama_model * model); // classification
-@ctypes_function("llama_token_cls", [llama_model_p_ctypes], llama_token)
-def llama_token_cls(model: llama_model_p, /) -> int:
-    """classification"""
+# LLAMA_API llama_token llama_vocab_cls(const struct llama_vocab * vocab), // classification
+#            "use llama_vocab_bos instead");
+@ctypes_function("llama_vocab_cls", [llama_vocab_p_ctypes], llama_token)
+def llama_vocab_cls(model: llama_model_p, /) -> int:
+    """llama_vocab_cls"""
     ...
 
 
-# LLAMA_API llama_token llama_token_sep(const struct llama_model * model); // sentence separator
-@ctypes_function("llama_token_sep", [llama_model_p_ctypes], llama_token)
-def llama_token_sep(model: llama_model_p, /) -> int:
+# LLAMA_API llama_token llama_vocab_sep(const struct llama_vocab * vocab); // sentence separator
+@ctypes_function("llama_vocab_sep", [llama_vocab_p_ctypes], llama_token)
+def llama_vocab_sep(model: llama_model_p, /) -> int:
     """sentence separator"""
     ...
 
 
-# LLAMA_API llama_token llama_token_nl (const struct llama_model * model); // next-line
-@ctypes_function("llama_token_nl", [llama_model_p_ctypes], llama_token)
-def llama_token_nl(model: llama_model_p, /) -> int:
+# LLAMA_API llama_token llama_vocab_nl (const struct llama_vocab * vocab); // next-line
+@ctypes_function("llama_vocab_nl", [llama_vocab_p_ctypes], llama_token)
+def llama_vocab_nl(model: llama_model_p, /) -> int:
     """next-line"""
     ...
 
-
-# LLAMA_API bool llama_add_bos_token(const struct llama_model * model);
-@ctypes_function("llama_add_bos_token", [llama_model_p_ctypes], ctypes.c_bool)
-def llama_add_bos_token(model: llama_model_p, /) -> bool:
+# LLAMA_API llama_token llama_vocab_pad(const struct llama_vocab * vocab); // padding
+@ctypes_function("llama_vocab_pad", [llama_vocab_p_ctypes], llama_token)
+def llama_vocab_pad(model: llama_model_p, /) -> int:
+    """padding"""
     ...
 
 
-# LLAMA_API bool llama_add_eos_token(const struct llama_model * model);
-@ctypes_function("llama_add_eos_token", [llama_model_p_ctypes], ctypes.c_bool)
-def llama_add_eos_token(model: llama_model_p, /) -> bool:
+# LLAMA_API bool llama_vocab_get_add_bos(const struct llama_vocab * vocab);
+@ctypes_function("llama_vocab_get_add_bos", [llama_vocab_p_ctypes], ctypes.c_bool)
+def llama_vocab_get_add_bos(model: llama_model_p, /) -> bool:
     ...
 
 
-# // Codellama infill tokens
-# DEPRECATED(LLAMA_API llama_token llama_token_prefix(const struct llama_model * model), "use llama_token_fim_pre instead");
-@ctypes_function("llama_token_prefix", [llama_model_p_ctypes], llama_token)
-def llama_token_prefix(model: llama_model_p) -> int:
-    """codellama infill tokens"""
+# LLAMA_API bool llama_vocab_get_add_eos(const struct llama_vocab * vocab);
+@ctypes_function("llama_vocab_get_add_eos", [llama_vocab_p_ctypes], ctypes.c_bool)
+def llama_vocab_get_add_eos(model: llama_model_p, /) -> bool:
+    ...
+
+# LLAMA_API llama_token llama_vocab_fim_pre(const struct llama_vocab * vocab);
+@ctypes_function("llama_vocab_fim_pre", [llama_vocab_p_ctypes], llama_token)
+def llama_vocab_fim_pre(model: llama_model_p, /) -> int:
+    ...
+
+# LLAMA_API llama_token llama_vocab_fim_suf(const struct llama_vocab * vocab);
+@ctypes_function("llama_vocab_fim_suf", [llama_vocab_p_ctypes], llama_token)
+def llama_vocab_fim_suf(model: llama_model_p, /) -> int:
+    ...
+
+# LLAMA_API llama_token llama_vocab_fim_mid(const struct llama_vocab * vocab);
+@ctypes_function("llama_vocab_fim_mid", [llama_vocab_p_ctypes], llama_token)
+def llama_vocab_fim_mid(model: llama_model_p, /) -> int:
+    ...
+
+# LLAMA_API llama_token llama_vocab_fim_pad(const struct llama_vocab * vocab);
+@ctypes_function("llama_vocab_fim_pad", [llama_vocab_p_ctypes], llama_token)
+def llama_vocab_fim_pad(model: llama_model_p, /) -> int:
+    ...
+
+# LLAMA_API llama_token llama_vocab_fim_rep(const struct llama_vocab * vocab);
+@ctypes_function("llama_vocab_fim_rep", [llama_vocab_p_ctypes], llama_token)
+def llama_vocab_fim_rep(model: llama_model_p, /) -> int:
+    ...
+
+# LLAMA_API llama_token llama_vocab_fim_sep(const struct llama_vocab * vocab);
+@ctypes_function("llama_vocab_fim_sep", [llama_vocab_p_ctypes], llama_token)
+def llama_vocab_fim_sep(model: llama_model_p, /) -> int:
     ...
 
 
-# DEPRECATED(LLAMA_API llama_token llama_token_middle(const struct llama_model * model), "use llama_token_fim_mid instead");
-@ctypes_function("llama_token_middle", [llama_model_p_ctypes], llama_token)
-def llama_token_middle(model: llama_model_p, /) -> int:
-    ...
-
-
-# DEPRECATED(LLAMA_API llama_token llama_token_suffix(const struct llama_model * model), "use llama_token_fim_suf instead");
-@ctypes_function("llama_token_suffix", [llama_model_p_ctypes], llama_token)
-def llama_token_suffix(model: llama_model_p, /) -> int:
-    ...
-
-
-# LLAMA_API llama_token llama_token_fim_pre(const struct llama_model * model);
-@ctypes_function("llama_token_fim_pre", [llama_model_p_ctypes], llama_token)
-def llama_token_fim_pre(model: llama_model_p, /) -> int:
-    ...
-
-# LLAMA_API llama_token llama_token_fim_suf(const struct llama_model * model);
-@ctypes_function("llama_token_fim_suf", [llama_model_p_ctypes], llama_token)
-def llama_token_fim_suf(model: llama_model_p, /) -> int:
-    ...
-
-# LLAMA_API llama_token llama_token_fim_mid(const struct llama_model * model);
-@ctypes_function("llama_token_fim_mid", [llama_model_p_ctypes], llama_token)
-def llama_token_fim_mid(model: llama_model_p, /) -> int:
-    ...
-
-# LLAMA_API llama_token llama_token_fim_pad(const struct llama_model * model);
-@ctypes_function("llama_token_fim_pad", [llama_model_p_ctypes], llama_token)
-def llama_token_fim_pad(model: llama_model_p, /) -> int:
-    ...
-
-# LLAMA_API llama_token llama_token_fim_rep(const struct llama_model * model);
-@ctypes_function("llama_token_fim_rep", [llama_model_p_ctypes], llama_token)
-def llama_token_fim_rep(model: llama_model_p, /) -> int:
-    ...
-
-# LLAMA_API llama_token llama_token_fim_sep(const struct llama_model * model);
-@ctypes_function("llama_token_fim_sep", [llama_model_p_ctypes], llama_token)
-def llama_token_fim_sep(model: llama_model_p, /) -> int:
-    ...
 
 # //
 # // Tokenization
@@ -2751,7 +2781,7 @@ def llama_token_fim_sep(model: llama_model_p, /) -> int:
 # /// @param parse_special Allow tokenizing special and/or control tokens which otherwise are not exposed and treated
 # ///                      as plaintext. Does not insert a leading space.
 # LLAMA_API int32_t llama_tokenize(
-#     const struct llama_model * model,
+#     const struct llama_vocab * vocab,
 #                   const char * text,
 #                      int32_t   text_len,
 #                  llama_token * tokens,
@@ -2761,7 +2791,7 @@ def llama_token_fim_sep(model: llama_model_p, /) -> int:
 @ctypes_function(
     "llama_tokenize",
     [
-        llama_model_p_ctypes,
+        llama_vocab_p_ctypes,
         ctypes.c_char_p,
         ctypes.c_int32,
         llama_token_p,
@@ -2772,7 +2802,7 @@ def llama_token_fim_sep(model: llama_model_p, /) -> int:
     ctypes.c_int32,
 )
 def llama_tokenize(
-    model: llama_model_p,
+    vocab: llama_vocab_p,
     text: bytes,
     text_len: Union[ctypes.c_int, int],
     tokens: CtypesArray[llama_token],
@@ -2805,7 +2835,7 @@ def llama_tokenize(
 # // User can skip up to 'lstrip' leading spaces before copying (useful when encoding/decoding multiple tokens with 'add_space_prefix')
 # // @param special If true, special tokens are rendered in the output.
 # LLAMA_API int32_t llama_token_to_piece(
-#           const struct llama_model * model,
+#           const struct llama_vocab * vocab,
 #                        llama_token   token,
 #                               char * buf,
 #                            int32_t   length,
@@ -2814,7 +2844,7 @@ def llama_tokenize(
 @ctypes_function(
     "llama_token_to_piece",
     [
-        llama_model_p_ctypes,
+        llama_vocab_p_ctypes,
         llama_token,
         ctypes.c_char_p,
         ctypes.c_int32,
@@ -2824,7 +2854,7 @@ def llama_tokenize(
     ctypes.c_int32,
 )
 def llama_token_to_piece(
-    model: llama_model_p,
+    vocab: llama_vocab_p,
     token: Union[llama_token, int],
     buf: Union[ctypes.c_char_p, bytes, CtypesArray[ctypes.c_char]],
     length: Union[ctypes.c_int, int],
@@ -2871,7 +2901,7 @@ def llama_token_to_piece(
 # /// @param remove_special Allow to remove BOS and EOS tokens if model is configured to do so.
 # /// @param unparse_special If true, special tokens are rendered in the output.
 # LLAMA_API int32_t llama_detokenize(
-#     const struct llama_model * model,
+#     const struct llama_vocab * vocab,
 #            const llama_token * tokens,
 #                      int32_t   n_tokens,
 #                         char * text,
@@ -2881,7 +2911,7 @@ def llama_token_to_piece(
 @ctypes_function(
     "llama_detokenize",
     [
-        llama_model_p_ctypes,
+        llama_vocab_p_ctypes,
         ctypes.POINTER(llama_token),
         ctypes.c_int32,
         ctypes.c_char_p,
@@ -2892,7 +2922,7 @@ def llama_token_to_piece(
     ctypes.c_int32,
 )
 def llama_detokenize(
-    model: llama_model_p,
+    vocab: llama_vocab_p,
     tokens: CtypesArray[llama_token],
     n_tokens: Union[ctypes.c_int, int],
     text: bytes,
@@ -3342,16 +3372,16 @@ def llama_sampler_init_mirostat_v2(
 
 
 # LLAMA_API struct llama_sampler * llama_sampler_init_grammar(
-#         const struct llama_model * model,
+#         const struct llama_vocab * vocab,
 #                       const char * grammar_str,
 #                       const char * grammar_root);
 @ctypes_function(
     "llama_sampler_init_grammar",
-    [llama_model_p_ctypes, ctypes.c_char_p, ctypes.c_char_p],
+    [llama_vocab_p_ctypes, ctypes.c_char_p, ctypes.c_char_p],
     llama_sampler_p_ctypes,
 )
 def llama_sampler_init_grammar(
-    model: llama_model_p, grammar_str: bytes, grammar_root: bytes, /
+    vocab: llama_vocab_p, grammar_str: bytes, grammar_root: bytes, /
 ) -> llama_sampler_p:
     ...
 
@@ -3378,8 +3408,9 @@ def llama_sampler_init_penalties(
 
 
 # ///  @details DRY sampler, designed by p-e-w, as described in: https://github.com/oobabooga/text-generation-webui/pull/5677, porting Koboldcpp implementation authored by pi6am: https://github.com/LostRuins/koboldcpp/pull/982
-# LLAMA_API struct llama_sampler *    llama_sampler_init_dry(
-#         const struct llama_model *  model,
+# LLAMA_API struct llama_sampler * llama_sampler_init_dry(
+#         const struct llama_vocab *  vocab,
+#                          int32_t    n_ctx_train,
 #                            float    dry_multiplier,
 #                            float    dry_base,
 #                          int32_t    dry_allowed_length,
@@ -3389,7 +3420,8 @@ def llama_sampler_init_penalties(
 @ctypes_function(
     "llama_sampler_init_dry",
     [
-        llama_model_p_ctypes,
+        llama_vocab_p_ctypes,
+        ctypes.c_int32,
         ctypes.c_float,
         ctypes.c_float,
         ctypes.c_int32,
@@ -3400,7 +3432,8 @@ def llama_sampler_init_penalties(
     llama_sampler_p_ctypes,
 )
 def llama_sampler_init_dry(
-    model: llama_model_p,
+    vocab: llama_vocab_p,
+    n_ctx_train: int,
     dry_multiplier: float,
     dry_base: float,
     dry_allowed_length: int,
@@ -3448,13 +3481,13 @@ def llama_sampler_init_logit_bias(
 # // 3. discard non-EOG tokens with low prob
 # // 4. if no tokens are left -> pick EOT
 # //
-# LLAMA_API struct llama_sampler * llama_sampler_init_infill(const struct llama_model * model);
+# LLAMA_API struct llama_sampler * llama_sampler_init_infill(const struct llama_vocab * vocab);
 @ctypes_function(
     "llama_sampler_init_infill",
-    [llama_model_p_ctypes],
+    [llama_vocab_p_ctypes],
     llama_sampler_p_ctypes,
 )
-def llama_sampler_init_infill(model: llama_model_p, /) -> llama_sampler_p:
+def llama_sampler_init_infill(vocab: llama_vocab_p, /) -> llama_sampler_p:
     """This sampler is meant to be used for fill-in-the-middle infilling.
     """
     ...
