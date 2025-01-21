@@ -1309,7 +1309,7 @@ def llama_pooling_type(ctx: llama_context_p, /) -> int:
 
 # LLAMA_API const struct llama_vocab * llama_model_get_vocab(const struct llama_model * model);
 @ctypes_function("llama_model_get_vocab", [llama_model_p_ctypes], ctypes.c_int32)
-def llama_model_get_vocab(model: llama_vocab_p, /) -> Optional[llama_vocab_p]:
+def llama_model_get_vocab(model: llama_model_p, /) -> Optional[llama_vocab_p]:
     ...
 
 # LLAMA_API enum llama_rope_type       llama_model_rope_type(const struct llama_model * model);
