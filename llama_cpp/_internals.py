@@ -110,19 +110,16 @@ class LlamaModel:
     def n_params(self) -> int:
         return llama_cpp.llama_model_n_params(self.model)
 
-    def get_tensor(self, name: str) -> ctypes.c_void_p:
-        return llama_cpp.llama_get_model_tensor(self.model, name.encode("utf-8"))
-
     # Vocab
 
     def token_get_text(self, token: int) -> str:
-        return llama_cpp.llama_token_get_text(self.model, token).decode("utf-8")
+        return llama_cpp.llama_vocab_get_text(self.vocab, token).decode("utf-8")
 
     def token_get_score(self, token: int) -> float:
-        return llama_cpp.llama_token_get_score(self.model, token)
+        return llama_cpp.llama_vocab_get_score(self.vocab, token)
 
     def token_get_attr(self, token: int) -> int:
-        return llama_cpp.llama_token_get_attr(self.model, token)
+        return llama_cpp.llama_vocab_get_attr(self.vocab, token)
 
     # Special tokens
 

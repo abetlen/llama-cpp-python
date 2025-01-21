@@ -2625,7 +2625,7 @@ def llama_get_embeddings_seq(
     "llama_vocab_get_text", [llama_vocab_p_ctypes, llama_token], ctypes.c_char_p
 )
 def llama_vocab_get_text(
-    model: llama_model_p, token: Union[llama_token, int], /
+    vocab: llama_vocab_p, token: Union[llama_token, int], /
 ) -> bytes:
     ...
 
@@ -2635,7 +2635,7 @@ def llama_vocab_get_text(
     "llama_vocab_get_score", [llama_vocab_p_ctypes, llama_token], ctypes.c_float
 )
 def llama_vocab_get_score(
-    model: llama_model_p, token: Union[llama_token, int], /
+    vocab: llama_vocab_p, token: Union[llama_token, int], /
 ) -> float:
     ...
 
@@ -2645,7 +2645,7 @@ def llama_vocab_get_score(
     "llama_vocab_get_attr", [llama_vocab_p_ctypes, llama_token], ctypes.c_int
 )
 def llama_vocab_get_attr(
-    model: llama_model_p, token: Union[llama_token, int], /
+    vocab: llama_vocab_p, token: Union[llama_token, int], /
 ) -> int:
     ...
 
@@ -2655,7 +2655,7 @@ def llama_vocab_get_attr(
 @ctypes_function(
     "llama_vocab_is_eog", [llama_vocab_p_ctypes, llama_token], ctypes.c_bool
 )
-def llama_vocab_is_eog(model: llama_model_p, token: Union[llama_token, int], /) -> bool:
+def llama_vocab_is_eog(vocab: llama_vocab_p, token: Union[llama_token, int], /) -> bool:
     """Check if the token is supposed to end generation (end-of-generation, eg. EOS, EOT, etc.)"""
     ...
 
@@ -2666,7 +2666,7 @@ def llama_vocab_is_eog(model: llama_model_p, token: Union[llama_token, int], /) 
     "llama_vocab_is_control", [llama_vocab_p_ctypes, llama_token], ctypes.c_bool
 )
 def llama_vocab_is_control(
-    model: llama_model_p, token: Union[llama_token, int], /
+    vocab: llama_vocab_p, token: Union[llama_token, int], /
 ) -> bool:
     """Identify if Token Id is a control token or a render-able token"""
     ...
@@ -2677,91 +2677,91 @@ def llama_vocab_is_control(
 
 # LLAMA_API llama_token llama_vocab_bos(const struct llama_vocab * vocab); // beginning-of-sentence
 @ctypes_function("llama_vocab_bos", [llama_vocab_p_ctypes], llama_token)
-def llama_vocab_bos(model: llama_model_p, /) -> int:
+def llama_vocab_bos(vocab: llama_vocab_p, /) -> int:
     """beginning-of-sentence"""
     ...
 
 
 # LLAMA_API llama_token llama_vocab_eos(const struct llama_vocab * vocab); // end-of-sentence
 @ctypes_function("llama_vocab_eos", [llama_vocab_p_ctypes], llama_token)
-def llama_vocab_eos(model: llama_model_p, /) -> int:
+def llama_vocab_eos(vocab: llama_vocab_p, /) -> int:
     """end-of-sentence"""
     ...
 
 
 # LLAMA_API llama_token llama_vocab_eot(const struct llama_vocab * vocab); // end-of-turn
 @ctypes_function("llama_vocab_eot", [llama_vocab_p_ctypes], llama_token)
-def llama_vocab_eot(model: llama_model_p, /) -> int:
+def llama_vocab_eot(vocab: llama_vocab_p, /) -> int:
     """end-of-turn"""
     ...
 
 # LLAMA_API llama_token llama_vocab_cls(const struct llama_vocab * vocab), // classification
 #            "use llama_vocab_bos instead");
 @ctypes_function("llama_vocab_cls", [llama_vocab_p_ctypes], llama_token)
-def llama_vocab_cls(model: llama_model_p, /) -> int:
+def llama_vocab_cls(vocab: llama_vocab_p, /) -> int:
     """llama_vocab_cls"""
     ...
 
 
 # LLAMA_API llama_token llama_vocab_sep(const struct llama_vocab * vocab); // sentence separator
 @ctypes_function("llama_vocab_sep", [llama_vocab_p_ctypes], llama_token)
-def llama_vocab_sep(model: llama_model_p, /) -> int:
+def llama_vocab_sep(vocab: llama_vocab_p, /) -> int:
     """sentence separator"""
     ...
 
 
 # LLAMA_API llama_token llama_vocab_nl (const struct llama_vocab * vocab); // next-line
 @ctypes_function("llama_vocab_nl", [llama_vocab_p_ctypes], llama_token)
-def llama_vocab_nl(model: llama_model_p, /) -> int:
+def llama_vocab_nl(vocab: llama_vocab_p, /) -> int:
     """next-line"""
     ...
 
 # LLAMA_API llama_token llama_vocab_pad(const struct llama_vocab * vocab); // padding
 @ctypes_function("llama_vocab_pad", [llama_vocab_p_ctypes], llama_token)
-def llama_vocab_pad(model: llama_model_p, /) -> int:
+def llama_vocab_pad(vocab: llama_vocab_p, /) -> int:
     """padding"""
     ...
 
 
 # LLAMA_API bool llama_vocab_get_add_bos(const struct llama_vocab * vocab);
 @ctypes_function("llama_vocab_get_add_bos", [llama_vocab_p_ctypes], ctypes.c_bool)
-def llama_vocab_get_add_bos(model: llama_model_p, /) -> bool:
+def llama_vocab_get_add_bos(vocab: llama_vocab_p, /) -> bool:
     ...
 
 
 # LLAMA_API bool llama_vocab_get_add_eos(const struct llama_vocab * vocab);
 @ctypes_function("llama_vocab_get_add_eos", [llama_vocab_p_ctypes], ctypes.c_bool)
-def llama_vocab_get_add_eos(model: llama_model_p, /) -> bool:
+def llama_vocab_get_add_eos(vocab: llama_vocab_p, /) -> bool:
     ...
 
 # LLAMA_API llama_token llama_vocab_fim_pre(const struct llama_vocab * vocab);
 @ctypes_function("llama_vocab_fim_pre", [llama_vocab_p_ctypes], llama_token)
-def llama_vocab_fim_pre(model: llama_model_p, /) -> int:
+def llama_vocab_fim_pre(vocab: llama_vocab_p, /) -> int:
     ...
 
 # LLAMA_API llama_token llama_vocab_fim_suf(const struct llama_vocab * vocab);
 @ctypes_function("llama_vocab_fim_suf", [llama_vocab_p_ctypes], llama_token)
-def llama_vocab_fim_suf(model: llama_model_p, /) -> int:
+def llama_vocab_fim_suf(vocab: llama_vocab_p, /) -> int:
     ...
 
 # LLAMA_API llama_token llama_vocab_fim_mid(const struct llama_vocab * vocab);
 @ctypes_function("llama_vocab_fim_mid", [llama_vocab_p_ctypes], llama_token)
-def llama_vocab_fim_mid(model: llama_model_p, /) -> int:
+def llama_vocab_fim_mid(vocab: llama_vocab_p, /) -> int:
     ...
 
 # LLAMA_API llama_token llama_vocab_fim_pad(const struct llama_vocab * vocab);
 @ctypes_function("llama_vocab_fim_pad", [llama_vocab_p_ctypes], llama_token)
-def llama_vocab_fim_pad(model: llama_model_p, /) -> int:
+def llama_vocab_fim_pad(vocab: llama_vocab_p, /) -> int:
     ...
 
 # LLAMA_API llama_token llama_vocab_fim_rep(const struct llama_vocab * vocab);
 @ctypes_function("llama_vocab_fim_rep", [llama_vocab_p_ctypes], llama_token)
-def llama_vocab_fim_rep(model: llama_model_p, /) -> int:
+def llama_vocab_fim_rep(vocab: llama_vocab_p, /) -> int:
     ...
 
 # LLAMA_API llama_token llama_vocab_fim_sep(const struct llama_vocab * vocab);
 @ctypes_function("llama_vocab_fim_sep", [llama_vocab_p_ctypes], llama_token)
-def llama_vocab_fim_sep(model: llama_model_p, /) -> int:
+def llama_vocab_fim_sep(vocab: llama_vocab_p, /) -> int:
     ...
 
 
