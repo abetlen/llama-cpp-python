@@ -2965,7 +2965,7 @@ def llama_detokenize(
         ctypes.c_char_p,
         ctypes.POINTER(llama_chat_message),
         ctypes.c_size_t,
-        bool,
+        ctypes.c_bool,
         ctypes.c_char_p,
         ctypes.c_int32
     ],
@@ -2978,7 +2978,6 @@ def llama_chat_apply_template(
     add_ass: bool,
     buf: bytes,
     length: int,
-    /,
 ) -> int:
     ...
 
