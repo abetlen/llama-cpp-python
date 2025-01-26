@@ -159,7 +159,7 @@ llama_context_p_ctypes = ctypes.c_void_p
 
 # struct llama_vocab;
 llama_vocab_p = NewType("llama_vocab_p", int)
-llama_vocab_p_ctypes = ctypes.c_int32
+llama_vocab_p_ctypes = ctypes.c_void_p
 
 # # struct llama_sampler;
 # llama_sampler_p = NewType("llama_sampler_p", int)
@@ -244,7 +244,7 @@ LLAMA_VOCAB_PRE_TYPE_OLMO = 12
 LLAMA_VOCAB_PRE_TYPE_DBRX = 13
 LLAMA_VOCAB_PRE_TYPE_SMAUG = 14
 LLAMA_VOCAB_PRE_TYPE_PORO = 15
-LLAMA_VOCAV_PRE_TYPE_CHATGLM3 = 16
+LLAMA_VOCAB_PRE_TYPE_CHATGLM3 = 16
 LLAMA_VOCAB_PRE_TYPE_CHATGLM4 = 17
 LLAMA_VOCAB_PRE_TYPE_VIKING = 18
 LLAMA_VOCAB_PRE_TYPE_JAIS = 19
@@ -1266,12 +1266,6 @@ def llama_n_seq_max(ctx: llama_context_p, /) -> int:
     ...
 
 
-# LLAMA_API int32_t llama_vocab_n_tokens(const struct llama_vocab * vocab);
-@ctypes_function("llama_vocab_n_tokens", [llama_vocab_p_ctypes], ctypes.c_int32)
-def llama_vocab_n_tokens(vocab: llama_vocab_p, /) -> int:
-    ...
-
-
 # LLAMA_API int32_t llama_model_n_ctx_train(const struct llama_model * model);
 @ctypes_function("llama_model_n_ctx_train", [llama_model_p_ctypes], ctypes.c_int32)
 def llama_model_n_ctx_train(model: llama_model_p, /) -> int:
@@ -1308,7 +1302,7 @@ def llama_pooling_type(ctx: llama_context_p, /) -> int:
     ...
 
 # LLAMA_API const struct llama_vocab * llama_model_get_vocab(const struct llama_model * model);
-@ctypes_function("llama_model_get_vocab", [llama_model_p_ctypes], ctypes.c_int32)
+@ctypes_function("llama_model_get_vocab", [llama_model_p_ctypes], llama_vocab_p)
 def llama_model_get_vocab(model: llama_model_p, /) -> Optional[llama_vocab_p]:
     ...
 
@@ -1330,7 +1324,7 @@ def llama_vocab_type(vocab: llama_vocab_p, /) -> int:
 
 
 # LLAMA_API int32_t llama_vocab_n_tokens(const struct llama_vocab * vocab);
-@ctypes_function("llama_vocab_n_tokens", [llama_vocab_p_ctypes], ctypes.c_int)
+@ctypes_function("llama_vocab_n_tokens", [llama_vocab_p_ctypes], ctypes.c_int32)
 def llama_vocab_n_tokens(vocab: llama_vocab_p, /) -> int:
     ...
 
@@ -2948,11 +2942,10 @@ def llama_detokenize(
 # // Chat templates
 # //
 
-
 # /// Apply chat template. Inspired by hf apply_chat_template() on python.
 # /// Both "model" and "custom_template" are optional, but at least one is required. "custom_template" has higher precedence than "model"
 # /// NOTE: This function does not use a jinja parser. It only support a pre-defined list of template. See more: https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template
-# /// @param tmpl A Jinja template to use for this chat. If this is nullptr, the model’s default chat template will be used instead.
+# /// @param tmpl A Jinja template to use for this chat. If this is nullptr, the model's default chat template will be used instead.
 # /// @param chat Pointer to a list of multiple llama_chat_message
 # /// @param n_msg Number of llama_chat_message in this chat
 # /// @param add_ass Whether to end the prompt with the token(s) that indicate the start of an assistant message.
@@ -2960,7 +2953,6 @@ def llama_detokenize(
 # /// @param length The size of the allocated buffer
 # /// @return The total number of bytes of the formatted prompt. If is it larger than the size of buffer, you may need to re-alloc it and then re-apply the template.
 # LLAMA_API int32_t llama_chat_apply_template(
-#           const struct llama_model * model,
 #                         const char * tmpl,
 #    const struct llama_chat_message * chat,
 #                             size_t   n_msg,
@@ -2970,19 +2962,22 @@ def llama_detokenize(
 @ctypes_function(
     "llama_chat_apply_template",
     [
-        ctypes.c_void_p,
         ctypes.c_char_p,
         ctypes.POINTER(llama_chat_message),
         ctypes.c_size_t,
+        ctypes.c_bool,
+        ctypes.c_char_p,
+        ctypes.c_int32
     ],
     ctypes.c_int32,
 )
 def llama_chat_apply_template(
-    model: llama_model_p,
     tmpl: bytes,
     chat: CtypesArray[llama_chat_message],
     n_msg: int,
-    /,
+    add_ass: bool,
+    buf: bytes,
+    length: int,
 ) -> int:
     ...
 
