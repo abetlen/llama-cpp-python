@@ -1302,7 +1302,7 @@ def llama_pooling_type(ctx: llama_context_p, /) -> int:
     ...
 
 # LLAMA_API const struct llama_vocab * llama_model_get_vocab(const struct llama_model * model);
-@ctypes_function("llama_model_get_vocab", [llama_model_p_ctypes], llama_vocab_p)
+@ctypes_function("llama_model_get_vocab", [llama_model_p_ctypes], llama_vocab_p_ctypes)
 def llama_model_get_vocab(model: llama_model_p, /) -> Optional[llama_vocab_p]:
     ...
 

@@ -43,7 +43,6 @@ class LlamaModel:
         self._exit_stack = ExitStack()
 
         model = None
-        vocab = None
 
         if not os.path.exists(path_model):
             raise ValueError(f"Model path does not exist: {path_model}")
@@ -58,23 +57,11 @@ class LlamaModel:
 
         self.model = model
 
-        vocab = llama_cpp.llama_model_get_vocab(self.model)
-
-        if vocab is None:
-            raise ValueError(f"Failed to load vocab from file: {path_model}")
-
-        self.vocab = vocab
-
         def free_model():
             if self.model is None:
                 return
             llama_cpp.llama_model_free(self.model)
             self.model = None
-
-            if self.vocab is None:
-                return
-            llama_cpp.llama_model_free(self.vocab)
-            self.vocab = None
 
         self._exit_stack.callback(free_model)
 
@@ -84,11 +71,11 @@ class LlamaModel:
     def __del__(self):
         self.close()
 
-    def vocab_type(self) -> int:
-        return llama_cpp.llama_vocab_type(self.vocab)
+    def vocab_type(self, _vocab:llama_cpp.llama_vocab_p) -> int:
+        return llama_cpp.llama_vocab_type(_vocab)
 
-    def n_vocab(self) -> int:
-        return llama_cpp.llama_vocab_n_tokens(self.vocab)
+    def n_vocab(self, _vocab:llama_cpp.llama_vocab_p) -> int:
+        return llama_cpp.llama_vocab_n_tokens(_vocab)
 
     def n_ctx_train(self) -> int:
         return llama_cpp.llama_model_n_ctx_train(self.model)
@@ -112,66 +99,66 @@ class LlamaModel:
 
     # Vocab
 
-    def token_get_text(self, token: int) -> str:
-        return llama_cpp.llama_vocab_get_text(self.vocab, token).decode("utf-8")
+    def token_get_text(self, _vocab:llama_cpp.llama_vocab_p, token: int) -> str:
+        return llama_cpp.llama_vocab_get_text(_vocab, token).decode("utf-8")
 
-    def token_get_score(self, token: int) -> float:
-        return llama_cpp.llama_vocab_get_score(self.vocab, token)
+    def token_get_score(self, _vocab:llama_cpp.llama_vocab_p, token: int) -> float:
+        return llama_cpp.llama_vocab_get_score(_vocab, token)
 
-    def token_get_attr(self, token: int) -> int:
-        return llama_cpp.llama_vocab_get_attr(self.vocab, token)
+    def token_get_attr(self, _vocab:llama_cpp.llama_vocab_p, token: int) -> int:
+        return llama_cpp.llama_vocab_get_attr(_vocab, token)
 
     # Special tokens
 
-    def token_bos(self) -> int:
-        return llama_cpp.llama_vocab_bos(self.vocab)
+    def token_bos(self, _vocab:llama_cpp.llama_vocab_p) -> int:
+        return llama_cpp.llama_vocab_bos(_vocab)
 
-    def token_eos(self) -> int:
-        return llama_cpp.llama_vocab_eos(self.vocab)
+    def token_eos(self, _vocab:llama_cpp.llama_vocab_p) -> int:
+        return llama_cpp.llama_vocab_eos(_vocab)
 
-    def token_eot(self) -> int:
-        return llama_cpp.llama_vocab_eot(self.vocab)
+    def token_eot(self, _vocab:llama_cpp.llama_vocab_p) -> int:
+        return llama_cpp.llama_vocab_eot(_vocab)
 
-    def token_cls(self) -> int:
-        return llama_cpp.llama_vocab_cls(self.vocab)
+    def token_cls(self, _vocab:llama_cpp.llama_vocab_p) -> int:
+        return llama_cpp.llama_vocab_cls(_vocab)
 
-    def token_sep(self) -> int:
-        return llama_cpp.llama_vocab_sep(self.vocab)
+    def token_sep(self, _vocab:llama_cpp.llama_vocab_p) -> int:
+        return llama_cpp.llama_vocab_sep(_vocab)
 
-    def token_nl(self) -> int:
-        return llama_cpp.llama_vocab_nl(self.vocab)
+    def token_nl(self, _vocab:llama_cpp.llama_vocab_p) -> int:
+        return llama_cpp.llama_vocab_nl(_vocab)
 
-    def token_pad(self) -> int:
-        return llama_cpp.llama_vocab_pad(self.vocab)
+    def token_pad(self, _vocab:llama_cpp.llama_vocab_p) -> int:
+        return llama_cpp.llama_vocab_pad(_vocab)
 
-    def token_prefix(self) -> int:
-        return llama_cpp.llama_vocab_fim_pre(self.vocab)
+    def token_prefix(self, _vocab:llama_cpp.llama_vocab_p) -> int:
+        return llama_cpp.llama_vocab_fim_pre(_vocab)
 
-    def token_middle(self) -> int:
-        return llama_cpp.llama_vocab_fim_mid(self.vocab)
+    def token_middle(self, _vocab:llama_cpp.llama_vocab_p) -> int:
+        return llama_cpp.llama_vocab_fim_mid(_vocab)
 
-    def token_suffix(self) -> int:
-        return llama_cpp.llama_vocab_fim_suf(self.vocab)
+    def token_suffix(self, _vocab:llama_cpp.llama_vocab_p) -> int:
+        return llama_cpp.llama_vocab_fim_suf(_vocab)
 
-    def add_bos_token(self) -> bool:
-        return llama_cpp.llama_vocab_get_add_bos(self.vocab)
+    def add_bos_token(self, _vocab:llama_cpp.llama_vocab_p) -> bool:
+        return llama_cpp.llama_vocab_get_add_bos(_vocab)
 
-    def add_eos_token(self) -> bool:
-        return llama_cpp.llama_vocab_get_add_eos(self.vocab)
+    def add_eos_token(self, _vocab:llama_cpp.llama_vocab_p) -> bool:
+        return llama_cpp.llama_vocab_get_add_eos(_vocab)
 
     # Tokenization
 
-    def tokenize(self, text: bytes, add_bos: bool, special: bool):
+    def tokenize(self, _vocab:llama_cpp.llama_vocab_p, text: bytes, add_bos: bool, special: bool):
         n_ctx = self.n_ctx_train()
         tokens = (llama_cpp.llama_token * n_ctx)()
         n_tokens = llama_cpp.llama_tokenize(
-            self.vocab, text, len(text), tokens, n_ctx, add_bos, special
+            _vocab, text, len(text), tokens, n_ctx, add_bos, special
         )
         if n_tokens < 0:
             n_tokens = abs(n_tokens)
             tokens = (llama_cpp.llama_token * n_tokens)()
             n_tokens = llama_cpp.llama_tokenize(
-                self.vocab, text, len(text), tokens, n_tokens, add_bos, special
+                _vocab, text, len(text), tokens, n_tokens, add_bos, special
             )
             if n_tokens < 0:
                 raise RuntimeError(
@@ -618,10 +605,11 @@ class LlamaSamplingContext:
     def sample(
         self,
         ctx_main: LlamaContext,
+        _vocab:llama_cpp.llama_vocab_p,
         idx: int = 0,
         logits_array: Optional[npt.NDArray[np.single]] = None,
     ):
-        n_vocab = ctx_main.model.n_vocab()
+        n_vocab = ctx_main.model.n_vocab(_vocab)
         id: int = 0
 
         if logits_array is None:
