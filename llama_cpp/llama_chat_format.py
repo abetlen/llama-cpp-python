@@ -594,7 +594,8 @@ def chat_formatter_to_chat_completion_handler(
             tool_choice=tool_choice,
         )
         prompt = llama.tokenize(
-            result.prompt.encode("utf-8"),
+            vocab=llama.llama_model_get_vocab(model),
+            text=result.prompt.encode("utf-8"),
             add_bos=not result.added_special,
             special=True,
         )
