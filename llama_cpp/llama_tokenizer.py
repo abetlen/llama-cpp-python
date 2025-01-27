@@ -81,7 +81,7 @@ class LlamaHFTokenizer(BaseLlamaTokenizer):
         self.hf_tokenizer = hf_tokenizer
 
     def tokenize(
-        self, text: bytes, add_bos: bool = True, special: bool = True
+        self, vocab:llama_cpp.llama_vocab_p, text: bytes, add_bos: bool = True, special: bool = True
     ) -> List[int]:
         return self.hf_tokenizer.encode(
             text.decode("utf-8", errors="ignore"), add_special_tokens=special
@@ -89,6 +89,7 @@ class LlamaHFTokenizer(BaseLlamaTokenizer):
 
     def detokenize(
         self,
+        vocab:llama_cpp.llama_vocab_p,
         tokens: List[int],
         prev_tokens: Optional[List[int]] = None,
         special: bool = False,

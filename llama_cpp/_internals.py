@@ -185,7 +185,7 @@ class LlamaModel:
         # this line removes a leading space if the first token is a beginning of sentence token
         return (
             output[1:]
-            if len(tokens) > 0 and tokens[0] == self.token_bos() and output[0:1] == b" "
+            if len(tokens) > 0 and tokens[0] == self.token_bos(vocab) and output[0:1] == b" "
             else output
         )
 
@@ -630,7 +630,7 @@ class LlamaSamplingContext:
 
         # apply penalties
         if len(self.prev) > 0:
-            nl_token = ctx_main.model.token_nl()
+            nl_token = ctx_main.model.token_nl(vocab)
             nl_logit = logits_array[nl_token]
             last_tokens = self.prev[-self.params.penalty_last_n :]
             last_tokens_size = min(len(last_tokens), self.params.penalty_last_n)
