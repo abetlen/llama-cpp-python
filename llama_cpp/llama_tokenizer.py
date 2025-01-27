@@ -14,7 +14,7 @@ from llama_cpp.llama_types import List
 class BaseLlamaTokenizer(abc.ABC):
     @abc.abstractmethod
     def tokenize(
-        self, text: bytes, add_bos: bool = True, special: bool = True
+        self, vocab: llama_cpp.llama_vocab_p, text: bytes, add_bos: bool = True, special: bool = True
     ) -> List[int]:
         """Tokenize the text into tokens.
 
@@ -28,6 +28,7 @@ class BaseLlamaTokenizer(abc.ABC):
     @abc.abstractmethod
     def detokenize(
         self,
+        vocab: llama_cpp.llama_vocab_p,
         tokens: List[int],
         prev_tokens: Optional[List[int]] = None,
         special: bool = False,
@@ -47,27 +48,29 @@ class LlamaTokenizer(BaseLlamaTokenizer):
         self._model = llama._model  # type: ignore
 
     def tokenize(
-        self, text: bytes, add_bos: bool = True, special: bool = True
+        self, vocab: llama_cpp.llama_vocab_p, text: bytes, add_bos: bool = True, special: bool = True
     ) -> List[int]:
-        return self._model.tokenize(text, add_bos=add_bos, special=special)
+        return self._model.tokenize(vocab, text, add_bos=add_bos, special=special)
 
     def detokenize(
         self,
+        vocab: llama_cpp.llama_vocab_p,
         tokens: List[int],
         prev_tokens: Optional[List[int]] = None,
         special: bool = False,
     ) -> bytes:
-        return self._model.detokenize(tokens, special=special)
+        return self._model.detokenize(vocab, tokens, special=special)
 
     def encode(
-        self, text: str, add_bos: bool = True, special: bool = True
+        self, vocab: llama_cpp.llama_vocab_p, text: str, add_bos: bool = True, special: bool = True
     ) -> List[int]:
         return self.tokenize(
+            vocab,
             text.encode("utf-8", errors="ignore"), add_bos=add_bos, special=special
         )
 
-    def decode(self, tokens: List[int]) -> str:
-        return self.detokenize(tokens).decode("utf-8", errors="ignore")
+    def decode(self, vocab: llama_cpp.llama_vocab_p, tokens: List[int]) -> str:
+        return self.detokenize(vocab, tokens).decode("utf-8", errors="ignore")
 
     @classmethod
     def from_ggml_file(cls, path: str) -> "LlamaTokenizer":
@@ -79,7 +82,7 @@ class LlamaHFTokenizer(BaseLlamaTokenizer):
         self.hf_tokenizer = hf_tokenizer
 
     def tokenize(
-        self, text: bytes, add_bos: bool = True, special: bool = True
+        self, vocab: llama_cpp.llama_vocab_p, text: bytes, add_bos: bool = True, special: bool = True
     ) -> List[int]:
         return self.hf_tokenizer.encode(
             text.decode("utf-8", errors="ignore"), add_special_tokens=special
@@ -87,6 +90,7 @@ class LlamaHFTokenizer(BaseLlamaTokenizer):
 
     def detokenize(
         self,
+        vocab: llama_cpp.llama_vocab_p,
         tokens: List[int],
         prev_tokens: Optional[List[int]] = None,
         special: bool = False,
