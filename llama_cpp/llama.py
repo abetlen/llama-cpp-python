@@ -374,6 +374,8 @@ class Llama:
             )
         )
 
+        self._vocab = llama_cpp.llama_model_get_vocab(self._model.model)
+
         # Override tokenizer
         self.tokenizer_ = tokenizer or LlamaTokenizer(self)
 
@@ -2171,7 +2173,7 @@ class Llama:
 
     def n_vocab(self) -> int:
         """Return the vocabulary size."""
-        return self._model.n_vocab()
+        return self._model.n_vocab(self._vocab)
 
     def tokenizer(self) -> LlamaTokenizer:
         """Return the llama tokenizer for this model."""
@@ -2179,15 +2181,15 @@ class Llama:
 
     def token_eos(self) -> int:
         """Return the end-of-sequence token."""
-        return self._model.token_eos()
+        return self._model.token_eos(self._vocab)
 
     def token_bos(self) -> int:
         """Return the beginning-of-sequence token."""
-        return self._model.token_bos()
+        return self._model.token_bos(self._vocab)
 
     def token_nl(self) -> int:
         """Return the newline token."""
-        return self._model.token_nl()
+        return self._model.token_nl(self._vocab)
 
     def pooling_type(self) -> str:
         """Return the pooling type."""

@@ -48,7 +48,7 @@ class LlamaModel:
             raise ValueError(f"Model path does not exist: {path_model}")
 
         with suppress_stdout_stderr(disable=verbose):
-            model = llama_cpp.llama_load_model_from_file(
+            model = llama_cpp.llama_model_load_from_file(
                 self.path_model.encode("utf-8"), self.params
             )
 
@@ -60,7 +60,7 @@ class LlamaModel:
         def free_model():
             if self.model is None:
                 return
-            llama_cpp.llama_free_model(self.model)
+            llama_cpp.llama_model_free(self.model)
             self.model = None
 
         self._exit_stack.callback(free_model)
@@ -71,20 +71,20 @@ class LlamaModel:
     def __del__(self):
         self.close()
 
-    def vocab_type(self) -> int:
-        return llama_cpp.llama_vocab_type(self.model)
+    def vocab_type(self, _vocab:llama_cpp.llama_vocab_p) -> int:
+        return llama_cpp.llama_vocab_type(_vocab)
 
-    def n_vocab(self) -> int:
-        return llama_cpp.llama_n_vocab(self.model)
+    def n_vocab(self, _vocab:llama_cpp.llama_vocab_p) -> int:
+        return llama_cpp.llama_vocab_n_tokens(_vocab)
 
     def n_ctx_train(self) -> int:
-        return llama_cpp.llama_n_ctx_train(self.model)
+        return llama_cpp.llama_model_n_ctx_train(self.model)
 
     def n_embd(self) -> int:
-        return llama_cpp.llama_n_embd(self.model)
+        return llama_cpp.llama_model_n_embd(self.model)
 
     def rope_freq_scale_train(self) -> float:
-        return llama_cpp.llama_rope_freq_scale_train(self.model)
+        return llama_cpp.llama_model_rope_freq_scale_train(self.model)
 
     def desc(self) -> str:
         buf = ctypes.create_string_buffer(1024)
@@ -97,68 +97,68 @@ class LlamaModel:
     def n_params(self) -> int:
         return llama_cpp.llama_model_n_params(self.model)
 
-    def get_tensor(self, name: str) -> ctypes.c_void_p:
-        return llama_cpp.llama_get_model_tensor(self.model, name.encode("utf-8"))
-
     # Vocab
 
-    def token_get_text(self, token: int) -> str:
-        return llama_cpp.llama_token_get_text(self.model, token).decode("utf-8")
+    def token_get_text(self, _vocab:llama_cpp.llama_vocab_p, token: int) -> str:
+        return llama_cpp.llama_vocab_get_text(_vocab, token).decode("utf-8")
 
-    def token_get_score(self, token: int) -> float:
-        return llama_cpp.llama_token_get_score(self.model, token)
+    def token_get_score(self, _vocab:llama_cpp.llama_vocab_p, token: int) -> float:
+        return llama_cpp.llama_vocab_get_score(_vocab, token)
 
-    def token_get_attr(self, token: int) -> int:
-        return llama_cpp.llama_token_get_attr(self.model, token)
+    def token_get_attr(self, _vocab:llama_cpp.llama_vocab_p, token: int) -> int:
+        return llama_cpp.llama_vocab_get_attr(_vocab, token)
 
     # Special tokens
 
-    def token_bos(self) -> int:
-        return llama_cpp.llama_token_bos(self.model)
+    def token_bos(self, _vocab:llama_cpp.llama_vocab_p) -> int:
+        return llama_cpp.llama_vocab_bos(_vocab)
 
-    def token_eos(self) -> int:
-        return llama_cpp.llama_token_eos(self.model)
+    def token_eos(self, _vocab:llama_cpp.llama_vocab_p) -> int:
+        return llama_cpp.llama_vocab_eos(_vocab)
 
-    def token_cls(self) -> int:
-        return llama_cpp.llama_token_cls(self.model)
+    def token_eot(self, _vocab:llama_cpp.llama_vocab_p) -> int:
+        return llama_cpp.llama_vocab_eot(_vocab)
 
-    def token_sep(self) -> int:
-        return llama_cpp.llama_token_sep(self.model)
+    def token_cls(self, _vocab:llama_cpp.llama_vocab_p) -> int:
+        return llama_cpp.llama_vocab_cls(_vocab)
 
-    def token_nl(self) -> int:
-        return llama_cpp.llama_token_nl(self.model)
+    def token_sep(self, _vocab:llama_cpp.llama_vocab_p) -> int:
+        return llama_cpp.llama_vocab_sep(_vocab)
 
-    def token_prefix(self) -> int:
-        return llama_cpp.llama_token_prefix(self.model)
+    def token_nl(self, _vocab:llama_cpp.llama_vocab_p) -> int:
+        return llama_cpp.llama_vocab_nl(_vocab)
 
-    def token_middle(self) -> int:
-        return llama_cpp.llama_token_middle(self.model)
+    def token_pad(self, _vocab:llama_cpp.llama_vocab_p) -> int:
+        return llama_cpp.llama_vocab_pad(_vocab)
 
-    def token_suffix(self) -> int:
-        return llama_cpp.llama_token_suffix(self.model)
+    def token_prefix(self, _vocab:llama_cpp.llama_vocab_p) -> int:
+        return llama_cpp.llama_vocab_fim_pre(_vocab)
 
-    def token_eot(self) -> int:
-        return llama_cpp.llama_token_eot(self.model)
+    def token_middle(self, _vocab:llama_cpp.llama_vocab_p) -> int:
+        return llama_cpp.llama_vocab_fim_mid(_vocab)
 
-    def add_bos_token(self) -> bool:
-        return llama_cpp.llama_add_bos_token(self.model)
+    def token_suffix(self, _vocab:llama_cpp.llama_vocab_p) -> int:
+        return llama_cpp.llama_vocab_fim_suf(_vocab)
 
-    def add_eos_token(self) -> bool:
-        return llama_cpp.llama_add_eos_token(self.model)
+    def add_bos_token(self, _vocab:llama_cpp.llama_vocab_p) -> bool:
+        return llama_cpp.llama_vocab_get_add_bos(_vocab)
+
+    def add_eos_token(self, _vocab:llama_cpp.llama_vocab_p) -> bool:
+        return llama_cpp.llama_vocab_get_add_eos(_vocab)
 
     # Tokenization
 
-    def tokenize(self, text: bytes, add_bos: bool, special: bool):
+    def tokenize(self, _vocab:llama_cpp.llama_vocab_p, text: bytes, add_bos: bool, special: bool):
         n_ctx = self.n_ctx_train()
         tokens = (llama_cpp.llama_token * n_ctx)()
         n_tokens = llama_cpp.llama_tokenize(
-            self.model, text, len(text), tokens, n_ctx, add_bos, special
+            _vocab, text, len(text), tokens, n_ctx, add_bos, special
         )
         if n_tokens < 0:
             n_tokens = abs(n_tokens)
             tokens = (llama_cpp.llama_token * n_tokens)()
             n_tokens = llama_cpp.llama_tokenize(
-                self.model, text, len(text), tokens, n_tokens, add_bos, special
+                _vocab, text, len(text), tokens, n_tokens, add_bos, special
             )
             if n_tokens < 0:
                 raise RuntimeError(
@@ -605,10 +605,11 @@ class LlamaSamplingContext:
     def sample(
         self,
         ctx_main: LlamaContext,
+        _vocab:llama_cpp.llama_vocab_p,
         idx: int = 0,
         logits_array: Optional[npt.NDArray[np.single]] = None,
     ):
-        n_vocab = ctx_main.model.n_vocab()
+        n_vocab = ctx_main.model.n_vocab(_vocab)
         id: int = 0
 
         if logits_array is None:
