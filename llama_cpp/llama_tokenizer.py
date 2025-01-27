@@ -14,7 +14,7 @@ from llama_cpp.llama_types import List
 class BaseLlamaTokenizer(abc.ABC):
     @abc.abstractmethod
     def tokenize(
-        self, text: bytes, add_bos: bool = True, special: bool = True
+        self, vocab:llama_cpp.llama_vocab_p, text: bytes, add_bos: bool = True, special: bool = True
     ) -> List[int]:
         """Tokenize the text into tokens.
 
@@ -28,6 +28,7 @@ class BaseLlamaTokenizer(abc.ABC):
     @abc.abstractmethod
     def detokenize(
         self,
+        vocab:llama_cpp.llama_vocab_p,
         tokens: List[int],
         prev_tokens: Optional[List[int]] = None,
         special: bool = False,
@@ -47,17 +48,18 @@ class LlamaTokenizer(BaseLlamaTokenizer):
         self._model = llama._model  # type: ignore
 
     def tokenize(
-        self, text: bytes, add_bos: bool = True, special: bool = True
+        self, vocab:llama_cpp.llama_vocab_p, text: bytes, add_bos: bool = True, special: bool = True
     ) -> List[int]:
-        return self._model.tokenize(text, add_bos=add_bos, special=special)
+        return self._model.tokenize(vocab, text, add_bos=add_bos, special=special)
 
     def detokenize(
         self,
+        vocab:llama_cpp.llama_vocab_p,
         tokens: List[int],
         prev_tokens: Optional[List[int]] = None,
         special: bool = False,
     ) -> bytes:
-        return self._model.detokenize(tokens, special=special)
+        return self._model.detokenize(vocab, tokens, special=special)
 
     def encode(
         self, text: str, add_bos: bool = True, special: bool = True
