@@ -478,10 +478,10 @@ class Llama:
         bos_token_id = self.token_bos()
 
         eos_token = (
-            self._model.token_get_text(eos_token_id) if eos_token_id != -1 else ""
+            self._model.token_get_text(self._vocab, eos_token_id) if eos_token_id != -1 else ""
         )
         bos_token = (
-            self._model.token_get_text(bos_token_id) if bos_token_id != -1 else ""
+            self._model.token_get_text(self._vocab, bos_token_id) if bos_token_id != -1 else ""
         )
 
         # Unfortunately the llama.cpp API does not return metadata arrays, so we can't get template names from tokenizer.chat_templates
@@ -1237,7 +1237,7 @@ class Llama:
 
         if prompt_tokens[:2] == [self.token_bos()] * 2:
             warnings.warn(
-                f'Detected duplicate leading "{self._model.token_get_text(self.token_bos())}" in prompt, this will likely reduce response quality, consider removing it...',
+                f'Detected duplicate leading "{self._model.token_get_text(self._vocab, self.token_bos())}" in prompt, this will likely reduce response quality, consider removing it...',
                 RuntimeWarning,
             )
 
