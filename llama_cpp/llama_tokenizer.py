@@ -62,14 +62,14 @@ class LlamaTokenizer(BaseLlamaTokenizer):
         return self._model.detokenize(vocab, tokens, special=special)
 
     def encode(
-        self, text: str, add_bos: bool = True, special: bool = True
+        self, vocab:llama_cpp.llama_vocab_p, text: str, add_bos: bool = True, special: bool = True
     ) -> List[int]:
         return self.tokenize(
-            text.encode("utf-8", errors="ignore"), add_bos=add_bos, special=special
+            vocab, text.encode("utf-8", errors="ignore"), add_bos=add_bos, special=special
         )
 
-    def decode(self, tokens: List[int]) -> str:
-        return self.detokenize(tokens).decode("utf-8", errors="ignore")
+    def decode(self, vocab:llama_cpp.llama_vocab_p, tokens: List[int]) -> str:
+        return self.detokenize(vocab, tokens).decode("utf-8", errors="ignore")
 
     @classmethod
     def from_ggml_file(cls, path: str) -> "LlamaTokenizer":

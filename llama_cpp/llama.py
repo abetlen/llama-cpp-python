@@ -1430,7 +1430,7 @@ class Llama:
                             )
                         )
                         top_logprob = {
-                            self.detokenize([i]).decode(
+                            self.detokenize(self._vocab, [i]).decode(
                                 "utf-8", errors="ignore"
                             ): logprob
                             for logprob, i in sorted_logprobs[:logprobs]
@@ -1559,6 +1559,7 @@ class Llama:
                     )
                     text_offset = len(prompt) + len(
                         self.detokenize(
+                            self._vocab,
                             completion_tokens[:returned_tokens],
                             prev_tokens=prompt_tokens
                             + completion_tokens[:returned_tokens],
@@ -1574,7 +1575,7 @@ class Llama:
                         )
                     )
                     top_logprob = {
-                        self.detokenize([i]).decode("utf-8", errors="ignore"): logprob
+                        self.detokenize(self._vocab, [i]).decode("utf-8", errors="ignore"): logprob
                         for logprob, i in sorted_logprobs[:logprobs]
                     }
                     top_logprob.update({token_str: current_logprobs[int(token)]})
@@ -1617,7 +1618,7 @@ class Llama:
                     "model": model_name,
                     "choices": [
                         {
-                            "text": self.detokenize([token]).decode(
+                            "text": self.detokenize(self._vocab, [token]).decode(
                                 "utf-8", errors="ignore"
                             ),
                             "index": 0,
@@ -1680,7 +1681,7 @@ class Llama:
                 all_tokens = completion_tokens
 
             all_token_strs = [
-                self.detokenize([token], prev_tokens=all_tokens[:i]).decode(
+                self.detokenize(self._vocab, [token], prev_tokens=all_tokens[:i]).decode(
                     "utf-8", errors="ignore"
                 )
                 for i, token in enumerate(all_tokens)
@@ -1695,7 +1696,7 @@ class Llama:
                 text_offsets.append(
                     text_offset
                     + len(
-                        self.detokenize(all_tokens[:idx]).decode(
+                        self.detokenize(self._vocab, all_tokens[:idx]).decode(
                             "utf-8", errors="ignore"
                         )
                     )
@@ -1708,7 +1709,7 @@ class Llama:
                 )
                 token_logprobs.append(logprobs_token[int(token)])
                 top_logprob: Optional[Dict[str, float]] = {
-                    self.detokenize([i], prev_tokens=all_tokens[:idx]).decode(
+                    self.detokenize(self._vocab, [i], prev_tokens=all_tokens[:idx]).decode(
                         "utf-8", errors="ignore"
                     ): logprob
                     for logprob, i in sorted_logprobs[:logprobs]

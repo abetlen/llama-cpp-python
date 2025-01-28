@@ -227,9 +227,10 @@ def _logit_bias_tokens_to_input_ids(
     logit_bias: Dict[str, float],
 ) -> Dict[str, float]:
     to_bias: Dict[str, float] = {}
+    vocab=llama.llama_model_get_vocab(llama.model)
     for token, score in logit_bias.items():
         token = token.encode("utf-8")
-        for input_id in llama.tokenize(token, add_bos=False, special=True):
+        for input_id in llama.tokenize(vocab, token, add_bos=False, special=True):
             to_bias[str(input_id)] = score
     return to_bias
 

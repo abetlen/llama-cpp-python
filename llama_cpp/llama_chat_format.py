@@ -594,7 +594,7 @@ def chat_formatter_to_chat_completion_handler(
             tool_choice=tool_choice,
         )
         prompt = llama.tokenize(
-            vocab=llama.llama_model_get_vocab(model),
+            vocab=llama.llama_model_get_vocab(llama.model),
             text=result.prompt.encode("utf-8"),
             add_bos=not result.added_special,
             special=True,
@@ -2813,8 +2813,8 @@ class Llava15ChatHandler:
         text = template.render(
             messages=messages,
             add_generation_prompt=True,
-            eos_token=llama.detokenize([llama.token_eos()]),
-            bos_token=llama.detokenize([llama.token_bos()]),
+            eos_token=llama.detokenize(vocab=llama.llama_model_get_vocab(llama.model), tokens=[llama.token_eos()]),
+            bos_token=llama.detokenize(vocab=llama.llama_model_get_vocab(llama.model), tokens=[llama.token_bos()]),
         )
         split_text = self.split_text_on_image_urls(text, image_urls)
 
@@ -2828,7 +2828,8 @@ class Llava15ChatHandler:
         for type_, value in split_text:
             if type_ == "text":
                 tokens = llama.tokenize(
-                    value.encode("utf8"), add_bos=False, special=True
+                    vocab=llama.llama_model_get_vocab(llama.model),
+                    text=value.encode("utf8"), add_bos=False, special=True
                 )
                 if llama.n_tokens + len(tokens) > llama.n_ctx():
                     raise ValueError(
