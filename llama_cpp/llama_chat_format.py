@@ -27,7 +27,7 @@ from jinja2.sandbox import ImmutableSandboxedEnvironment
 
 import numpy as np
 import numpy.typing as npt
-
+import llama_cpp.llama_cpp as llama_cpp
 import llama_cpp.llama as llama
 import llama_cpp.llama_types as llama_types
 import llama_cpp.llama_grammar as llama_grammar
@@ -594,7 +594,7 @@ def chat_formatter_to_chat_completion_handler(
             tool_choice=tool_choice,
         )
         prompt = llama.tokenize(
-            vocab=llama.llama_model_get_vocab(llama.model),
+            vocab=llama_cpp.llama_model_get_vocab(llama.model),
             text=result.prompt.encode("utf-8"),
             add_bos=not result.added_special,
             special=True,
@@ -2813,8 +2813,8 @@ class Llava15ChatHandler:
         text = template.render(
             messages=messages,
             add_generation_prompt=True,
-            eos_token=llama.detokenize(vocab=llama.llama_model_get_vocab(llama.model), tokens=[llama.token_eos()]),
-            bos_token=llama.detokenize(vocab=llama.llama_model_get_vocab(llama.model), tokens=[llama.token_bos()]),
+            eos_token=llama.detokenize(vocab=llama_cpp.llama_model_get_vocab(llama.model), tokens=[llama.token_eos()]),
+            bos_token=llama.detokenize(vocab=llama_cpp.llama_model_get_vocab(llama.model), tokens=[llama.token_bos()]),
         )
         split_text = self.split_text_on_image_urls(text, image_urls)
 
@@ -2828,7 +2828,7 @@ class Llava15ChatHandler:
         for type_, value in split_text:
             if type_ == "text":
                 tokens = llama.tokenize(
-                    vocab=llama.llama_model_get_vocab(llama.model),
+                    vocab=llama_cpp.llama_model_get_vocab(llama.model),
                     text=value.encode("utf8"), add_bos=False, special=True
                 )
                 if llama.n_tokens + len(tokens) > llama.n_ctx():
