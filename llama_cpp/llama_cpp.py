@@ -1483,10 +1483,12 @@ def llama_model_size(model: llama_model_p, /) -> int:
 
 
 # // Get the default chat template. Returns nullptr if not available
-# LLAMA_API const char * llama_model_chat_template(const struct llama_model * model);
-@ctypes_function("llama_model_chat_template", [llama_model_p_ctypes], ctypes.c_char_p)
-def llama_model_chat_template(model: llama_model_p, /) -> Optional[bytes]:
-    """Get the default chat template. Returns None if not available"""
+# // If name is NULL, returns the default chat template
+# LLAMA_API const char * llama_model_chat_template(const struct llama_model * model, const char * name);
+@ctypes_function("llama_model_chat_template", [llama_model_p_ctypes, ctypes.c_char_p], ctypes.c_char_p)
+def llama_model_chat_template(model: llama_model_p, name: Optional[bytes], /) -> Optional[bytes]:
+    """Get the default chat template. Returns None if not available
+    If name is None, returns the default chat template"""
     ...
 
 
