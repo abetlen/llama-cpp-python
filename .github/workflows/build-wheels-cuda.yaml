@@ -61,11 +61,9 @@ jobs:
       - name: Setup Mamba
         uses: conda-incubator/setup-miniconda@v3.1.0
         with:
-          activate-environment: "build"
+          activate-environment: "llamacpp"
           python-version: ${{ matrix.pyver }}
-          miniforge-variant: Mambaforge
           miniforge-version: latest
-          use-mamba: true
           add-pip-as-python-dependency: true
           auto-activate-base: false
 
