@@ -780,6 +780,7 @@ class llama_context_params(ctypes.Structure):
         embeddings (bool): if true, extract embeddings (together with logits)
         offload_kqv (bool): whether to offload the KQV ops (including the KV cache) to GPU
         flash_attn (bool): whether to use flash attention
+        no_perf (bool): whether to measure performance timings
         abort_callback (ggml_abort_callback): abort callback if it returns true, execution of llama_decode() will be aborted
         abort_callback_data (ctypes.ctypes.c_void_p): data for abort_callback
     """
@@ -810,6 +811,7 @@ class llama_context_params(ctypes.Structure):
         embeddings: bool
         offload_kqv: bool
         flash_attn: bool
+        no_perf: bool
         abort_callback: Callable[[ctypes.c_void_p], bool]
         abort_callback_data: ctypes.c_void_p
 
@@ -839,6 +841,7 @@ class llama_context_params(ctypes.Structure):
         ("embeddings", ctypes.c_bool),
         ("offload_kqv", ctypes.c_bool),
         ("flash_attn", ctypes.c_bool),
+        ("no_perf", ctypes.c_bool),
         ("abort_callback", ggml_abort_callback),
         ("abort_callback_data", ctypes.c_void_p),
     ]
