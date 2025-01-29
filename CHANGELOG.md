@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.7]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@794fe23f29fb40104975c91fe19f23798f7c726e
+- fix(ci): Fix the CUDA workflow by @oobabooga in #1894
+- fix: error showing time spent in llama perf context print, adds `no_perf` flag to `Llama` class by @shakalaca in #1898
+
 ## [0.3.6]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@f7cd13301c2a88f97073fd119072b4cc92c08df1
