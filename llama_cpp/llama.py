@@ -406,10 +406,10 @@ class Llama:
             )
         )
 
-        self._lora_adapter: Optional[llama_cpp.llama_lora_adapter_p] = None
+        self._lora_adapter: Optional[llama_cpp.llama_adapter_lora_p] = None
 
         if self.lora_path:
-            self._lora_adapter = llama_cpp.llama_lora_adapter_init(
+            self._lora_adapter = llama_cpp.llama_adapter_lora_init(
                 self._model.model,
                 self.lora_path.encode("utf-8"),
             )
@@ -421,12 +421,12 @@ class Llama:
             def free_lora_adapter():
                 if self._lora_adapter is None:
                     return
-                llama_cpp.llama_lora_adapter_free(self._lora_adapter)
+                llama_cpp.llama_adapter_lora_free(self._lora_adapter)
                 self._lora_adapter = None
 
             self._stack.callback(free_lora_adapter)
 
-            if llama_cpp.llama_lora_adapter_set(
+            if llama_cpp.llama_set_adapter_lora(
                 self._ctx.ctx, self._lora_adapter, self.lora_scale
             ):
                 raise RuntimeError(
@@ -1152,9 +1152,9 @@ class Llama:
         bos_token_id: int = self.token_bos()
         cls_token_id: int = self._model.token_cls()
         sep_token_id: int = self._model.token_sep()
-        prefix_token_id: int = self._model.token_prefix()
-        middle_token_id: int = self._model.token_middle()
-        suffix_token_id: int = self._model.token_suffix()
+        prefix_token_id: int = 0 # self._model.token_prefix() # TODO: Fix
+        middle_token_id: int = 0 # self._model.token_middle() # TODO: Fix
+        suffix_token_id: int = 0 # self._model.token_suffix() # TODO: Fix
         add_space_prefix: bool = (
             self.metadata.get("tokenizer.ggml.add_space_prefix", "true") == "true"
         )
@@ -1332,7 +1332,7 @@ class Llama:
             logits_processor=logits_processor,
             grammar=grammar,
         ):
-            if llama_cpp.llama_token_is_eog(self._model.model, token):
+            if llama_cpp.llama_token_is_eog(self._model.vocab, token):
                 text = self.detokenize(completion_tokens, prev_tokens=prompt_tokens)
                 finish_reason = "stop"
                 break
