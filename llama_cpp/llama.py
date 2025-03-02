@@ -94,6 +94,7 @@ class Llama:
         offload_kqv: bool = True,
         flash_attn: bool = False,
         # Sampling Params
+        no_perf: bool = False,
         last_n_tokens_size: int = 64,
         # LoRA Params
         lora_base: Optional[str] = None,
@@ -173,6 +174,7 @@ class Llama:
             embedding: Embedding mode only.
             offload_kqv: Offload K, Q, V to GPU.
             flash_attn: Use flash attention.
+            no_perf: Measure performance timings.
             last_n_tokens_size: Maximum number of tokens to keep in the last_n_tokens deque.
             lora_base: Optional path to base model, useful if using a quantized base model and you want to apply LoRA to an f16 model.
             lora_path: Path to a LoRA file to apply to the model.
@@ -351,6 +353,7 @@ class Llama:
         if type_v is not None:
             self.context_params.type_v = type_v
         # Sampling Params
+        self.context_params.no_perf = no_perf
         self.last_n_tokens_size = last_n_tokens_size
 
         self.cache: Optional[BaseLlamaCache] = None
@@ -406,10 +409,10 @@ class Llama:
             )
         )
 
-        self._lora_adapter: Optional[llama_cpp.llama_lora_adapter_p] = None
+        self._lora_adapter: Optional[llama_cpp.llama_adapter_lora_p] = None
 
         if self.lora_path:
-            self._lora_adapter = llama_cpp.llama_lora_adapter_init(
+            self._lora_adapter = llama_cpp.llama_adapter_lora_init(
                 self._model.model,
                 self.lora_path.encode("utf-8"),
             )
@@ -421,12 +424,12 @@ class Llama:
             def free_lora_adapter():
                 if self._lora_adapter is None:
                     return
-                llama_cpp.llama_lora_adapter_free(self._lora_adapter)
+                llama_cpp.llama_adapter_lora_free(self._lora_adapter)
                 self._lora_adapter = None
 
             self._stack.callback(free_lora_adapter)
 
-            if llama_cpp.llama_lora_adapter_set(
+            if llama_cpp.llama_set_adapter_lora(
                 self._ctx.ctx, self._lora_adapter, self.lora_scale
             ):
                 raise RuntimeError(
@@ -1159,9 +1162,9 @@ class Llama:
         bos_token_id: int = self.token_bos()
         cls_token_id: int = self._model.token_cls()
         sep_token_id: int = self._model.token_sep()
-        prefix_token_id: int = self._model.token_prefix()
-        middle_token_id: int = self._model.token_middle()
-        suffix_token_id: int = self._model.token_suffix()
+        prefix_token_id: int = 0 # self._model.token_prefix() # TODO: Fix
+        middle_token_id: int = 0 # self._model.token_middle() # TODO: Fix
+        suffix_token_id: int = 0 # self._model.token_suffix() # TODO: Fix
         add_space_prefix: bool = (
             self.metadata.get("tokenizer.ggml.add_space_prefix", "true") == "true"
         )
@@ -1339,7 +1342,7 @@ class Llama:
             logits_processor=logits_processor,
             grammar=grammar,
         ):
-            if llama_cpp.llama_token_is_eog(self._model.model, token):
+            if llama_cpp.llama_token_is_eog(self._model.vocab, token):
                 text = self.detokenize(completion_tokens, prev_tokens=prompt_tokens)
                 finish_reason = "stop"
                 break
@@ -2103,6 +2106,7 @@ class Llama:
             offload_kqv=self.context_params.offload_kqv,
             flash_attn=self.context_params.flash_attn,
             # Sampling Params
+            no_perf=self.context_params.no_perf,
             last_n_tokens_size=self.last_n_tokens_size,
             # LoRA Params
             lora_base=self.lora_base,
