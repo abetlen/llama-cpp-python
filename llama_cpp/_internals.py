@@ -810,14 +810,14 @@ class LlamaSampler:
         sampler = llama_cpp.llama_sampler_init_xtc(probability, threshold, min_keep, seed)
         self._add_sampler(sampler)
 
-    def add_dry(self, model: LlamaModel, multiplier: float, base: float,
+    def add_dry(self, model: LlamaModel, ctx: LlamaContext, multiplier: float, base: float,
                 allowed_length: int, penalty_last_n: int, seq_breakers: list[str] = []):
 
         # Convert Python strings to bytes
         seq_breakers_bytes = [s.encode('utf-8') for s in seq_breakers]
         # Create array of char*
         arr = (ctypes.c_char_p * len(seq_breakers_bytes))(*seq_breakers_bytes)
-        sampler = llama_cpp.llama_sampler_init_dry(model.model, multiplier, base,
+        sampler = llama_cpp.llama_sampler_init_dry(model.vocab, ctx.n_ctx(), multiplier, base,
                                                 allowed_length, penalty_last_n,
                                                 arr, len(seq_breakers))
         self._add_sampler(sampler)

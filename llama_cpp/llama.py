@@ -754,7 +754,7 @@ class Llama:
             else:
                 n_probs = 0
                 min_keep = max(1, n_probs)
-                sampler.add_dry(self._model, dry_multiplier, dry_base, dry_allowed_length, dry_range, dry_seq_breakers)
+                sampler.add_dry(self._model, self._ctx, dry_multiplier, dry_base, dry_allowed_length, dry_range, dry_seq_breakers)
                 sampler.add_top_k(top_k)
                 sampler.add_typical(typical_p, min_keep)
                 sampler.add_top_p(top_p, min_keep)
