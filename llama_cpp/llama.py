@@ -760,8 +760,8 @@ class Llama:
                 sampler.add_top_p(top_p, min_keep)
                 sampler.add_min_p(min_p, min_keep)
                 sampler.add_temp(temp)
-                sampler.add_dist(self._seed)
                 sampler.add_xtc(xtc_probability, xtc_threshold, min_keep, self._seed)
+                sampler.add_dist(self._seed)
         return sampler
 
     def sample(
