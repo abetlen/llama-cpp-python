@@ -3373,6 +3373,95 @@ class MiniCPMv26ChatHandler(Llava15ChatHandler):
     )
 
 
+class Gemma3ChatHandler(Llava15ChatHandler):
+    # Chat Format:
+    # '<bos><start_of_turn>user\n{system_prompt}\n\n{prompt}<end_of_turn>\n<start_of_turn>model\n'
+
+    DEFAULT_SYSTEM_MESSAGE = None
+
+    CHAT_FORMAT = (
+        "{{ '<bos>' }}"
+        "{%- if messages[0]['role'] == 'system' -%}"
+        "{%- if messages[0]['content'] is string -%}"
+        "{%- set first_user_prefix = messages[0]['content'] + '\n\n' -%}"
+        "{%- else -%}"
+        "{%- set first_user_prefix = messages[0]['content'][0]['text'] + '\n\n' -%}"
+        "{%- endif -%}"
+        "{%- set loop_messages = messages[1:] -%}"
+        "{%- else -%}"
+        "{%- set first_user_prefix = \"\" -%}"
+        "{%- set loop_messages = messages -%}"
+        "{%- endif -%}"
+        "{%- for message in loop_messages -%}"
+        "{%- if (message['role'] == 'user') != (loop.index0 % 2 == 0) -%}"
+        "{{ raise_exception(\"Conversation roles must alternate user/assistant/user/assistant/...\") }}"
+        "{%- endif -%}"
+        "{%- if (message['role'] == 'assistant') -%}"
+        "{%- set role = \"model\" -%}"
+        "{%- else -%}"
+        "{%- set role = message['role'] -%}"
+        "{%- endif -%}"
+        "{{ '<start_of_turn>' + role + '\n' + (first_user_prefix if loop.first else \"\") }}"
+        "{%- if message['content'] is string -%}"
+        "{{ message['content'] | trim }}"
+        "{%- elif message['content'] is iterable -%}"
+        "{%- for item in message['content'] -%}"
+        "{%- if item['type'] == 'image' -%}"
+        "{{ '<start_of_image>' }}"
+        "{%- elif item['type'] == 'text' -%}"
+        "{{ item['text'] | trim }}"
+        "{%- endif -%}"
+        "{%- endfor -%}"
+        "{%- else -%}"
+        "{{ raise_exception(\"Invalid content type\") }}"
+        "{%- endif -%}"
+        "{{ '<end_of_turn>\n' }}"
+        "{%- endfor -%}"
+        "{%- if add_generation_prompt -%}"
+        "{{ '<start_of_turn>model\n' }}"
+        "{%- endif -%}"
+    )
+
+    @staticmethod
+    def split_text_on_image_urls(text: str, image_urls: List[str]):
+        split_text: List[Tuple[Literal["text", "image_url"], str]] = []
+        copied_urls = image_urls[:]
+        remaining = text
+        image_placeholder = "<start_of_image>"
+
+        while remaining:
+            # Find placeholder
+            pos = remaining.find(image_placeholder)
+            if pos != -1:
+                assert len(copied_urls) > 0
+                if pos > 0:
+                    split_text += [("text", remaining[:pos])]
+                split_text += [("text", "\n\n<start_of_image>")]
+                split_text += [("image_url", copied_urls.pop(0))]
+                split_text += [("text", "<end_of_image>\n\n")]
+                remaining = remaining[pos + len(image_placeholder):]
+            else:
+                assert len(copied_urls) == 0
+                split_text.append(("text", remaining))
+                remaining = ""
+        return split_text
+
+    @staticmethod
+    def get_image_urls(messages: List[llama_types.ChatCompletionRequestMessage]):
+        image_urls: List[str] = []
+        for message in messages:
+            if message["role"] == "user":
+                if message.get("content") is None:
+                    continue
+                for content in message["content"]:
+                    if isinstance(content, dict) and content.get("type") == "image":
+                        if isinstance(content.get("image"), dict) and isinstance(content["image"].get("url"), str):
+                            image_urls.append(content["image"]["url"])
+                        elif isinstance(content.get("url"), str):
+                            image_urls.append(content["url"])
+        return image_urls
+
+
 @register_chat_completion_handler("chatml-function-calling")
 def chatml_function_calling(
     llama: llama.Llama,
