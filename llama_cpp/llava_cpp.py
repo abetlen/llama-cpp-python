@@ -7,6 +7,7 @@ from ctypes import (
     c_int,
     c_uint8,
     c_float,
+    c_size_t,
     c_void_p,
     POINTER,
     _Pointer,  # type: ignore
@@ -141,6 +142,28 @@ def llava_eval_image_embed(
 ################################################
 
 
+# struct clip_image_u8_batch {
+#     struct clip_image_u8 * data;
+#     size_t size;
+# };
+class clip_image_u8_batch(Structure):
+  _fields_ = [
+      ("data", c_void_p),
+      ("size", c_size_t),
+  ]
+
+
+# struct clip_image_f32_batch {
+#     struct clip_image_f32 * data;
+#     size_t size;
+# };
+class clip_image_f32_batch(Structure):
+  _fields_ = [
+      ("data", c_void_p),
+      ("size", c_size_t),
+  ]
+
+
 # /** load mmproj model */
 # CLIP_API struct clip_ctx * clip_model_load    (const char * fname, int verbosity);
 @ctypes_function("clip_model_load", [c_char_p, c_int], clip_ctx_p_ctypes)
@@ -156,3 +179,92 @@ def clip_model_load(
 def clip_free(ctx: clip_ctx_p, /):
     ...
 
+
+# CLIP_API struct clip_image_u8  * clip_image_u8_init ();
+@ctypes_function("clip_image_u8_init", [], c_void_p)
+def clip_image_u8_init() -> Optional[c_void_p]:
+    ...
+
+
+# CLIP_API void clip_image_u8_free (struct clip_image_u8  * img);
+@ctypes_function("clip_image_u8_free", [c_void_p], None)
+def clip_image_u8_free(img: c_void_p, /):
+    ...
+
+
+# CLIP_API void clip_image_f32_free(struct clip_image_f32 * img);
+@ctypes_function("clip_image_f32_free", [c_void_p], None)
+def clip_image_f32_free(img: c_void_p, /):
+    ...
+
+
+# CLIP_API void clip_image_u8_batch_free (struct clip_image_u8_batch  * batch);
+@ctypes_function("clip_image_u8_batch_free", [POINTER(clip_image_u8_batch)], None)
+def clip_image_u8_batch_free(batch: "_Pointer[clip_image_u8_batch]", /):
+    ...
+
+
+# CLIP_API void clip_image_f32_batch_free(struct clip_image_f32_batch * batch);
+@ctypes_function("clip_image_f32_batch_free", [POINTER(clip_image_f32_batch)], None)
+def clip_image_f32_batch_free(batch: "_Pointer[clip_image_f32_batch]", /):
+    ...
+
+
+# /** preprocess img and store the result in res_imgs, pad_to_square may be overridden to false depending on model configuration */
+# CLIP_API bool clip_image_preprocess(struct clip_ctx * ctx, const struct clip_image_u8 * img, struct clip_image_f32_batch * res_imgs );
+@ctypes_function(
+    "clip_image_preprocess",
+    [
+        clip_ctx_p_ctypes,
+        c_void_p,
+        POINTER(clip_image_f32_batch),
+    ],
+    c_bool,
+)
+def clip_image_preprocess(
+    ctx: clip_ctx_p,
+    img: c_void_p,
+    res_imgs: "_Pointer[clip_image_f32_batch]",
+    /,
+) -> bool:
+    ...
+
+
+# CLIP_API bool clip_image_batch_encode(struct clip_ctx * ctx, int n_threads, const struct clip_image_f32_batch * imgs, float * vec);
+@ctypes_function(
+    "clip_image_batch_encode",
+    [
+        clip_ctx_p_ctypes,
+        c_int,
+        POINTER(clip_image_f32_batch),
+        POINTER(c_float),
+    ],
+    c_bool,
+)
+def clip_image_batch_encode(
+    ctx: clip_ctx_p,
+    n_threads: c_int,
+    imgs: "_Pointer[clip_image_f32_batch]",
+    vec: c_void_p
+) -> bool:
+    ...
+
+
+# /** interpret bytes as an image file with length bytes_length, and use the result to populate img */
+# CLIP_API bool clip_image_load_from_bytes(const unsigned char * bytes, size_t bytes_length, struct clip_image_u8 * img);
+@ctypes_function(
+    "clip_image_load_from_bytes",
+    [
+        c_void_p,
+        c_size_t,
+        c_void_p,
+    ],
+    c_bool,
+)
+def clip_image_load_from_bytes(
+    bytes: c_void_p,
+    bytes_length: c_size_t,
+    img: c_void_p,
+    /,
+) -> bool:
+    ...
