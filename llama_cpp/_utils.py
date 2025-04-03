@@ -1,5 +1,7 @@
 import os
 import sys
+import warnings
+import functools
 
 from typing import Any, Dict
 
@@ -76,3 +78,17 @@ class Singleton(object, metaclass=MetaSingleton):
 
     def __init__(self):
         super(Singleton, self).__init__()
+
+
+def deprecated(reason):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            warnings.warn(
+                f"Call to deprecated function {func.__name__} ({reason}).",
+                category=DeprecationWarning,
+                stacklevel=2,
+            )
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
