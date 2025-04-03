@@ -3467,6 +3467,12 @@ class Gemma3ChatHandler(Llava15ChatHandler):
     def eval_image(self, llama: llama.Llama, image_url: str):
         import llama_cpp
 
+        n_tokens = 256
+        if llama.n_tokens + n_tokens > llama.n_ctx():
+            raise ValueError(
+                f"Prompt exceeds n_ctx: {llama.n_tokens + n_tokens} > {llama.n_ctx()}"
+            )
+
         img_bytes = self.load_image(image_url)
         img_u8_p = self._llava_cpp.clip_image_u8_init()
         if not self._llava_cpp.clip_image_load_from_bytes(
@@ -3485,7 +3491,6 @@ class Gemma3ChatHandler(Llava15ChatHandler):
             raise ValueError("Failed to preprocess image.")
 
         n_embd = llama_cpp.llama_model_n_embd(llama._model.model)
-        n_tokens = 256
         embed = (ctypes.c_float * (n_tokens * n_embd))()
         if not self._llava_cpp.clip_image_batch_encode(self.clip_ctx, llama.n_threads, img_f32_p, embed):
             self._llava_cpp.clip_image_f32_batch_free(img_f32_p)
