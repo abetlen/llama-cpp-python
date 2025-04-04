@@ -245,7 +245,8 @@ def clip_image_batch_encode(
     ctx: clip_ctx_p,
     n_threads: c_int,
     imgs: "_Pointer[clip_image_f32_batch]",
-    vec: c_void_p
+    vec: c_void_p,
+    /,
 ) -> bool:
     ...
 

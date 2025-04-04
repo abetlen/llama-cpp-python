@@ -3409,7 +3409,7 @@ class Gemma3ChatHandler(Llava15ChatHandler):
         "{{ message['content'] | trim }}"
         "{%- elif message['content'] is iterable -%}"
         "{%- for item in message['content'] -%}"
-        "{%- if item['type'] == 'image' -%}"
+        "{%- if item['type'] == 'image_url' -%}"
         "{{ '<start_of_image>' }}"
         "{%- elif item['type'] == 'text' -%}"
         "{{ item['text'] | trim }}"
@@ -3448,21 +3448,6 @@ class Gemma3ChatHandler(Llava15ChatHandler):
                 split_text.append(("text", remaining))
                 remaining = ""
         return split_text
-
-    @staticmethod
-    def get_image_urls(messages: List[llama_types.ChatCompletionRequestMessage]):
-        image_urls: List[str] = []
-        for message in messages:
-            if message["role"] == "user":
-                if message.get("content") is None:
-                    continue
-                for content in message["content"]:
-                    if isinstance(content, dict) and content.get("type") == "image":
-                        if isinstance(content.get("image"), dict) and isinstance(content["image"].get("url"), str):
-                            image_urls.append(content["image"]["url"])
-                        elif isinstance(content.get("url"), str):
-                            image_urls.append(content["url"])
-        return image_urls
 
     def eval_image(self, llama: llama.Llama, image_url: str):
         import llama_cpp
