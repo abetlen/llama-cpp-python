@@ -640,10 +640,94 @@ class llama_model_kv_override(ctypes.Structure):
         value: Union[int, float, bool, bytes]
 
 
+
+# struct ggml_backend_buffer_type_i {
+#     const char *          (*get_name)      (ggml_backend_buffer_type_t buft);
+#     // allocate a buffer of this type
+#     ggml_backend_buffer_t (*alloc_buffer)  (ggml_backend_buffer_type_t buft, size_t size);
+#     // tensor alignment
+#     size_t                (*get_alignment) (ggml_backend_buffer_type_t buft);
+#     // (optional) max buffer size that can be allocated (defaults to SIZE_MAX)
+#     size_t                (*get_max_size)  (ggml_backend_buffer_type_t buft);
+#     // (optional) data size needed to allocate the tensor, including padding (defaults to ggml_nbytes)
+#     size_t                (*get_alloc_size)(ggml_backend_buffer_type_t buft, const struct ggml_tensor * tensor);
+#     // (optional) check if tensor data is in host memory and uses standard ggml tensor layout (defaults to false)
+#     bool                  (*is_host)       (ggml_backend_buffer_type_t buft);
+# };
+class ggml_backend_buffer_type_i(ctypes.Structure):
+    _fields_ = [
+        ("get_name", ctypes.c_void_p), # NOTE: Unused
+        ("alloc_buffer", ctypes.c_void_p), # NOTE: Unused
+        ("get_alignment", ctypes.c_void_p), # NOTE: Unused
+        ("get_max_size", ctypes.c_void_p), # NOTE: Unused
+        ("get_alloc_size", ctypes.c_void_p), # NOTE: Unused
+        ("is_host", ctypes.c_void_p) # NOTE: Unused
+    ]
+
+# typedef struct ggml_backend_device * ggml_backend_dev_t;
+ggml_backend_dev_t = ctypes.c_void_p # NOTE: Unused
+
+# struct ggml_backend_buffer_type {
+#     struct ggml_backend_buffer_type_i  iface;
+#     ggml_backend_dev_t device;
+#     void * context;
+# };
+class ggml_backend_buffer_type(ctypes.Structure):
+    _fields_ = [
+        ("iface", ggml_backend_buffer_type_i),
+        ("device", ggml_backend_dev_t),
+        ("context", ctypes.c_void_p)
+    ]
+
+# typedef struct ggml_backend_buffer_type * ggml_backend_buffer_type_t;
+ggml_backend_buffer_type_t = ctypes.POINTER(ggml_backend_buffer_type)
+
 # struct llama_model_tensor_buft_override {
 #     const char * pattern;
 #     ggml_backend_buffer_type_t buft;
 # };
+class llama_model_tensor_buft_override(ctypes.Structure):
+    _fields_ = [
+        ("pattern", ctypes.c_char_p),
+        ("buft", ggml_backend_buffer_type_t),
+    ]
+
+
+# GGML_API size_t ggml_backend_dev_count(void);
+@ctypes_function(
+    "ggml_backend_dev_count",
+    [],
+    ctypes.c_size_t,
+)
+def ggml_backend_dev_count() -> int:
+    ...
+
+# GGML_API ggml_backend_dev_t ggml_backend_dev_get(size_t index);
+@ctypes_function(
+    "ggml_backend_dev_get",
+    [ctypes.c_size_t],
+    ggml_backend_dev_t,
+)
+def ggml_backend_dev_get(index: int, /) -> ggml_backend_dev_t:
+    ...
+
+# GGML_API ggml_backend_buffer_type_t ggml_backend_dev_buffer_type(ggml_backend_dev_t device);
+@ctypes_function(
+    "ggml_backend_dev_buffer_type",
+    [ggml_backend_dev_t],
+    ggml_backend_buffer_type_t,
+)
+def ggml_backend_dev_buffer_type(device: ggml_backend_dev_t, /) -> ggml_backend_buffer_type_t:
+    ...
+
+# GGML_API const char * ggml_backend_buft_name(ggml_backend_buffer_type_t buft);
+@ctypes_function(
+    "ggml_backend_buft_name",
+    [ggml_backend_buffer_type_t],
+    ctypes.c_char_p,
+)
+def ggml_backend_buft_name(buft: ggml_backend_buffer_type_t, /) -> bytes:
+    ...
 
 
 # struct llama_model_params {
@@ -703,7 +787,7 @@ class llama_model_params(ctypes.Structure):
 
     if TYPE_CHECKING:
         devices: CtypesArray[ctypes.c_void_p]  # NOTE: unused
-        tensor_buft_overrides: CtypesArray[llama_model_tensor_buft_override] # NOTE: unused
+        tensor_buft_overrides: CtypesArray[llama_model_tensor_buft_override]
         n_gpu_layers: int
         split_mode: int
         main_gpu: int
@@ -718,7 +802,7 @@ class llama_model_params(ctypes.Structure):
 
     _fields_ = [
         ("devices", ctypes.c_void_p), # NOTE: unnused
-        ("tensor_buft_overrides", ctypes.c_void_p), # NOTE: unused
+        ("tensor_buft_overrides", ctypes.POINTER(llama_model_tensor_buft_override)),
         ("n_gpu_layers", ctypes.c_int32),
         ("split_mode", ctypes.c_int),
         ("main_gpu", ctypes.c_int32),

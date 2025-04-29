@@ -115,6 +115,7 @@ class Llama:
         # Misc
         spm_infill: bool = False,
         verbose: bool = True,
+        override_tensor: Optional[str] = None,
         # Extra Params
         **kwargs,  # type: ignore
     ):
@@ -187,6 +188,7 @@ class Llama:
             type_k: KV cache data type for K (default: f16)
             type_v: KV cache data type for V (default: f16)
             spm_infill: Use Suffix/Prefix/Middle pattern for infill (instead of Prefix/Suffix/Middle) as some models prefer this.
+            override_tensor: <tensor name pattern>=<buffer type>,...
 
         Raises:
             ValueError: If the model path does not exist.
@@ -363,6 +365,46 @@ class Llama:
         self.lora_path = lora_path
 
         self.spm_infill = spm_infill
+
+        self._c_tensor_buft_overrides = None
+        if override_tensor is not None:
+
+            buft_overrides = []
+            buft_list = {}
+            # Enumerate all devices and add their buffer types to the list
+            for i in range(llama_cpp.ggml_backend_dev_count()):
+                dev = llama_cpp.ggml_backend_dev_get(i)
+                buft = llama_cpp.ggml_backend_dev_buffer_type(dev)
+                if buft:
+                    buft_name = llama_cpp.ggml_backend_buft_name(buft).decode('utf-8')
+                    buft_list[buft_name] = buft
+
+            # Process overrides
+            for override in override_tensor.split(','):
+                pos = override.find('=')
+                if pos == -1:
+                    raise ValueError("invalid value")
+
+                tensor_name = override[:pos]
+                buffer_type = override[pos+1:]
+
+                if buffer_type not in buft_list:
+                    print("Available buffer types:")
+                    for name in buft_list:
+                        print(f"  {name}")
+                    raise ValueError("unknown buffer type")
+
+                buft_overrides.append(
+                    llama_cpp.llama_model_tensor_buft_override(
+                        pattern=tensor_name.encode('utf-8'),
+                        buft=buft_list[buffer_type]
+                    )
+                )
+            array_type = llama_cpp.llama_model_tensor_buft_override * (len(buft_overrides) + 1)
+            self._c_tensor_buft_overrides = array_type(
+                *buft_overrides
+            )
+            self.model_params.tensor_buft_overrides = self._c_tensor_buft_overrides
 
         if not os.path.exists(model_path):
             raise ValueError(f"Model path does not exist: {model_path}")
