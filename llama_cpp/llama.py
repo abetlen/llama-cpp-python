@@ -367,7 +367,7 @@ class Llama:
         self.spm_infill = spm_infill
 
         self._c_tensor_buft_overrides = None
-        if override_tensor is not None:
+        if override_tensor:
 
             buft_overrides = []
             buft_list = {}
