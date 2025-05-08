@@ -143,7 +143,7 @@ if (LLAMA_BUILD)
         endif()
 
         # Building llava
-        add_subdirectory(vendor/llama.cpp/examples/llava)
+        add_subdirectory(vendor/llama.cpp/tools/mtmd)
         set_target_properties(llava_shared PROPERTIES OUTPUT_NAME "llava")
 
         if (WIN32)

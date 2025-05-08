@@ -235,6 +235,8 @@ LLAMA_VOCAB_TYPE_RWKV = 5
 #     LLAMA_VOCAB_PRE_TYPE_SUPERBPE       = 30,
 #     LLAMA_VOCAB_PRE_TYPE_TRILLION       = 31,
 #     LLAMA_VOCAB_PRE_TYPE_BAILINGMOE     = 32,
+#     LLAMA_VOCAB_PRE_TYPE_LLAMA4         = 33,
+#     LLAMA_VOCAB_PRE_TYPE_PIXTRAL        = 34,
 # };
 LLAMA_VOCAB_PRE_TYPE_DEFAULT = 0
 LLAMA_VOCAB_PRE_TYPE_LLAMA3 = 1
@@ -252,7 +254,7 @@ LLAMA_VOCAB_PRE_TYPE_OLMO = 12
 LLAMA_VOCAB_PRE_TYPE_DBRX = 13
 LLAMA_VOCAB_PRE_TYPE_SMAUG = 14
 LLAMA_VOCAB_PRE_TYPE_PORO = 15
-LLAMA_VOCAV_PRE_TYPE_CHATGLM3 = 16
+LLAMA_VOCAB_PRE_TYPE_CHATGLM3 = 16
 LLAMA_VOCAB_PRE_TYPE_CHATGLM4 = 17
 LLAMA_VOCAB_PRE_TYPE_VIKING = 18
 LLAMA_VOCAB_PRE_TYPE_JAIS = 19
@@ -269,6 +271,8 @@ LLAMA_VOCAB_PRE_TYPE_GPT4O = 29
 LLAMA_VOCAB_PRE_TYPE_SUPERBPE = 30
 LLAMA_VOCAB_PRE_TYPE_TRILLION = 31
 LLAMA_VOCAB_PRE_TYPE_BAILINGMOE = 32
+LLAMA_VOCAB_PRE_TYPE_LLAMA4 = 33
+LLAMA_VOCAB_PRE_TYPE_PIXTRAL = 34
 
 
 # // note: these values should be synchronized with ggml_rope
@@ -891,17 +895,18 @@ It might not exist for progress report where '.' is output repeatedly."""
 
 # // model quantization parameters
 # typedef struct llama_model_quantize_params {
-#     int32_t nthread;                     // number of threads to use for quantizing, if <=0 will use std::thread::hardware_concurrency()
-#     enum llama_ftype ftype;              // quantize to this llama_ftype
-#     enum ggml_type output_tensor_type;   // output tensor type
-#     enum ggml_type token_embedding_type; // token embeddings tensor type
-#     bool allow_requantize;               // allow quantizing non-f32/f16 tensors
-#     bool quantize_output_tensor;         // quantize output.weight
-#     bool only_copy;                      // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
-#     bool pure;                           // quantize all tensors to the default type
-#     bool keep_split;                     // quantize to the same number of shards
-#     void * imatrix;                      // pointer to importance matrix data
-#     void * kv_overrides;                 // pointer to vector containing overrides
+#     int32_t nthread;                      // number of threads to use for quantizing, if <=0 will use std::thread::hardware_concurrency()
+#     enum llama_ftype ftype;               // quantize to this llama_ftype
+#     enum ggml_type output_tensor_type;    // output tensor type
+#     enum ggml_type token_embedding_type;  // token embeddings tensor type
+#     bool allow_requantize;                // allow quantizing non-f32/f16 tensors
+#     bool quantize_output_tensor;          // quantize output.weight
+#     bool only_copy;                       // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
+#     bool pure;                            // quantize all tensors to the default type
+#     bool keep_split;                      // quantize to the same number of shards
+#     void * imatrix;                       // pointer to importance matrix data
+#     void * kv_overrides;                  // pointer to vector containing overrides
+#     void * tensor_types;                  // pointer to vector containing tensor types
 # } llama_model_quantize_params;
 class llama_model_quantize_params(ctypes.Structure):
     """Parameters for llama_model_quantize
@@ -918,6 +923,7 @@ class llama_model_quantize_params(ctypes.Structure):
         keep_split (bool): quantize to the same number of shards
         imatrix (ctypes.c_void_p): pointer to importance matrix data
         kv_overrides (ctypes.c_void_p): pointer to vector containing overrides
+        tensor_types (ctypes.c_void_p): pointer to vector containing tensor types
     """
 
     if TYPE_CHECKING:
@@ -932,6 +938,7 @@ class llama_model_quantize_params(ctypes.Structure):
         keep_split: bool
         imatrix: ctypes.c_void_p
         kv_overrides: ctypes.c_void_p
+        tensor_types: ctypes.c_void_p
 
     _fields_ = [
         ("nthread", ctypes.c_int32),
@@ -945,6 +952,7 @@ class llama_model_quantize_params(ctypes.Structure):
         ("keep_split", ctypes.c_bool),
         ("imatrix", ctypes.c_void_p),
         ("kv_overrides", ctypes.c_void_p),
+        ("tensor_types", ctypes.c_void_p),
     ]
 
 
@@ -3812,6 +3820,7 @@ def llama_sampler_init_softmax() -> llama_sampler_p:
 
 
 # /// @details Top-K sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
+# /// Setting k <= 0 makes this a noop
 # LLAMA_API struct llama_sampler * llama_sampler_init_top_k      (int32_t k);
 @ctypes_function("llama_sampler_init_top_k", [ctypes.c_int32], llama_sampler_p_ctypes)
 def llama_sampler_init_top_k(k: int) -> llama_sampler_p:
