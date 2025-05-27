@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.9]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@8733e0cf6eefc7c7752297cc22d0836706f4222c
+
+## [0.3.8]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@7841fc723e059d1fd9640e5c0ef19050fcc7c698
+
+## [0.3.7]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@794fe23f29fb40104975c91fe19f23798f7c726e
+- fix(ci): Fix the CUDA workflow by @oobabooga in #1894
+- fix: error showing time spent in llama perf context print, adds `no_perf` flag to `Llama` class by @shakalaca in #1898
+
+## [0.3.6]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@f7cd13301c2a88f97073fd119072b4cc92c08df1
+- fix(server): streaming resource lock by @gjpower in #1879
+
+## [0.3.5]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@26a8406ba9198eb6fdd8329fa717555b4f77f05f
+- fix(ci): Fix release by updating macos runner image to non-deprecated version by @abetlen in afedfc888462f9a6e809dc9455eb3b663764cc3f
+- fix(server): add missing await statements for async exit_stack handling by @gjpower in #1858
+
+## [0.3.4]
+
+- fix(ci): Build wheels for macos 13-15, cuda 12.1-12.4 by @abetlen in ca808028bd16b8327bd84128d48015a4b1304690
+
+## [0.3.3]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@ce8784bdb153ff7794dde5a50b0ebfa51baa6171
+- fix: chat API logprobs format by @domdomegg in #1788
+- feat: Add support for CUDA 12.6, fix CUDA 12.5 by @Smartappli in #1775
+- fix: Make content not required in ChatCompletionRequestAssistantMessage by @feloy in #1807
+- fix: Fix pickling of Llama class by setting seed from _seed member by @abetlen in 2523472c3eccb9ab9277117cc4ff705212b6888a
+- fix: Fix logit-bias type hint by @ddh0 in #1802
+- fix(server): Avoid thread starvation on many concurrent requests by making use of asyncio to lock llama_proxy context by @gjpower in #1798
+- fix(server): Added missing exit_stack.close() to /v1/chat/completions by @Ian321 in #1796
+- fix(examples): Refactor Batching notebook to use new sampler chain API by @lukestanley in #1793
+- fix(docs): Update development instructions by @Florents-Tselai in #1833
+- fix(docs): Remove ref to llama_eval in llama_cpp.py docs by @richdougherty in #1819
+
+## [0.3.2]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@74d73dc85cc2057446bf63cc37ff649ae7cebd80
+
 ## [0.3.1]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@c919d5db39c8a7fcb64737f008e4b105ee0acd20

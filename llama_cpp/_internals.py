@@ -55,7 +55,13 @@ class LlamaModel:
         if model is None:
             raise ValueError(f"Failed to load model from file: {path_model}")
 
+        vocab = llama_cpp.llama_model_get_vocab(model)
+
+        if vocab is None:
+            raise ValueError(f"Failed to get vocab from model: {path_model}")
+
         self.model = model
+        self.vocab = vocab
 
         def free_model():
             if self.model is None:
@@ -75,7 +81,7 @@ class LlamaModel:
         return llama_cpp.llama_vocab_type(self.model)
 
     def n_vocab(self) -> int:
-        return llama_cpp.llama_n_vocab(self.model)
+        return llama_cpp.llama_n_vocab(self.vocab)
 
     def n_ctx_train(self) -> int:
         return llama_cpp.llama_n_ctx_train(self.model)
@@ -84,7 +90,7 @@ class LlamaModel:
         return llama_cpp.llama_n_embd(self.model)
 
     def rope_freq_scale_train(self) -> float:
-        return llama_cpp.llama_rope_freq_scale_train(self.model)
+        return llama_cpp.llama_model_rope_freq_scale_train(self.model)
 
     def desc(self) -> str:
         buf = ctypes.create_string_buffer(1024)
@@ -98,53 +104,53 @@ class LlamaModel:
         return llama_cpp.llama_model_n_params(self.model)
 
     def get_tensor(self, name: str) -> ctypes.c_void_p:
-        return llama_cpp.llama_get_model_tensor(self.model, name.encode("utf-8"))
+        raise NotImplementedError("get_tensor is not implemented in llama.cpp")
 
     # Vocab
 
     def token_get_text(self, token: int) -> str:
-        return llama_cpp.llama_token_get_text(self.model, token).decode("utf-8")
+        return llama_cpp.llama_token_get_text(self.vocab, token).decode("utf-8")
 
     def token_get_score(self, token: int) -> float:
-        return llama_cpp.llama_token_get_score(self.model, token)
+        return llama_cpp.llama_token_get_score(self.vocab, token)
 
     def token_get_attr(self, token: int) -> int:
-        return llama_cpp.llama_token_get_attr(self.model, token)
+        return llama_cpp.llama_token_get_attr(self.vocab, token)
 
     # Special tokens
 
     def token_bos(self) -> int:
-        return llama_cpp.llama_token_bos(self.model)
+        return llama_cpp.llama_token_bos(self.vocab)
 
     def token_eos(self) -> int:
-        return llama_cpp.llama_token_eos(self.model)
+        return llama_cpp.llama_token_eos(self.vocab)
 
     def token_cls(self) -> int:
-        return llama_cpp.llama_token_cls(self.model)
+        return llama_cpp.llama_token_cls(self.vocab)
 
     def token_sep(self) -> int:
-        return llama_cpp.llama_token_sep(self.model)
+        return llama_cpp.llama_token_sep(self.vocab)
 
     def token_nl(self) -> int:
-        return llama_cpp.llama_token_nl(self.model)
+        return llama_cpp.llama_token_nl(self.vocab)
 
     def token_prefix(self) -> int:
-        return llama_cpp.llama_token_prefix(self.model)
+        raise NotImplementedError("token_prefix is not implemented in llama.cpp")
 
     def token_middle(self) -> int:
-        return llama_cpp.llama_token_middle(self.model)
+        raise NotImplementedError("token_middle is not implemented in llama.cpp")
 
     def token_suffix(self) -> int:
-        return llama_cpp.llama_token_suffix(self.model)
+        raise NotImplementedError("token_suffix is not implemented in llama.cpp")
 
     def token_eot(self) -> int:
-        return llama_cpp.llama_token_eot(self.model)
+        return llama_cpp.llama_token_eot(self.vocab)
 
     def add_bos_token(self) -> bool:
-        return llama_cpp.llama_add_bos_token(self.model)
+        return llama_cpp.llama_add_bos_token(self.vocab)
 
     def add_eos_token(self) -> bool:
-        return llama_cpp.llama_add_eos_token(self.model)
+        return llama_cpp.llama_add_eos_token(self.vocab)
 
     # Tokenization
 
@@ -152,13 +158,13 @@ class LlamaModel:
         n_ctx = self.n_ctx_train()
         tokens = (llama_cpp.llama_token * n_ctx)()
         n_tokens = llama_cpp.llama_tokenize(
-            self.model, text, len(text), tokens, n_ctx, add_bos, special
+            self.vocab, text, len(text), tokens, n_ctx, add_bos, special
         )
         if n_tokens < 0:
             n_tokens = abs(n_tokens)
             tokens = (llama_cpp.llama_token * n_tokens)()
             n_tokens = llama_cpp.llama_tokenize(
-                self.model, text, len(text), tokens, n_tokens, add_bos, special
+                self.vocab, text, len(text), tokens, n_tokens, add_bos, special
             )
             if n_tokens < 0:
                 raise RuntimeError(
@@ -168,7 +174,7 @@ class LlamaModel:
 
     def token_to_piece(self, token: int, special: bool = False) -> bytes:
         buf = ctypes.create_string_buffer(32)
-        llama_cpp.llama_token_to_piece(self.model, token, buf, 32, 0, special)
+        llama_cpp.llama_token_to_piece(self.vocab, token, buf, 32, 0, special)
         return bytes(buf)
 
     def detokenize(self, tokens: List[int], special: bool = False) -> bytes:
@@ -177,7 +183,7 @@ class LlamaModel:
         buffer = (ctypes.c_char * size)()
         for token in tokens:
             n = llama_cpp.llama_token_to_piece(
-                self.model, llama_cpp.llama_token(token), buffer, size, 0, special
+                self.vocab, llama_cpp.llama_token(token), buffer, size, 0, special
             )
             assert n <= size
             output += bytes(buffer[:n])
@@ -320,7 +326,8 @@ class LlamaContext:
 
     def set_rng_seed(self, seed: int):
         # TODO: Fix
-        llama_cpp.llama_set_rng_seed(self.ctx, seed)
+        # llama_cpp.llama_set_rng_seed(self.ctx, seed)
+        raise NotImplementedError("set_rng_seed is not implemented in llama.cpp")
 
     def sample_repetition_penalties(
         self,
@@ -331,55 +338,63 @@ class LlamaContext:
         penalty_freq: float,
         penalty_present: float,
     ):
-        llama_cpp.llama_sample_repetition_penalties(
-            self.ctx,
-            llama_cpp.byref(candidates.candidates),
-            last_tokens_data,
-            penalty_last_n,
-            penalty_repeat,
-            penalty_freq,
-            penalty_present,
-        )
+        # llama_cpp.llama_sample_repetition_penalties(
+        #     self.ctx,
+        #     llama_cpp.byref(candidates.candidates),
+        #     last_tokens_data,
+        #     penalty_last_n,
+        #     penalty_repeat,
+        #     penalty_freq,
+        #     penalty_present,
+        # )
+        raise NotImplementedError("sample_repetition_penalties is not implemented in llama.cpp")
 
     def sample_softmax(self, candidates: "_LlamaTokenDataArray"):
-        llama_cpp.llama_sample_softmax(
-            self.ctx,
-            llama_cpp.byref(candidates.candidates),
-        )
+        # llama_cpp.llama_sample_softmax(
+        #     self.ctx,
+        #     llama_cpp.byref(candidates.candidates),
+        # )
+        raise NotImplementedError("sample_softmax is not implemented in llama.cpp")
 
     def sample_top_k(self, candidates: "_LlamaTokenDataArray", k: int, min_keep: int):
-        llama_cpp.llama_sample_top_k(
-            self.ctx, llama_cpp.byref(candidates.candidates), k, min_keep
-        )
+        # llama_cpp.llama_sample_top_k(
+        #     self.ctx, llama_cpp.byref(candidates.candidates), k, min_keep
+        # )
+        raise NotImplementedError("sample_top_k is not implemented in llama.cpp")
 
     def sample_top_p(self, candidates: "_LlamaTokenDataArray", p: float, min_keep: int):
-        llama_cpp.llama_sample_top_p(
-            self.ctx, llama_cpp.byref(candidates.candidates), p, min_keep
-        )
+        # llama_cpp.llama_sample_top_p(
+        #     self.ctx, llama_cpp.byref(candidates.candidates), p, min_keep
+        # )
+        raise NotImplementedError("sample_top_p is not implemented in llama.cpp")
 
     def sample_min_p(self, candidates: "_LlamaTokenDataArray", p: float, min_keep: int):
-        llama_cpp.llama_sample_min_p(
-            self.ctx, llama_cpp.byref(candidates.candidates), p, min_keep
-        )
+        # llama_cpp.llama_sample_min_p(
+        #     self.ctx, llama_cpp.byref(candidates.candidates), p, min_keep
+        # )
+        raise NotImplementedError("sample_min_p is not implemented in llama.cpp")
 
     def sample_typical(
         self, candidates: "_LlamaTokenDataArray", p: float, min_keep: int
     ):
-        llama_cpp.llama_sample_typical(
-            self.ctx, llama_cpp.byref(candidates.candidates), p, min_keep
-        )
+        # llama_cpp.llama_sample_typical(
+        #     self.ctx, llama_cpp.byref(candidates.candidates), p, min_keep
+        # )
+        raise NotImplementedError("sample_typical is not implemented in llama.cpp")
 
     def sample_temp(self, candidates: "_LlamaTokenDataArray", temp: float):
-        llama_cpp.llama_sample_temp(
-            self.ctx, llama_cpp.byref(candidates.candidates), temp
-        )
+        # llama_cpp.llama_sample_temp(
+        #     self.ctx, llama_cpp.byref(candidates.candidates), temp
+        # )
+        raise NotImplementedError("sample_temp is not implemented in llama.cpp")
 
     def sample_grammar(self, candidates: "_LlamaTokenDataArray", grammar: LlamaGrammar):
-        llama_cpp.llama_sample_grammar(
-            self.ctx,
-            llama_cpp.byref(candidates.candidates),
-            grammar.grammar,
-        )
+        # llama_cpp.llama_sample_grammar(
+        #     self.ctx,
+        #     llama_cpp.byref(candidates.candidates),
+        #     grammar.grammar,
+        # )
+        raise NotImplementedError("sample_grammar is not implemented in llama.cpp")
 
     def sample_token_mirostat(
         self,
@@ -389,14 +404,15 @@ class LlamaContext:
         m: int,
         mu: llama_cpp.CtypesPointerOrRef[ctypes.c_float],
     ) -> int:
-        return llama_cpp.llama_sample_token_mirostat(
-            self.ctx,
-            llama_cpp.byref(candidates.candidates),
-            tau,
-            eta,
-            m,
-            mu,
-        )
+        raise NotImplementedError("sample_token_mirostat is not implemented in llama.cpp")
+        # return llama_cpp.llama_sample_token_mirostat(
+        #     self.ctx,
+        #     llama_cpp.byref(candidates.candidates),
+        #     tau,
+        #     eta,
+        #     m,
+        #     mu,
+        # )
 
     def sample_token_mirostat_v2(
         self,
@@ -405,29 +421,33 @@ class LlamaContext:
         eta: float,
         mu: llama_cpp.CtypesPointerOrRef[ctypes.c_float],
     ) -> int:
-        return llama_cpp.llama_sample_token_mirostat_v2(
-            self.ctx,
-            llama_cpp.byref(candidates.candidates),
-            tau,
-            eta,
-            mu,
-        )
+        raise NotImplementedError("sample_token_mirostat_v2 is not implemented in llama.cpp")
+        # return llama_cpp.llama_sample_token_mirostat_v2(
+        #     self.ctx,
+        #     llama_cpp.byref(candidates.candidates),
+        #     tau,
+        #     eta,
+        #     mu,
+        # )
 
     def sample_token_greedy(self, candidates: "_LlamaTokenDataArray") -> int:
-        return llama_cpp.llama_sample_token_greedy(
-            self.ctx,
-            llama_cpp.byref(candidates.candidates),
-        )
+        raise NotImplementedError("sample_token_greedy is not implemented in llama.cpp")
+        # return llama_cpp.llama_sample_token_greedy(
+        #     self.ctx,
+        #     llama_cpp.byref(candidates.candidates),
+        # )
 
     def sample_token(self, candidates: "_LlamaTokenDataArray") -> int:
-        return llama_cpp.llama_sample_token(
-            self.ctx,
-            llama_cpp.byref(candidates.candidates),
-        )
+        raise NotImplementedError("sample_token is not implemented in llama.cpp")
+        # return llama_cpp.llama_sample_token(
+        #     self.ctx,
+        #     llama_cpp.byref(candidates.candidates),
+        # )
 
     # Grammar
     def grammar_accept_token(self, grammar: LlamaGrammar, token: int):
-        llama_cpp.llama_grammar_accept_token(grammar.grammar, self.ctx, token)
+        raise NotImplementedError("grammar_accept_token is not implemented in llama.cpp")
+        # llama_cpp.llama_grammar_accept_token(grammar.grammar, self.ctx, token)
 
     def reset_timings(self):
         llama_cpp.llama_perf_context_reset(self.ctx)
@@ -788,7 +808,7 @@ class LlamaSampler:
 
     def add_grammar(self, model: LlamaModel, grammar: LlamaGrammar):
         sampler = llama_cpp.llama_sampler_init_grammar(
-            model.model, grammar._grammar.encode("utf-8"), grammar._root.encode("utf-8")
+            model.vocab, grammar._grammar.encode("utf-8"), grammar._root.encode("utf-8")
         )
         self._add_sampler(sampler)
 
@@ -805,15 +825,10 @@ class LlamaSampler:
         ignore_eos: bool,
     ):
         sampler = llama_cpp.llama_sampler_init_penalties(
-            n_vocab,
-            special_eos_id,
-            linefeed_id,
             penalty_last_n,
             penalty_repeat,
             penalty_freq,
             penalty_present,
-            penalize_nl,
-            ignore_eos,
         )
         self._add_sampler(sampler)
 
@@ -847,6 +862,7 @@ class LlamaSampler:
 
     def sample(self, ctx: LlamaContext, idx: int) -> int:
         assert self.sampler is not None
+        assert ctx.ctx is not None
         return llama_cpp.llama_sampler_sample(self.sampler, ctx.ctx, idx)
 
     def close(self):
