@@ -62,6 +62,9 @@ if (LLAMA_BUILD)
     # Enable building of the common library
     set(LLAMA_BUILD_COMMON ON CACHE BOOL "Build llama.cpp common library" FORCE)
 
+    # Disable building curl support
+    set(LLAMA_CURL OFF CACHE BOOL "llama.cpp: enable curl" FORCE)
+
     # Architecture detection and settings for Apple platforms
     if (APPLE)
         # Get the target architecture
@@ -143,7 +146,7 @@ if (LLAMA_BUILD)
         endif()
 
         # Building llava
-        add_subdirectory(vendor/llama.cpp/examples/llava)
+        add_subdirectory(vendor/llama.cpp/tools/mtmd)
         set_target_properties(llava_shared PROPERTIES OUTPUT_NAME "llava")
 
         if (WIN32)
