@@ -142,28 +142,6 @@ def llava_eval_image_embed(
 ################################################
 
 
-# struct clip_image_u8_batch {
-#     struct clip_image_u8 * data;
-#     size_t size;
-# };
-class clip_image_u8_batch(Structure):
-  _fields_ = [
-      ("data", c_void_p),
-      ("size", c_size_t),
-  ]
-
-
-# struct clip_image_f32_batch {
-#     struct clip_image_f32 * data;
-#     size_t size;
-# };
-class clip_image_f32_batch(Structure):
-  _fields_ = [
-      ("data", c_void_p),
-      ("size", c_size_t),
-  ]
-
-
 # /** load mmproj model */
 # CLIP_API struct clip_ctx * clip_model_load    (const char * fname, int verbosity);
 @ctypes_function("clip_model_load", [c_char_p, c_int], clip_ctx_p_ctypes)
@@ -192,21 +170,15 @@ def clip_image_u8_free(img: c_void_p, /):
     ...
 
 
-# CLIP_API void clip_image_f32_free(struct clip_image_f32 * img);
-@ctypes_function("clip_image_f32_free", [c_void_p], None)
-def clip_image_f32_free(img: c_void_p, /):
-    ...
-
-
-# CLIP_API void clip_image_u8_batch_free (struct clip_image_u8_batch  * batch);
-@ctypes_function("clip_image_u8_batch_free", [POINTER(clip_image_u8_batch)], None)
-def clip_image_u8_batch_free(batch: "_Pointer[clip_image_u8_batch]", /):
+# CLIP_API struct clip_image_f32_batch * clip_image_f32_batch_init();
+@ctypes_function("clip_image_f32_batch_init", [], c_void_p)
+def clip_image_f32_batch_init() -> Optional[c_void_p]:
     ...
 
 
 # CLIP_API void clip_image_f32_batch_free(struct clip_image_f32_batch * batch);
-@ctypes_function("clip_image_f32_batch_free", [POINTER(clip_image_f32_batch)], None)
-def clip_image_f32_batch_free(batch: "_Pointer[clip_image_f32_batch]", /):
+@ctypes_function("clip_image_f32_batch_free", [c_void_p], None)
+def clip_image_f32_batch_free(batch: c_void_p, /):
     ...
 
 
@@ -217,14 +189,14 @@ def clip_image_f32_batch_free(batch: "_Pointer[clip_image_f32_batch]", /):
     [
         clip_ctx_p_ctypes,
         c_void_p,
-        POINTER(clip_image_f32_batch),
+        c_void_p,
     ],
     c_bool,
 )
 def clip_image_preprocess(
     ctx: clip_ctx_p,
     img: c_void_p,
-    res_imgs: "_Pointer[clip_image_f32_batch]",
+    res_imgs: c_void_p,
     /,
 ) -> bool:
     ...
@@ -236,7 +208,7 @@ def clip_image_preprocess(
     [
         clip_ctx_p_ctypes,
         c_int,
-        POINTER(clip_image_f32_batch),
+        c_void_p,
         POINTER(c_float),
     ],
     c_bool,
@@ -244,7 +216,7 @@ def clip_image_preprocess(
 def clip_image_batch_encode(
     ctx: clip_ctx_p,
     n_threads: c_int,
-    imgs: "_Pointer[clip_image_f32_batch]",
+    imgs: c_void_p,
     vec: c_void_p,
     /,
 ) -> bool:

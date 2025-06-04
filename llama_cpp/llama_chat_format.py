@@ -3468,8 +3468,7 @@ class Gemma3ChatHandler(Llava15ChatHandler):
             self._llava_cpp.clip_image_u8_free(img_u8_p)
             raise ValueError("Failed to load image.")
 
-        img_f32 = self._llava_cpp.clip_image_f32_batch()
-        img_f32_p = ctypes.byref(img_f32)
+        img_f32_p = self._llava_cpp.clip_image_f32_batch_init()
         if not self._llava_cpp.clip_image_preprocess(self.clip_ctx, img_u8_p, img_f32_p):
             self._llava_cpp.clip_image_f32_batch_free(img_f32_p)
             self._llava_cpp.clip_image_u8_free(img_u8_p)
