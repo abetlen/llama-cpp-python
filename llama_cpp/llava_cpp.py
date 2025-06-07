@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 # Specify the base name of the shared library to load
 _libllava_base_name = "llava"
 _libllava_override_path = os.environ.get("LLAVA_CPP_LIB")
-_libllava_base_path = pathlib.Path(os.path.abspath(os.path.dirname(__file__))) / "lib" if _libllava_override_path is None else pathlib.Path()
+_libllava_base_path = pathlib.Path(os.path.abspath(os.path.dirname(__file__))) / "lib" if _libllava_override_path is None else pathlib.Path(_libllava_override_path)
 
 # Load the library
 _libllava = load_shared_library(_libllava_base_name, _libllava_base_path)
