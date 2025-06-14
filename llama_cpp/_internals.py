@@ -277,19 +277,19 @@ class LlamaContext:
         return llama_cpp.llama_pooling_type(self.ctx)
 
     def kv_cache_clear(self):
-        llama_cpp.llama_kv_cache_clear(self.ctx)
+        llama_cpp.llama_kv_self_clear(self.ctx)
 
     def kv_cache_seq_rm(self, seq_id: int, p0: int, p1: int):
-        llama_cpp.llama_kv_cache_seq_rm(self.ctx, seq_id, p0, p1)
+        llama_cpp.llama_kv_self_seq_rm(self.ctx, seq_id, p0, p1)
 
     def kv_cache_seq_cp(self, seq_id_src: int, seq_id_dst: int, p0: int, p1: int):
-        llama_cpp.llama_kv_cache_seq_cp(self.ctx, seq_id_src, seq_id_dst, p0, p1)
+        llama_cpp.llama_kv_self_seq_cp(self.ctx, seq_id_src, seq_id_dst, p0, p1)
 
     def kv_cache_seq_keep(self, seq_id: int):
-        llama_cpp.llama_kv_cache_seq_keep(self.ctx, seq_id)
+        llama_cpp.llama_kv_self_seq_keep(self.ctx, seq_id)
 
     def kv_cache_seq_shift(self, seq_id: int, p0: int, p1: int, shift: int):
-        llama_cpp.llama_kv_cache_seq_add(self.ctx, seq_id, p0, p1, shift)
+        llama_cpp.llama_kv_self_seq_add(self.ctx, seq_id, p0, p1, shift)
 
     def get_state_size(self) -> int:
         return llama_cpp.llama_get_state_size(self.ctx)
