@@ -709,15 +709,15 @@ class Llama:
             sampler.add_custom(apply_func)
 
         sampler.add_penalties(
-            n_vocab=self._n_vocab,
-            special_eos_id=self._token_eos,
-            linefeed_id=self._token_nl,
+            # n_vocab=self._n_vocab,
+            # special_eos_id=self._token_eos,
+            # linefeed_id=self._token_nl,
             penalty_last_n=self.last_n_tokens_size,
             penalty_repeat=repeat_penalty,
             penalty_freq=frequency_penalty,
             penalty_present=presence_penalty,
-            penalize_nl=penalize_nl,
-            ignore_eos=False,
+            # penalize_nl=penalize_nl,
+            # ignore_eos=False,
         )
 
         if grammar is not None:

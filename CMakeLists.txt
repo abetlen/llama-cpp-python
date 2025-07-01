@@ -135,46 +135,46 @@ if (LLAMA_BUILD)
         )
     endif()
 
-    if (LLAVA_BUILD)
-        if (LLAMA_CUBLAS OR LLAMA_CUDA)
-            add_compile_definitions(GGML_USE_CUBLAS)
-            add_compile_definitions(GGML_USE_CUDA)
-        endif()
-
-        if (LLAMA_METAL)
-            add_compile_definitions(GGML_USE_METAL)
-        endif()
-
-        # Building llava
-        add_subdirectory(vendor/llama.cpp/tools/mtmd)
-        set_target_properties(llava_shared PROPERTIES OUTPUT_NAME "llava")
-
-        if (WIN32)
-            set_target_properties(llava_shared PROPERTIES CUDA_ARCHITECTURES OFF)
-        endif()
-        llama_cpp_python_install_target(llava_shared)
-        if (WIN32)
-            install(
-                FILES $<TARGET_RUNTIME_DLLS:llava_shared>
-                DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/lib
-            )
-            install(
-                FILES $<TARGET_RUNTIME_DLLS:llava_shared>
-                DESTINATION ${SKBUILD_PLATLIB_DIR}/llama_cpp/lib
-            )
-        endif()
-
-        # Fix for llava build: Add include directory for llama.h
-        # Move these commands after the add_subdirectory call
-        target_include_directories(llava PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/vendor/llama.cpp/include)
-        target_include_directories(llava PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/vendor/llama.cpp/ggml/include)
-
-        if (BUILD_SHARED_LIBS)
-            target_include_directories(llava_shared PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/vendor/llama.cpp/include)
-            target_include_directories(llava_shared PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/vendor/llama.cpp/ggml/include)
-        endif()
-
-        target_include_directories(llama-llava-cli PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/vendor/llama.cpp/include)
-        target_include_directories(llama-minicpmv-cli PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/vendor/llama.cpp/include)
-    endif()
+    # if (LLAVA_BUILD)
+    #     if (LLAMA_CUBLAS OR LLAMA_CUDA)
+    #         add_compile_definitions(GGML_USE_CUBLAS)
+    #         add_compile_definitions(GGML_USE_CUDA)
+    #     endif()
+    #
+    #     if (LLAMA_METAL)
+    #         add_compile_definitions(GGML_USE_METAL)
+    #     endif()
+    #
+    #     # Building llava
+    #     add_subdirectory(vendor/llama.cpp/tools/mtmd)
+    #     set_target_properties(llava_shared PROPERTIES OUTPUT_NAME "llava")
+    #
+    #     if (WIN32)
+    #         set_target_properties(llava_shared PROPERTIES CUDA_ARCHITECTURES OFF)
+    #     endif()
+    #     llama_cpp_python_install_target(llava_shared)
+    #     if (WIN32)
+    #         install(
+    #             FILES $<TARGET_RUNTIME_DLLS:llava_shared>
+    #             DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/lib
+    #         )
+    #         install(
+    #             FILES $<TARGET_RUNTIME_DLLS:llava_shared>
+    #             DESTINATION ${SKBUILD_PLATLIB_DIR}/llama_cpp/lib
+    #         )
+    #     endif()
+    #
+    #     # Fix for llava build: Add include directory for llama.h
+    #     # Move these commands after the add_subdirectory call
+    #     target_include_directories(llava PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/vendor/llama.cpp/include)
+    #     target_include_directories(llava PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/vendor/llama.cpp/ggml/include)
+    #
+    #     if (BUILD_SHARED_LIBS)
+    #         target_include_directories(llava_shared PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/vendor/llama.cpp/include)
+    #         target_include_directories(llava_shared PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/vendor/llama.cpp/ggml/include)
+    #     endif()
+    #
+    #     target_include_directories(llama-llava-cli PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/vendor/llama.cpp/include)
+    #     target_include_directories(llama-minicpmv-cli PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/vendor/llama.cpp/include)
+    # endif()
 endif()
