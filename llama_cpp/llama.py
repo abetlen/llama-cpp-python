@@ -92,8 +92,8 @@ class Llama:
         embedding: bool = False,
         offload_kqv: bool = True,
         flash_attn: bool = False,
-        op_offloat: bool | None = None,
-        swa_full: bool | None = None,
+        op_offloat: Optional[bool] = None,
+        swa_full: Optional[bool] = None,
         # Sampling Params
         no_perf: bool = False,
         last_n_tokens_size: int = 64,
