@@ -66,7 +66,6 @@ class Llama:
         split_mode: int = llama_cpp.LLAMA_SPLIT_MODE_LAYER,
         main_gpu: int = 0,
         tensor_split: Optional[List[float]] = None,
-        rpc_servers: Optional[str] = None,
         vocab_only: bool = False,
         use_mmap: bool = True,
         use_mlock: bool = False,
@@ -93,6 +92,8 @@ class Llama:
         embedding: bool = False,
         offload_kqv: bool = True,
         flash_attn: bool = False,
+        op_offloat: Optional[bool] = None,
+        swa_full: Optional[bool] = None,
         # Sampling Params
         no_perf: bool = False,
         last_n_tokens_size: int = 64,
@@ -150,7 +151,6 @@ class Llama:
             split_mode: How to split the model across GPUs. See llama_cpp.LLAMA_SPLIT_* for options.
             main_gpu: main_gpu interpretation depends on split_mode: LLAMA_SPLIT_MODE_NONE: the GPU that is used for the entire model. LLAMA_SPLIT_MODE_ROW: the GPU that is used for small tensors and intermediate results. LLAMA_SPLIT_MODE_LAYER: ignored
             tensor_split: How split tensors should be distributed across GPUs. If None, the model is not split.
-            rpc_servers: Comma separated list of RPC servers to use for offloading
             vocab_only: Only load the vocabulary no weights.
             use_mmap: Use mmap if possible.
             use_mlock: Force the system to keep the model in RAM.
@@ -174,6 +174,8 @@ class Llama:
             embedding: Embedding mode only.
             offload_kqv: Offload K, Q, V to GPU.
             flash_attn: Use flash attention.
+            op_offloat: offload host tensor operations to device
+            swa_full: use full-size SWA cache (https://github.com/ggml-org/llama.cpp/pull/13194#issuecomment-2868343055)
             no_perf: Measure performance timings.
             last_n_tokens_size: Maximum number of tokens to keep in the last_n_tokens deque.
             lora_base: Optional path to base model, useful if using a quantized base model and you want to apply LoRA to an f16 model.
@@ -226,11 +228,6 @@ class Llama:
         )  # 0x7FFFFFFF is INT32 max, will be auto set to all layers
         self.model_params.split_mode = split_mode
         self.model_params.main_gpu = main_gpu
-        if rpc_servers is not None:
-            self.model_params.rpc_servers = rpc_servers.encode("utf-8")
-            self._rpc_servers = rpc_servers
-        else:
-            self._rpc_servers = None
         self.tensor_split = tensor_split
         self._c_tensor_split = None
         if self.tensor_split is not None:
@@ -341,12 +338,17 @@ class Llama:
             yarn_beta_slow if yarn_beta_slow != 0.0 else 0
         )
         self.context_params.yarn_orig_ctx = yarn_orig_ctx if yarn_orig_ctx != 0 else 0
-        self.context_params.logits_all = (
-            logits_all if draft_model is None else True
-        )  # Must be set to True for speculative decoding
+        self._logits_all = logits_all if draft_model is None else True
         self.context_params.embeddings = embedding  # TODO: Rename to embeddings
         self.context_params.offload_kqv = offload_kqv
         self.context_params.flash_attn = flash_attn
+
+        if op_offloat is not None:
+            self.context_params.op_offloat = op_offloat
+
+        if swa_full is not None:
+            self.context_params.swa_full = swa_full
+
         #  KV cache quantization
         if type_k is not None:
             self.context_params.type_k = type_k
@@ -568,7 +570,7 @@ class Llama:
     def eval_logits(self) -> Deque[List[float]]:
         return deque(
             self.scores[: self.n_tokens, :].tolist(),
-            maxlen=self._n_ctx if self.context_params.logits_all else 1,
+            maxlen=self._n_ctx if self._logits_all else 1,
         )
 
     def tokenize(
@@ -641,13 +643,13 @@ class Llama:
             n_past = self.n_tokens
             n_tokens = len(batch)
             self._batch.set_batch(
-                batch=batch, n_past=n_past, logits_all=self.context_params.logits_all
+                batch=batch, n_past=n_past, logits_all=self._logits_all
             )
             self._ctx.decode(self._batch)
             # Save tokens
             self.input_ids[n_past : n_past + n_tokens] = batch
             # Save logits
-            if self.context_params.logits_all:
+            if self._logits_all:
                 rows = n_tokens
                 cols = self._n_vocab
                 logits = np.ctypeslib.as_array(
@@ -709,15 +711,15 @@ class Llama:
             sampler.add_custom(apply_func)
 
         sampler.add_penalties(
-            n_vocab=self._n_vocab,
-            special_eos_id=self._token_eos,
-            linefeed_id=self._token_nl,
+            # n_vocab=self._n_vocab,
+            # special_eos_id=self._token_eos,
+            # linefeed_id=self._token_nl,
             penalty_last_n=self.last_n_tokens_size,
             penalty_repeat=repeat_penalty,
             penalty_freq=frequency_penalty,
             penalty_present=presence_penalty,
-            penalize_nl=penalize_nl,
-            ignore_eos=False,
+            # penalize_nl=penalize_nl,
+            # ignore_eos=False,
         )
 
         if grammar is not None:
@@ -1288,7 +1290,7 @@ class Llama:
         else:
             stop_sequences = []
 
-        if logprobs is not None and self.context_params.logits_all is False:
+        if logprobs is not None and self._logits_all is False:
             raise ValueError(
                 "logprobs is not supported for models created with logits_all=False"
             )
@@ -2091,10 +2093,12 @@ class Llama:
             yarn_beta_fast=self.context_params.yarn_beta_fast,
             yarn_beta_slow=self.context_params.yarn_beta_slow,
             yarn_orig_ctx=self.context_params.yarn_orig_ctx,
-            logits_all=self.context_params.logits_all,
+            logits_all=self._logits_all,
             embedding=self.context_params.embeddings,
             offload_kqv=self.context_params.offload_kqv,
             flash_attn=self.context_params.flash_attn,
+            op_offloat=self.context_params.op_offloat,
+            swa_full=self.context_params.swa_full,
             # Sampling Params
             no_perf=self.context_params.no_perf,
             last_n_tokens_size=self.last_n_tokens_size,
