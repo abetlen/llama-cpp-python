@@ -2710,9 +2710,9 @@ class Llava15ChatHandler:
         with suppress_stdout_stderr(disable=self.verbose):
             # Get default parameters
             ctx_params = self._mtmd_cpp.mtmd_context_params_default()
-            # ctx_params.use_gpu = True
+            ctx_params.use_gpu = True # TODO: Make this configurable
             ctx_params.print_timings = self.verbose
-            ctx_params.n_threads = 16
+            ctx_params.n_threads = llama_model.n_threads
             ctx_params.verbosity = 2 if self.verbose else 0  # GGML_LOG_LEVEL_INFO = 2
 
             # Initialize mtmd context
