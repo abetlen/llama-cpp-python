@@ -28,6 +28,7 @@ from jinja2.sandbox import ImmutableSandboxedEnvironment
 import numpy as np
 import numpy.typing as npt
 
+import llama_cpp.llama_cpp as llama_cpp
 import llama_cpp.llama as llama
 import llama_cpp.llama_types as llama_types
 import llama_cpp.llama_grammar as llama_grammar
@@ -2651,7 +2652,7 @@ def functionary_v1_v2_chat_handler(
 
 class Llava15ChatHandler:
     DEFAULT_SYSTEM_MESSAGE: Optional[str] = (
-        "A chat between a curious human and an artificial intelligence assistant.  The assistant gives helpful, detailed, and polite answers to the human's questions."
+        "A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human's questions."
     )
 
     CHAT_FORMAT = (
@@ -2690,70 +2691,72 @@ class Llava15ChatHandler:
     )
 
     def __init__(self, clip_model_path: str, verbose: bool = True):
-        import llama_cpp.llava_cpp as llava_cpp
+        import llama_cpp.mtmd_cpp as mtmd_cpp
 
         self.clip_model_path = clip_model_path
         self.verbose = verbose
-
-        self._llava_cpp = llava_cpp  # TODO: Fix
+        self._mtmd_cpp = mtmd_cpp
         self._exit_stack = ExitStack()
-        self._last_image_embed: Optional[
-            llava_cpp.CtypesPointer[llava_cpp.llava_image_embed]
-        ] = None
-        self._last_image_hash: Optional[int] = None
+        self.mtmd_ctx: Optional[mtmd_cpp.mtmd_context_p] = None
 
         if not os.path.exists(clip_model_path):
             raise ValueError(f"Clip model path does not exist: {clip_model_path}")
 
+    def _init_mtmd_context(self, llama_model: llama.Llama):
+        """Initialize mtmd context with the llama model."""
+        if self.mtmd_ctx is not None:
+            return  # Already initialized
+
         with suppress_stdout_stderr(disable=self.verbose):
-            clip_ctx = self._llava_cpp.clip_model_load(self.clip_model_path.encode(), 0)
+            # Get default parameters
+            ctx_params = self._mtmd_cpp.mtmd_context_params_default()
+            # ctx_params.use_gpu = True
+            ctx_params.print_timings = self.verbose
+            ctx_params.n_threads = 16
+            ctx_params.verbosity = 2 if self.verbose else 0  # GGML_LOG_LEVEL_INFO = 2
 
-            if clip_ctx is None:
-                raise ValueError(f"Failed to load clip model: {clip_model_path}")
+            # Initialize mtmd context
+            self.mtmd_ctx = self._mtmd_cpp.mtmd_init_from_file(
+                self.clip_model_path.encode(),
+                llama_model.model,
+                ctx_params
+            )
 
-            self.clip_ctx = clip_ctx
+            if self.mtmd_ctx is None:
+                raise ValueError(f"Failed to load mtmd context from: {self.clip_model_path}")
 
-            def clip_free():
+            # Check if vision is supported
+            if not self._mtmd_cpp.mtmd_support_vision(self.mtmd_ctx):
+                raise ValueError("Vision is not supported by this model")
+
+            def mtmd_free():
                 with suppress_stdout_stderr(disable=self.verbose):
-                    self._llava_cpp.clip_free(self.clip_ctx)
+                    if self.mtmd_ctx is not None:
+                        self._mtmd_cpp.mtmd_free(self.mtmd_ctx)
+                        self.mtmd_ctx = None
 
-            self._exit_stack.callback(clip_free)
-
-        def last_image_embed_free():
-            with suppress_stdout_stderr(disable=self.verbose):
-                if self._last_image_embed is not None:
-                    self._llava_cpp.llava_image_embed_free(self._last_image_embed)
-                    self._last_image_embed = None
-
-        self._exit_stack.callback(last_image_embed_free)
+            self._exit_stack.callback(mtmd_free)
 
     def load_image(self, image_url: str) -> bytes:
         return self._load_image(image_url)
 
-    def _embed_image_bytes(self, image_bytes: bytes, n_threads_batch: int = 1):
-        if (
-            self._last_image_embed is not None
-            and self._last_image_hash is not None
-            and hash(image_bytes) == self._last_image_hash
-        ):
-            return self._last_image_embed
+    def _create_bitmap_from_bytes(self, image_bytes: bytes):
+        """Create mtmd_bitmap from image bytes."""
+        if self.mtmd_ctx is None:
+            raise ValueError("mtmd context not initialized")
+
         with suppress_stdout_stderr(disable=self.verbose):
-            # Free the previous image embed
-            if self._last_image_embed is not None:
-                self._llava_cpp.llava_image_embed_free(self._last_image_embed)
-                self._last_image_embed = None
-                self._last_image_hash = None
-            embed = self._llava_cpp.llava_image_embed_make_with_bytes(
-                self.clip_ctx,
-                n_threads_batch,
-                (ctypes.c_uint8 * len(image_bytes)).from_buffer(
-                    bytearray(image_bytes)
-                ),
-                len(image_bytes),
+            # Create bitmap from buffer using helper function
+            bitmap = self._mtmd_cpp.mtmd_helper_bitmap_init_from_buf(
+                self.mtmd_ctx,
+                (ctypes.c_uint8 * len(image_bytes)).from_buffer(bytearray(image_bytes)),
+                len(image_bytes)
             )
-            self._last_image_embed = embed
-            self._last_image_hash = hash(image_bytes)
-            return embed
+            
+            if bitmap is None:
+                raise ValueError("Failed to create bitmap from image bytes")
+            
+            return bitmap
 
     def __call__(
         self,
@@ -2794,7 +2797,9 @@ class Llava15ChatHandler:
         llama_types.CreateChatCompletionResponse,
         Iterator[llama_types.CreateChatCompletionStreamResponse],
     ]:
-        assert self.clip_ctx is not None
+        # Initialize mtmd context
+        self._init_mtmd_context(llama)
+        assert self.mtmd_ctx is not None
 
         system_prompt = _get_system_message(messages)
         if system_prompt == "" and self.DEFAULT_SYSTEM_MESSAGE is not None:
@@ -2809,54 +2814,131 @@ class Llava15ChatHandler:
             trim_blocks=True,
             lstrip_blocks=True,
         ).from_string(self.CHAT_FORMAT)
+        
+        # Get the default media marker
+        media_marker = self._mtmd_cpp.mtmd_default_marker().decode('utf-8')
+        
+        # Replace image URLs with media markers in the template
         text = template.render(
             messages=messages,
             add_generation_prompt=True,
             eos_token=llama.detokenize([llama.token_eos()]),
             bos_token=llama.detokenize([llama.token_bos()]),
         )
-        split_text = self.split_text_on_image_urls(text, image_urls)
+        
+        # Replace image URLs in text with media markers
+        for image_url in image_urls:
+            text = text.replace(image_url, media_marker)
 
         if self.verbose:
             print(text, file=sys.stderr)
 
+        # Create bitmaps from images
+        bitmaps = []
+        bitmap_cleanup = []
+        try:
+            for image_url in image_urls:
+                image_bytes = self.load_image(image_url)
+                bitmap = self._create_bitmap_from_bytes(image_bytes)
+                bitmaps.append(bitmap)
+                bitmap_cleanup.append(bitmap)
 
-        # Evaluate prompt
-        llama.reset()
-        llama._ctx.kv_cache_clear()
-        for type_, value in split_text:
-            if type_ == "text":
-                tokens = llama.tokenize(
-                    value.encode("utf8"), add_bos=False, special=True
+            # Create input text structure
+            input_text = self._mtmd_cpp.mtmd_input_text()
+            input_text.text = text.encode('utf-8')
+            input_text.add_special = True
+            input_text.parse_special = True
+
+            # Create input chunks
+            chunks = self._mtmd_cpp.mtmd_input_chunks_init()
+            if chunks is None:
+                raise ValueError("Failed to create input chunks")
+
+            try:
+                # Tokenize text and images together
+                bitmap_array = (self._mtmd_cpp.mtmd_bitmap_p_ctypes * len(bitmaps))(*bitmaps)
+                result = self._mtmd_cpp.mtmd_tokenize(
+                    self.mtmd_ctx,
+                    chunks,
+                    ctypes.byref(input_text),
+                    bitmap_array,
+                    len(bitmaps)
                 )
-                if llama.n_tokens + len(tokens) > llama.n_ctx():
-                    raise ValueError(
-                        f"Prompt exceeds n_ctx: {llama.n_tokens + len(tokens)} > {llama.n_ctx()}"
-                    )
-                llama.eval(tokens)
-            else:
-                image_bytes = self.load_image(value)
-                embed = self._embed_image_bytes(image_bytes, llama.context_params.n_threads_batch)
-                if llama.n_tokens + embed.contents.n_image_pos > llama.n_ctx():
-                    raise ValueError(
-                        f"Prompt exceeds n_ctx: {llama.n_tokens + embed.contents.n_image_pos} > {llama.n_ctx()}"
-                    )
-                n_past = ctypes.c_int(llama.n_tokens)
-                n_past_p = ctypes.pointer(n_past)
-                with suppress_stdout_stderr(disable=self.verbose):
-                    self._llava_cpp.llava_eval_image_embed(
-                        llama.ctx,
-                        embed,
-                        llama.n_batch,
-                        n_past_p,
-                    )
-                # Required to avoid issues with hf tokenizer
-                llama.input_ids[llama.n_tokens : n_past.value] = -1
-                llama.n_tokens = n_past.value
 
-        # Get prompt tokens to avoid a cache miss
-        prompt = llama.input_ids[: llama.n_tokens].tolist()
+                if result != 0:
+                    raise ValueError(f"Failed to tokenize input: error code {result}")
 
+                # Reset llama context
+                llama.reset()
+                llama._ctx.kv_cache_clear()
+
+                # Process each chunk
+                n_past = llama_cpp.llama_pos(0)
+                n_chunks = self._mtmd_cpp.mtmd_input_chunks_size(chunks)
+                
+                for i in range(n_chunks):
+                    chunk = self._mtmd_cpp.mtmd_input_chunks_get(chunks, i)
+                    if chunk is None:
+                        continue
+
+                    chunk_type = self._mtmd_cpp.mtmd_input_chunk_get_type(chunk)
+                    
+                    if chunk_type == self._mtmd_cpp.MTMD_INPUT_CHUNK_TYPE_TEXT:
+                        # Handle text chunk
+                        n_tokens_out = ctypes.c_size_t()
+                        tokens_ptr = self._mtmd_cpp.mtmd_input_chunk_get_tokens_text(
+                            chunk, ctypes.byref(n_tokens_out)
+                        )
+                        
+                        if tokens_ptr and n_tokens_out.value > 0:
+                            # Convert ctypes array to Python list
+                            tokens = [tokens_ptr[j] for j in range(n_tokens_out.value)]
+                            
+                            if llama.n_tokens + len(tokens) > llama.n_ctx():
+                                raise ValueError(
+                                    f"Prompt exceeds n_ctx: {llama.n_tokens + len(tokens)} > {llama.n_ctx()}"
+                                )
+                            llama.eval(tokens)
+                    
+                    elif chunk_type in [self._mtmd_cpp.MTMD_INPUT_CHUNK_TYPE_IMAGE, self._mtmd_cpp.MTMD_INPUT_CHUNK_TYPE_AUDIO]:
+                        # Handle image/audio chunk using helper
+                        chunk_n_tokens = self._mtmd_cpp.mtmd_input_chunk_get_n_tokens(chunk)
+                        
+                        if llama.n_tokens + chunk_n_tokens > llama.n_ctx():
+                            raise ValueError(
+                                f"Prompt exceeds n_ctx: {llama.n_tokens + chunk_n_tokens} > {llama.n_ctx()}"
+                            )
+                        
+                        new_n_past = llama_cpp.llama_pos(0)
+                        result = self._mtmd_cpp.mtmd_helper_eval_chunk_single(
+                            self.mtmd_ctx,
+                            llama._ctx.ctx,
+                            chunk,
+                            llama_cpp.llama_pos(llama.n_tokens),
+                            llama_cpp.llama_seq_id(0),
+                            llama.n_batch,
+                            False,  # logits_last
+                            ctypes.byref(new_n_past)
+                        )
+                        
+                        if result != 0:
+                            raise ValueError(f"Failed to evaluate chunk: error code {result}")
+                        
+                        # Update llama's token count
+                        llama.n_tokens = new_n_past.value
+
+                # Get prompt tokens to avoid a cache miss
+                prompt = llama.input_ids[: llama.n_tokens].tolist()
+
+            finally:
+                self._mtmd_cpp.mtmd_input_chunks_free(chunks)
+
+        finally:
+            # Cleanup bitmaps
+            for bitmap in bitmap_cleanup:
+                self._mtmd_cpp.mtmd_bitmap_free(bitmap)
+
+        # Handle response format and tools (same as before)
         if response_format is not None and response_format["type"] == "json_object":
             grammar = _grammar_for_response_format(response_format)
 
@@ -2931,6 +3013,7 @@ class Llava15ChatHandler:
             grammar=grammar,
             logit_bias=logit_bias,
         )
+        
         if tool is not None:
             tool_name = tool["function"]["name"]
             return _convert_completion_to_chat_function(
@@ -2943,12 +3026,10 @@ class Llava15ChatHandler:
         # TODO: Add Pillow support for other image formats beyond (jpg, png)
         if image_url.startswith("data:"):
             import base64
-
             image_bytes = base64.b64decode(image_url.split(",")[1])
             return image_bytes
         else:
             import urllib.request
-
             with urllib.request.urlopen(image_url) as f:
                 image_bytes = f.read()
                 return image_bytes
@@ -2974,6 +3055,7 @@ class Llava15ChatHandler:
 
     @staticmethod
     def split_text_on_image_urls(text: str, image_urls: List[str]):
+        """This method is no longer used in the new implementation."""
         def find_first(s: str, substrs: List[str]):
             for i, substr in enumerate(substrs):
                 pos = s.find(substr)
@@ -3371,6 +3453,61 @@ class MiniCPMv26ChatHandler(Llava15ChatHandler):
         "<|im_start|>assistant\n"
         "{% endif %}"
     )
+
+
+class Qwen25VLChatHandler(Llava15ChatHandler):
+    DEFAULT_SYSTEM_MESSAGE = "You are a helpful assistant."
+
+    CHAT_FORMAT = (
+        "<|im_start|>system\n"
+        "You are a helpful assistant.<|im_end|>\n"
+        "{% for message in messages %}"
+        "{% if message['role'] == 'user' %}"
+        "<|im_start|>user\n"
+        "{% if message['content'] is string %}"
+        "{{ message['content'] }}"
+        "{% else %}"
+        "{% for content in message['content'] %}"
+        "{% if content['type'] == 'text' %}"
+        "{{ content['text'] }}"
+        "{% elif content['type'] == 'image_url' %}"
+        "{% if content.image_url is string %}"
+        "{{ content.image_url }}"
+        "{% else %}"
+        "{{ content.image_url.url }}"
+        "{% endif %}"
+        "{% endif %}"
+        "{% endfor %}"
+        "{% endif %}"
+        "<|im_end|>\n"
+        "{% endif %}"
+        "{% endfor %}"
+        "<|im_start|>assistant\n"
+    )
+
+    def __call__(self, **kwargs):
+        llama = kwargs['llama']
+
+        # Clear state for multiple runs
+        llama.reset()
+        llama._ctx.kv_cache_clear()
+        llama.n_tokens = 0
+
+        if hasattr(llama, 'input_ids'):
+            llama.input_ids.fill(0)
+
+        # Clear any handler state
+        if hasattr(self, '_last_image_embed'):
+            self._last_image_embed = None
+            self._last_image_hash = None
+
+        if self.verbose:
+            messages = kwargs.get('messages', [])
+            image_count = len(self.get_image_urls(messages))
+            print(f"Minimal - Cleared state, processing {image_count} images", file=sys.stderr)
+
+        # Use parent implementation
+        return super().__call__(**kwargs)
 
 
 @register_chat_completion_handler("chatml-function-calling")
