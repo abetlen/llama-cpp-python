@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.10]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@8846aace4934ad29651ea61b8c7e3f6b0556e3d2
+- feat: Add support for llama.cpp multimodal, add Qwen2.5-VL chat handler by @abetlen in cd548bd0f14210627798237d5c2ea78acfb88ccb
+
 ## [0.3.9]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@8733e0cf6eefc7c7752297cc22d0836706f4222c
