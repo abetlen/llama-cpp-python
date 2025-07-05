@@ -20,7 +20,7 @@ jobs:
         id: set-matrix
         run: |
           $matrix = @{
-              'os' = @('ubuntu-latest', 'windows-2019')
+              'os' = @('ubuntu-22.04', 'windows-2022')
               'pyver' = @("3.9", "3.10", "3.11", "3.12")
               'cuda' = @("12.1.1", "12.2.2", "12.3.2", "12.4.1") #, "12.5.1", "12.6.1")
               'releasetag' = @("basic")
