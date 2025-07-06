@@ -8,7 +8,7 @@ permissions:
 jobs:
   define_matrix:
     name: Define Build Matrix
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     defaults:
@@ -20,7 +20,7 @@ jobs:
         id: set-matrix
         run: |
           $matrix = @{
-              'os' = @('ubuntu-22.04', 'windows-2022')
+              'os' = @('ubuntu-22.04') #, 'windows-2022')
               'pyver' = @("3.9", "3.10", "3.11", "3.12")
               'cuda' = @("12.1.1", "12.2.2", "12.3.2", "12.4.1") #, "12.5.1", "12.6.1")
               'releasetag' = @("basic")
