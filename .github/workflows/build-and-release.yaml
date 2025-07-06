@@ -74,6 +74,7 @@ jobs:
           CIBW_SKIP: "*musllinux* pp*"
           CIBW_REPAIR_WHEEL_COMMAND: ""
           CIBW_ARCHS: "aarch64"
+          CIBW_ENVIRONMENT: CMAKE_ARGS="-DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_APPLE_SILICON_PROCESSOR=arm64 -DCMAKE_CROSSCOMPILING=ON"
           CIBW_BUILD: "cp38-* cp39-* cp310-* cp311-* cp312-*"
         with:
           output-dir: wheelhouse
