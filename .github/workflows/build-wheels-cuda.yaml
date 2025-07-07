@@ -47,7 +47,7 @@ jobs:
         if: runner.os == 'Windows'
         uses: microsoft/setup-msbuild@v2
         with:
-          vs-version: '[17.0)'
+          vs-version: 'latest'
 
       - uses: actions/checkout@v4
         with:
