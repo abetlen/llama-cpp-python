@@ -20,7 +20,7 @@ jobs:
         id: set-matrix
         run: |
           $matrix = @{
-              'os' = @('ubuntu-22.04', 'ubuntu-24.04-arm', 'windows-2022')
+              'os' = @('ubuntu-22.04', 'ubuntu-22.04-arm', 'windows-2022')
               'pyver' = @("3.10", "3.11", "3.12", "3.13")
               'cuda' = @("12.6.3", "12.8.1", "12.9.1") #, "12.5.1", "12.6.1")
               'releasetag' = @("basic")
@@ -59,7 +59,7 @@ jobs:
           cache: 'pip'
 
       - name: Setup Mamba
-        uses: conda-incubator/setup-miniconda@v3.1.0
+        uses: conda-incubator/setup-miniconda@v3.2.0
         with:
           activate-environment: "llamacpp"
           python-version: ${{ matrix.pyver }}
