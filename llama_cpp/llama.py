@@ -369,15 +369,25 @@ class Llama:
         if not os.path.exists(model_path):
             raise ValueError(f"Model path does not exist: {model_path}")
 
-        self._model = self._stack.enter_context(
-            contextlib.closing(
-                internals.LlamaModel(
-                    path_model=self.model_path,
-                    params=self.model_params,
-                    verbose=self.verbose,
+        try:
+            self._model = self._stack.enter_context(
+                contextlib.closing(
+                    internals.LlamaModel(
+                        path_model=self.model_path,
+                        params=self.model_params,
+                        verbose=self.verbose,
+                    )
                 )
-            )
-        )
+            )   
+        except RuntimeError as e:
+            if "No such file or directory" in str(e):
+                raise FileNotFoundError(
+                    f"Model file not found at '{self.model_path}'. "
+                    "Make sure the .gguf model file exists at the given path."
+                ) from e
+            else:
+                raise
+
 
         # Override tokenizer
         self.tokenizer_ = tokenizer or LlamaTokenizer(self)
