@@ -200,6 +200,7 @@ LLAMA_VOCAB_TYPE_RWKV = 5
 """RWKV tokenizer based on greedy tokenization"""
 
 
+# NOTE: Deprecated and will be removed in the future. (already gone in llama.cpp)
 # // pre-tokenization types
 # enum llama_vocab_pre_type {
 #     LLAMA_VOCAB_PRE_TYPE_DEFAULT        = 0,
