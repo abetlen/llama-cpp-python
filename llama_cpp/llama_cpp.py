@@ -179,12 +179,13 @@ llama_seq_id = ctypes.c_int32
 
 
 # enum llama_vocab_type {
-#     LLAMA_VOCAB_TYPE_NONE = 0, // For models without vocab
-#     LLAMA_VOCAB_TYPE_SPM  = 1, // LLaMA tokenizer based on byte-level BPE with byte fallback
-#     LLAMA_VOCAB_TYPE_BPE  = 2, // GPT-2 tokenizer based on byte-level BPE
-#     LLAMA_VOCAB_TYPE_WPM  = 3, // BERT tokenizer based on WordPiece
-#     LLAMA_VOCAB_TYPE_UGM  = 4, // T5 tokenizer based on Unigram
-#     LLAMA_VOCAB_TYPE_RWKV = 5, // RWKV tokenizer based on greedy tokenization
+#     LLAMA_VOCAB_TYPE_NONE   = 0, // For models without vocab
+#     LLAMA_VOCAB_TYPE_SPM    = 1, // LLaMA tokenizer based on byte-level BPE with byte fallback
+#     LLAMA_VOCAB_TYPE_BPE    = 2, // GPT-2 tokenizer based on byte-level BPE
+#     LLAMA_VOCAB_TYPE_WPM    = 3, // BERT tokenizer based on WordPiece
+#     LLAMA_VOCAB_TYPE_UGM    = 4, // T5 tokenizer based on Unigram
+#     LLAMA_VOCAB_TYPE_RWKV   = 5, // RWKV tokenizer based on greedy tokenization
+#     LLAMA_VOCAB_TYPE_PLAMO2 = 6, // PLaMo-2 tokenizer based on Aho-Corasick with dynamic programming
 # };
 LLAMA_VOCAB_TYPE_NONE = 0
 """For models without vocab"""
@@ -198,6 +199,8 @@ LLAMA_VOCAB_TYPE_UGM = 4
 """T5 tokenizer based on Unigram"""
 LLAMA_VOCAB_TYPE_RWKV = 5
 """RWKV tokenizer based on greedy tokenization"""
+LLAMA_VOCAB_TYPE_PLAMO2 = 6
+"""PLaMo-2 tokenizer based on Aho-Corasick with dynamic programming"""
 
 
 # NOTE: Deprecated and will be removed in the future. (already gone in llama.cpp)
@@ -2171,7 +2174,7 @@ def llama_kv_self_seq_add(
 # //   - lazily on next llama_decode()
 # // p0 < 0 : [0,  p1]
 # // p1 < 0 : [p0, inf)
-# DEPRECATED(void llama_kv_self_seq_div(
+# DEPRECATED(LLAMA_API void llama_kv_self_seq_div(
 #         struct llama_context * ctx,
 #                 llama_seq_id   seq_id,
 #                    llama_pos   p0,
