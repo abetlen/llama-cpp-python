@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.14]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@79e0b68c178656bb0632cb8602d2940b755077f8
+
+## [0.3.13]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@bdca38376f7e8dd928defe01ce6a16218a64b040
+- fix: Better chat format for Qwen2.5-VL by @alcoftTAO in #2040
+
 ## [0.3.12]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@a0374a67e2924f2e845cdc59dd67d9a44065a89c
