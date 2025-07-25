@@ -1959,6 +1959,8 @@ class Llama:
         logit_bias: Optional[Dict[int, float]] = None,
         logprobs: Optional[bool] = None,
         top_logprobs: Optional[int] = None,
+        documents: Optional[List[Dict[str, str]]] = None,
+        template_kwargs: Optional[Dict[str, Any]] = None,
     ) -> Union[
         CreateChatCompletionResponse, Iterator[CreateChatCompletionStreamResponse]
     ]:
@@ -1991,6 +1993,8 @@ class Llama:
             logits_processor: A list of logits processors to use.
             grammar: A grammar to use.
             logit_bias: A logit bias to use.
+            documents: A list of documents to use for the chat completion.
+            template_kwargs: Optional dictionary of arguments to pass to chat template.
 
         Returns:
             Generated chat completion or a stream of chat completion chunks.
@@ -2030,6 +2034,8 @@ class Llama:
             logits_processor=logits_processor,
             grammar=grammar,
             logit_bias=logit_bias,
+            documents=documents,
+            template_kwargs=template_kwargs,
         )
 
     def create_chat_completion_openai_v1(
