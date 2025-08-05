@@ -2752,10 +2752,10 @@ class Llava15ChatHandler:
                 (ctypes.c_uint8 * len(image_bytes)).from_buffer(bytearray(image_bytes)),
                 len(image_bytes)
             )
-
+            
             if bitmap is None:
                 raise ValueError("Failed to create bitmap from image bytes")
-
+            
             return bitmap
 
     def __call__(
@@ -2814,10 +2814,10 @@ class Llava15ChatHandler:
             trim_blocks=True,
             lstrip_blocks=True,
         ).from_string(self.CHAT_FORMAT)
-
+        
         # Get the default media marker
         media_marker = self._mtmd_cpp.mtmd_default_marker().decode('utf-8')
-
+        
         # Replace image URLs with media markers in the template
         text = template.render(
             messages=messages,
@@ -2825,7 +2825,7 @@ class Llava15ChatHandler:
             eos_token=llama.detokenize([llama.token_eos()]),
             bos_token=llama.detokenize([llama.token_bos()]),
         )
-
+        
         # Replace image URLs in text with media markers
         for image_url in image_urls:
             text = text.replace(image_url, media_marker)
@@ -2875,40 +2875,40 @@ class Llava15ChatHandler:
                 # Process each chunk
                 n_past = llama_cpp.llama_pos(0)
                 n_chunks = self._mtmd_cpp.mtmd_input_chunks_size(chunks)
-
+                
                 for i in range(n_chunks):
                     chunk = self._mtmd_cpp.mtmd_input_chunks_get(chunks, i)
                     if chunk is None:
                         continue
 
                     chunk_type = self._mtmd_cpp.mtmd_input_chunk_get_type(chunk)
-
+                    
                     if chunk_type == self._mtmd_cpp.MTMD_INPUT_CHUNK_TYPE_TEXT:
                         # Handle text chunk
                         n_tokens_out = ctypes.c_size_t()
                         tokens_ptr = self._mtmd_cpp.mtmd_input_chunk_get_tokens_text(
                             chunk, ctypes.byref(n_tokens_out)
                         )
-
+                        
                         if tokens_ptr and n_tokens_out.value > 0:
                             # Convert ctypes array to Python list
                             tokens = [tokens_ptr[j] for j in range(n_tokens_out.value)]
-
+                            
                             if llama.n_tokens + len(tokens) > llama.n_ctx():
                                 raise ValueError(
                                     f"Prompt exceeds n_ctx: {llama.n_tokens + len(tokens)} > {llama.n_ctx()}"
                                 )
                             llama.eval(tokens)
-
+                    
                     elif chunk_type in [self._mtmd_cpp.MTMD_INPUT_CHUNK_TYPE_IMAGE, self._mtmd_cpp.MTMD_INPUT_CHUNK_TYPE_AUDIO]:
                         # Handle image/audio chunk using helper
                         chunk_n_tokens = self._mtmd_cpp.mtmd_input_chunk_get_n_tokens(chunk)
-
+                        
                         if llama.n_tokens + chunk_n_tokens > llama.n_ctx():
                             raise ValueError(
                                 f"Prompt exceeds n_ctx: {llama.n_tokens + chunk_n_tokens} > {llama.n_ctx()}"
                             )
-
+                        
                         new_n_past = llama_cpp.llama_pos(0)
                         result = self._mtmd_cpp.mtmd_helper_eval_chunk_single(
                             self.mtmd_ctx,
@@ -2920,10 +2920,10 @@ class Llava15ChatHandler:
                             False,  # logits_last
                             ctypes.byref(new_n_past)
                         )
-
+                        
                         if result != 0:
                             raise ValueError(f"Failed to evaluate chunk: error code {result}")
-
+                        
                         # Update llama's token count
                         llama.n_tokens = new_n_past.value
 
@@ -3013,33 +3013,13 @@ class Llava15ChatHandler:
             grammar=grammar,
             logit_bias=logit_bias,
         )
-
+        
         if tool is not None:
             tool_name = tool["function"]["name"]
             return _convert_completion_to_chat_function(
                 tool_name, completion_or_chunks, stream
             )
         return _convert_completion_to_chat(completion_or_chunks, stream=stream)
-
-    def eval_image(self, llama: llama.Llama, image_url: str):
-        image_bytes = self.load_image(image_url)
-        embed = self._embed_image_bytes(image_bytes, llama.context_params.n_threads_batch)
-        if llama.n_tokens + embed.contents.n_image_pos > llama.n_ctx():
-            raise ValueError(
-                f"Prompt exceeds n_ctx: {llama.n_tokens + embed.contents.n_image_pos} > {llama.n_ctx()}"
-            )
-        n_past = ctypes.c_int(llama.n_tokens)
-        n_past_p = ctypes.pointer(n_past)
-        with suppress_stdout_stderr(disable=self.verbose):
-            self._llava_cpp.llava_eval_image_embed(
-                llama.ctx,
-                embed,
-                llama.n_batch,
-                n_past_p,
-            )
-        # Required to avoid issues with hf tokenizer
-        llama.input_ids[llama.n_tokens : n_past.value] = -1
-        llama.n_tokens = n_past.value
 
     @staticmethod
     def _load_image(image_url: str) -> bytes:
@@ -3531,6 +3511,57 @@ class Qwen25VLChatHandler(Llava15ChatHandler):
 
         # Use parent implementation
         return super().__call__(**kwargs)
+
+
+class Gemma3ChatHandler(Llava15ChatHandler):
+    # Chat Format:
+    # '<bos><start_of_turn>user\n{system_prompt}\n\n{prompt}<end_of_turn>\n<start_of_turn>model\n'
+
+    DEFAULT_SYSTEM_MESSAGE = None
+
+    CHAT_FORMAT = (
+        "{% if messages[0]['role'] == 'system' %}"
+        "{% if messages[0]['content'] is string %}"
+        "{% set first_user_prefix = messages[0]['content'] + '\n\n' %}"
+        "{% else %}"
+        "{% set first_user_prefix = messages[0]['content'][0]['text'] + '\n\n' %}"
+        "{% endif %}"
+        "{% set loop_messages = messages[1:] %}"
+        "{% else %}"
+        "{% set first_user_prefix = \"\" %}"
+        "{% set loop_messages = messages %}"
+        "{% endif %}"
+        "{% for message in loop_messages %}"
+        "{% if (message['role'] == 'user') != (loop.index0 % 2 == 0) %}"
+        "{{ raise_exception(\"Conversation roles must alternate user/assistant/user/assistant/...\") }}"
+        "{% endif %}"
+        "{% if (message['role'] == 'assistant') %}"
+        "{% set role = \"model\" %}"
+        "{% else %}"
+        "{% set role = message['role'] %}"
+        "{% endif %}"
+        "{{ '<start_of_turn>' + role + '\n' + (first_user_prefix if loop.first else \"\") }}"
+        "{% if message['content'] is string %}"
+        "{{ message['content'] | trim }}"
+        "{% elif message['content'] is iterable %}"
+        "{% for item in message['content'] %}"
+        "{% if item['type'] == 'image_url' and item['image_url'] is string %}"
+        "{{ '\n\n' + item['image_url'] + '\n\n' }}"
+        "{% elif item['type'] == 'image_url' and item['image_url'] is mapping %}"
+        "{{ '\n\n' + item['image_url']['url'] + '\n\n' }}"
+        "{% elif item['type'] == 'text' %}"
+        "{{ item['text'] | trim }}"
+        "{% endif %}"
+        "{% endfor %}"
+        "{% else %}"
+        "{{ raise_exception(\"Invalid content type\") }}"
+        "{% endif %}"
+        "{{ '<end_of_turn>\n' }}"
+        "{% endfor %}"
+        "{% if add_generation_prompt %}"
+        "{{ '<start_of_turn>model\n' }}"
+        "{% endif %}"
+    )
 
 
 @register_chat_completion_handler("chatml-function-calling")
