@@ -171,6 +171,20 @@ class LlamaProxy:
                 chat_handler = llama_cpp.llama_chat_format.MiniCPMv26ChatHandler(
                     clip_model_path=settings.clip_model_path, verbose=settings.verbose
                 )
+        elif settings.chat_format == "qwen2.5-vl":
+            assert settings.clip_model_path is not None, "clip model not found"
+            if settings.hf_model_repo_id is not None:
+                chat_handler = (
+                    llama_cpp.llama_chat_format.Qwen25VLChatHandler.from_pretrained(
+                        repo_id=settings.hf_model_repo_id,
+                        filename=settings.clip_model_path,
+                        verbose=settings.verbose,
+                    )
+                )
+            else:
+                chat_handler = llama_cpp.llama_chat_format.Qwen25VLChatHandler(
+                    clip_model_path=settings.clip_model_path, verbose=settings.verbose
+                )
         elif settings.chat_format == "hf-autotokenizer":
             assert (
                 settings.hf_pretrained_model_name_or_path is not None

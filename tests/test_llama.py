@@ -216,3 +216,19 @@ root ::= "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10"
 
     assert number_1 != number_2
     assert number_1 == number_3
+
+
+def test_real_llama_embeddings(llama_cpp_model_path):
+    model = llama_cpp.Llama(
+        llama_cpp_model_path,
+        n_ctx=32,
+        n_batch=32,
+        n_ubatch=32,
+        n_threads=multiprocessing.cpu_count(),
+        n_threads_batch=multiprocessing.cpu_count(),
+        logits_all=False,
+        flash_attn=True,
+        embedding=True
+    )
+    # Smoke test for now
+    model.embed("Hello World")

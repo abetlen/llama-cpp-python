@@ -9,6 +9,7 @@ ARG IMAGE
 
 # Update and upgrade the existing packages 
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
+    git \
     python3 \
     python3-pip \
     ninja-build \
