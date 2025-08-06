@@ -8,6 +8,7 @@ import dataclasses
 import random
 import string
 
+from datetime import datetime
 from contextlib import ExitStack
 from typing import (
     Any,
@@ -214,6 +215,10 @@ class Jinja2ChatFormatter(ChatFormatter):
             lstrip_blocks=True,
         ).from_string(self.template)
 
+    @staticmethod
+    def strftime_now(f: str) -> str:
+        return datetime.now().strftime(f)
+
     def __call__(
         self,
         *,
@@ -237,6 +242,7 @@ class Jinja2ChatFormatter(ChatFormatter):
             function_call=function_call,
             tools=tools,
             tool_choice=tool_choice,
+            strftime_now=self.strftime_now,
         )
 
         stopping_criteria = None
@@ -2752,10 +2758,10 @@ class Llava15ChatHandler:
                 (ctypes.c_uint8 * len(image_bytes)).from_buffer(bytearray(image_bytes)),
                 len(image_bytes)
             )
-            
+
             if bitmap is None:
                 raise ValueError("Failed to create bitmap from image bytes")
-            
+
             return bitmap
 
     def __call__(
@@ -2814,10 +2820,10 @@ class Llava15ChatHandler:
             trim_blocks=True,
             lstrip_blocks=True,
         ).from_string(self.CHAT_FORMAT)
-        
+
         # Get the default media marker
         media_marker = self._mtmd_cpp.mtmd_default_marker().decode('utf-8')
-        
+
         # Replace image URLs with media markers in the template
         text = template.render(
             messages=messages,
@@ -2825,7 +2831,7 @@ class Llava15ChatHandler:
             eos_token=llama.detokenize([llama.token_eos()]),
             bos_token=llama.detokenize([llama.token_bos()]),
         )
-        
+
         # Replace image URLs in text with media markers
         for image_url in image_urls:
             text = text.replace(image_url, media_marker)
@@ -2875,40 +2881,40 @@ class Llava15ChatHandler:
                 # Process each chunk
                 n_past = llama_cpp.llama_pos(0)
                 n_chunks = self._mtmd_cpp.mtmd_input_chunks_size(chunks)
-                
+
                 for i in range(n_chunks):
                     chunk = self._mtmd_cpp.mtmd_input_chunks_get(chunks, i)
                     if chunk is None:
                         continue
 
                     chunk_type = self._mtmd_cpp.mtmd_input_chunk_get_type(chunk)
-                    
+
                     if chunk_type == self._mtmd_cpp.MTMD_INPUT_CHUNK_TYPE_TEXT:
                         # Handle text chunk
                         n_tokens_out = ctypes.c_size_t()
                         tokens_ptr = self._mtmd_cpp.mtmd_input_chunk_get_tokens_text(
                             chunk, ctypes.byref(n_tokens_out)
                         )
-                        
+
                         if tokens_ptr and n_tokens_out.value > 0:
                             # Convert ctypes array to Python list
                             tokens = [tokens_ptr[j] for j in range(n_tokens_out.value)]
-                            
+
                             if llama.n_tokens + len(tokens) > llama.n_ctx():
                                 raise ValueError(
                                     f"Prompt exceeds n_ctx: {llama.n_tokens + len(tokens)} > {llama.n_ctx()}"
                                 )
                             llama.eval(tokens)
-                    
+
                     elif chunk_type in [self._mtmd_cpp.MTMD_INPUT_CHUNK_TYPE_IMAGE, self._mtmd_cpp.MTMD_INPUT_CHUNK_TYPE_AUDIO]:
                         # Handle image/audio chunk using helper
                         chunk_n_tokens = self._mtmd_cpp.mtmd_input_chunk_get_n_tokens(chunk)
-                        
+
                         if llama.n_tokens + chunk_n_tokens > llama.n_ctx():
                             raise ValueError(
                                 f"Prompt exceeds n_ctx: {llama.n_tokens + chunk_n_tokens} > {llama.n_ctx()}"
                             )
-                        
+
                         new_n_past = llama_cpp.llama_pos(0)
                         result = self._mtmd_cpp.mtmd_helper_eval_chunk_single(
                             self.mtmd_ctx,
@@ -2920,10 +2926,10 @@ class Llava15ChatHandler:
                             False,  # logits_last
                             ctypes.byref(new_n_past)
                         )
-                        
+
                         if result != 0:
                             raise ValueError(f"Failed to evaluate chunk: error code {result}")
-                        
+
                         # Update llama's token count
                         llama.n_tokens = new_n_past.value
 
@@ -3013,7 +3019,7 @@ class Llava15ChatHandler:
             grammar=grammar,
             logit_bias=logit_bias,
         )
-        
+
         if tool is not None:
             tool_name = tool["function"]["name"]
             return _convert_completion_to_chat_function(

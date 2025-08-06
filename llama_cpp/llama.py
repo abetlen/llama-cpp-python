@@ -637,7 +637,7 @@ class Llama:
         Args:
             tokens: The list of tokens to evaluate.
         """
-        self._ctx.kv_cache_seq_rm(-1, self.n_tokens, -1)
+        self._ctx.kv_cache_seq_rm(0, self.n_tokens, -1)
         for i in range(0, len(tokens), self.n_batch):
             batch = tokens[i : min(len(tokens), i + self.n_batch)]
             n_past = self.n_tokens
@@ -945,7 +945,7 @@ class Llama:
 
                 if sample_idx < self.n_tokens and token != self._input_ids[sample_idx]:
                     self.n_tokens = sample_idx
-                    self._ctx.kv_cache_seq_rm(-1, self.n_tokens, -1)
+                    self._ctx.kv_cache_seq_rm(0, self.n_tokens, -1)
                     break
 
             if self.draft_model is not None:
