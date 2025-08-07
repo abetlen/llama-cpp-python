@@ -8,6 +8,7 @@ import dataclasses
 import random
 import string
 
+from datetime import datetime
 from contextlib import ExitStack
 from typing import (
     Any,
@@ -214,6 +215,10 @@ class Jinja2ChatFormatter(ChatFormatter):
             lstrip_blocks=True,
         ).from_string(self.template)
 
+    @staticmethod
+    def strftime_now(f: str) -> str:
+        return datetime.now().strftime(f)
+
     def __call__(
         self,
         *,
@@ -237,6 +242,7 @@ class Jinja2ChatFormatter(ChatFormatter):
             function_call=function_call,
             tools=tools,
             tool_choice=tool_choice,
+            strftime_now=self.strftime_now,
         )
 
         stopping_criteria = None
