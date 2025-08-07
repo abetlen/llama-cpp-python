@@ -92,7 +92,7 @@ class Llama:
         embedding: bool = False,
         offload_kqv: bool = True,
         flash_attn: bool = False,
-        op_offloat: Optional[bool] = None,
+        op_offload: Optional[bool] = None,
         swa_full: Optional[bool] = None,
         # Sampling Params
         no_perf: bool = False,
@@ -174,7 +174,7 @@ class Llama:
             embedding: Embedding mode only.
             offload_kqv: Offload K, Q, V to GPU.
             flash_attn: Use flash attention.
-            op_offloat: offload host tensor operations to device
+            op_offload: offload host tensor operations to device
             swa_full: use full-size SWA cache (https://github.com/ggml-org/llama.cpp/pull/13194#issuecomment-2868343055)
             no_perf: Measure performance timings.
             last_n_tokens_size: Maximum number of tokens to keep in the last_n_tokens deque.
@@ -343,8 +343,8 @@ class Llama:
         self.context_params.offload_kqv = offload_kqv
         self.context_params.flash_attn = flash_attn
 
-        if op_offloat is not None:
-            self.context_params.op_offloat = op_offloat
+        if op_offload is not None:
+            self.context_params.op_offload = op_offload
 
         if swa_full is not None:
             self.context_params.swa_full = swa_full
@@ -2097,7 +2097,7 @@ class Llama:
             embedding=self.context_params.embeddings,
             offload_kqv=self.context_params.offload_kqv,
             flash_attn=self.context_params.flash_attn,
-            op_offloat=self.context_params.op_offloat,
+            op_offload=self.context_params.op_offload,
             swa_full=self.context_params.swa_full,
             # Sampling Params
             no_perf=self.context_params.no_perf,
