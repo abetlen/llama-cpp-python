@@ -206,14 +206,14 @@ class Jinja2ChatFormatter(ChatFormatter):
         tools: Optional[List[llama_types.ChatCompletionTool]] = None,
         tool_choice: Optional[llama_types.ChatCompletionToolChoiceOption] = None,
         documents: Optional[List[Dict[str, str]]] = None,
-        template_kwargs: Optional[Dict[str, Any]] = None,
+        chat_template_kwargs: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ) -> ChatFormatterResponse:
         def raise_exception(message: str):
             raise ValueError(message)
 
-        if template_kwargs is None:
-            template_kwargs = {}
+        if chat_template_kwargs is None:
+            chat_template_kwargs = {}
 
         prompt = self._environment.render(
             messages=messages,
@@ -226,7 +226,7 @@ class Jinja2ChatFormatter(ChatFormatter):
             tools=tools,
             tool_choice=tool_choice,
             documents=documents,
-            **template_kwargs,
+            **chat_template_kwargs,
         )
 
         stopping_criteria = None
@@ -543,7 +543,7 @@ def chat_formatter_to_chat_completion_handler(
         logprobs: Optional[bool] = None,
         top_logprobs: Optional[int] = None,
         documents: Optional[List[Dict[str, str]]] = None,
-        template_kwargs: Optional[Dict[str, Any]] = None,
+        chat_template_kwargs: Optional[Dict[str, Any]] = None,
         **kwargs,  # type: ignore
     ) -> Union[
         llama_types.CreateChatCompletionResponse,
@@ -556,7 +556,7 @@ def chat_formatter_to_chat_completion_handler(
             tools=tools,
             tool_choice=tool_choice,
             documents=documents,
-            template_kwargs=template_kwargs,
+            chat_template_kwargs=chat_template_kwargs,
         )
         prompt = result.prompt
         if result.stop is not None:
