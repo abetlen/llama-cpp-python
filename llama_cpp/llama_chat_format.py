@@ -214,7 +214,7 @@ class Jinja2ChatFormatter(ChatFormatter):
             lstrip_blocks=True,
             extensions=[jinja2_ext.loopcontrols],
         )
-        environment.filters["tojson"] = lambda x, indent=None, separators=None, sort_keys=False: json.dumps(x, indent=indent, separators=separators, sort_keys=sort_keys, ensure_ascii=False)
+        environment.filters["tojson"] = lambda x, indent=None, separators=None, sort_keys=False, ensure_ascii=False: json.dumps(x, indent=indent, separators=separators, sort_keys=sort_keys, ensure_ascii=ensure_ascii)
         environment.globals["strftime_now"] = lambda format: datetime.now().strftime(format)
         self._environment = environment.from_string(self.template)
 
