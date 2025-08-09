@@ -1,0 +1,13 @@
+apiVersion: v2
+appVersion: 0.1.83
+description: A Helm chart for llama-cpp-python
+name: llama-cpp-python
+type: application
+version: 0.0.1
+
+dependencies:
+  - name: helmet
+    version: 0.x.x
+    repository: https://companyinfo.github.io/helm-charts
+    import-values: # <== It is mandatory if you want to import the Helmet default values.
+      - defaults
