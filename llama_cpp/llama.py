@@ -2262,7 +2262,7 @@ class Llama:
         Returns:
             A Llama model."""
         try:
-            from huggingface_hub import hf_hub_download, HfFileSystem
+            from huggingface_hub import hf_hub_download, snapshot_download, HfFileSystem
             from huggingface_hub.utils import validate_repo_id
         except ImportError:
             raise ImportError(
@@ -2327,10 +2327,14 @@ class Llama:
                     )
 
                 if len(matching_additional_files) > 1:
-                    raise ValueError(
-                        f"Multiple files found in {repo_id} matching {additonal_file_name}\n\n"
-                        f"Available Files:\n{json.dumps(files)}"
+                    snapshot_download(
+                        repo_id=repo_id,
+                        allow_patterns=additonal_file_name,
+                        local_dir=local_dir,
+                        local_dir_use_symlinks=local_dir_use_symlinks,
+                        cache_dir=cache_dir,
                     )
+                    continue
 
                 (matching_additional_file,) = matching_additional_files
 
