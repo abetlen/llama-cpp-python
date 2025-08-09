@@ -3884,6 +3884,41 @@ def llama_sampler_init_xtc(
 ) -> llama_sampler_p:
     ...
 
+#    LLAMA_API struct llama_sampler *    llama_sampler_init_dry(
+#            const struct llama_vocab *  vocab,
+#                             int32_t    context_size,
+#                               float    dry_multiplier,
+#                               float    dry_base,
+#                             int32_t    dry_allowed_length,
+#                             int32_t    dry_penalty_last_n,
+#                          const char ** seq_breakers,
+#                              size_t    num_breakers);
+@ctypes_function(
+"llama_sampler_init_dry",
+    [
+        llama_vocab_p_ctypes,
+        ctypes.c_int32,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.c_int32,
+        ctypes.c_int32,
+        ctypes.POINTER(ctypes.c_char_p),
+        ctypes.c_size_t
+    ],
+    llama_sampler_p_ctypes,
+)
+def llama_sampler_init_dry(
+    vocab: llama_vocab_p,
+    context_size: int,
+    dry_multiplier: float,
+    dry_base: float,
+    dry_allowed_length: int,
+    dry_penalty_last_n: int,
+    seq_breakers: list[str],
+    num_breakers: int,
+) -> llama_sampler_p:
+    ...
+
 
 # /// @details Top n sigma sampling as described in academic paper "Top-nσ: Not All Logits Are You Need" https://arxiv.org/pdf/2411.07641
 # LLAMA_API struct llama_sampler * llama_sampler_init_top_n_sigma(float   n);
