@@ -1394,7 +1394,24 @@ def format_gemma(
     _prompt = _format_no_colon_single(system_message="", messages=_messages, sep=_sep)
     return ChatFormatterResponse(prompt=_prompt, stop=_sep)
 
+# Chat format for Cohere's Command R models (close to chatml but with different tokens).
+# See https://docs.cohere.com/docs/prompting-command-r
+@register_chat_format("command-r")
+def format_commandr(
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    **kwargs: Any,
+) -> ChatFormatterResponse:
+    system_template = "<|START_OF_TURN_TOKEN|><|SYSTEM_TOKEN|>{system_message}"
+    system_message = _get_system_message(messages)
+    system_message = system_template.format(system_message=system_message)
+    _roles = dict(user="<|START_OF_TURN_TOKEN|><|USER_TOKEN|>", assistant="<|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>")
+    _sep = "<|END_OF_TURN_TOKEN|>"
+    _messages = _map_roles(messages, _roles)
+    _messages.append((_roles["assistant"], None))
+    _prompt = _format_chatml(system_message, _messages, _sep)
+    return ChatFormatterResponse(prompt=_prompt, stop=_sep)
 
+    
 # Tricky chat formats that require custom chat handlers
 
 
