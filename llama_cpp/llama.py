@@ -1130,6 +1130,7 @@ class Llama:
         min_p: float = 0.05,
         typical_p: float = 1.0,
         logprobs: Optional[int] = None,
+        full_logprobs: bool = False,
         echo: bool = False,
         stop: Optional[Union[str, List[str]]] = [],
         frequency_penalty: float = 0.0,
@@ -1654,7 +1655,18 @@ class Llama:
             text_str = text_str + suffix
 
         logprobs_or_none: Optional[CompletionLogprobs] = None
-        if logprobs is not None:
+        if logprobs is not None and full_logprobs:
+            if logprobs == 0:
+                logits = self.eval_logits
+            elif logprobs == -1:
+                logits = list(self.eval_logits)[-len(completion_tokens):]
+            else:
+                logits = list(self.eval_logits)[-logprobs:]
+            logprobs_or_none = [
+                Llama.logits_to_logprobs(list(map(float, row)))
+                for row in logits
+            ]
+        elif logprobs is not None:
             text_offset = 0 if echo else len(prompt)
             token_offset = 0 if echo else len(prompt_tokens[1:])
             text_offsets: List[int] = []
@@ -1750,6 +1762,7 @@ class Llama:
         min_p: float = 0.05,
         typical_p: float = 1.0,
         logprobs: Optional[int] = None,
+        full_logprobs: bool = False,
         echo: bool = False,
         stop: Optional[Union[str, List[str]]] = [],
         frequency_penalty: float = 0.0,
@@ -1779,6 +1792,7 @@ class Llama:
             min_p: The min-p value to use for minimum p sampling. Minimum P sampling as described in https://github.com/ggerganov/llama.cpp/pull/3841
             typical_p: The typical-p value to use for sampling. Locally Typical Sampling implementation described in the paper https://arxiv.org/abs/2202.00666.
             logprobs: The number of logprobs to return. If None, no logprobs are returned.
+            full_logprobs: if `logprobs` is not None, returns full logprobs vector (instead of top). If `logprobs==-1` only generated tokens, `logprobs==0` all tokens, else last `logprobs` tokens.
             echo: Whether to echo the prompt.
             stop: A list of strings to stop generation when encountered.
             frequency_penalty: The penalty to apply to tokens based on their frequency in the prompt.
@@ -1813,6 +1827,7 @@ class Llama:
             min_p=min_p,
             typical_p=typical_p,
             logprobs=logprobs,
+            full_logprobs=full_logprobs,
             echo=echo,
             stop=stop,
             frequency_penalty=frequency_penalty,
@@ -1847,6 +1862,7 @@ class Llama:
         min_p: float = 0.05,
         typical_p: float = 1.0,
         logprobs: Optional[int] = None,
+        full_logprobs: bool = False,
         echo: bool = False,
         stop: Optional[Union[str, List[str]]] = [],
         frequency_penalty: float = 0.0,
@@ -1876,6 +1892,7 @@ class Llama:
             min_p: The min-p value to use for minimum p sampling. Minimum P sampling as described in https://github.com/ggerganov/llama.cpp/pull/3841
             typical_p: The typical-p value to use for sampling. Locally Typical Sampling implementation described in the paper https://arxiv.org/abs/2202.00666.
             logprobs: The number of logprobs to return. If None, no logprobs are returned.
+            full_logprobs: if `logprobs` is not None, returns full logprobs vector (instead of top). If `logprobs==-1` only generated tokens, `logprobs==0` all tokens, else last `logprobs` tokens.
             echo: Whether to echo the prompt.
             stop: A list of strings to stop generation when encountered.
             frequency_penalty: The penalty to apply to tokens based on their frequency in the prompt.
@@ -1910,6 +1927,7 @@ class Llama:
             min_p=min_p,
             typical_p=typical_p,
             logprobs=logprobs,
+            full_logprobs=full_logprobs,
             echo=echo,
             stop=stop,
             frequency_penalty=frequency_penalty,
