@@ -36,4 +36,4 @@ ENV PORT=8000
 EXPOSE 8000
 
 # Run the server start script
-CMD ["/bin/sh", "/app/docker/simple/run.sh"]
+CMD ["/bin/sh", "/app/run.sh"]
