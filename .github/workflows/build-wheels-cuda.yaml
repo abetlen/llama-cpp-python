@@ -20,9 +20,9 @@ jobs:
         id: set-matrix
         run: |
           $matrix = @{
-              'os' = @('ubuntu-22.04') #, 'windows-2022')
-              'pyver' = @("3.9", "3.10", "3.11", "3.12")
-              'cuda' = @("12.1.1", "12.2.2", "12.3.2", "12.4.1") #, "12.5.1", "12.6.1")
+              'os' = @('ubuntu-22.04', 'ubuntu-22.04-arm', 'windows-2022')
+              'pyver' = @("3.10", "3.11", "3.12", "3.13")
+              'cuda' = @("12.6.3", "12.8.1", "12.9.1") #, "12.5.1", "12.6.1")
               'releasetag' = @("basic")
           }
 
@@ -47,7 +47,7 @@ jobs:
         if: runner.os == 'Windows'
         uses: microsoft/setup-msbuild@v2
         with:
-          vs-version: '[16.11,16.12)'
+          vs-version: 'latest'
 
       - uses: actions/checkout@v4
         with:
@@ -59,7 +59,7 @@ jobs:
           cache: 'pip'
 
       - name: Setup Mamba
-        uses: conda-incubator/setup-miniconda@v3.1.0
+        uses: conda-incubator/setup-miniconda@v3.2.0
         with:
           activate-environment: "llamacpp"
           python-version: ${{ matrix.pyver }}
@@ -89,7 +89,7 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           $y = (gi '.\MSBuildExtensions').fullname + '\*'
-          (gi 'C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\MSBuild\Microsoft\VC\*\BuildCustomizations').fullname.foreach({cp $y $_})
+          (gi 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Microsoft\VC\*\BuildCustomizations').fullname.foreach({cp $y $_})
           $cupath = 'CUDA_PATH_V' + $env:CUDAVER.Remove($env:CUDAVER.LastIndexOf('.')).Replace('.','_')
           echo "$cupath=$env:CONDA_PREFIX" >> $env:GITHUB_ENV
 
