@@ -381,6 +381,7 @@ LLAMA_TOKEN_ATTR_SINGLE_WORD = 1 << 9
 #     //LLAMA_FTYPE_MOSTLY_Q4_0_8_8      = 35, // removed from gguf files, use Q4_0 and runtime repack
 #     LLAMA_FTYPE_MOSTLY_TQ1_0         = 36, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_TQ2_0         = 37, // except 1d tensors
+#     LLAMA_FTYPE_MOSTLY_MXFP4_MOE     = 38, // except 1d tensors
 #
 #     LLAMA_FTYPE_GUESSED = 1024, // not specified in the model file
 # };
@@ -419,6 +420,7 @@ LLAMA_FTYPE_MOSTLY_BF16 = 32
 # LLAMA_FTYPE_MOSTLY_Q4_0_8_8 = 35
 LLAMA_FTYPE_MOSTLY_TQ1_0 = 36
 LLAMA_FTYPE_MOSTLY_TQ2_0 = 37
+LLAMA_FTYPE_MOSTLY_MXFP4_MOE = 38
 LLAMA_FTYPE_GUESSED = 1024
 
 # enum llama_rope_scaling_type {
@@ -691,6 +693,7 @@ class llama_model_kv_override(ctypes.Structure):
 #     bool use_mmap;      // use mmap if possible
 #     bool use_mlock;     // force system to keep model in RAM
 #     bool check_tensors; // validate model tensor data
+#     bool use_extra_bufts; // use extra buffer types (used for weight repacking)
 # };
 class llama_model_params(ctypes.Structure):
     """Parameters for llama_model
@@ -708,7 +711,8 @@ class llama_model_params(ctypes.Structure):
         vocab_only (bool): only load the vocabulary, no weights
         use_mmap (bool): use mmap if possible
         use_mlock (bool): force system to keep model in RAM
-        check_tensors (bool): validate model tensor data"""
+        check_tensors (bool): validate model tensor data
+        use_extra_bufts (bool): use extra buffer types (used for weight repacking)"""
 
     if TYPE_CHECKING:
         devices: CtypesArray[ctypes.c_void_p]  # NOTE: unused
@@ -724,6 +728,7 @@ class llama_model_params(ctypes.Structure):
         use_mmap: bool
         use_mlock: bool
         check_tensors: bool
+        use_extra_bufts: bool
 
     _fields_ = [
         ("devices", ctypes.c_void_p), # NOTE: unnused
@@ -739,6 +744,7 @@ class llama_model_params(ctypes.Structure):
         ("use_mmap", ctypes.c_bool),
         ("use_mlock", ctypes.c_bool),
         ("check_tensors", ctypes.c_bool),
+        ("use_extra_bufts", ctypes.c_bool),
     ]
 
 
@@ -787,6 +793,9 @@ class llama_model_params(ctypes.Structure):
 #     bool swa_full;    // use full-size SWA cache (https://github.com/ggml-org/llama.cpp/pull/13194#issuecomment-2868343055)
 #                       // NOTE: setting to false when n_seq_max > 1 can cause bad performance in some cases
 #                       //       ref: https://github.com/ggml-org/llama.cpp/pull/13845#issuecomment-2924800573
+#     bool kv_unified;  // use a unified buffer across the input sequences when computing the attention
+#                       // try to disable when n_seq_max > 1 for improved performance when the sequences do not share a large prefix
+#                       // ref: https://github.com/ggml-org/llama.cpp/pull/14363
 # };
 class llama_context_params(ctypes.Structure):
     """Parameters for llama_context
@@ -821,6 +830,7 @@ class llama_context_params(ctypes.Structure):
         no_perf (bool): whether to measure performance timings
         op_offload (bool): offload host tensor operations to device
         swa_full (bool): use full-size SWA cache
+        kv_unified (bool): use a unified buffer across the input sequences when computing the attention
     """
 
     if TYPE_CHECKING:
@@ -853,6 +863,7 @@ class llama_context_params(ctypes.Structure):
         no_perf: bool
         op_offload: bool
         swa_full: bool
+        kv_unified: bool
 
     _fields_ = [
         ("n_ctx", ctypes.c_uint32),
@@ -884,6 +895,7 @@ class llama_context_params(ctypes.Structure):
         ("no_perf", ctypes.c_bool),
         ("op_offload", ctypes.c_bool),
         ("swa_full", ctypes.c_bool),
+        ("kv_unified", ctypes.c_bool),
     ]
 
 
@@ -1648,6 +1660,14 @@ def llama_model_decoder_start_token(model: llama_model_p, /) -> int:
 @ctypes_function("llama_model_is_recurrent", [llama_model_p_ctypes], ctypes.c_bool)
 def llama_model_is_recurrent(model: llama_model_p, /) -> bool:
     """Returns true if the model is recurrent (like Mamba, RWKV, etc.)"""
+    ...
+
+
+# // Returns true if the model is diffusion-based (like LLaDA, Dream, etc.)
+# LLAMA_API bool llama_model_is_diffusion(const struct llama_model * model);
+@ctypes_function("llama_model_is_diffusion", [llama_model_p_ctypes], ctypes.c_bool)
+def llama_model_is_diffusion(model: llama_model_p, /) -> bool:
+    """Returns true if the model is diffusion-based (like LLaDA, Dream, etc.)"""
     ...
 
 
@@ -2833,6 +2853,7 @@ def llama_synchronize(ctx: llama_context_p, /):
 # // in the order they have appeared in the batch.
 # // Rows: number of tokens for which llama_batch.logits[i] != 0
 # // Cols: n_vocab
+# // TODO: deprecate in favor of llama_get_logits_ith() (ref: https://github.com/ggml-org/llama.cpp/pull/14853#issuecomment-3113143522)
 # LLAMA_API float * llama_get_logits(struct llama_context * ctx);
 @ctypes_function(
     "llama_get_logits", [llama_context_p_ctypes], ctypes.POINTER(ctypes.c_float)
@@ -2873,6 +2894,7 @@ def llama_get_logits_ith(
 # // in the order they have appeared in the batch.
 # // shape: [n_outputs*n_embd]
 # // Otherwise, returns NULL.
+# // TODO: deprecate in favor of llama_get_embeddings_ith() (ref: https://github.com/ggml-org/llama.cpp/pull/14853#issuecomment-3113143522)
 # LLAMA_API float * llama_get_embeddings(struct llama_context * ctx);
 @ctypes_function(
     "llama_get_embeddings", [llama_context_p_ctypes], ctypes.POINTER(ctypes.c_float)
@@ -3017,6 +3039,13 @@ def llama_vocab_nl(vocab: llama_vocab_p, /) -> llama_token:
 @ctypes_function("llama_vocab_pad", [llama_vocab_p_ctypes], llama_token)
 def llama_vocab_pad(vocab: llama_vocab_p, /) -> llama_token:
     """padding"""
+    ...
+
+
+# LLAMA_API llama_token llama_vocab_mask(const struct llama_vocab * vocab); // mask
+@ctypes_function("llama_vocab_mask", [llama_vocab_p_ctypes], llama_token)
+def llama_vocab_mask(vocab: llama_vocab_p, /) -> llama_token:
+    """mask"""
     ...
 
 
@@ -4176,6 +4205,7 @@ def llama_log_set(
 
 #     int32_t n_p_eval;
 #     int32_t n_eval;
+#     int32_t n_reused; // number of times a ggml compute graph had been reused
 # };
 class llama_perf_context_data(ctypes.Structure):
     _fields_ = [
@@ -4185,6 +4215,7 @@ class llama_perf_context_data(ctypes.Structure):
         ("t_eval_ms", ctypes.c_double),
         ("n_p_eval", ctypes.c_int32),
         ("n_eval", ctypes.c_int32),
+        ("n_reused", ctypes.c_int32),
     ]
 
 

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.16]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@4227c9be4268ac844921b90f31595f81236bd317
+
+## [0.3.15]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@9a96389544a08fd829fccda28142ce2066017fde
+- feat: Add gpt-oss chat format support through strftime_now in chat format by @iamlemec in af637928db7351e030011085f818b034c6efc047
+- fix: rename op_offloat to op_offload in llama.py by @sergey21000 in #2046
+
 ## [0.3.14]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@79e0b68c178656bb0632cb8602d2940b755077f8
