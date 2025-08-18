@@ -1395,6 +1395,23 @@ def format_gemma(
     return ChatFormatterResponse(prompt=_prompt, stop=_sep)
 
 
+# Chat format for Nous-Capybara models, see more details:
+# https://huggingface.co/NousResearch/Nous-Capybara-34B
+@register_chat_format("user-assistant")
+def format_user_assistant(
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    **kwargs: Any,
+) -> ChatFormatterResponse:
+    stop_str = "</s>"
+    system_message = _get_system_message(messages)
+    _roles = dict(user="USER:", assistant="ASSISTANT:")
+    _sep = "\n"
+    _messages = _map_roles(messages, _roles)
+    _messages.append((_roles["assistant"], None))
+    _prompt = _format_chatml(system_message, _messages, _sep)
+    return ChatFormatterResponse(prompt=_prompt, stop=stop_str)
+
+
 # Tricky chat formats that require custom chat handlers
 
 
