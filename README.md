@@ -20,6 +20,8 @@ This package provides:
     - OpenAI-like API
     - [LangChain compatibility](https://python.langchain.com/docs/integrations/llms/llamacpp)
     - [LlamaIndex compatibility](https://docs.llamaindex.ai/en/stable/examples/llm/llama_2_llama_cpp.html)
+    - Chat with kernel memory
+    - LlamaCpp Python UI
 - OpenAI compatible web server
     - [Local Copilot replacement](https://llama-cpp-python.readthedocs.io/en/latest/server/#code-completion)
     - [Function Calling support](https://llama-cpp-python.readthedocs.io/en/latest/server/#function-calling)
@@ -649,6 +651,30 @@ For instance, if you want to work with larger contexts, you can expand the conte
 llm = Llama(model_path="./models/7B/llama-model.gguf", n_ctx=2048)
 ```
 
+### Cross-encoders
+
+To utilise the cross-encoder, you follow the below code instructions:
+```python
+# Define the location of your nltk data directory
+data_path1 = llama_cpp.nlLoader()
+
+# Load LlamaCpp GGUF embeddings model and parse in the searchQuery function with the scored passages to generate embeddings
+llm_embed = Llama(
+  model_path=f"<PATH TO YOUR GGUF EMBEDDINGS MODEL>",
+  embedding=True,
+    )
+# Store each document in a vector embedding database
+for i, d in enumerate(llama_cpp.searchQuery(
+  question=question
+    )):
+    response = llm_embed.create_embedding(
+            input=d
+        )
+        embedding = response["data"][0]["embedding"]
+        collection.add(ids=[str(i)], embeddings=[embedding], documents=[d])
+        print("Processing embeddings...")
+```
+
 ## OpenAI Compatible Web Server
 
 `llama-cpp-python` offers a web server which aims to act as a drop-in replacement for the OpenAI API.
@@ -705,6 +731,71 @@ docker run --rm -it -p 8000:8000 -v /path/to/models:/models -e MODEL=/models/lla
 
 [Docker on termux (requires root)](https://gist.github.com/FreddieOliveira/efe850df7ff3951cb62d74bd770dce27) is currently the only known way to run this on phones, see [termux support issue](https://github.com/abetlen/llama-cpp-python/issues/389)
 
+# 🃏 SeKernel_for_LLM
+This is a Python module used to create a semantic kernel in your openai api compatible chat applications.
+
+### 🍬 Features
+- In-chat memory
+- Internet-search
+- Database querying
+
+## ⚙️ How to:
+- Clone the repo and import the modules into your project. Ensure that it is in the project directory.
+- ```python
+  import kernel
+  import plugins
+
+  ### INTERNET-SEARCH ###
+  # Define search plugin
+  search_prompt = plugins.searchPlugin(output=question) # If context equals None, use the Chat template. See `kernel.py` for more templates.
+
+  # Initialize the kernel
+  data = kernel.shopTemplate(prompt=prompt, plugin=plugins.defaultPlugin(), context=search_prompt or context=None # Where no context is provided, and so you may assume the AI assistant to not have any awareness of information of events that took place after the date until which it's training data is up until) # See plugins.py module for more plugins
+
+  ### DATABASE ###
+  # Using this database plugin
+  # Initialize the database plugin
+  db = plugins.dbConn()
+
+  # Use the database plugin along with the dbChatPlugin
+  data = kernel.chatTemplate(prompt=prompt, plugin=plugins.dbChatPlugin())
+
+  # Excuting the query
+  db.execute(response)
+
+  # Getting the output
+  response = db.fetchall()
+
+  ### LlamaCpp ###
+  # Parsing the kernel model to LlamaCpp
+  LlamaCpp
+  client = Llama(
+        model_path=kernel.model() # Make sure to add your GGUF model in the kernel module.
+  )
+
+  # Use the kernel and set messages parameter equal to data. Depending on your LLM API defintion, messages may be a different parameter, in this case it is messages, as defined in the OpenAI API definition.
+  output = client.create_chat_completions(
+    messages = data
+  )
+  ```
+  See [OpenAI](https://platform.openai.com/docs/api-reference/chat/create) API reference for more.
+- ```python
+  # You may then append any new content and/or messages to the kernel
+  data.append(new_message)
+  ```
+## 📽️ Short Films
+See examples of using the SeKernel_for_LLM with 🦙 [LlamaCpp Python bindings](https://github.com/abetlen/llama-cpp-python)
+
+#### The square-root of 2
+https://github.com/user-attachments/assets/cb48e962-2cba-4672-b4e7-c0f77455bb74
+
+#### Internet search with Google for the price of leggings
+https://github.com/user-attachments/assets/fdf5ac16-c8b7-4b39-b91b-d4e2d8d2d888
+
+#### Database query
+https://github.com/user-attachments/assets/ad9c87a4-475f-4ca0-a576-109709ca84b0
+
+
 ## Low-level API
 
 [API Reference](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#low-level-api)
@@ -735,6 +826,21 @@ Check out the [examples folder](examples/low_level_api) for more examples of usi
 
 Documentation is available via [https://llama-cpp-python.readthedocs.io/](https://llama-cpp-python.readthedocs.io/).
 If you find any issues with the documentation, please open an issue or submit a PR.
+
+## UI's
+# SeKernel_for_LLM_UI
+This is the repository for the UI for the SeKernel_for_LLM module
+
+## How to:
+- Clone the repo
+- Ensure that you have llama-cpp-python installed and running
+- Add your model to the `kernel.py` script
+- Launch the UI by running `python sekernel_ui.py`
+-- Please note : Only internet-connected chat is supported. If you have the skills, you can checkout the plugins.py module to add more functionality to your UI.
+
+## Short-films
+https://github.com/user-attachments/assets/a6e75136-bd3f-4960-8791-6f83094f2123
+
 
 ## Development
 
