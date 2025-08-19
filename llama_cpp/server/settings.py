@@ -228,6 +228,10 @@ class ServerSettings(BaseSettings):
         default="",
         description="The root path for the server. Useful when running behind a reverse proxy.",
     )
+    load_external_chat_formats: bool = Field(
+        default=True,
+        description="Whether we should be looking for external chat formats.",
+    )
 
 
 class Settings(ServerSettings, ModelSettings):
