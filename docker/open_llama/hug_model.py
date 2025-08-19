@@ -76,7 +76,7 @@ def main():
 
     # Arguments
     parser.add_argument('-v', '--version', type=int, default=0x0003,
-                        help='hexadecimal version number of ggml file')
+                        help='Hexadecimal version number of ggml file')
     parser.add_argument('-a', '--author', type=str, default='TheBloke',
                         help='HuggingFace author filter')
     parser.add_argument('-t', '--tag', type=str, default='llama',
@@ -85,9 +85,18 @@ def main():
                         help='HuggingFace search filter')
     parser.add_argument('-f', '--filename', type=str, default='q5_1',
                         help='HuggingFace model repository filename substring match')
+    parser.add_argument('-o', '--output-dir', type=str, default='downloads',
+                        help='Custom output directory for downloaded files')
 
     # Parse the arguments
     args = parser.parse_args()
+
+    # Ensure the output directory exists
+    if not os.path.exists(args.output_dir):
+        os.makedirs(args.output_dir)
+    elif not os.path.isdir(args.output_dir):
+        print(f"Error: {args.output_dir} exists but is not a directory.")
+        exit(1)
 
     # Define the parameters
     params = {
@@ -125,12 +134,12 @@ def main():
 
     if model_choice is not None:
         model_id, rfilename = model_choice
+        dest = os.path.join(args.output_dir, f"{model_id.replace('/', '_')}_{rfilename}")
         url = f"https://huggingface.co/{model_id}/resolve/main/{rfilename}"
-        dest = f"{model_id.replace('/', '_')}_{rfilename}"
         download_file(url, dest)
         _, version = check_magic_and_version(dest)
         if version != args.version:
-             print(f"Warning: Expected version {args.version}, but found different version in the file.")
+            print(f"Warning: Expected version {args.version}, but found different version in the file.")
     else:
         print("Error - model choice was None")
         exit(2)
