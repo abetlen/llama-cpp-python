@@ -819,6 +819,39 @@ class Llama:
             self._sampler = None
         return token
 
+    def _reuse_tokens(self, new_tokens: Sequence[int]) -> int:
+        """Removes some tokens to keep the longest prefix of new_tokens in the cache.
+
+        Returns:
+            The number of tokens in the kept prefix
+        """
+        idx = 0
+        # Skip any matching initial tokens
+        while idx < self.n_tokens and idx < len(new_tokens) and self.input_ids[idx] == new_tokens[idx]:
+            idx += 1
+        cur_idx = idx
+        new_idx = idx
+
+        while True:
+            if cur_idx == self.n_tokens or new_idx == len(new_tokens):
+                return new_idx
+
+            # Skip to the first matching token
+            skip_start = cur_idx
+            while cur_idx < self.n_tokens and self.input_ids[cur_idx] != new_tokens[new_idx]:
+                cur_idx += 1
+            if cur_idx == self.n_tokens:
+                return new_idx
+            self._ctx.kv_cache_seq_rm(0, skip_start, cur_idx)
+
+            # Shift the longest matching sequence
+            shift_start = cur_idx
+            while cur_idx < self.n_tokens and new_idx < len(new_tokens) and self.input_ids[cur_idx] == new_tokens[new_idx]:
+                self.input_ids[new_idx] = new_tokens[new_idx]
+                cur_idx += 1
+                new_idx += 1
+            self._ctx.kv_cache_seq_shift(0, shift_start, cur_idx, new_idx-cur_idx)
+
     def generate(
         self,
         tokens: Sequence[int],
@@ -881,12 +914,7 @@ class Llama:
 
         # Check for kv cache prefix match
         if reset and self.n_tokens > 0:
-            longest_prefix = 0
-            for a, b in zip(self._input_ids, tokens[:-1]):
-                if a == b:
-                    longest_prefix += 1
-                else:
-                    break
+            longest_prefix = self._reuse_tokens(tokens[:-1])
             if longest_prefix > 0:
                 reset = False
                 tokens = tokens[longest_prefix:]
