@@ -16,6 +16,7 @@ dependencies = [
     "numpy>=1.20.0",
     "diskcache>=5.6.1",
     "jinja2>=2.11.3",
+    "pillow>=9.0.0"
 ]
 requires-python = ">=3.8"
 classifiers = [
