@@ -1266,9 +1266,7 @@ class Llama:
             suffix_tokens: List[int] = (
                 [suffix_token_id]
                 + (
-                    self.tokenize(
-                        suffix.encode("utf-8"), add_bos=False, special=False
-                    )
+                    self.tokenize(suffix.encode("utf-8"), add_bos=False, special=False)
                     if suffix
                     else []
                 )
