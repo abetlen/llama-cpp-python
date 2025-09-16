@@ -61,7 +61,9 @@ for ctx_n in (16, 32):
     n_eval += len(toks)
     ll_ptr = context.get_logits_ith(-1)
     if ll_ptr is not None:
-        low_level_logits[ctx_n] = np.ctypeslib.as_array(ll_ptr, shape=(model.n_vocab(),)).copy()
+        low_level_logits[ctx_n] = np.ctypeslib.as_array(
+            ll_ptr, shape=(model.n_vocab(),)
+        ).copy()
     # Sample first token
     token_id = sampler.sample(context, -1)
     first_tok = token_id
@@ -77,25 +79,33 @@ for ctx_n in (16, 32):
         toks = [token_id]
         result.append(token_id)
 
-    out_text = model.detokenize(result[len(tokens):], special=True).decode('utf-8', errors='ignore')
+    out_text = model.detokenize(result[len(tokens) :], special=True).decode(
+        "utf-8", errors="ignore"
+    )
     print(f"  n_ctx={ctx_n} first_token={first_tok} continuation='{out_text}'")
 
 print("\nHigh-level comparison (n_ctx=32):")
-ll = llama_cpp.Llama(model_path,
-                     n_ctx=32,
-                     n_batch=32,
-                     n_ubatch=32,
-                     logits_all=False,
-                     flash_attn=True,
-                     verbose=False)
+ll = llama_cpp.Llama(
+    model_path,
+    n_ctx=32,
+    n_batch=32,
+    n_ubatch=32,
+    logits_all=False,
+    flash_attn=True,
+    verbose=False,
+)
 
 # Reproduce low-level prompt eval inside high-level object
 prompt_tokens_hl = ll.tokenize(PROMPT, add_bos=True, special=True)
 ll.reset()
 ll.eval(prompt_tokens_hl)
-hl_logits_ptr = ll._ctx.get_logits_ith(-1)  # noqa: SLF001 access internal for diagnostics
+hl_logits_ptr = ll._ctx.get_logits_ith(
+    -1
+)  # noqa: SLF001 access internal for diagnostics
 if hl_logits_ptr is not None:
-    hl_logits = np.ctypeslib.as_array(hl_logits_ptr, shape=(ll._n_vocab,)).copy()  # noqa: SLF001
+    hl_logits = np.ctypeslib.as_array(
+        hl_logits_ptr, shape=(ll._n_vocab,)
+    ).copy()  # noqa: SLF001
     # Compare with low-level n_ctx=32 logits
     ref = low_level_logits.get(32)
     if ref is not None:
@@ -104,25 +114,39 @@ if hl_logits_ptr is not None:
         # Show top 5 indices where difference is largest
         delta = np.abs(ref - hl_logits)
         top_idx = np.argsort(delta)[-5:][::-1]
-        print("  Top differing token ids:", [(int(i), float(delta[i])) for i in top_idx])
+        print(
+            "  Top differing token ids:", [(int(i), float(delta[i])) for i in top_idx]
+        )
+
         # Show probabilities for target tokens 31 and 916 after softmax for sanity
         def softmax(x):
             m = np.max(x)
             e = np.exp(x - m)
             return e / np.sum(e)
+
         ref_p = softmax(ref)
         hl_p = softmax(hl_logits)
         for tid in (31, 916):
-            print(f"    token {tid}: ref_logit={ref[tid]:.4f} hl_logit={hl_logits[tid]:.4f} ref_p={ref_p[tid]:.6f} hl_p={hl_p[tid]:.6f}")
+            print(
+                f"    token {tid}: ref_logit={ref[tid]:.4f} hl_logit={hl_logits[tid]:.4f} ref_p={ref_p[tid]:.6f} hl_p={hl_p[tid]:.6f}"
+            )
 
-resp = ll.create_completion("The quick brown fox jumps", max_tokens=4, top_k=50, top_p=0.9, temperature=0.8, seed=SEED, stream=False)
+resp = ll.create_completion(
+    "The quick brown fox jumps",
+    max_tokens=4,
+    top_k=50,
+    top_p=0.9,
+    temperature=0.8,
+    seed=SEED,
+    stream=False,
+)
 if isinstance(resp, dict):
-    print("  high_level_text=", resp['choices'][0]['text'])
+    print("  high_level_text=", resp["choices"][0]["text"])
 else:
     # If somehow streaming iterator was returned, consume first
     collected = None
     for part in resp:
         collected = part
     if collected:
-        print("  high_level_text=", collected['choices'][0]['text'])
+        print("  high_level_text=", collected["choices"][0]["text"])
 print("Done.")

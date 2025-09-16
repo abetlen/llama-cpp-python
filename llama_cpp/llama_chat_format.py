@@ -5,10 +5,10 @@ import sys
 import json
 import ctypes
 import dataclasses
+import datetime
 import random
 import string
 
-from datetime import datetime
 from contextlib import ExitStack
 from typing import (
     Any,
@@ -34,6 +34,7 @@ import llama_cpp.llama as llama
 import llama_cpp.llama_types as llama_types
 import llama_cpp.llama_grammar as llama_grammar
 
+from ._ggml import GGMLLogLevel
 from ._logger import logger
 from ._utils import suppress_stdout_stderr, Singleton
 
@@ -54,6 +55,17 @@ MIXTRAL_INSTRUCT_CHAT_TEMPLATE = "{{ bos_token }}{% for message in messages %}{%
 
 # Source: https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct/blob/main/tokenizer_config.json
 LLAMA3_INSTRUCT_CHAT_TEMPLATE = "{% set loop_messages = messages %}{% for message in loop_messages %}{% set content = '<|start_header_id|>' + message['role'] + '<|end_header_id|>\n\n'+ message['content'] | trim + '<|eot_id|>' %}{% if loop.index0 == 0 %}{% set content = bos_token + content %}{% endif %}{{ content }}{% endfor %}{% if add_generation_prompt %}{{ '<|start_header_id|>assistant<|end_header_id|>\n\n' }}{% endif %}"
+
+# Source: https://huggingface.co/meta-llama/Llama-4-Scout-17B-16E-Instruct/blob/main/tokenizer_config.json
+LLAMA4_INSTRUCT_BOS_TOKEN = "<|begin_of_text|>"
+LLAMA4_INSTRUCT_EOS_TOKEN = "<|eot|>"
+LLAMA4_INSTRUCT_CHAT_TEMPLATE = "{% if custom_tools is defined %}\n    {% set tools = custom_tools %}\n{% endif %}\n{% if not tools_in_user_message is defined %}\n    {% set tools_in_user_message = true %}\n{% endif %}\n{% if not date_string is defined %}\n    {% if strftime_now is defined %}\n        {% set date_string = strftime_now(\"%d %b %Y\") %}\n    {% else %}\n        {% set date_string = \"26 Jul 2024\" %}\n    {% endif %}\n{% endif %}\n{% if not tools is defined %}\n    {% set tools = none %}\n{% endif %}\n\n{#- This block extracts the system message, so we can slot it into the right place. #}\n{% if messages[0]['role'] == 'system' %}    \n    {% if messages[0]['content'] is string %}\n        {% set system_message = messages[0]['content']|trim %}\n    {% else %}\n        {#- FIXME: The processor requires an array, always. #}\n        {% set system_message = messages[0]['content'][0]['text']|trim %}\n    {% endif %}\n    {% set messages = messages[1:] %}\n    {% set user_supplied_system_message = true %}\n{% else %}\n    {% set system_message = \"\" %}\n    {% set user_supplied_system_message = false %}\n{% endif %}\n\n{#- System message if the user supplied one #}\n{% if user_supplied_system_message %}\n    {{ \"<|header_start|>system<|header_end|>\\n\\n\" }}\n    {% if tools is not none %}\n        {{ \"Environment: ipython\\n\" }}\n    {% endif %}\n    {% if tools is not none and not tools_in_user_message %}\n        {{ \"You have access to the following functions. To call a function, please respond with JSON for a function call.\" }}\n        {{ 'Respond in the format {\"name\": function name, \"parameters\": dictionary of argument name and its value}.' }}\n        {{ \"Do not use variables.\\n\\n\" }}\n        {% for t in tools %}\n            {{ t | tojson(indent=4) }}\n            {{ \"\\n\\n\" }}\n        {% endfor %}\n    {% endif %}\n    {{ system_message }}\n    {{ \"<|eot|>\" }}\n{% endif %}\n\n{#- Custom tools are passed in a user message with some extra guidance #}\n{% if tools_in_user_message and not tools is none %}\n    {#- Extract the first user message so we can plug it in here #}\n    {% if messages | length != 0 %}\n        {% set first_user_message = messages[0]['content']|trim %}\n        {% set messages = messages[1:] %}\n    {% else %}\n        {{ raise_exception(\"Cannot put tools in the first user message when there's no first user message!\") }}\n{% endif %}\n    {{ '<|header_start|>user<|header_end|>\\n\\n' -}}\n    {{ \"Given the following functions, please respond with a JSON for a function call \" }}\n    {{ \"with its proper arguments that best answers the given prompt.\\n\\n\" }}\n    {{ 'Respond in the format {\"name\": function name, \"parameters\": dictionary of argument name and its value}.' }}\n    {{ \"Do not use variables.\\n\\n\" }}\n    {% for t in tools %}\n        {{ t | tojson(indent=4) }}\n        {{ \"\\n\\n\" }}\n    {% endfor %}\n    {{ first_user_message + \"<|eot|>\"}}\n{% endif %}\n\n{% for message in messages %}\n    {% if not (message.role == 'ipython' or message.role == 'tool' or 'tool_calls' in message) %}\n    {{ '<|header_start|>' + message['role'] + '<|header_end|>\\n\\n' }}\n        {% if message['content'] is string %}\n            {{ message['content'] }}\n        {% else %}\n            {% for content in message['content'] %}\n                {% if content['type'] == 'image' %}\n                    {{ '<|image|>' }}\n                {% elif content['type'] == 'text' %}\n                    {{ content['text'] }}\n                {% endif %}\n            {% endfor %}\n        {% endif %}\n        {{ \"<|eot|>\" }}\n    {% elif 'tool_calls' in message and message.tool_calls|length > 0 %}\n       {{ '<|header_start|>assistant<|header_end|>\\n\\n' -}}\n       {{ '<|python_start|>' }}\n        {% if message['content'] is string %}\n            {{ message['content'] }}\n        {% else %}\n            {% for content in message['content'] %}\n                {% if content['type'] == 'image' %}\n                    {{ '<|image|>' }}\n                {% elif content['type'] == 'text' %}\n                    {{ content['text'] }}\n                {% endif %}\n            {% endfor %}\n        {% endif %}\n       {{ '<|python_end|>' }}\n        {% for tool_call in message.tool_calls %}\n           {{ '{\"name\": \"' + tool_call.function.name + '\", ' }}\n           {{ '\"parameters\": ' }}\n           {{ tool_call.function.arguments | tojson }}\n           {{ \"}\" }}\n        {% endfor %}\n       {{ \"<|eot|>\" }}\n    {% elif message.role == \"tool\" or message.role == \"ipython\" %}\n        {{ \"<|header_start|>ipython<|header_end|>\\n\\n\" }}\n        {% if message.content is mapping or message.content is iterable %}\n            {{ message.content | tojson }}\n        {% else %}\n            {{ message.content }}\n        {% endif %}\n        {{ \"<|eot|>\" }}\n    {% endif %}\n{% endfor %}\n{% if add_generation_prompt %}\n    {{ '<|header_start|>assistant<|header_end|>\\n\\n' }}\n{% endif %}\n"
+
+
+# Source: https://huggingface.co/openai/gpt-oss-20b/blob/main/tokenizer_config.json
+GPT_OSS_BOS_TOKEN = "<|startoftext|>"
+GPT_OSS_EOS_TOKEN = "<|return|>"
+GPT_OSS_PAD_TOKEN = "<|endoftext|>"
 
 ### Chat Completion Handler ###
 
@@ -79,6 +91,7 @@ class LlamaChatCompletionHandler(Protocol):
         temperature: float = 0.2,
         top_p: float = 0.95,
         top_k: int = 40,
+        top_n_sigma: float = -1.00,
         stream: bool = False,
         stop: Optional[Union[str, List[str]]] = [],
         seed: Optional[int] = None,
@@ -94,10 +107,16 @@ class LlamaChatCompletionHandler(Protocol):
         # llama.cpp parameters
         min_p: float = 0.05,
         typical_p: float = 1.0,
-        tfs_z: float = 1.0,
         mirostat_mode: int = 0,
         mirostat_tau: float = 5.0,
         mirostat_eta: float = 0.1,
+        xtc_threshold: float = 0.1,
+        xtc_probability: float = 0.0,
+        dry_multiplier: float = 0.0,
+        dry_base: float = 1.75,
+        dry_allowed_length: int = 2,
+        dry_penalty_last_n:int = 0,
+        dry_seq_breakers: list[str] = ["\n", ":", "\"", "*"],
         logits_processor: Optional[llama.LogitsProcessorList] = None,
         grammar: Optional[llama.LlamaGrammar] = None,
         logprobs: Optional[bool] = None,
@@ -215,10 +234,6 @@ class Jinja2ChatFormatter(ChatFormatter):
             lstrip_blocks=True,
         ).from_string(self.template)
 
-    @staticmethod
-    def strftime_now(f: str) -> str:
-        return datetime.now().strftime(f)
-
     def __call__(
         self,
         *,
@@ -232,17 +247,23 @@ class Jinja2ChatFormatter(ChatFormatter):
         def raise_exception(message: str):
             raise ValueError(message)
 
+        def strftime_now(format_string="%Y-%m-%d %H:%M:%S") -> str:
+            """
+            Returns the current time formatted as a string.
+            """
+            return datetime.datetime.now().strftime(format_string)
+
         prompt = self._environment.render(
             messages=messages,
             eos_token=self.eos_token,
             bos_token=self.bos_token,
             raise_exception=raise_exception,
+            strftime_now=strftime_now,
             add_generation_prompt=self.add_generation_prompt,
             functions=functions,
             function_call=function_call,
             tools=tools,
             tool_choice=tool_choice,
-            strftime_now=self.strftime_now,
         )
 
         stopping_criteria = None
@@ -578,10 +599,17 @@ def chat_formatter_to_chat_completion_handler(
         presence_penalty: float = 0.0,
         frequency_penalty: float = 0.0,
         repeat_penalty: float = 1.1,
-        tfs_z: float = 1.0,
+        top_n_sigma: float = -1.00,
         mirostat_mode: int = 0,
         mirostat_tau: float = 5.0,
         mirostat_eta: float = 0.1,
+        xtc_threshold: float = 0.1,
+        xtc_probability: float = 0.0,
+        dry_multiplier: float = 0.0,
+        dry_base: float = 1.75,
+        dry_allowed_length: int = 2,
+        dry_penalty_last_n:int = 0,
+        dry_seq_breakers: list[str] = ["\n", ":", "\"", "*"],
         model: Optional[str] = None,
         logits_processor: Optional[llama.LogitsProcessorList] = None,
         grammar: Optional[llama.LlamaGrammar] = None,
@@ -681,10 +709,17 @@ def chat_formatter_to_chat_completion_handler(
             presence_penalty=presence_penalty,
             frequency_penalty=frequency_penalty,
             repeat_penalty=repeat_penalty,
-            tfs_z=tfs_z,
+            top_n_sigma=top_n_sigma,
             mirostat_mode=mirostat_mode,
             mirostat_tau=mirostat_tau,
             mirostat_eta=mirostat_eta,
+            xtc_threshold=xtc_threshold,
+            xtc_probability=xtc_probability,
+            dry_multiplier=dry_multiplier,
+            dry_base=dry_base,
+            dry_allowed_length=dry_allowed_length,
+            dry_penalty_last_n=dry_penalty_last_n,
+            dry_seq_breakers=dry_seq_breakers,
             model=model,
             logits_processor=logits_processor,
             stopping_criteria=stopping_criteria,
@@ -1015,6 +1050,25 @@ def format_llama3(
         assistant="<|start_header_id|>assistant<|end_header_id|>\n\n",
     )
     _sep = "<|eot_id|>"
+    _messages = _map_roles(messages, _roles)
+    _messages.append((_roles["assistant"], None))
+    _prompt = _format_no_colon_single("", _messages, _sep)
+    return ChatFormatterResponse(prompt=_prompt, stop=_sep)
+
+
+# Chat format for Llama-4 models text only, see more details at:
+# https://github.com/meta-llama/llama-models/blob/main/models/llama4/chat_format.py#L61-L316
+@register_chat_format("llama-4")
+def format_llama4(
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    **kwargs: Any,
+) -> ChatFormatterResponse:
+    _roles = dict(
+        system="<|header_start|>system<|header_end|>\n\n",
+        user="<|header_start|>user<|header_end|>\n\n",
+        assistant="<|header_start|>assistant<|header_end|>\n\n",
+    )
+    _sep = "<|eot|>"
     _messages = _map_roles(messages, _roles)
     _messages.append((_roles["assistant"], None))
     _prompt = _format_no_colon_single("", _messages, _sep)
@@ -1418,10 +1472,17 @@ def functionary_chat_handler(
     presence_penalty: float = 0.0,
     frequency_penalty: float = 0.0,
     repeat_penalty: float = 1.1,
-    tfs_z: float = 1.0,
+    top_n_sigma: float = -1.00,
     mirostat_mode: int = 0,
     mirostat_tau: float = 5.0,
     mirostat_eta: float = 0.1,
+    xtc_threshold: float = 0.1,
+    xtc_probability: float = 0.0,
+    dry_multiplier: float = 0.0,
+    dry_base: float = 1.75,
+    dry_allowed_length: int = 2,
+    dry_penalty_last_n:int = 0,
+    dry_seq_breakers: list[str] = ["\n", ":", "\"", "*"],
     model: Optional[str] = None,
     logits_processor: Optional[llama.LogitsProcessorList] = None,
     grammar: Optional[llama.LlamaGrammar] = None,
@@ -1624,10 +1685,17 @@ def functionary_chat_handler(
             presence_penalty=presence_penalty,
             frequency_penalty=frequency_penalty,
             repeat_penalty=repeat_penalty,
-            tfs_z=tfs_z,
+            top_n_sigma=top_n_sigma,
             mirostat_mode=mirostat_mode,
             mirostat_tau=mirostat_tau,
             mirostat_eta=mirostat_eta,
+            xtc_threshold=xtc_threshold,
+            xtc_probability=xtc_probability,
+            dry_multiplier=dry_multiplier,
+            dry_base=dry_base,
+            dry_allowed_length=dry_allowed_length,
+            dry_penalty_last_n=dry_penalty_last_n,
+            dry_seq_breakers=dry_seq_breakers,
             model=model,
             logits_processor=logits_processor,
             grammar=grammar,
@@ -1705,10 +1773,17 @@ def functionary_chat_handler(
         presence_penalty=presence_penalty,
         frequency_penalty=frequency_penalty,
         repeat_penalty=repeat_penalty,
-        tfs_z=tfs_z,
+        top_n_sigma=top_n_sigma,
         mirostat_mode=mirostat_mode,
         mirostat_tau=mirostat_tau,
         mirostat_eta=mirostat_eta,
+        xtc_threshold=xtc_threshold,
+        xtc_probability=xtc_probability,
+        dry_multiplier=dry_multiplier,
+        dry_base=dry_base,
+        dry_allowed_length=dry_allowed_length,
+        dry_penalty_last_n=dry_penalty_last_n,
+        dry_seq_breakers=dry_seq_breakers,
         model=model,
         logits_processor=logits_processor,
     )  # type: ignore
@@ -1777,10 +1852,17 @@ def functionary_v1_v2_chat_handler(
     presence_penalty: float = 0.0,
     frequency_penalty: float = 0.0,
     repeat_penalty: float = 1.1,
-    tfs_z: float = 1.0,
+    top_n_sigma: float = -1.00,
     mirostat_mode: int = 0,
     mirostat_tau: float = 5.0,
     mirostat_eta: float = 0.1,
+    xtc_threshold: float = 0.1,
+    xtc_probability: float = 0.0,
+    dry_multiplier: float = 0.0,
+    dry_base: float = 1.75,
+    dry_allowed_length: int = 2,
+    dry_penalty_last_n:int = 0,
+    dry_seq_breakers: list[str] = ["\n", ":", "\"", "*"],
     model: Optional[str] = None,
     logits_processor: Optional[llama.LogitsProcessorList] = None,
     grammar: Optional[llama.LlamaGrammar] = None,
@@ -1993,10 +2075,17 @@ def functionary_v1_v2_chat_handler(
             presence_penalty=presence_penalty,
             frequency_penalty=frequency_penalty,
             repeat_penalty=repeat_penalty,
-            tfs_z=tfs_z,
+            top_n_sigma=top_n_sigma,
             mirostat_mode=mirostat_mode,
             mirostat_tau=mirostat_tau,
             mirostat_eta=mirostat_eta,
+            xtc_threshold=xtc_threshold,
+            xtc_probability=xtc_probability,
+            dry_multiplier=dry_multiplier,
+            dry_base=dry_base,
+            dry_allowed_length=dry_allowed_length,
+            dry_penalty_last_n=dry_penalty_last_n,
+            dry_seq_breakers=dry_seq_breakers,
             model=model,
             logits_processor=logits_processor,
             grammar=grammar,
@@ -2056,10 +2145,17 @@ def functionary_v1_v2_chat_handler(
                 presence_penalty=presence_penalty,
                 frequency_penalty=frequency_penalty,
                 repeat_penalty=repeat_penalty,
-                tfs_z=tfs_z,
+                top_n_sigma=top_n_sigma,
                 mirostat_mode=mirostat_mode,
                 mirostat_tau=mirostat_tau,
                 mirostat_eta=mirostat_eta,
+                xtc_threshold=xtc_threshold,
+                xtc_probability=xtc_probability,
+                dry_multiplier=dry_multiplier,
+                dry_base=dry_base,
+                dry_allowed_length=dry_allowed_length,
+                dry_penalty_last_n=dry_penalty_last_n,
+                dry_seq_breakers=dry_seq_breakers,
                 model=model,
                 logits_processor=logits_processor,
                 grammar=grammar,
@@ -2758,10 +2854,10 @@ class Llava15ChatHandler:
                 (ctypes.c_uint8 * len(image_bytes)).from_buffer(bytearray(image_bytes)),
                 len(image_bytes)
             )
-            
+
             if bitmap is None:
                 raise ValueError("Failed to create bitmap from image bytes")
-            
+
             return bitmap
 
     def __call__(
@@ -2788,10 +2884,17 @@ class Llava15ChatHandler:
         presence_penalty: float = 0.0,
         frequency_penalty: float = 0.0,
         repeat_penalty: float = 1.1,
-        tfs_z: float = 1.0,
+        top_n_sigma: float = -1.00,
         mirostat_mode: int = 0,
         mirostat_tau: float = 5.0,
         mirostat_eta: float = 0.1,
+        xtc_threshold: float = 0.1,
+        xtc_probability: float = 0.0,
+        dry_multiplier: float = 0.0,
+        dry_base: float = 1.75,
+        dry_allowed_length: int = 2,
+        dry_penalty_last_n:int = 0,
+        dry_seq_breakers: list[str] = ["\n", ":", "\"", "*"],
         model: Optional[str] = None,
         logits_processor: Optional[llama.LogitsProcessorList] = None,
         grammar: Optional[llama.LlamaGrammar] = None,
@@ -2820,10 +2923,10 @@ class Llava15ChatHandler:
             trim_blocks=True,
             lstrip_blocks=True,
         ).from_string(self.CHAT_FORMAT)
-        
+
         # Get the default media marker
         media_marker = self._mtmd_cpp.mtmd_default_marker().decode('utf-8')
-        
+
         # Replace image URLs with media markers in the template
         text = template.render(
             messages=messages,
@@ -2831,7 +2934,7 @@ class Llava15ChatHandler:
             eos_token=llama.detokenize([llama.token_eos()]),
             bos_token=llama.detokenize([llama.token_bos()]),
         )
-        
+
         # Replace image URLs in text with media markers
         for image_url in image_urls:
             text = text.replace(image_url, media_marker)
@@ -2876,45 +2979,45 @@ class Llava15ChatHandler:
 
                 # Reset llama context
                 llama.reset()
-                llama._ctx.kv_cache_clear()
+                llama._ctx.memory_clear(True)
 
                 # Process each chunk
                 n_past = llama_cpp.llama_pos(0)
                 n_chunks = self._mtmd_cpp.mtmd_input_chunks_size(chunks)
-                
+
                 for i in range(n_chunks):
                     chunk = self._mtmd_cpp.mtmd_input_chunks_get(chunks, i)
                     if chunk is None:
                         continue
 
                     chunk_type = self._mtmd_cpp.mtmd_input_chunk_get_type(chunk)
-                    
-                    if chunk_type == self._mtmd_cpp.MTMD_INPUT_CHUNK_TYPE_TEXT:
+
+                    if chunk_type == self._mtmd_cpp.mtmd_input_chunk_type.MTMD_INPUT_CHUNK_TYPE_TEXT:
                         # Handle text chunk
                         n_tokens_out = ctypes.c_size_t()
                         tokens_ptr = self._mtmd_cpp.mtmd_input_chunk_get_tokens_text(
                             chunk, ctypes.byref(n_tokens_out)
                         )
-                        
+
                         if tokens_ptr and n_tokens_out.value > 0:
                             # Convert ctypes array to Python list
                             tokens = [tokens_ptr[j] for j in range(n_tokens_out.value)]
-                            
+
                             if llama.n_tokens + len(tokens) > llama.n_ctx():
                                 raise ValueError(
                                     f"Prompt exceeds n_ctx: {llama.n_tokens + len(tokens)} > {llama.n_ctx()}"
                                 )
                             llama.eval(tokens)
-                    
-                    elif chunk_type in [self._mtmd_cpp.MTMD_INPUT_CHUNK_TYPE_IMAGE, self._mtmd_cpp.MTMD_INPUT_CHUNK_TYPE_AUDIO]:
+
+                    elif chunk_type in [self._mtmd_cpp.mtmd_input_chunk_type.MTMD_INPUT_CHUNK_TYPE_IMAGE, self._mtmd_cpp.mtmd_input_chunk_type.MTMD_INPUT_CHUNK_TYPE_AUDIO]:
                         # Handle image/audio chunk using helper
                         chunk_n_tokens = self._mtmd_cpp.mtmd_input_chunk_get_n_tokens(chunk)
-                        
+
                         if llama.n_tokens + chunk_n_tokens > llama.n_ctx():
                             raise ValueError(
                                 f"Prompt exceeds n_ctx: {llama.n_tokens + chunk_n_tokens} > {llama.n_ctx()}"
                             )
-                        
+
                         new_n_past = llama_cpp.llama_pos(0)
                         result = self._mtmd_cpp.mtmd_helper_eval_chunk_single(
                             self.mtmd_ctx,
@@ -2926,10 +3029,10 @@ class Llava15ChatHandler:
                             False,  # logits_last
                             ctypes.byref(new_n_past)
                         )
-                        
+
                         if result != 0:
                             raise ValueError(f"Failed to evaluate chunk: error code {result}")
-                        
+
                         # Update llama's token count
                         llama.n_tokens = new_n_past.value
 
@@ -3010,16 +3113,23 @@ class Llava15ChatHandler:
             presence_penalty=presence_penalty,
             frequency_penalty=frequency_penalty,
             repeat_penalty=repeat_penalty,
-            tfs_z=tfs_z,
+            top_n_sigma=top_n_sigma,
             mirostat_mode=mirostat_mode,
             mirostat_tau=mirostat_tau,
             mirostat_eta=mirostat_eta,
+            xtc_threshold=xtc_threshold,
+            xtc_probability=xtc_probability,
+            dry_multiplier=dry_multiplier,
+            dry_base=dry_base,
+            dry_allowed_length=dry_allowed_length,
+            dry_penalty_last_n=dry_penalty_last_n,
+            dry_seq_breakers=dry_seq_breakers,
             model=model,
             logits_processor=logits_processor,
             grammar=grammar,
             logit_bias=logit_bias,
         )
-        
+
         if tool is not None:
             tool_name = tool["function"]["name"]
             return _convert_completion_to_chat_function(
@@ -3427,6 +3537,7 @@ class MiniCPMv26ChatHandler(Llava15ChatHandler):
     DEFAULT_SYSTEM_MESSAGE = "You are a helpful assistant."
 
     CHAT_FORMAT = (
+        "{% set image_count = namespace(value=0) %}"
         "{% for message in messages %}"
         "{% if loop.first and messages[0]['role'] != 'system' %}"
         "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n"
@@ -3436,10 +3547,12 @@ class MiniCPMv26ChatHandler(Llava15ChatHandler):
         "{% for content in message['content'] %}"
         "{% if content.type == 'image_url' %}"
         "{% if content.image_url is string %}"
-        "{{ content.image_url }}"
+        "{% set image_count.value = image_count.value + 1 %}"
+        "<image_id>{{ image_count.value }}</image_id>: <image>{{ content.image_url }}</image>"
         "{% endif %}"
         "{% if content.image_url is mapping %}"
-        "{{ content.image_url.url }}"
+        "{% set image_count.value = image_count.value + 1 %}"
+        "<image_id>{{ image_count.value }}</image_id>: <image>{{ content.image_url.url }}</image>"
         "{% endif %}"
         "{% endif %}"
         "{% endfor %}"
@@ -3461,11 +3574,70 @@ class MiniCPMv26ChatHandler(Llava15ChatHandler):
     )
 
 
+class Gemma3ChatHandler(Llava15ChatHandler):
+    DEFAULT_SYSTEM_MESSAGE = "You are a helpful assistant."
+
+    GEMMA3_BOI_TOKEN  = "<start_of_image>"
+    GEMMA3_EOI_TOKEN = "<end_of_image>"
+    GEMMA3_BOS_TOKEN = "<bos>"
+    GEMMA3_EOS_TOKEN = "<eos>"
+
+    CHAT_FORMAT = (
+        "{% if messages[0]['role'] == 'system' %}"
+        "{% set loop_messages = messages[1:] %}"
+        "{% if messages[0]['content'] is string %}"
+        "{% set first_user_prefix = messages[0]['content'] + '\n\n' %}"
+        "{% else %}"
+        "{% set first_user_prefix = messages[0]['content'][0]['text'] + '\n\n' %}"
+        "{% endif %}"
+        "{% else %}"
+        "{% set loop_messages = messages %}"
+        "{% set first_user_prefix = '' %}"
+        "{% endif %}"
+
+        "{% for message in loop_messages %}"
+        "{% if (message['role'] == 'user') != (loop.index0 % 2 == 0) %}"
+        "{{ raise_exception(\"Conversation roles must alternate user/assistant/user/assistant/...\") }}"
+        "{% endif %}"
+
+        "{% if message['role'] == 'assistant' %}"
+        "{% set role = 'model' %}"
+        "{% else %}"
+        "{% set role = message['role'] %}"
+        "{% endif %}"
+
+        "{{ '<start_of_turn>' + role + '\n' + (first_user_prefix if loop.first else '') }}"
+
+        "{% if message['content'] is string %}"
+        "{{ message['content'] | trim }}"
+        "{% elif message['content'] is iterable %}"
+        "{% for item in message['content'] %}"
+        "{% if item['type'] == 'image_url' and item['image_url'] is string %}"
+        "{{ '<start_of_image>' + item['image_url'] + '<end_of_image>' }}"
+        "{% elif item['type'] == 'image_url' and item['image_url'] is mapping %}"
+        "{{ '<start_of_image>' + item['image_url']['url'] + '<end_of_image>' }}"
+        "{% elif item['type'] == 'text' %}"
+        "{{ item['text'] | trim }}"
+        "{% endif %}"
+        "{% endfor %}"
+        "{% else %}"
+        "{{ raise_exception('Invalid content type') }}"
+        "{% endif %}"
+
+        "<end_of_turn>\n"
+        "{% endfor %}"
+
+        "{% if add_generation_prompt %}"
+        "<start_of_turn>model\n"
+        "{% endif %}"
+    )
+
+
 class Qwen25VLChatHandler(Llava15ChatHandler):
     DEFAULT_SYSTEM_MESSAGE = "You are a helpful assistant."
 
     CHAT_FORMAT = (
-        #"{% set image_count = namespace(value=0) %}"
+        "{% set image_count = namespace(value=0) %}"
         #"{% set video_count = namespace(value=0) %}"
         "{% for message in messages %}"
         "{% if loop.first and message['role'] != 'system' %}"
@@ -3479,11 +3651,12 @@ class Qwen25VLChatHandler(Llava15ChatHandler):
         "{% for content in message['content'] %}"
         "{% if content['type'] == 'image_url' %}"
         "{% if content.image_url is string %}"
-        "{{ content.image_url }}"
+        "{% set image_count.value = image_count.value + 1 %}"
+        "Picture {{ image_count.value }}: <|vision_start|> {{ content.image_url }} <|vision_end|>"
         "{% else %}"
-        "{{ content.image_url.url }}"
+        "{% set image_count.value = image_count.value + 1 %}"
+        "Picture {{ image_count.value }}: <|vision_start|> {{ content.image_url.url }} <|vision_end|>"
         "{% endif %}"
-        #"{% set image_count.value = image_count.value + 1 %}"
         "{% elif content['type'] == 'text' %}"
         "{{ content['text'] }}"
         "{% endif %}"
@@ -3499,7 +3672,7 @@ class Qwen25VLChatHandler(Llava15ChatHandler):
 
         # Clear state for multiple runs
         llama.reset()
-        llama._ctx.kv_cache_clear()
+        llama._ctx.memory_clear(True)
         llama.n_tokens = 0
 
         if hasattr(llama, 'input_ids'):
@@ -3517,6 +3690,7 @@ class Qwen25VLChatHandler(Llava15ChatHandler):
 
         # Use parent implementation
         return super().__call__(**kwargs)
+
 
 
 @register_chat_completion_handler("chatml-function-calling")
@@ -3539,10 +3713,17 @@ def chatml_function_calling(
     presence_penalty: float = 0.0,
     frequency_penalty: float = 0.0,
     repeat_penalty: float = 1.1,
-    tfs_z: float = 1.0,
+    top_n_sigma: float = -1.00,
     mirostat_mode: int = 0,
     mirostat_tau: float = 5.0,
     mirostat_eta: float = 0.1,
+    xtc_threshold: float = 0.1,
+    xtc_probability: float = 0.0,
+    dry_multiplier: float = 0.0,
+    dry_base: float = 1.75,
+    dry_allowed_length: int = 2,
+    dry_penalty_last_n:int = 0,
+    dry_seq_breakers: list[str] = ["\n", ":", "\"", "*"],
     model: Optional[str] = None,
     logits_processor: Optional[llama.LogitsProcessorList] = None,
     grammar: Optional[llama.LlamaGrammar] = None,
@@ -3670,10 +3851,17 @@ def chatml_function_calling(
                 presence_penalty=presence_penalty,
                 frequency_penalty=frequency_penalty,
                 repeat_penalty=repeat_penalty,
-                tfs_z=tfs_z,
+                top_n_sigma=top_n_sigma,
                 mirostat_mode=mirostat_mode,
                 mirostat_tau=mirostat_tau,
                 mirostat_eta=mirostat_eta,
+                xtc_threshold=xtc_threshold,
+                xtc_probability=xtc_probability,
+                dry_multiplier=dry_multiplier,
+                dry_base=dry_base,
+                dry_allowed_length=dry_allowed_length,
+                dry_penalty_last_n=dry_penalty_last_n,
+                dry_seq_breakers=dry_seq_breakers,
                 model=model,
                 logits_processor=logits_processor,
                 grammar=grammar,
@@ -3723,10 +3911,17 @@ def chatml_function_calling(
             presence_penalty=presence_penalty,
             frequency_penalty=frequency_penalty,
             repeat_penalty=repeat_penalty,
-            tfs_z=tfs_z,
+            top_n_sigma=top_n_sigma,
             mirostat_mode=mirostat_mode,
             mirostat_tau=mirostat_tau,
             mirostat_eta=mirostat_eta,
+            xtc_threshold=xtc_threshold,
+            xtc_probability=xtc_probability,
+            dry_multiplier=dry_multiplier,
+            dry_base=dry_base,
+            dry_allowed_length=dry_allowed_length,
+            dry_penalty_last_n=dry_penalty_last_n,
+            dry_seq_breakers=dry_seq_breakers,
             model=model,
             logits_processor=logits_processor,
             grammar=grammar,
@@ -3767,10 +3962,17 @@ def chatml_function_calling(
         presence_penalty=presence_penalty,
         frequency_penalty=frequency_penalty,
         repeat_penalty=repeat_penalty,
-        tfs_z=tfs_z,
+        top_n_sigma=top_n_sigma,
         mirostat_mode=mirostat_mode,
         mirostat_tau=mirostat_tau,
         mirostat_eta=mirostat_eta,
+        xtc_threshold=xtc_threshold,
+        xtc_probability=xtc_probability,
+        dry_multiplier=dry_multiplier,
+        dry_base=dry_base,
+        dry_allowed_length=dry_allowed_length,
+        dry_penalty_last_n=dry_penalty_last_n,
+        dry_seq_breakers=dry_seq_breakers,
         model=model,
         logits_processor=logits_processor,
         grammar=llama_grammar.LlamaGrammar.from_string(
@@ -3795,10 +3997,17 @@ def chatml_function_calling(
                 presence_penalty=presence_penalty,
                 frequency_penalty=frequency_penalty,
                 repeat_penalty=repeat_penalty,
-                tfs_z=tfs_z,
+                top_n_sigma=top_n_sigma,
                 mirostat_mode=mirostat_mode,
                 mirostat_tau=mirostat_tau,
                 mirostat_eta=mirostat_eta,
+                xtc_threshold=xtc_threshold,
+                xtc_probability=xtc_probability,
+                dry_multiplier=dry_multiplier,
+                dry_base=dry_base,
+                dry_allowed_length=dry_allowed_length,
+                dry_penalty_last_n=dry_penalty_last_n,
+                dry_seq_breakers=dry_seq_breakers,
                 model=model,
                 logits_processor=logits_processor,
                 grammar=llama_grammar.LlamaGrammar.from_string(
@@ -3842,10 +4051,17 @@ def chatml_function_calling(
                 presence_penalty=presence_penalty,
                 frequency_penalty=frequency_penalty,
                 repeat_penalty=repeat_penalty,
-                tfs_z=tfs_z,
+                top_n_sigma=top_n_sigma,
                 mirostat_mode=mirostat_mode,
                 mirostat_tau=mirostat_tau,
                 mirostat_eta=mirostat_eta,
+                xtc_threshold=xtc_threshold,
+                xtc_probability=xtc_probability,
+                dry_multiplier=dry_multiplier,
+                dry_base=dry_base,
+                dry_allowed_length=dry_allowed_length,
+                dry_penalty_last_n=dry_penalty_last_n,
+                dry_seq_breakers=dry_seq_breakers,
                 model=model,
                 logits_processor=logits_processor,
                 grammar=grammar,
@@ -3871,10 +4087,17 @@ def chatml_function_calling(
                 presence_penalty=presence_penalty,
                 frequency_penalty=frequency_penalty,
                 repeat_penalty=repeat_penalty,
-                tfs_z=tfs_z,
+                top_n_sigma=top_n_sigma,
                 mirostat_mode=mirostat_mode,
                 mirostat_tau=mirostat_tau,
                 mirostat_eta=mirostat_eta,
+                xtc_threshold=xtc_threshold,
+                xtc_probability=xtc_probability,
+                dry_multiplier=dry_multiplier,
+                dry_base=dry_base,
+                dry_allowed_length=dry_allowed_length,
+                dry_penalty_last_n=dry_penalty_last_n,
+                dry_seq_breakers=dry_seq_breakers,
                 model=model,
                 logits_processor=logits_processor,
                 grammar=llama_grammar.LlamaGrammar.from_string(

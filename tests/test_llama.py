@@ -66,6 +66,7 @@ def llama_cpp_model_path():
 
 def test_real_model(llama_cpp_model_path):
     import os
+
     assert os.path.exists(llama_cpp_model_path)
 
     params = llama_cpp.llama_model_default_params()
@@ -114,6 +115,7 @@ def test_real_model(llama_cpp_model_path):
     output_text = model.detokenize(output, special=True)
     assert output_text == b" over the lazy dog"
 
+
 def test_real_llama(llama_cpp_model_path):
     model = llama_cpp.Llama(
         llama_cpp_model_path,
@@ -132,10 +134,9 @@ def test_real_llama(llama_cpp_model_path):
         top_k=50,
         top_p=0.9,
         temperature=0.8,
-        seed=1337
+        seed=1337,
     )
     assert output["choices"][0]["text"] == " over the lazy dog"
-
 
     output = model.create_completion(
         "The capital of france is paris, 'true' or 'false'?:\n",
@@ -144,22 +145,23 @@ def test_real_llama(llama_cpp_model_path):
         top_p=0.9,
         temperature=0.8,
         seed=1337,
-        grammar=llama_cpp.LlamaGrammar.from_string("""
+        grammar=llama_cpp.LlamaGrammar.from_string(
+            """
 root ::= "true" | "false"
-""")
+"""
+        ),
     )
     assert output["choices"][0]["text"] == "true"
 
     suffix = b"rot"
     tokens = model.tokenize(suffix, add_bos=True, special=True)
+
     def logit_processor_func(input_ids, logits):
         for token in tokens:
             logits[token] *= 1000
         return logits
 
-    logit_processors = llama_cpp.LogitsProcessorList(
-        [logit_processor_func]
-    )
+    logit_processors = llama_cpp.LogitsProcessorList([logit_processor_func])
 
     output = model.create_completion(
         "The capital of france is par",
@@ -168,7 +170,7 @@ root ::= "true" | "false"
         top_p=0.9,
         temperature=0.8,
         seed=1337,
-        logits_processor=logit_processors
+        logits_processor=logit_processors,
     )
     assert output["choices"][0]["text"].lower().startswith("rot")
 
@@ -182,9 +184,11 @@ root ::= "true" | "false"
         top_k=50,
         top_p=0.9,
         temperature=0.8,
-        grammar=llama_cpp.LlamaGrammar.from_string("""
+        grammar=llama_cpp.LlamaGrammar.from_string(
+            """
 root ::= "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10"
-""")
+"""
+        ),
     )
     number_1 = output["choices"][0]["text"]
 
@@ -194,9 +198,11 @@ root ::= "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10"
         top_k=50,
         top_p=0.9,
         temperature=0.8,
-        grammar=llama_cpp.LlamaGrammar.from_string("""
+        grammar=llama_cpp.LlamaGrammar.from_string(
+            """
 root ::= "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10"
-""")
+"""
+        ),
     )
     number_2 = output["choices"][0]["text"]
 
@@ -208,9 +214,11 @@ root ::= "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10"
         top_k=50,
         top_p=0.9,
         temperature=0.8,
-        grammar=llama_cpp.LlamaGrammar.from_string("""
+        grammar=llama_cpp.LlamaGrammar.from_string(
+            """
 root ::= "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10"
-""")
+"""
+        ),
     )
     number_3 = output["choices"][0]["text"]
 
@@ -228,7 +236,7 @@ def test_real_llama_embeddings(llama_cpp_model_path):
         n_threads_batch=multiprocessing.cpu_count(),
         logits_all=False,
         flash_attn=True,
-        embedding=True
+        embedding=True,
     )
     # Smoke test for now
     model.embed("Hello World")
