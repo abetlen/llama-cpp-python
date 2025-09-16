@@ -834,21 +834,29 @@ class Llama:
         # Obtain logits pointer for processor application (no extra noise injection)
         try:
             c_ctx = self._ctx.ctx
-            if ridx is not None and ridx != -1:
-                logits_ptr = llama_cpp.llama_get_logits_ith(c_ctx, ctypes.c_int32(ridx))
-            else:
-                logits_ptr = llama_cpp.llama_get_logits_ith(c_ctx, ctypes.c_int32(-1))
+            # Always pull the most recent logits (-1) for deterministic modification
+            logits_ptr = llama_cpp.llama_get_logits_ith(c_ctx, ctypes.c_int32(-1))
         except Exception:
             logits_ptr = None
 
         # Apply Python-side logits processors (if any) BEFORE sampler distribution sampling
-        if getattr(self, "_logits_processor_chain", None) and logits_ptr:
+        # Apply logits processors if either a persistent chain or per-call processors provided
+        if (
+            getattr(self, "_logits_processor_chain", None) or logits_processor
+        ) and logits_ptr:
             try:
                 vocab = self._n_vocab
                 logits_view = np.ctypeslib.as_array(logits_ptr, shape=(vocab,))
                 proc_logits = logits_view.copy()
                 input_ids = self._input_ids
-                for proc in self._logits_processor_chain:  # type: ignore
+                base_chain = (
+                    list(self._logits_processor_chain)  # type: ignore
+                    if getattr(self, "_logits_processor_chain", None)
+                    else []
+                )
+                # Merge persistent + per-call
+                processors = base_chain + (list(logits_processor) if logits_processor else [])  # type: ignore
+                for proc in processors:  # type: ignore
                     proc_logits = proc(input_ids, proc_logits)
                 logits_view[:] = proc_logits
             except Exception as e:
@@ -1234,77 +1242,44 @@ class Llama:
         prefix_token_id: int = self._model.token_fim_pre()
         middle_token_id: int = self._model.token_fim_mid()
         suffix_token_id: int = self._model.token_fim_suf()
-        add_space_prefix: bool = (
-            self.metadata.get("tokenizer.ggml.add_space_prefix", "true") == "true"
-        )
-        bos_tokens: List[int] = [bos_token_id]
-        eos_tokens: List[int] = [
-            sep_token_id if self._model.get_add_sep() else eos_token_id
-        ]
-
-        if (
-            (isinstance(prompt, list) and suffix is None)
-            or not self._model.get_add_bos()
-            or bos_tokens[:1] == [-1]
-        ):
-            bos_tokens = []
-
-        if (isinstance(prompt, list) and suffix is None) or (
-            not self._model.get_add_eos() and not self._model.get_add_sep()
-        ):
-            eos_tokens = []
-
-        suffix_space_prefix: int = 0
-        # Tokenizer hack to remove leading space
-        if add_space_prefix and suffix_token_id >= 0 and suffix:
-            suffix = "☺" + suffix
-            suffix_space_prefix = 2
-
-        # If prompt is empty, initialize completion with BOS token to avoid
-        # detokenization including a space at the beginning of the completion
-        completion_tokens: List[int] = [] if len(prompt) > 0 else [bos_token_id]
-        # Add blank space to start of prompt to match OG llama tokenizer
-        prefix_tokens: List[int] = (
-            [prefix_token_id] if prefix_token_id >= 0 and suffix is not None else []
-        ) + (
-            (
-                self.tokenize(
-                    prompt.encode("utf-8"),
-                    add_bos=False,
-                    special=(prefix_token_id < 0 or suffix is None),
+        # Simplified prompt handling: do not insert BOS/EOS or space-prefix hacks automatically.
+        if suffix is None:
+            if isinstance(prompt, str):
+                prompt_tokens: List[int] = self.tokenize(
+                    prompt.encode("utf-8"), add_bos=False, special=True
                 )
-                if prompt != ""
-                else []
+            else:
+                prompt_tokens = list(prompt)
+            completion_tokens: List[int] = []
+        else:
+            # Preserve explicit infill behavior only when suffix provided.
+            completion_tokens = []
+            prefix_tokens: List[int] = (
+                [prefix_token_id] if prefix_token_id >= 0 else []
+            ) + (
+                self.tokenize(
+                    prompt.encode("utf-8"), add_bos=False, special=(prefix_token_id < 0)
+                )
+                if isinstance(prompt, str) and prompt != ""
+                else (prompt if isinstance(prompt, list) else [])
             )
-            if isinstance(prompt, str)
-            else prompt
-        )
-        suffix_tokens: List[int] = (
-            (
+            suffix_tokens: List[int] = (
                 [suffix_token_id]
                 + (
-                    self.tokenize(suffix.encode("utf-8"), add_bos=False, special=False)[
-                        suffix_space_prefix:
-                    ]
+                    self.tokenize(
+                        suffix.encode("utf-8"), add_bos=False, special=False
+                    )
                     if suffix
                     else []
                 )
+                if suffix_token_id >= 0
+                else []
             )
-            if suffix_token_id >= 0 and suffix is not None
-            else []
-        )
-        middle_tokens: List[int] = (
-            [middle_token_id] if middle_token_id >= 0 and suffix is not None else []
-        )
-        prompt_tokens: List[int] = (
-            bos_tokens
-            + (
-                (suffix_tokens + prefix_tokens + middle_tokens)
-                if self.spm_infill
-                else (prefix_tokens + suffix_tokens + middle_tokens)
-            )
-            + eos_tokens
-        )
+            middle_tokens: List[int] = [middle_token_id] if middle_token_id >= 0 else []
+            if self.spm_infill:
+                prompt_tokens = suffix_tokens + prefix_tokens + middle_tokens
+            else:
+                prompt_tokens = prefix_tokens + suffix_tokens + middle_tokens
         text: bytes = b""
         returned_tokens: int = 0
         stop = (
@@ -1312,11 +1287,7 @@ class Llama:
         )
         model_name: str = model if model is not None else self.model_path
 
-        if prompt_tokens[:2] == [self.token_bos()] * 2:
-            warnings.warn(
-                f'Detected duplicate leading "{self._model.token_get_text(self.token_bos())}" in prompt, this will likely reduce response quality, consider removing it...',
-                RuntimeWarning,
-            )
+        # Duplicate BOS warning removed (no implicit BOS insertion anymore).
 
         # NOTE: This likely doesn't work correctly for the first token in the prompt
         # because of the extra space added to the start of the prompt_tokens
@@ -1739,7 +1710,12 @@ class Llama:
         text_str = text.decode("utf-8", errors="ignore")
 
         if echo:
-            text_str = prompt + text_str
+            if isinstance(prompt, str):
+                text_str = prompt + text_str
+            else:
+                # When prompt supplied as token ids, reconstruct its string form for echo
+                prompt_text = self.detokenize(prompt).decode("utf-8", errors="ignore")
+                text_str = prompt_text + text_str
 
         if suffix_token_id < 0 and suffix is not None:
             text_str = text_str + suffix
@@ -1747,18 +1723,14 @@ class Llama:
         logprobs_or_none: Optional[CompletionLogprobs] = None
         if logprobs is not None:
             text_offset = 0 if echo else len(prompt)
-            token_offset = 0 if echo else len(prompt_tokens[1:])
+            token_offset = 0 if echo else len(prompt_tokens)
             text_offsets: List[int] = []
             token_logprobs: List[Optional[float]] = []
             tokens: List[str] = []
             top_logprobs: List[Optional[Dict[str, float]]] = []
 
             if echo:
-                # Remove leading BOS token if exists
-                all_tokens = (
-                    prompt_tokens[1 if prompt_tokens[0] == self.token_bos() else 0 :]
-                    + completion_tokens
-                )
+                all_tokens = prompt_tokens + completion_tokens
             else:
                 all_tokens = completion_tokens
 
