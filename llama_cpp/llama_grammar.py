@@ -131,6 +131,15 @@ number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? ws
 ws ::= ([ \t\n] ws)?
 """
 
+ENGLISH_GBNF = r"""
+# note: this might be incomplete, mostly an example
+root        ::= en-char+ ([ \t\n] en-char+)*
+en-char     ::= letter | digit | punctuation
+letter      ::= [a-zA-Z]
+digit       ::= [0-9]
+punctuation ::= [!"#$%&'()*+,-./:;<=>?@[\\\]^_`{|}~]
+"""
+
 JAPANESE_GBNF = r"""
 root   ::= object
 value  ::= object | array | string | number | ("true" | "false" | "null") ws

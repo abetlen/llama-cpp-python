@@ -84,7 +84,20 @@ class ModelSettings(BaseSettings):
         description="The number of threads to use when batch processing. Use -1 for max cpu threads",
     )
     rope_scaling_type: int = Field(
-        default=llama_cpp.LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED
+        default=llama_cpp.llama_rope_scaling_type.LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED,
+        description="RoPE scaling type, from `enum llama_rope_scaling_type",
+    )
+    pooling_type: int = Field(
+        default=llama_cpp.LLAMA_POOLING_TYPE_UNSPECIFIED,
+        description="whether to pool (sum) embedding results by sequence id",
+    )
+    attention_type: int = Field(
+        default=llama_cpp.llama_attention_type.LLAMA_ATTENTION_TYPE_UNSPECIFIED,
+        description="attention type to use for embeddings",
+    )
+    flash_attn_type: int = Field(
+        default=llama_cpp.llama_flash_attn_type.LLAMA_FLASH_ATTN_TYPE_AUTO,
+        description="when to enable Flash Attention",
     )
     rope_freq_base: float = Field(default=0.0, description="RoPE base frequency")
     rope_freq_scale: float = Field(
@@ -103,8 +116,14 @@ class ModelSettings(BaseSettings):
     offload_kqv: bool = Field(
         default=True, description="Whether to offload kqv to the GPU."
     )
-    flash_attn: bool = Field(
-        default=False, description="Whether to use flash attention."
+    op_offload: bool = Field(
+        default=True, description="Whether to offload host tensor operations to device"
+    )
+    swa_full: bool = Field(
+        default=True, description="Whether to use full-size SWA cache"
+    )
+    kv_unified: bool = Field(
+        default=True, description="enable single unified KV buffer for the KV cache of all sequences"
     )
     # Sampling Params
     last_n_tokens_size: int = Field(
