@@ -269,7 +269,7 @@ To upgrade and rebuild `llama-cpp-python` add `--upgrade --force-reinstall --no-
 
 The high-level API provides a simple managed interface through the [`Llama`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama) class.
 
-Below is a short example demonstrating how to use the high-level API to for basic text completion:
+Below is a short example demonstrating how to use the high-level API for basic text completion:
 
 ```python
 from llama_cpp import Llama
