@@ -355,7 +355,9 @@ class LlamaContext:
     # Sampling functions - deprecated, use LlamaSampler instead
 
     def set_rng_seed(self, seed: int):
-        raise NotImplementedError("set_rng_seed is deprecated, use LlamaSampler instead")
+        raise NotImplementedError(
+            "set_rng_seed is deprecated, use LlamaSampler instead"
+        )
 
     def sample_repetition_penalties(
         self,
@@ -366,30 +368,44 @@ class LlamaContext:
         penalty_freq: float,
         penalty_present: float,
     ):
-        raise NotImplementedError("sample_repetition_penalties is deprecated, use LlamaSampler instead")
+        raise NotImplementedError(
+            "sample_repetition_penalties is deprecated, use LlamaSampler instead"
+        )
 
     def sample_softmax(self, candidates: "_LlamaTokenDataArray"):
-        raise NotImplementedError("sample_softmax is deprecated, use LlamaSampler instead")
+        raise NotImplementedError(
+            "sample_softmax is deprecated, use LlamaSampler instead"
+        )
 
     def sample_top_k(self, candidates: "_LlamaTokenDataArray", k: int, min_keep: int):
-        raise NotImplementedError("sample_top_k is deprecated, use LlamaSampler instead")
+        raise NotImplementedError(
+            "sample_top_k is deprecated, use LlamaSampler instead"
+        )
 
     def sample_top_p(self, candidates: "_LlamaTokenDataArray", p: float, min_keep: int):
-        raise NotImplementedError("sample_top_p is deprecated, use LlamaSampler instead")
+        raise NotImplementedError(
+            "sample_top_p is deprecated, use LlamaSampler instead"
+        )
 
     def sample_min_p(self, candidates: "_LlamaTokenDataArray", p: float, min_keep: int):
-        raise NotImplementedError("sample_min_p is deprecated, use LlamaSampler instead")
+        raise NotImplementedError(
+            "sample_min_p is deprecated, use LlamaSampler instead"
+        )
 
     def sample_typical(
         self, candidates: "_LlamaTokenDataArray", p: float, min_keep: int
     ):
-        raise NotImplementedError("sample_typical is deprecated, use LlamaSampler instead")
+        raise NotImplementedError(
+            "sample_typical is deprecated, use LlamaSampler instead"
+        )
 
     def sample_temp(self, candidates: "_LlamaTokenDataArray", temp: float):
         raise NotImplementedError("sample_temp is deprecated, use LlamaSampler instead")
 
     def sample_grammar(self, candidates: "_LlamaTokenDataArray", grammar: LlamaGrammar):
-        raise NotImplementedError("sample_grammar is deprecated, use LlamaSampler instead")
+        raise NotImplementedError(
+            "sample_grammar is deprecated, use LlamaSampler instead"
+        )
 
     def sample_token_mirostat(
         self,
@@ -399,7 +415,9 @@ class LlamaContext:
         m: int,
         mu: llama_cpp.CtypesPointerOrRef[ctypes.c_float],
     ) -> int:
-        raise NotImplementedError("sample_token_mirostat is deprecated, use LlamaSampler instead")
+        raise NotImplementedError(
+            "sample_token_mirostat is deprecated, use LlamaSampler instead"
+        )
 
     def sample_token_mirostat_v2(
         self,
@@ -408,17 +426,25 @@ class LlamaContext:
         eta: float,
         mu: llama_cpp.CtypesPointerOrRef[ctypes.c_float],
     ) -> int:
-        raise NotImplementedError("sample_token_mirostat_v2 is deprecated, use LlamaSampler instead")
+        raise NotImplementedError(
+            "sample_token_mirostat_v2 is deprecated, use LlamaSampler instead"
+        )
 
     def sample_token_greedy(self, candidates: "_LlamaTokenDataArray") -> int:
-        raise NotImplementedError("sample_token_greedy is deprecated, use LlamaSampler instead")
+        raise NotImplementedError(
+            "sample_token_greedy is deprecated, use LlamaSampler instead"
+        )
 
     def sample_token(self, candidates: "_LlamaTokenDataArray") -> int:
-        raise NotImplementedError("sample_token is deprecated, use LlamaSampler instead")
+        raise NotImplementedError(
+            "sample_token is deprecated, use LlamaSampler instead"
+        )
 
     # Grammar
     def grammar_accept_token(self, grammar: LlamaGrammar, token: int):
-        raise NotImplementedError("grammar_accept_token is deprecated, use LlamaSampler instead")
+        raise NotImplementedError(
+            "grammar_accept_token is deprecated, use LlamaSampler instead"
+        )
 
     def reset_timings(self):
         llama_cpp.llama_perf_context_reset(self.ctx)
@@ -529,6 +555,8 @@ def normalize_embedding(embedding):
     norm = float(np.linalg.norm(embedding))
     if norm == 0.0:
         return embedding
+    if isinstance(embedding, np.ndarray):
+        return embedding / norm
     return [v / norm for v in embedding]
 
 
@@ -602,16 +630,16 @@ class LlamaSamplingContext:
         logits_array: Optional[npt.NDArray[np.single]] = None,
     ):
         # This method is deprecated in favor of using LlamaSampler directly
-        raise NotImplementedError("LlamaSamplingContext.sample is deprecated, use LlamaSampler instead")
+        raise NotImplementedError(
+            "LlamaSamplingContext.sample is deprecated, use LlamaSampler instead"
+        )
 
     def accept(self, ctx_main: LlamaContext, id: int, apply_grammar: bool):
         self.prev.append(id)
 
 
 class CustomSampler:
-    def __init__(
-        self, apply_func: Callable[[llama_cpp.llama_token_data_array], None]
-    ):
+    def __init__(self, apply_func: Callable[[llama_cpp.llama_token_data_array], None]):
         self.apply_func = apply_func
 
         def apply_wrapper(
@@ -723,20 +751,20 @@ class LlamaSampler:
         llama_cpp.llama_sampler_chain_add(self.sampler, sampler)
 
     def add_grammar_lazy_patterns(
-        self, 
-        model: LlamaModel, 
+        self,
+        model: LlamaModel,
         grammar: LlamaGrammar,
         trigger_patterns: List[str],
-        trigger_tokens: List[int]
+        trigger_tokens: List[int],
     ):
         # Convert patterns to C array
         pattern_ptrs = (ctypes.c_char_p * len(trigger_patterns))()
         for i, pattern in enumerate(trigger_patterns):
             pattern_ptrs[i] = pattern.encode("utf-8")
-        
+
         # Convert tokens to C array
         token_array = (llama_cpp.llama_token * len(trigger_tokens))(*trigger_tokens)
-        
+
         sampler = llama_cpp.llama_sampler_init_grammar_lazy_patterns(
             model.vocab,
             grammar._grammar.encode("utf-8"),
@@ -744,7 +772,7 @@ class LlamaSampler:
             pattern_ptrs,
             len(trigger_patterns),
             token_array,
-            len(trigger_tokens)
+            len(trigger_tokens),
         )
         llama_cpp.llama_sampler_chain_add(self.sampler, sampler)
 
@@ -771,13 +799,13 @@ class LlamaSampler:
         dry_base: float,
         dry_allowed_length: int,
         dry_penalty_last_n: int,
-        seq_breakers: List[str]
+        seq_breakers: List[str],
     ):
         # Convert seq_breakers to C array
         breaker_ptrs = (ctypes.c_char_p * len(seq_breakers))()
         for i, breaker in enumerate(seq_breakers):
             breaker_ptrs[i] = breaker.encode("utf-8")
-        
+
         sampler = llama_cpp.llama_sampler_init_dry(
             model.vocab,
             n_ctx_train,
@@ -786,25 +814,19 @@ class LlamaSampler:
             dry_allowed_length,
             dry_penalty_last_n,
             breaker_ptrs,
-            len(seq_breakers)
+            len(seq_breakers),
         )
         llama_cpp.llama_sampler_chain_add(self.sampler, sampler)
 
-    def add_logit_bias(
-        self, 
-        n_vocab: int, 
-        logit_bias: Dict[int, float]
-    ):
+    def add_logit_bias(self, n_vocab: int, logit_bias: Dict[int, float]):
         # Convert logit_bias dict to C array
         bias_array = (llama_cpp.llama_logit_bias * len(logit_bias))()
         for i, (token, bias) in enumerate(logit_bias.items()):
             bias_array[i].token = token
             bias_array[i].bias = bias
-        
+
         sampler = llama_cpp.llama_sampler_init_logit_bias(
-            n_vocab,
-            len(logit_bias),
-            bias_array
+            n_vocab, len(logit_bias), bias_array
         )
         llama_cpp.llama_sampler_chain_add(self.sampler, sampler)
 
@@ -838,15 +860,17 @@ class LlamaSampler:
     def clone(self):
         # NOTE: Custom samplers cannot be cloned due to Python callback limitations
         if self.custom_samplers:
-            raise NotImplementedError("Cannot clone LlamaSampler that contains custom samplers")
-        
+            raise NotImplementedError(
+                "Cannot clone LlamaSampler that contains custom samplers"
+            )
+
         cloned_sampler = llama_cpp.llama_sampler_clone(self.sampler)
         # Create a new wrapper around the cloned sampler
         new_sampler = LlamaSampler.__new__(LlamaSampler)
         new_sampler.sampler = cloned_sampler
         new_sampler.custom_samplers = []
         new_sampler._exit_stack = ExitStack()
-        
+
         def free_sampler():
             if new_sampler.sampler is not None:
                 llama_cpp.llama_sampler_free(new_sampler.sampler)

@@ -75,6 +75,7 @@ class Llama:
         n_ctx: int = 512,
         n_batch: int = 512,
         n_ubatch: int = 512,
+        n_seq_max: int = 1,
         n_threads: Optional[int] = None,
         n_threads_batch: Optional[int] = None,
         rope_scaling_type: Optional[
@@ -159,6 +160,7 @@ class Llama:
             n_ctx: Text context, 0 = from model
             n_batch: Prompt processing maximum batch size
             n_ubatch: Physical batch size
+            n_seq_max: Maximum number of sequences (i.e. distinct states for recurrent models or parallel batches)
             n_threads: Number of threads to use for generation
             n_threads_batch: Number of threads to use for batch processing
             rope_scaling_type: RoPE scaling type, from `enum llama_rope_scaling_type`. ref: https://github.com/ggerganov/llama.cpp/pull/2054
@@ -300,6 +302,8 @@ class Llama:
             self.model_params.kv_overrides = self._kv_overrides_array
 
         self.n_batch = min(n_ctx, n_batch)  # ???
+        self.n_ubatch = min(self.n_batch, n_ubatch)
+        self.n_seq_max = n_seq_max
         self.n_threads = n_threads or max(multiprocessing.cpu_count() // 2, 1)
         self.n_threads_batch = n_threads_batch or multiprocessing.cpu_count()
 
@@ -310,7 +314,8 @@ class Llama:
         self.context_params = llama_cpp.llama_context_default_params()
         self.context_params.n_ctx = n_ctx
         self.context_params.n_batch = self.n_batch
-        self.context_params.n_ubatch = min(self.n_batch, n_ubatch)
+        self.context_params.n_ubatch = self.n_ubatch
+        self.context_params.n_seq_max = self.n_seq_max
         self.context_params.n_threads = self.n_threads
         self.context_params.n_threads_batch = self.n_threads_batch
         self.context_params.rope_scaling_type = (
@@ -934,7 +939,8 @@ class Llama:
 
                 sample_idx += 1
                 if stopping_criteria is not None and stopping_criteria(
-                    self._input_ids[: sample_idx], self._scores[sample_idx - self.n_tokens, :]
+                    self._input_ids[:sample_idx],
+                    self._scores[sample_idx - self.n_tokens, :],
                 ):
                     return
                 tokens_or_none = yield token
@@ -960,7 +966,10 @@ class Llama:
                 )
 
     def create_embedding(
-        self, input: Union[str, List[str]], model: Optional[str] = None
+        self,
+        input: Union[str, List[str]],
+        model: Optional[str] = None,
+        return_numpy: bool = False,
     ) -> CreateEmbeddingResponse:
         """Embed a string.
 
@@ -975,9 +984,11 @@ class Llama:
         input = input if isinstance(input, list) else [input]
 
         # get numeric embeddings
-        embeds: Union[List[List[float]], List[List[List[float]]]]
+        embeds: Any
         total_tokens: int
-        embeds, total_tokens = self.embed(input, return_count=True)  # type: ignore
+        embeds, total_tokens = self.embed(
+            input, return_count=True, return_numpy=return_numpy
+        )  # type: ignore
 
         # convert to CreateEmbeddingResponse
         data: List[Embedding] = [
@@ -1005,6 +1016,7 @@ class Llama:
         normalize: bool = False,
         truncate: bool = True,
         return_count: bool = False,
+        return_numpy: bool = False,
     ):
         """Embed a string.
 
@@ -1050,20 +1062,21 @@ class Llama:
                 pos: int = 0
                 for i, size in enumerate(seq_sizes):
                     ptr = llama_cpp.llama_get_embeddings(self._ctx.ctx)
-                    embedding: List[List[float]] = [
-                        ptr[pos + j * n_embd : pos + (j + 1) * n_embd]
-                        for j in range(size)
-                    ]
+                    # Convert full pointer to numpy array once (zero-copy)
+                    ptr_array = np.ctypeslib.as_array(ptr, shape=(size * n_embd,))
+                    # Reshape to 2D array: (n_tokens, n_embd)
+                    embedding = ptr_array.reshape(size, n_embd)
                     if normalize:
-                        embedding = [
-                            internals.normalize_embedding(e) for e in embedding
-                        ]
+                        # Normalize each token embedding using vectorized operations
+                        norms = np.linalg.norm(embedding, axis=1, keepdims=True)
+                        norms = np.where(norms == 0, 1, norms)  # Avoid division by zero
+                        embedding = embedding / norms
                     data.append(embedding)
                     pos += size
             else:
                 for i in range(len(seq_sizes)):
                     ptr = llama_cpp.llama_get_embeddings_seq(self._ctx.ctx, i)
-                    embedding: List[float] = ptr[:n_embd]
+                    embedding = np.ctypeslib.as_array(ptr, shape=(n_embd,))
                     if normalize:
                         embedding = internals.normalize_embedding(embedding)
                     data.append(embedding)
@@ -1110,7 +1123,15 @@ class Llama:
         if self.verbose:
             llama_cpp.llama_perf_context_print(self._ctx.ctx)
 
-        output = data[0] if isinstance(input, str) else data
+        output: Any = data[0] if isinstance(input, str) else data
+
+        if not return_numpy:
+            if isinstance(output, np.ndarray):
+                output = output.tolist()
+            elif isinstance(output, list) and all(
+                isinstance(x, np.ndarray) for x in output
+            ):
+                output = [x.tolist() for x in output]
 
         llama_cpp.llama_kv_self_clear(self._ctx.ctx)
         self.reset()
@@ -1157,9 +1178,9 @@ class Llama:
         bos_token_id: int = self.token_bos()
         cls_token_id: int = self._model.token_cls()
         sep_token_id: int = self._model.token_sep()
-        prefix_token_id: int = 0 # self._model.token_prefix() # TODO: Fix
-        middle_token_id: int = 0 # self._model.token_middle() # TODO: Fix
-        suffix_token_id: int = 0 # self._model.token_suffix() # TODO: Fix
+        prefix_token_id: int = 0  # self._model.token_prefix() # TODO: Fix
+        middle_token_id: int = 0  # self._model.token_middle() # TODO: Fix
+        suffix_token_id: int = 0  # self._model.token_suffix() # TODO: Fix
         add_space_prefix: bool = (
             self.metadata.get("tokenizer.ggml.add_space_prefix", "true") == "true"
         )
@@ -1315,7 +1336,7 @@ class Llama:
         if seed is not None:
             self.set_seed(seed)
         else:
-            self.set_seed(random.Random(self._seed).randint(0, 2 ** 32))
+            self.set_seed(random.Random(self._seed).randint(0, 2**32))
 
         finish_reason = "length"
         multibyte_fix = 0
@@ -2056,7 +2077,10 @@ class Llama:
             stream = kwargs.get("stream", False)  # type: ignore
             assert isinstance(stream, bool)
             if stream:
-                return (ChatCompletionChunk(**chunk) for chunk in self.create_chat_completion(*args, **kwargs))  # type: ignore
+                return (
+                    ChatCompletionChunk(**chunk)
+                    for chunk in self.create_chat_completion(*args, **kwargs)
+                )  # type: ignore
             else:
                 return ChatCompletion(**self.create_chat_completion(*args, **kwargs))  # type: ignore
         except ImportError:
@@ -2080,8 +2104,9 @@ class Llama:
             # Context Params
             seed=self._seed,
             n_ctx=self.context_params.n_ctx,
-            n_batch=self.n_batch,
+            n_batch=self.context_params.n_batch,
             n_ubatch=self.context_params.n_ubatch,
+            n_seq_max=self.context_params.n_seq_max,
             n_threads=self.context_params.n_threads,
             n_threads_batch=self.context_params.n_threads_batch,
             rope_scaling_type=self.context_params.rope_scaling_type,
@@ -2318,7 +2343,11 @@ class Llama:
         if additional_files:
             for additonal_file_name in additional_files:
                 # find the additional shard file:
-                matching_additional_files = [file for file in file_list if fnmatch.fnmatch(file, additonal_file_name)]
+                matching_additional_files = [
+                    file
+                    for file in file_list
+                    if fnmatch.fnmatch(file, additonal_file_name)
+                ]
 
                 if len(matching_additional_files) == 0:
                     raise ValueError(
