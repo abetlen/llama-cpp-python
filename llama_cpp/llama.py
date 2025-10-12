@@ -25,6 +25,8 @@ from typing import (
     Deque,
     Callable,
     Dict,
+    Tuple,
+    overload,
 )
 from collections import deque
 from pathlib import Path
@@ -984,7 +986,7 @@ class Llama:
         input = input if isinstance(input, list) else [input]
 
         # get numeric embeddings
-        embeds: Any
+        embeds: Union[List[npt.NDArray[np.single]], List[List[List[float]]]]
         total_tokens: int
         embeds, total_tokens = self.embed(
             input, return_count=True, return_numpy=return_numpy
@@ -1010,6 +1012,86 @@ class Llama:
             },
         }
 
+    @overload
+    def embed(
+        self,
+        input: str,
+        normalize: bool = False,
+        truncate: bool = True,
+        return_count: Literal[False] = False,
+        return_numpy: Literal[True] = True,
+    ) -> npt.NDArray[np.single]: ...
+
+    @overload
+    def embed(
+        self,
+        input: str,
+        normalize: bool = False,
+        truncate: bool = True,
+        return_count: Literal[False] = False,
+        return_numpy: Literal[False] = False,
+    ) -> List[List[float]]: ...
+
+    @overload
+    def embed(
+        self,
+        input: List[str],
+        normalize: bool = False,
+        truncate: bool = True,
+        return_count: Literal[False] = False,
+        return_numpy: Literal[True] = True,
+    ) -> List[npt.NDArray[np.single]]: ...
+
+    @overload
+    def embed(
+        self,
+        input: List[str],
+        normalize: bool = False,
+        truncate: bool = True,
+        return_count: Literal[False] = False,
+        return_numpy: Literal[False] = False,
+    ) -> List[List[List[float]]]: ...
+
+    @overload
+    def embed(
+        self,
+        input: str,
+        normalize: bool = False,
+        truncate: bool = True,
+        return_count: Literal[True] = True,
+        return_numpy: Literal[True] = True,
+    ) -> Tuple[npt.NDArray[np.single], int]: ...
+
+    @overload
+    def embed(
+        self,
+        input: str,
+        normalize: bool = False,
+        truncate: bool = True,
+        return_count: Literal[True] = True,
+        return_numpy: Literal[False] = False,
+    ) -> Tuple[List[List[float]], int]: ...
+
+    @overload
+    def embed(
+        self,
+        input: List[str],
+        normalize: bool = False,
+        truncate: bool = True,
+        return_count: Literal[True] = True,
+        return_numpy: Literal[True] = True,
+    ) -> Tuple[List[npt.NDArray[np.single]], int]: ...
+
+    @overload
+    def embed(
+        self,
+        input: List[str],
+        normalize: bool = False,
+        truncate: bool = True,
+        return_count: Literal[True] = True,
+        return_numpy: Literal[False] = False,
+    ) -> Tuple[List[List[List[float]]], int]: ...
+
     def embed(
         self,
         input: Union[str, List[str]],
@@ -1017,7 +1099,16 @@ class Llama:
         truncate: bool = True,
         return_count: bool = False,
         return_numpy: bool = False,
-    ):
+    ) -> Union[
+        npt.NDArray[np.single],
+        List[List[float]],
+        List[npt.NDArray[np.single]],
+        List[List[List[float]]],
+        Tuple[npt.NDArray[np.single], int],
+        Tuple[List[List[float]], int],
+        Tuple[List[npt.NDArray[np.single]], int],
+        Tuple[List[List[List[float]]], int],
+    ]:
         """Embed a string.
 
         Args:
@@ -1123,7 +1214,12 @@ class Llama:
         if self.verbose:
             llama_cpp.llama_perf_context_print(self._ctx.ctx)
 
-        output: Any = data[0] if isinstance(input, str) else data
+        output: Union[
+            npt.NDArray[np.single],
+            List[List[float]],
+            List[npt.NDArray[np.single]],
+            List[List[List[float]]],
+        ] = data[0] if isinstance(input, str) else data
 
         if not return_numpy:
             if isinstance(output, np.ndarray):
