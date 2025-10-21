@@ -194,7 +194,7 @@ class ChatFormatter(Protocol):
 class GenerationTagIgnore(Extension):
     """Ignores the generation and endgeneration tags in Jinja templates."""
 
-    tags = {"generation"}
+    tags = {"generation", "endgeneration"}
 
     def parse(self, parser):
         parser.stream.skip(1)
