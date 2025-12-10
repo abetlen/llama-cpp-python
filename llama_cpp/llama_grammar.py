@@ -132,31 +132,13 @@ ws ::= ([ \t\n] ws)?
 """
 
 JAPANESE_GBNF = r"""
-root   ::= object
-value  ::= object | array | string | number | ("true" | "false" | "null") ws
-
-object ::=
-  "{" ws (
-            string ":" ws value
-    ("," ws string ":" ws value)*
-  )? "}" ws
-
-array  ::=
-  "[" ws (
-            value
-    ("," ws value)*
-  )? "]" ws
-
-string ::=
-  "\"" (
-    [^"\\] |
-    "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F]) # escapes
-  )* "\"" ws
-
-number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? ws
-
-# Optional space: by convention, applied in this grammar after literal chars when allowed
-ws ::= ([ \t\n] ws)?
+# A probably incorrect grammar for Japanese
+root        ::= jp-char+ ([ \t\n] jp-char+)*
+jp-char     ::= hiragana | katakana | punctuation | cjk
+hiragana    ::= [ぁ-ゟ]
+katakana    ::= [ァ-ヿ]
+punctuation ::= [、-〾]
+cjk         ::= [一-鿿]
 """
 
 JSON_ARR_GBNF = r"""
@@ -219,7 +201,7 @@ string ::=
     "\\" (["\\bfnrt] | "u" [0-9a-fA-F]{4}) # escapes
   )* "\"" ws
 
-number ::= ("-"? ([0-9] | [1-9] [0-9]{0,15})) ("." [0-9]+)? ([eE] [-+]? [0-9] [1-9]{0,15})? ws
+number ::= ("-"? ([0-9] | [1-9] [0-9]{0,15})) ("." [0-9]+)? ([eE] [-+]? [1-9] [0-9]{0,15})? ws
 
 # Optional space: by convention, applied in this grammar after literal chars when allowed
 ws ::= | " " | "\n" [ \t]{0,20}
@@ -245,10 +227,6 @@ SPACE_RULE = '" "?'
 INVALID_RULE_CHARS_RE = re.compile(r"[^a-zA-Z0-9-]+")
 GRAMMAR_LITERAL_ESCAPE_RE = re.compile(r'[\r\n"]')
 GRAMMAR_LITERAL_ESCAPES = {"\r": "\\r", "\n": "\\n", '"': '\\"'}
-
-# whitespace is constrained to a single space char to prevent model "running away" in
-# whitespace. Also maybe improves generation quality?
-SPACE_RULE = '" "?'
 
 
 def _build_repetition(
