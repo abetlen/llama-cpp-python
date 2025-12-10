@@ -3032,13 +3032,26 @@ class Llava15ChatHandler:
         # TODO: Add Pillow support for other image formats beyond (jpg, png)
         if image_url.startswith("data:"):
             import base64
-            image_bytes = base64.b64decode(image_url.split(",")[1])
-            return image_bytes
-        else:
-            import urllib.request
-            with urllib.request.urlopen(image_url) as f:
-                image_bytes = f.read()
-                return image_bytes
+            return base64.b64decode(image_url.split(",")[1])
+        
+        import urllib.request
+        import urllib.parse
+
+        parsed = urllib.parse.urlparse(image_url)
+        if parsed.username and parsed.password:
+            # auth handler for URLs with credentials
+            mgr = urllib.request.HTTPPasswordMgrWithDefaultRealm()
+            hostport = parsed.hostname + (f":{parsed.port}" if parsed.port else "")
+            mgr.add_password(None, hostport, parsed.username, parsed.password)
+            opener = urllib.request.build_opener(urllib.request.HTTPBasicAuthHandler(mgr))
+            # URL without credentials
+            url = urllib.parse.urlunparse(parsed._replace(netloc=hostport))
+            with opener.open(url) as f:
+                return f.read()
+
+        with urllib.request.urlopen(image_url) as f:
+            return f.read()
+
 
     @staticmethod
     def get_image_urls(messages: List[llama_types.ChatCompletionRequestMessage]):
