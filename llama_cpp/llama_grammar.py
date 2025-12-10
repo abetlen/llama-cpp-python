@@ -104,31 +104,19 @@ ws ::= ([ \t\n]+)
 """
 
 CHESS_GBNF = r"""
-root   ::= object
-value  ::= object | array | string | number | ("true" | "false" | "null") ws
+# Specifies chess moves as a list in algebraic notation, using PGN conventions
 
-object ::=
-  "{" ws (
-            string ":" ws value
-    ("," ws string ":" ws value)*
-  )? "}" ws
+# Force first move to "1. ", then any 1-2 digit number after, relying on model to follow the pattern
+root    ::= "1. " move " " move "\n" ([1-9] [0-9]? ". " move " " move "\n")+
+move    ::= (pawn | nonpawn | castle) [+#]?
 
-array  ::=
-  "[" ws (
-            value
-    ("," ws value)*
-  )? "]" ws
+# piece type, optional file/rank, optional capture, dest file & rank
+nonpawn ::= [NBKQR] [a-h]? [1-8]? "x"? [a-h] [1-8]
 
-string ::=
-  "\"" (
-    [^"\\] |
-    "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F]) # escapes
-  )* "\"" ws
+# optional file & capture, dest file & rank, optional promotion
+pawn    ::= ([a-h] "x")? [a-h] [1-8] ("=" [NBKQR])?
 
-number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? ws
-
-# Optional space: by convention, applied in this grammar after literal chars when allowed
-ws ::= ([ \t\n] ws)?
+castle  ::= "O-O" "-O"?
 """
 
 JAPANESE_GBNF = r"""
