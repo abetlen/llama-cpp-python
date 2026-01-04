@@ -102,6 +102,7 @@ class LlamaChatCompletionHandler(Protocol):
         grammar: Optional[llama.LlamaGrammar] = None,
         logprobs: Optional[bool] = None,
         top_logprobs: Optional[int] = None,
+        special: bool = False,
         **kwargs,  # type: ignore
     ) -> Union[
         llama_types.CreateChatCompletionResponse,
@@ -2798,6 +2799,7 @@ class Llava15ChatHandler:
         logit_bias: Optional[Dict[str, float]] = None,
         logprobs: Optional[bool] = None,
         top_logprobs: Optional[int] = None,
+        special: bool = False,
         **kwargs,  # type: ignore
     ) -> Union[
         llama_types.CreateChatCompletionResponse,
@@ -3018,6 +3020,7 @@ class Llava15ChatHandler:
             logits_processor=logits_processor,
             grammar=grammar,
             logit_bias=logit_bias,
+            special=special,
         )
         
         if tool is not None:

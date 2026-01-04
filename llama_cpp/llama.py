@@ -1199,6 +1199,7 @@ class Llama:
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
         logit_bias: Optional[Dict[int, float]] = None,
+        special: bool = False,
     ) -> Union[
         Iterator[CreateCompletionResponse], Iterator[CreateCompletionStreamResponse]
     ]:
@@ -1390,13 +1391,17 @@ class Llama:
             grammar=grammar,
         ):
             if llama_cpp.llama_token_is_eog(self._model.vocab, token):
-                text = self.detokenize(completion_tokens, prev_tokens=prompt_tokens)
+                text = self.detokenize(
+                    completion_tokens, prev_tokens=prompt_tokens, special=special
+                )
                 finish_reason = "stop"
                 break
 
             completion_tokens.append(token)
 
-            all_text = self.detokenize(completion_tokens, prev_tokens=prompt_tokens)
+            all_text = self.detokenize(
+                completion_tokens, prev_tokens=prompt_tokens, special=special
+            )
 
             # Contains multi-byte UTF8
             for k, char in enumerate(all_text[-3:]):
@@ -1423,6 +1428,7 @@ class Llama:
                 remaining_text = self.detokenize(
                     remaining_tokens,
                     prev_tokens=prompt_tokens + completion_tokens[:returned_tokens],
+                    special=special,
                 )
                 remaining_length = len(remaining_text)
 
@@ -1450,6 +1456,7 @@ class Llama:
                                 [token],
                                 prev_tokens=prompt_tokens
                                 + completion_tokens[:returned_tokens],
+                                special=special,
                             )
                         )
                         # Check if stop sequence is in the token
@@ -1461,12 +1468,14 @@ class Llama:
                             [token],
                             prev_tokens=prompt_tokens
                             + completion_tokens[:returned_tokens],
+                            special=special,
                         ).decode("utf-8", errors="ignore")
                         text_offset = len(prompt) + len(
                             self.detokenize(
                                 completion_tokens[:returned_tokens],
                                 prev_tokens=prompt_tokens
                                 + completion_tokens[:returned_tokens],
+                                special=special,
                             ).decode("utf-8", errors="ignore")
                         )
                         token_offset = len(prompt_tokens) + returned_tokens
@@ -1479,7 +1488,7 @@ class Llama:
                             )
                         )
                         top_logprob = {
-                            self.detokenize([i]).decode(
+                            self.detokenize([i], special=special).decode(
                                 "utf-8", errors="ignore"
                             ): logprob
                             for logprob, i in sorted_logprobs[:logprobs]
@@ -1491,6 +1500,7 @@ class Llama:
                                     [token],
                                     prev_tokens=prompt_tokens
                                     + completion_tokens[:returned_tokens],
+                                    special=special,
                                 ).decode("utf-8", errors="ignore")
                             ],
                             "text_offset": [text_offset],
@@ -1509,6 +1519,7 @@ class Llama:
                                         [token],
                                         prev_tokens=prompt_tokens
                                         + completion_tokens[:returned_tokens],
+                                        special=special,
                                     ).decode("utf-8", errors="ignore"),
                                     "index": 0,
                                     "logprobs": logprobs_or_none,
@@ -1525,6 +1536,7 @@ class Llama:
                                     remaining_tokens[:i],
                                     prev_tokens=prompt_tokens
                                     + completion_tokens[:returned_tokens],
+                                    special=special,
                                 )
                                 ts = bs.decode("utf-8")
                                 decode_success = True
@@ -1560,14 +1572,18 @@ class Llama:
                         }
 
             if len(completion_tokens) >= max_tokens:
-                text = self.detokenize(completion_tokens, prev_tokens=prompt_tokens)
+                text = self.detokenize(
+                    completion_tokens, prev_tokens=prompt_tokens, special=special
+                )
                 finish_reason = "length"
                 break
 
         if stopping_criteria is not None and stopping_criteria(
             self._input_ids, self._scores[-1, :]
         ):
-            text = self.detokenize(completion_tokens, prev_tokens=prompt_tokens)
+            text = self.detokenize(
+                completion_tokens, prev_tokens=prompt_tokens, special=special
+            )
             finish_reason = "stop"
 
         if self.verbose:
@@ -1578,6 +1594,7 @@ class Llama:
             remaining_text = self.detokenize(
                 remaining_tokens,
                 prev_tokens=prompt_tokens + completion_tokens[:returned_tokens],
+                special=special,
             )
             any_stop = [s for s in stop_sequences if s in remaining_text]
             if len(any_stop) > 0:
@@ -1591,6 +1608,7 @@ class Llama:
                     self.detokenize(
                         [token],
                         prev_tokens=prompt_tokens + completion_tokens[:returned_tokens],
+                        special=special,
                     )
                 )
 
@@ -1599,13 +1617,16 @@ class Llama:
                     if token == bos_token_id:
                         continue
                     token_str = self.detokenize([token]).decode(
-                        "utf-8", errors="ignore"
+                        "utf-8",
+                        errors="ignore",
+                        special=special,
                     )
                     text_offset = len(prompt) + len(
                         self.detokenize(
                             completion_tokens[:returned_tokens],
                             prev_tokens=prompt_tokens
                             + completion_tokens[:returned_tokens],
+                            special=special,
                         )
                     )
                     token_offset = len(prompt_tokens) + returned_tokens - 1
@@ -1618,13 +1639,18 @@ class Llama:
                         )
                     )
                     top_logprob = {
-                        self.detokenize([i]).decode("utf-8", errors="ignore"): logprob
+                        self.detokenize([i]).decode(
+                            "utf-8", errors="ignore", special=special
+                        ): logprob
                         for logprob, i in sorted_logprobs[:logprobs]
                     }
                     top_logprob.update({token_str: current_logprobs[int(token)]})
                     logprobs_or_none = {
                         "tokens": [
-                            self.detokenize([token]).decode("utf-8", errors="ignore")
+                            self.detokenize(
+                                [token],
+                                special=special,
+                            ).decode("utf-8", errors="ignore")
                         ],
                         "text_offset": [text_offset],
                         "token_logprobs": [current_logprobs[int(token)]],
@@ -1632,7 +1658,7 @@ class Llama:
                     }
 
                 if token_end_position >= end:
-                    last_text = self.detokenize([token])
+                    last_text = self.detokenize([token], special=special)
                     if token_end_position == end - 1:
                         break
                     returned_tokens += 1
@@ -1661,7 +1687,7 @@ class Llama:
                     "model": model_name,
                     "choices": [
                         {
-                            "text": self.detokenize([token]).decode(
+                            "text": self.detokenize([token], special=special).decode(
                                 "utf-8", errors="ignore"
                             ),
                             "index": 0,
@@ -1725,7 +1751,7 @@ class Llama:
 
             all_token_strs = [
                 self.detokenize([token], prev_tokens=all_tokens[:i]).decode(
-                    "utf-8", errors="ignore"
+                    "utf-8", errors="ignore", special=special
                 )
                 for i, token in enumerate(all_tokens)
             ]
@@ -1740,7 +1766,7 @@ class Llama:
                     text_offset
                     + len(
                         self.detokenize(all_tokens[:idx]).decode(
-                            "utf-8", errors="ignore"
+                            "utf-8", errors="ignore", special=special
                         )
                     )
                 )
@@ -1752,9 +1778,9 @@ class Llama:
                 )
                 token_logprobs.append(logprobs_token[int(token)])
                 top_logprob: Optional[Dict[str, float]] = {
-                    self.detokenize([i], prev_tokens=all_tokens[:idx]).decode(
-                        "utf-8", errors="ignore"
-                    ): logprob
+                    self.detokenize(
+                        [i], prev_tokens=all_tokens[:idx], special=special
+                    ).decode("utf-8", errors="ignore"): logprob
                     for logprob, i in sorted_logprobs[:logprobs]
                 }
                 top_logprob.update({token_str: logprobs_token[int(token)]})
@@ -1819,6 +1845,7 @@ class Llama:
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
         logit_bias: Optional[Dict[int, float]] = None,
+        special: bool = False,
     ) -> Union[CreateCompletionResponse, Iterator[CreateCompletionStreamResponse]]:
         """Generate text from a prompt.
 
@@ -1848,6 +1875,7 @@ class Llama:
             logits_processor: A list of logits processors to use.
             grammar: A grammar to use for constrained sampling.
             logit_bias: A logit bias to use.
+            special: Include special tokens in output.
 
         Raises:
             ValueError: If the requested tokens exceed the context window.
@@ -1882,6 +1910,7 @@ class Llama:
             logits_processor=logits_processor,
             grammar=grammar,
             logit_bias=logit_bias,
+            special=special,
         )
         if stream:
             chunks: Iterator[CreateCompletionStreamResponse] = completion_or_chunks
@@ -1916,6 +1945,7 @@ class Llama:
         logits_processor: Optional[LogitsProcessorList] = None,
         grammar: Optional[LlamaGrammar] = None,
         logit_bias: Optional[Dict[int, float]] = None,
+        special: bool = False,
     ) -> Union[CreateCompletionResponse, Iterator[CreateCompletionStreamResponse]]:
         """Generate text from a prompt.
 
@@ -1945,6 +1975,7 @@ class Llama:
             logits_processor: A list of logits processors to use.
             grammar: A grammar to use for constrained sampling.
             logit_bias: A logit bias to use.
+            special: Include special tokens in output.
 
         Raises:
             ValueError: If the requested tokens exceed the context window.
@@ -1979,6 +2010,7 @@ class Llama:
             logits_processor=logits_processor,
             grammar=grammar,
             logit_bias=logit_bias,
+            special=special,
         )
 
     def create_chat_completion(
@@ -2011,6 +2043,7 @@ class Llama:
         logit_bias: Optional[Dict[int, float]] = None,
         logprobs: Optional[bool] = None,
         top_logprobs: Optional[int] = None,
+        special: bool = False,
     ) -> Union[
         CreateChatCompletionResponse, Iterator[CreateChatCompletionStreamResponse]
     ]:
@@ -2043,6 +2076,7 @@ class Llama:
             logits_processor: A list of logits processors to use.
             grammar: A grammar to use.
             logit_bias: A logit bias to use.
+            special: Include special tokens in output.
 
         Returns:
             Generated chat completion or a stream of chat completion chunks.
@@ -2082,6 +2116,7 @@ class Llama:
             logits_processor=logits_processor,
             grammar=grammar,
             logit_bias=logit_bias,
+            special=special,
         )
 
     def create_chat_completion_openai_v1(

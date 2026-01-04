@@ -23,6 +23,7 @@ response = llama.create_chat_completion(
         }
     ],
     stream=True,
+    special=True,
 )
 
 for chunk in response:
