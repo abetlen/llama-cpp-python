@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- feat: Add chat completion handler for Granite-Docling (and SmolVLM)
+- feat: Add `special` argument to keep special tokens in chat completion output
+
 ## [0.3.16]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@4227c9be4268ac844921b90f31595f81236bd317

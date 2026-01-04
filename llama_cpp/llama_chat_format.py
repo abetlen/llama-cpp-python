@@ -3519,6 +3519,37 @@ class Qwen25VLChatHandler(Llava15ChatHandler):
         return super().__call__(**kwargs)
 
 
+class GraniteDoclingChatHandler(Llava15ChatHandler):
+    DEFAULT_SYSTEM_MESSAGE = None
+
+    CHAT_FORMAT = """{%- for message in messages -%}
+{{- '<|start_of_role|>' + message['role'] + '<|end_of_role|>' -}}
+{%- if message['content'] is string -%}
+{{- message['content'] -}}
+{%- else -%}
+{%- for part in message['content'] -%}
+{%- if part['type'] == 'text' -%}
+{{- part['text'] -}}
+{%- elif part['type'] == 'image_url' -%}
+{%- if part['image_url'] is string %}
+{{- part['image_url'] }}
+{%- elif part['image_url'] is mapping -%}
+{{- part['image_url']['url'] -}}
+{%- endif -%}
+{%- endif -%}
+{%- endfor -%}
+{%- endif -%}
+{{- '<|end_of_text|>
+' -}}
+{%- endfor -%}
+{%- if add_generation_prompt -%}
+{{- '<|start_of_role|>assistant' -}}
+{%- if controls -%}{{- ' ' + controls | tojson() -}}{%- endif -%}
+{{- '<|end_of_role|>' -}}
+{%- endif -%}
+"""
+
+
 @register_chat_completion_handler("chatml-function-calling")
 def chatml_function_calling(
     llama: llama.Llama,
