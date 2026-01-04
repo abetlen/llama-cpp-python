@@ -589,6 +589,7 @@ def chat_formatter_to_chat_completion_handler(
         logit_bias: Optional[Dict[str, float]] = None,
         logprobs: Optional[bool] = None,
         top_logprobs: Optional[int] = None,
+        special: bool = False,
         **kwargs,  # type: ignore
     ) -> Union[
         llama_types.CreateChatCompletionResponse,
@@ -691,6 +692,7 @@ def chat_formatter_to_chat_completion_handler(
             stopping_criteria=stopping_criteria,
             grammar=grammar,
             logit_bias=logit_bias,
+            special=special,
         )
         if tool is not None:
             tool_name = tool["function"]["name"]
@@ -1426,6 +1428,7 @@ def functionary_chat_handler(
     model: Optional[str] = None,
     logits_processor: Optional[llama.LogitsProcessorList] = None,
     grammar: Optional[llama.LlamaGrammar] = None,
+    special: bool = False,
     **kwargs,  # type: ignore
 ) -> Union[llama_types.ChatCompletion, Iterator[llama_types.ChatCompletionChunk]]:
     SYSTEM_MESSAGE = """A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. The assistant calls functions with appropriate input when necessary"""
@@ -1632,6 +1635,7 @@ def functionary_chat_handler(
             model=model,
             logits_processor=logits_processor,
             grammar=grammar,
+            special=special,
         )
         return _convert_completion_to_chat(completion_or_completion_chunks, stream=stream)  # type: ignore
 
@@ -1712,6 +1716,7 @@ def functionary_chat_handler(
         mirostat_eta=mirostat_eta,
         model=model,
         logits_processor=logits_processor,
+        special=special,
     )  # type: ignore
 
     assert "usage" in completion
@@ -1785,6 +1790,7 @@ def functionary_v1_v2_chat_handler(
     model: Optional[str] = None,
     logits_processor: Optional[llama.LogitsProcessorList] = None,
     grammar: Optional[llama.LlamaGrammar] = None,
+    special: bool = False,
     **kwargs,  # type: ignore
 ) -> Union[llama_types.ChatCompletion, Iterator[llama_types.ChatCompletionChunk]]:
     SYSTEM_MESSAGE = """A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. The assistant calls functions with appropriate input when necessary"""
@@ -2001,6 +2007,7 @@ def functionary_v1_v2_chat_handler(
             model=model,
             logits_processor=logits_processor,
             grammar=grammar,
+            special=special,
         )
         if stream is False:
             completion_or_completion_chunks["choices"][0]["text"] = (
@@ -2064,6 +2071,7 @@ def functionary_v1_v2_chat_handler(
                 model=model,
                 logits_processor=logits_processor,
                 grammar=grammar,
+                special=special,
             ),
         )
 
@@ -3582,6 +3590,7 @@ def chatml_function_calling(
     grammar: Optional[llama.LlamaGrammar] = None,
     logprobs: Optional[bool] = None,
     top_logprobs: Optional[int] = None,
+    special: bool = False,
     **kwargs,  # type: ignore
 ) -> Union[
     llama_types.CreateChatCompletionResponse,
@@ -3712,6 +3721,7 @@ def chatml_function_calling(
                 logits_processor=logits_processor,
                 grammar=grammar,
                 logprobs=top_logprobs if logprobs else None,
+                special=special,
             ),
             stream=stream,
         )
@@ -3764,6 +3774,7 @@ def chatml_function_calling(
             model=model,
             logits_processor=logits_processor,
             grammar=grammar,
+            special=special,
         )
         return _convert_completion_to_chat_function(
             tool_name, completion_or_chunks, stream
@@ -3810,6 +3821,7 @@ def chatml_function_calling(
         grammar=llama_grammar.LlamaGrammar.from_string(
             initial_gbnf_tool_grammar, verbose=llama.verbose
         ),
+        special=special,
     )
     completion: llama_types.CreateCompletionResponse = completion_or_chunks  # type: ignore
     text = completion["choices"][0]["text"]
@@ -3838,6 +3850,7 @@ def chatml_function_calling(
                 grammar=llama_grammar.LlamaGrammar.from_string(
                     follow_up_gbnf_tool_grammar, verbose=llama.verbose
                 ),
+                special=special,
             ),
             stream=stream,
         )
@@ -3883,6 +3896,7 @@ def chatml_function_calling(
                 model=model,
                 logits_processor=logits_processor,
                 grammar=grammar,
+                special=special,
             )
             completion_or_chunks = cast(
                 llama_types.CreateCompletionResponse, completion_or_chunks
@@ -3914,6 +3928,7 @@ def chatml_function_calling(
                 grammar=llama_grammar.LlamaGrammar.from_string(
                     follow_up_gbnf_tool_grammar, verbose=llama.verbose
                 ),
+                special=special,
             )
             response = cast(llama_types.CreateCompletionResponse, response)
 
