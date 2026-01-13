@@ -3530,6 +3530,33 @@ class Qwen25VLChatHandler(Llava15ChatHandler):
         return super().__call__(**kwargs)
 
 
+class SmolVLMChatHandler(Llava15ChatHandler):
+    DEFAULT_SYSTEM_MESSAGE = None
+    CHAT_FORMAT = (
+        "<|im_start|>"
+        "{% for message in messages %}"
+        "{{message['role'] | capitalize}}"
+        "{% if message['content'][0]['type'] == 'image' %}"
+        "{{':'}}{% else %}{{': '}}{% endif %}"
+        "{% for line in message['content'] %}"
+        "{% if line['type'] == 'text' %}"
+        "{{line['text']}}"
+        "{% elif line['type'] == 'image_url' %}"
+        "{% if line['image_url'] is string %}"
+        "{{ line['image_url'] }}"
+        "{% elif line['image_url'] is mapping %}"
+        "{{ line['image_url']['url'] }}"
+        "{% endif %}"
+        "{% endif %}"
+        "{% endfor %}"
+        "<end_of_utterance>\n"
+        "{% endfor %}"
+        "{% if add_generation_prompt %}"
+        "{{ 'Assistant:' }}"
+        "{% endif %}"
+    )
+
+
 class GraniteDoclingChatHandler(Llava15ChatHandler):
     DEFAULT_SYSTEM_MESSAGE = None
 
