@@ -72,6 +72,22 @@ def llama_cpp_embedding_model_path():
     return model_path
 
 
+@pytest.fixture
+def llama_cpp_recurrent_model_path():
+    repo_id = "QuantFactory/mamba-130m-hf-GGUF"
+    filename = "mamba-130m-hf.Q2_K.gguf"
+    model_path = hf_hub_download(repo_id, filename)
+    return model_path
+
+
+@pytest.fixture
+def llama_cpp_hybrid_model_path():
+    repo_id = "tiiuae/Falcon-H1-Tiny-90M-Instruct-GGUF"
+    filename = "Falcon-H1-Tiny-90M-Instruct-Q2_K.gguf"
+    model_path = hf_hub_download(repo_id, filename)
+    return model_path
+
+
 def test_real_model(llama_cpp_model_path):
     import os
 
@@ -231,6 +247,96 @@ root ::= "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10"
 
     assert number_1 != number_2
     assert number_1 == number_3
+
+
+def test_real_llama_repeated_prompt_cache(llama_cpp_model_path):
+    model = llama_cpp.Llama(
+        llama_cpp_model_path,
+        n_ctx=32,
+        n_batch=32,
+        n_ubatch=32,
+        n_threads=multiprocessing.cpu_count(),
+        n_threads_batch=multiprocessing.cpu_count(),
+        logits_all=False,
+        flash_attn=True,
+        verbose=False,
+    )
+    prompt = "The quick brown fox jumps over the lazy dog. The quick brown fox"
+
+    output_1 = model.create_completion(
+        prompt,
+        max_tokens=6,
+        temperature=0.0,
+        seed=1337,
+    )
+    output_2 = model.create_completion(
+        prompt,
+        max_tokens=6,
+        temperature=0.0,
+        seed=1337,
+    )
+
+    assert output_1["choices"][0]["text"] == " jumps over the lazy dog."
+    assert output_2["choices"][0]["text"] == output_1["choices"][0]["text"]
+
+
+def _assert_prompt_cache_reset_handles_history_edit(
+    model_path,
+    *,
+    is_recurrent: bool,
+    is_hybrid: bool,
+):
+    model = llama_cpp.Llama(
+        model_path,
+        n_ctx=32,
+        n_batch=32,
+        n_ubatch=32,
+        n_threads=multiprocessing.cpu_count(),
+        n_threads_batch=multiprocessing.cpu_count(),
+        logits_all=False,
+        verbose=False,
+    )
+
+    assert model._is_recurrent is is_recurrent
+    assert model._is_hybrid is is_hybrid
+
+    first_prompt = "The quick brown fox"
+    second_prompt = "The slow brown fox"
+    first_tokens = model.tokenize(first_prompt.encode(), add_bos=True, special=True)
+    second_tokens = model.tokenize(second_prompt.encode(), add_bos=True, special=True)
+
+    assert first_tokens != second_tokens
+    assert first_tokens[0] == second_tokens[0]
+
+    first_output = model.create_completion(
+        first_prompt,
+        max_tokens=1,
+        temperature=0.0,
+    )
+    assert isinstance(first_output["choices"][0]["text"], str)
+
+    second_output = model.create_completion(
+        second_prompt,
+        max_tokens=1,
+        temperature=0.0,
+    )
+    assert isinstance(second_output["choices"][0]["text"], str)
+
+
+def test_recurrent_model_prompt_cache_reset(llama_cpp_recurrent_model_path):
+    _assert_prompt_cache_reset_handles_history_edit(
+        llama_cpp_recurrent_model_path,
+        is_recurrent=True,
+        is_hybrid=False,
+    )
+
+
+def test_hybrid_model_prompt_cache_reset(llama_cpp_hybrid_model_path):
+    _assert_prompt_cache_reset_handles_history_edit(
+        llama_cpp_hybrid_model_path,
+        is_recurrent=False,
+        is_hybrid=True,
+    )
 
 
 def test_real_llama_embeddings(llama_cpp_embedding_model_path):

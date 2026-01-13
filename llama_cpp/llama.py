@@ -559,6 +559,10 @@ class Llama:
 
         self._sampler = None
 
+        # Cache recurrent/hybrid model detection to avoid repeated FFI calls
+        self._is_recurrent = llama_cpp.llama_model_is_recurrent(self._model.model)
+        self._is_hybrid = llama_cpp.llama_model_is_hybrid(self._model.model)
+
     @property
     def ctx(self) -> llama_cpp.llama_context_p:
         return self._ctx.ctx
@@ -643,6 +647,11 @@ class Llama:
     def reset(self):
         """Reset the model state."""
         self.n_tokens = 0
+
+        if self._is_recurrent or self._is_hybrid:
+            mem = llama_cpp.llama_get_memory(self._ctx.ctx)
+            if mem is not None:
+                llama_cpp.llama_memory_clear(mem, True)
 
     def eval(self, tokens: Sequence[int]):
         """Evaluate a list of tokens.
@@ -899,6 +908,19 @@ class Llama:
                     longest_prefix += 1
                 else:
                     break
+
+            # Recurrent and hybrid models cannot rewind state; reset if needed
+            if (
+                self._is_recurrent or self._is_hybrid
+            ) and longest_prefix < self.n_tokens:
+                longest_prefix = 0
+                reset = True
+                if self.verbose:
+                    print(
+                        "Llama.generate: recurrent/hybrid model requires full state reset",
+                        file=sys.stderr,
+                    )
+
             if longest_prefix > 0:
                 if self._ctx.kv_cache_seq_rm(-1, longest_prefix, -1):
                     reset = False
