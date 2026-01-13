@@ -192,6 +192,11 @@ class Llama:
             type_v: KV cache data type for V (default: f16)
             spm_infill: Use Suffix/Prefix/Middle pattern for infill (instead of Prefix/Suffix/Middle) as some models prefer this.
 
+        Note:
+            Recurrent and hybrid models (Mamba, RWKV, Nemotron-A3B, Jamba) cannot
+            rewind their state and require full reset on history edits. This is handled
+            automatically to maintain compatibility. Standard transformers are unaffected.
+
         Raises:
             ValueError: If the model path does not exist.
 
@@ -553,6 +558,11 @@ class Llama:
 
         self._sampler = None
 
+        # Cache recurrent/hybrid model detection to avoid repeated FFI calls
+        self._is_recurrent_model = llama_cpp.llama_model_is_recurrent(
+            self._model.model
+        ) or llama_cpp.llama_model_is_hybrid(self._model.model)
+
     @property
     def ctx(self) -> llama_cpp.llama_context_p:
         return self._ctx.ctx
@@ -579,6 +589,19 @@ class Llama:
             self.scores[: self.n_tokens, :].tolist(),
             maxlen=self._n_ctx if self._logits_all else 1,
         )
+
+    @property
+    def _is_recurrent(self) -> bool:
+        """Check if model is recurrent (SSM) or hybrid (SSM+Attention).
+
+        These models (Mamba, RWKV, Nemotron, Jamba, etc.) cannot rewind their
+        recurrent state without snapshots. Only strict forward progression or
+        full reset is allowed.
+
+        Returns:
+            True if model has recurrent state that cannot be rewound.
+        """
+        return self._is_recurrent_model
 
     def tokenize(
         self, text: bytes, add_bos: bool = True, special: bool = False
@@ -637,6 +660,11 @@ class Llama:
     def reset(self):
         """Reset the model state."""
         self.n_tokens = 0
+
+        if self._is_recurrent:
+            mem = llama_cpp.llama_get_memory(self._ctx.ctx)
+            if mem is not None:
+                llama_cpp.llama_memory_clear(mem, True)
 
     def eval(self, tokens: Sequence[int]):
         """Evaluate a list of tokens.
@@ -888,11 +916,22 @@ class Llama:
         # Check for kv cache prefix match
         if reset and self.n_tokens > 0:
             longest_prefix = 0
-            for a, b in zip(self._input_ids, tokens[:-1]):
+            for a, b in zip(self._input_ids, tokens):
                 if a == b:
                     longest_prefix += 1
                 else:
                     break
+
+            # Recurrent models cannot rewind state; reset if needed
+            if self._is_recurrent and longest_prefix < self.n_tokens:
+                longest_prefix = 0
+                reset = True
+                if self.verbose:
+                    print(
+                        "Llama.generate: recurrent model requires full state reset",
+                        file=sys.stderr,
+                    )
+
             if longest_prefix > 0:
                 if self._ctx.kv_cache_seq_rm(-1, longest_prefix, -1):
                     reset = False
