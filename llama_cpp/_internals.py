@@ -75,11 +75,7 @@ class LlamaModel:
         self._exit_stack.callback(free_model)
 
     def close(self):
-        if self.sampler is not None:
-            # NOTE: Must remove custom samplers before free or llama.cpp will try to free them
-            for i, _ in reversed(self.custom_samplers):
-                llama_cpp.llama_sampler_chain_remove(self.sampler, i)
-            self.custom_samplers.clear()
+        # NOTE: LlamaModel doesn't manage samplers (that's LlamaSampler's job)
         self._exit_stack.close()
 
     def __del__(self):
@@ -292,19 +288,26 @@ class LlamaContext:
 
     def kv_cache_seq_rm(self, seq_id: int, p0: int, p1: int):
         assert self.memory is not None, "Memory is not initialized"
-        seq_id = seq_id if seq_id >= 0 else 0
+        # seq_id < 0 means "all sequences" - this is valid per llama.cpp docs
         llama_cpp.llama_memory_seq_rm(self.memory, seq_id, p0, p1)
 
     def kv_cache_seq_cp(self, seq_id_src: int, seq_id_dst: int, p0: int, p1: int):
         assert self.memory is not None, "Memory is not initialized"
+        # Negative seq_id not documented for cp - require non-negative IDs
+        assert seq_id_src >= 0, f"seq_id_src must be >= 0, got {seq_id_src}"
+        assert seq_id_dst >= 0, f"seq_id_dst must be >= 0, got {seq_id_dst}"
         llama_cpp.llama_memory_seq_cp(self.memory, seq_id_src, seq_id_dst, p0, p1)
 
     def kv_cache_seq_keep(self, seq_id: int):
         assert self.memory is not None, "Memory is not initialized"
+        # Negative seq_id not documented for keep - require non-negative ID
+        assert seq_id >= 0, f"seq_id must be >= 0, got {seq_id}"
         llama_cpp.llama_memory_seq_keep(self.memory, seq_id)
 
     def kv_cache_seq_shift(self, seq_id: int, p0: int, p1: int, shift: int):
         assert self.memory is not None, "Memory is not initialized"
+        # Negative seq_id not documented for shift - require non-negative ID
+        assert seq_id >= 0, f"seq_id must be >= 0, got {seq_id}"
         llama_cpp.llama_memory_seq_add(self.memory, seq_id, p0, p1, shift)
 
     def get_state_size(self) -> int:
@@ -355,7 +358,9 @@ class LlamaContext:
     # Sampling functions - deprecated, use LlamaSampler instead
 
     def set_rng_seed(self, seed: int):
-        raise NotImplementedError("set_rng_seed is deprecated, use LlamaSampler instead")
+        raise NotImplementedError(
+            "set_rng_seed is deprecated, use LlamaSampler instead"
+        )
 
     def sample_repetition_penalties(
         self,
@@ -366,30 +371,44 @@ class LlamaContext:
         penalty_freq: float,
         penalty_present: float,
     ):
-        raise NotImplementedError("sample_repetition_penalties is deprecated, use LlamaSampler instead")
+        raise NotImplementedError(
+            "sample_repetition_penalties is deprecated, use LlamaSampler instead"
+        )
 
     def sample_softmax(self, candidates: "_LlamaTokenDataArray"):
-        raise NotImplementedError("sample_softmax is deprecated, use LlamaSampler instead")
+        raise NotImplementedError(
+            "sample_softmax is deprecated, use LlamaSampler instead"
+        )
 
     def sample_top_k(self, candidates: "_LlamaTokenDataArray", k: int, min_keep: int):
-        raise NotImplementedError("sample_top_k is deprecated, use LlamaSampler instead")
+        raise NotImplementedError(
+            "sample_top_k is deprecated, use LlamaSampler instead"
+        )
 
     def sample_top_p(self, candidates: "_LlamaTokenDataArray", p: float, min_keep: int):
-        raise NotImplementedError("sample_top_p is deprecated, use LlamaSampler instead")
+        raise NotImplementedError(
+            "sample_top_p is deprecated, use LlamaSampler instead"
+        )
 
     def sample_min_p(self, candidates: "_LlamaTokenDataArray", p: float, min_keep: int):
-        raise NotImplementedError("sample_min_p is deprecated, use LlamaSampler instead")
+        raise NotImplementedError(
+            "sample_min_p is deprecated, use LlamaSampler instead"
+        )
 
     def sample_typical(
         self, candidates: "_LlamaTokenDataArray", p: float, min_keep: int
     ):
-        raise NotImplementedError("sample_typical is deprecated, use LlamaSampler instead")
+        raise NotImplementedError(
+            "sample_typical is deprecated, use LlamaSampler instead"
+        )
 
     def sample_temp(self, candidates: "_LlamaTokenDataArray", temp: float):
         raise NotImplementedError("sample_temp is deprecated, use LlamaSampler instead")
 
     def sample_grammar(self, candidates: "_LlamaTokenDataArray", grammar: LlamaGrammar):
-        raise NotImplementedError("sample_grammar is deprecated, use LlamaSampler instead")
+        raise NotImplementedError(
+            "sample_grammar is deprecated, use LlamaSampler instead"
+        )
 
     def sample_token_mirostat(
         self,
@@ -399,7 +418,9 @@ class LlamaContext:
         m: int,
         mu: llama_cpp.CtypesPointerOrRef[ctypes.c_float],
     ) -> int:
-        raise NotImplementedError("sample_token_mirostat is deprecated, use LlamaSampler instead")
+        raise NotImplementedError(
+            "sample_token_mirostat is deprecated, use LlamaSampler instead"
+        )
 
     def sample_token_mirostat_v2(
         self,
@@ -408,17 +429,25 @@ class LlamaContext:
         eta: float,
         mu: llama_cpp.CtypesPointerOrRef[ctypes.c_float],
     ) -> int:
-        raise NotImplementedError("sample_token_mirostat_v2 is deprecated, use LlamaSampler instead")
+        raise NotImplementedError(
+            "sample_token_mirostat_v2 is deprecated, use LlamaSampler instead"
+        )
 
     def sample_token_greedy(self, candidates: "_LlamaTokenDataArray") -> int:
-        raise NotImplementedError("sample_token_greedy is deprecated, use LlamaSampler instead")
+        raise NotImplementedError(
+            "sample_token_greedy is deprecated, use LlamaSampler instead"
+        )
 
     def sample_token(self, candidates: "_LlamaTokenDataArray") -> int:
-        raise NotImplementedError("sample_token is deprecated, use LlamaSampler instead")
+        raise NotImplementedError(
+            "sample_token is deprecated, use LlamaSampler instead"
+        )
 
     # Grammar
     def grammar_accept_token(self, grammar: LlamaGrammar, token: int):
-        raise NotImplementedError("grammar_accept_token is deprecated, use LlamaSampler instead")
+        raise NotImplementedError(
+            "grammar_accept_token is deprecated, use LlamaSampler instead"
+        )
 
     def reset_timings(self):
         llama_cpp.llama_perf_context_reset(self.ctx)
@@ -493,7 +522,7 @@ class LlamaBatch:
             self.batch.seq_id[j][0] = seq_id
             self.batch.n_seq_id[j] = 1
             self.batch.logits[j] = logits_all
-        self.batch.logits[n_tokens - 1] = True
+        self.batch.logits[n_tokens0 + n_tokens - 1] = True
 
 
 class LlamaTokenDataArray:
@@ -602,16 +631,16 @@ class LlamaSamplingContext:
         logits_array: Optional[npt.NDArray[np.single]] = None,
     ):
         # This method is deprecated in favor of using LlamaSampler directly
-        raise NotImplementedError("LlamaSamplingContext.sample is deprecated, use LlamaSampler instead")
+        raise NotImplementedError(
+            "LlamaSamplingContext.sample is deprecated, use LlamaSampler instead"
+        )
 
     def accept(self, ctx_main: LlamaContext, id: int, apply_grammar: bool):
         self.prev.append(id)
 
 
 class CustomSampler:
-    def __init__(
-        self, apply_func: Callable[[llama_cpp.llama_token_data_array], None]
-    ):
+    def __init__(self, apply_func: Callable[[llama_cpp.llama_token_data_array], None]):
         self.apply_func = apply_func
 
         def apply_wrapper(
@@ -646,6 +675,7 @@ class LlamaSampler:
         params = llama_cpp.llama_sampler_chain_default_params()
         self.sampler = llama_cpp.llama_sampler_chain_init(params)
         self.custom_samplers: List[Tuple[int, CustomSampler]] = []
+        self._pinned_buffers: List[ctypes.Array] = []  # Pin C arrays to prevent GC
         self._exit_stack = ExitStack()
 
         def free_sampler():
@@ -723,20 +753,24 @@ class LlamaSampler:
         llama_cpp.llama_sampler_chain_add(self.sampler, sampler)
 
     def add_grammar_lazy_patterns(
-        self, 
-        model: LlamaModel, 
+        self,
+        model: LlamaModel,
         grammar: LlamaGrammar,
         trigger_patterns: List[str],
-        trigger_tokens: List[int]
+        trigger_tokens: List[int],
     ):
         # Convert patterns to C array
         pattern_ptrs = (ctypes.c_char_p * len(trigger_patterns))()
         for i, pattern in enumerate(trigger_patterns):
             pattern_ptrs[i] = pattern.encode("utf-8")
-        
+
         # Convert tokens to C array
         token_array = (llama_cpp.llama_token * len(trigger_tokens))(*trigger_tokens)
-        
+
+        # Pin buffers to prevent garbage collection while C code may reference them
+        self._pinned_buffers.append(pattern_ptrs)
+        self._pinned_buffers.append(token_array)
+
         sampler = llama_cpp.llama_sampler_init_grammar_lazy_patterns(
             model.vocab,
             grammar._grammar.encode("utf-8"),
@@ -744,7 +778,7 @@ class LlamaSampler:
             pattern_ptrs,
             len(trigger_patterns),
             token_array,
-            len(trigger_tokens)
+            len(trigger_tokens),
         )
         llama_cpp.llama_sampler_chain_add(self.sampler, sampler)
 
@@ -771,13 +805,16 @@ class LlamaSampler:
         dry_base: float,
         dry_allowed_length: int,
         dry_penalty_last_n: int,
-        seq_breakers: List[str]
+        seq_breakers: List[str],
     ):
         # Convert seq_breakers to C array
         breaker_ptrs = (ctypes.c_char_p * len(seq_breakers))()
         for i, breaker in enumerate(seq_breakers):
             breaker_ptrs[i] = breaker.encode("utf-8")
-        
+
+        # Pin buffer to prevent garbage collection
+        self._pinned_buffers.append(breaker_ptrs)
+
         sampler = llama_cpp.llama_sampler_init_dry(
             model.vocab,
             n_ctx_train,
@@ -786,25 +823,22 @@ class LlamaSampler:
             dry_allowed_length,
             dry_penalty_last_n,
             breaker_ptrs,
-            len(seq_breakers)
+            len(seq_breakers),
         )
         llama_cpp.llama_sampler_chain_add(self.sampler, sampler)
 
-    def add_logit_bias(
-        self, 
-        n_vocab: int, 
-        logit_bias: Dict[int, float]
-    ):
+    def add_logit_bias(self, n_vocab: int, logit_bias: Dict[int, float]):
         # Convert logit_bias dict to C array
         bias_array = (llama_cpp.llama_logit_bias * len(logit_bias))()
         for i, (token, bias) in enumerate(logit_bias.items()):
             bias_array[i].token = token
             bias_array[i].bias = bias
-        
+
+        # Pin buffer to prevent garbage collection
+        self._pinned_buffers.append(bias_array)
+
         sampler = llama_cpp.llama_sampler_init_logit_bias(
-            n_vocab,
-            len(logit_bias),
-            bias_array
+            n_vocab, len(logit_bias), bias_array
         )
         llama_cpp.llama_sampler_chain_add(self.sampler, sampler)
 
@@ -838,15 +872,17 @@ class LlamaSampler:
     def clone(self):
         # NOTE: Custom samplers cannot be cloned due to Python callback limitations
         if self.custom_samplers:
-            raise NotImplementedError("Cannot clone LlamaSampler that contains custom samplers")
-        
+            raise NotImplementedError(
+                "Cannot clone LlamaSampler that contains custom samplers"
+            )
+
         cloned_sampler = llama_cpp.llama_sampler_clone(self.sampler)
         # Create a new wrapper around the cloned sampler
         new_sampler = LlamaSampler.__new__(LlamaSampler)
         new_sampler.sampler = cloned_sampler
         new_sampler.custom_samplers = []
         new_sampler._exit_stack = ExitStack()
-        
+
         def free_sampler():
             if new_sampler.sampler is not None:
                 llama_cpp.llama_sampler_free(new_sampler.sampler)
