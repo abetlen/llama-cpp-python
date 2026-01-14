@@ -153,6 +153,15 @@ if (LLAMA_BUILD)
             add_compile_definitions(GGML_USE_METAL)
         endif()
 
+        # Set version for mtmd (required by upstream CMakeLists.txt)
+        # NOTE: This is a workaround for mtmd build requirements.
+        # Version is set to 0.0.0 for local builds. If upstream adds version
+        # compatibility checks, this may need to match llama.cpp version.
+        if (NOT DEFINED LLAMA_BUILD_NUMBER)
+            set(LLAMA_BUILD_NUMBER 0)
+        endif()
+        set(LLAMA_INSTALL_VERSION 0.0.${LLAMA_BUILD_NUMBER})
+
         # Building llava
         add_subdirectory(vendor/llama.cpp/tools/mtmd)
 
