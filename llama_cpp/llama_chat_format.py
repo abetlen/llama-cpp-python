@@ -1435,7 +1435,7 @@ def format_deepseek_r1(
             _prompt += _role_assistant + content + _eos
 
     _prompt += _role_assistant
-    return ChatFormatterResponse(prompt=_prompt, stop=_eos)
+    return ChatFormatterResponse(prompt=_prompt, stop=_eos, added_special=True)
 
 
 # Chat format for DeepSeek R1 distilled models (Qwen-based)
