@@ -55,6 +55,11 @@ MIXTRAL_INSTRUCT_CHAT_TEMPLATE = "{{ bos_token }}{% for message in messages %}{%
 # Source: https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct/blob/main/tokenizer_config.json
 LLAMA3_INSTRUCT_CHAT_TEMPLATE = "{% set loop_messages = messages %}{% for message in loop_messages %}{% set content = '<|start_header_id|>' + message['role'] + '<|end_header_id|>\n\n'+ message['content'] | trim + '<|eot_id|>' %}{% if loop.index0 == 0 %}{% set content = bos_token + content %}{% endif %}{{ content }}{% endfor %}{% if add_generation_prompt %}{{ '<|start_header_id|>assistant<|end_header_id|>\n\n' }}{% endif %}"
 
+# Source: https://huggingface.co/deepseek-ai/DeepSeek-R1/blob/main/tokenizer_config.json
+DEEPSEEK_R1_CHAT_TEMPLATE = "{% if not add_generation_prompt is defined %}{% set add_generation_prompt = false %}{% endif %}{% set ns = namespace(is_first=false, is_tool=false, is_output_first=true, system_prompt='', is_first_sp=true) %}{%- for message in messages %}{%- if message['role'] == 'system' %}{%- if ns.is_first_sp %}{% set ns.system_prompt = ns.system_prompt + message['content'] %}{% set ns.is_first_sp = false %}{%- else %}{% set ns.system_prompt = ns.system_prompt + '\\n\\n' + message['content'] %}{%- endif %}{%- endif %}{%- endfor %}{{ bos_token }}{{ ns.system_prompt }}{%- for message in messages %}{%- if message['role'] == 'user' %}{%- set ns.is_tool = false -%}{{\"<\uff5cUser\uff5c>\" + message['content']}}{%- endif %}{%- if message['role'] == 'assistant' and 'tool_calls' not in message %}{%- if ns.is_tool %}{{'<\uff5ctool\u2581outputs\u2581end\uff5c>' + message['content'] + '<\uff5cend\u2581of\u2581sentence\uff5c>'}}{%- set ns.is_tool = false -%}{%- else %}{% set content = message['content'] %}{% if '</think>' in content %}{% set content = content.split('</think>')[-1] %}{% endif %}{{'<\uff5cAssistant\uff5c>' + content + '<\uff5cend\u2581of\u2581sentence\uff5c>'}}{%- endif %}{%- endif %}{%- endfor -%}{% if ns.is_tool %}{{'<\uff5ctool\u2581outputs\u2581end\uff5c>'}}{% endif %}{% if add_generation_prompt and not ns.is_tool %}{{'<\uff5cAssistant\uff5c>'}}{% endif %}"
+DEEPSEEK_R1_BOS_TOKEN = "<\uff5cbegin\u2581of\u2581sentence\uff5c>"
+DEEPSEEK_R1_EOS_TOKEN = "<\uff5cend\u2581of\u2581sentence\uff5c>"
+
 ### Chat Completion Handler ###
 
 
@@ -807,6 +812,14 @@ def guess_chat_format_from_gguf_metadata(metadata: Dict[str, str]) -> Optional[s
     if metadata["tokenizer.chat_template"] == LLAMA3_INSTRUCT_CHAT_TEMPLATE:
         return "llama-3"
 
+    if metadata["tokenizer.chat_template"] == DEEPSEEK_R1_CHAT_TEMPLATE:
+        return "deepseek-r1"
+
+    # Heuristic: detect DeepSeek R1 models by checking for characteristic tokens
+    chat_template = metadata["tokenizer.chat_template"]
+    if "<\uff5cUser\uff5c>" in chat_template and "<\uff5cAssistant\uff5c>" in chat_template:
+        return "deepseek-r1"
+
     return None
 
 
@@ -1393,6 +1406,56 @@ def format_gemma(
     _messages.append((_roles["assistant"], None))
     _prompt = _format_no_colon_single(system_message="", messages=_messages, sep=_sep)
     return ChatFormatterResponse(prompt=_prompt, stop=_sep)
+
+
+# Chat format for DeepSeek R1 and distilled models, see more details:
+# https://huggingface.co/deepseek-ai/DeepSeek-R1
+@register_chat_format("deepseek-r1")
+def format_deepseek_r1(
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    **kwargs: Any,
+) -> ChatFormatterResponse:
+    _bos = "<\uff5cbegin\u2581of\u2581sentence\uff5c>"
+    _eos = "<\uff5cend\u2581of\u2581sentence\uff5c>"
+    _role_user = "<\uff5cUser\uff5c>"
+    _role_assistant = "<\uff5cAssistant\uff5c>"
+
+    system_message = _get_system_message(messages)
+    _prompt = _bos + system_message
+
+    for message in messages:
+        role = message["role"]
+        content = message.get("content", "") or ""
+        if role == "user" and isinstance(content, str):
+            _prompt += _role_user + content
+        elif role == "assistant" and isinstance(content, str):
+            # Strip thinking content for multi-turn context
+            if "</think>" in content:
+                content = content.split("</think>")[-1]
+            _prompt += _role_assistant + content + _eos
+
+    _prompt += _role_assistant
+    return ChatFormatterResponse(prompt=_prompt, stop=_eos, added_special=True)
+
+
+# Chat format for DeepSeek R1 distilled models (Qwen-based)
+# Uses the same template as DeepSeek R1
+@register_chat_format("deepseek-r1-distill-qwen")
+def format_deepseek_r1_distill_qwen(
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    **kwargs: Any,
+) -> ChatFormatterResponse:
+    return format_deepseek_r1(messages, **kwargs)
+
+
+# Chat format for DeepSeek R1 distilled models (Llama-based)
+# Uses the same template as DeepSeek R1
+@register_chat_format("deepseek-r1-distill-llama")
+def format_deepseek_r1_distill_llama(
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    **kwargs: Any,
+) -> ChatFormatterResponse:
+    return format_deepseek_r1(messages, **kwargs)
 
 
 # Tricky chat formats that require custom chat handlers
