@@ -341,7 +341,11 @@ class Llama:
         self._logits_all = logits_all if draft_model is None else True
         self.context_params.embeddings = embedding  # TODO: Rename to embeddings
         self.context_params.offload_kqv = offload_kqv
-        self.context_params.flash_attn = flash_attn
+        self.context_params.flash_attn_type = (
+            llama_cpp.LLAMA_FLASH_ATTN_TYPE_ENABLED
+            if flash_attn
+            else llama_cpp.LLAMA_FLASH_ATTN_TYPE_DISABLED
+        )
 
         if op_offload is not None:
             self.context_params.op_offload = op_offload
@@ -2096,7 +2100,10 @@ class Llama:
             logits_all=self._logits_all,
             embedding=self.context_params.embeddings,
             offload_kqv=self.context_params.offload_kqv,
-            flash_attn=self.context_params.flash_attn,
+            flash_attn=(
+                self.context_params.flash_attn_type
+                == llama_cpp.LLAMA_FLASH_ATTN_TYPE_ENABLED
+            ),
             op_offload=self.context_params.op_offload,
             swa_full=self.context_params.swa_full,
             # Sampling Params
