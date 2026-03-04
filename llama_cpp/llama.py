@@ -892,13 +892,23 @@ class Llama:
                 else:
                     break
             if longest_prefix > 0:
-                reset = False
-                tokens = tokens[longest_prefix:]
-                self.n_tokens = longest_prefix
-                if self.verbose:
+                # Try to trim the KV cache to prefix length.  Hybrid models
+                # (e.g. GDN) may not support partial removal — in that case we
+                # fall through to the full reset path below.
+                if self._ctx.kv_cache_seq_rm(-1, longest_prefix, -1):
+                    reset = False
+                    tokens = tokens[longest_prefix:]
+                    self.n_tokens = longest_prefix
+                    if self.verbose:
+                        print(
+                            f"Llama.generate: {longest_prefix} prefix-match hit, "
+                            f"remaining {len(tokens)} prompt tokens to eval",
+                            file=sys.stderr,
+                        )
+                elif self.verbose:
                     print(
-                        f"Llama.generate: {longest_prefix} prefix-match hit, "
-                        f"remaining {len(tokens)} prompt tokens to eval",
+                        f"Llama.generate: {longest_prefix} prefix-match found "
+                        f"but partial kv removal not supported, re-evaluating full prompt",
                         file=sys.stderr,
                     )
 
@@ -1045,7 +1055,7 @@ class Llama:
         data: Union[List[List[float]], List[List[List[float]]]] = []
 
         def decode_batch(seq_sizes: List[int]):
-            llama_cpp.llama_kv_self_clear(self._ctx.ctx)
+            llama_cpp.llama_memory_clear(llama_cpp.llama_get_memory(self._ctx.ctx), True)
             self._ctx.decode(self._batch)
             self._batch.reset()
 
@@ -1116,7 +1126,7 @@ class Llama:
 
         output = data[0] if isinstance(input, str) else data
 
-        llama_cpp.llama_kv_self_clear(self._ctx.ctx)
+        llama_cpp.llama_memory_clear(llama_cpp.llama_get_memory(self._ctx.ctx), True)
         self.reset()
 
         if return_count:
