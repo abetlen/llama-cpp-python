@@ -46,6 +46,7 @@ function(llama_cpp_python_install_target target)
 endfunction()
 
 if (LLAMA_BUILD)
+    set(BUILD_NUMBER 0 CACHE STRING "Build number" FORCE)
     set(BUILD_SHARED_LIBS "On")
 
     set(CMAKE_SKIP_BUILD_RPATH FALSE)
@@ -154,6 +155,10 @@ if (LLAMA_BUILD)
         endif()
 
         # Building llava
+        # Set LLAMA_INSTALL_VERSION for mtmd (not inherited from llama.cpp subdirectory scope)
+        if(NOT DEFINED LLAMA_INSTALL_VERSION)
+            set(LLAMA_INSTALL_VERSION "0.0.0")
+        endif()
         add_subdirectory(vendor/llama.cpp/tools/mtmd)
 
         if (WIN32)
