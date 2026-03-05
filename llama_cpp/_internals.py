@@ -310,9 +310,11 @@ class LlamaContext:
     def get_state_size(self) -> int:
         return llama_cpp.llama_state_get_size(self.ctx)
 
-    # TODO: copy_state_data
+    def copy_state_data(self, dst, size: int) -> int:
+        return llama_cpp.llama_state_get_data(self.ctx, dst, size)
 
-    # TODO: set_state_data
+    def set_state_data(self, src, size: int) -> int:
+        return llama_cpp.llama_state_set_data(self.ctx, src, size)
 
     # TODO: llama_load_session_file
 
