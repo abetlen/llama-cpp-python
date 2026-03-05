@@ -110,11 +110,22 @@ def ctypes_function_for_shared_library(lib: ctypes.CDLL):
     ):
         def decorator(f: F) -> F:
             if enabled:
-                func = getattr(lib, name)
-                func.argtypes = argtypes
-                func.restype = restype
-                functools.wraps(f)(func)
-                return func
+                try:
+                    func = getattr(lib, name)
+                    func.argtypes = argtypes
+                    func.restype = restype
+                    functools.wraps(f)(func)
+                    return func
+                except AttributeError:
+                    # Symbol not found in shared library (deprecated/removed)
+                    @functools.wraps(f)
+                    def stub(*args: Any, **kwargs: Any) -> Any:
+                        raise NotImplementedError(
+                            f"Symbol '{name}' not found in shared library. The C API might "
+                            "have been removed or deprecated."
+                        )
+
+                    return stub  # type: ignore
             else:
                 return f
 

@@ -463,6 +463,16 @@ LLAMA_ATTENTION_TYPE_CAUSAL = 0
 LLAMA_ATTENTION_TYPE_NON_CAUSAL = 1
 
 
+# enum llama_flash_attn_type {
+#     LLAMA_FLASH_ATTN_TYPE_AUTO     = -1,
+#     LLAMA_FLASH_ATTN_TYPE_DISABLED = 0,
+#     LLAMA_FLASH_ATTN_TYPE_ENABLED  = 1,
+# };
+LLAMA_FLASH_ATTN_TYPE_AUTO = -1
+LLAMA_FLASH_ATTN_TYPE_DISABLED = 0
+LLAMA_FLASH_ATTN_TYPE_ENABLED = 1
+
+
 # enum llama_split_mode {
 #     LLAMA_SPLIT_MODE_NONE  = 0, // single GPU
 #     LLAMA_SPLIT_MODE_LAYER = 1, // split layers and KV across GPUs
@@ -761,6 +771,7 @@ class llama_model_params(ctypes.Structure):
 #     enum llama_rope_scaling_type rope_scaling_type; // RoPE scaling type, from `enum llama_rope_scaling_type`
 #     enum llama_pooling_type      pooling_type;      // whether to pool (sum) embedding results by sequence id
 #     enum llama_attention_type    attention_type;    // attention type to use for embeddings
+#     enum llama_flash_attn_type   flash_attn_type;   // when to enable Flash Attention
 
 #     // ref: https://github.com/ggml-org/llama.cpp/pull/2054
 #     float    rope_freq_base;   // RoPE base frequency, 0 = from model
@@ -770,7 +781,7 @@ class llama_model_params(ctypes.Structure):
 #     float    yarn_beta_fast;   // YaRN low correction dim
 #     float    yarn_beta_slow;   // YaRN high correction dim
 #     uint32_t yarn_orig_ctx;    // YaRN original context size
-#     float    defrag_thold;     // defragment the KV cache if holes/size > thold, <= 0 disabled (default)
+#     float    defrag_thold;     // [DEPRECATED] defragment the KV cache if holes/size > thold, <= 0 disabled (default)
 
 #     ggml_backend_sched_eval_callback cb_eval;
 #     void * cb_eval_user_data;
@@ -787,15 +798,14 @@ class llama_model_params(ctypes.Structure):
 #     // Keep the booleans together and at the end of the struct to avoid misalignment during copy-by-value.
 #     bool embeddings;  // if true, extract embeddings (together with logits)
 #     bool offload_kqv; // offload the KQV ops (including the KV cache) to GPU
-#     bool flash_attn;  // use flash attention [EXPERIMENTAL]
 #     bool no_perf;     // measure performance timings
 #     bool op_offload;  // offload host tensor operations to device
-#     bool swa_full;    // use full-size SWA cache (https://github.com/ggml-org/llama.cpp/pull/13194#issuecomment-2868343055)
-#                       // NOTE: setting to false when n_seq_max > 1 can cause bad performance in some cases
-#                       //       ref: https://github.com/ggml-org/llama.cpp/pull/13845#issuecomment-2924800573
+#     bool swa_full;    // use full-size SWA cache
 #     bool kv_unified;  // use a unified buffer across the input sequences when computing the attention
-#                       // try to disable when n_seq_max > 1 for improved performance when the sequences do not share a large prefix
-#                       // ref: https://github.com/ggml-org/llama.cpp/pull/14363
+
+#     // [EXPERIMENTAL]
+#     struct llama_sampler_seq_config * samplers;
+#     size_t                            n_samplers;
 # };
 class llama_context_params(ctypes.Structure):
     """Parameters for llama_context
@@ -810,6 +820,7 @@ class llama_context_params(ctypes.Structure):
         rope_scaling_type (int): RoPE scaling type, from `enum llama_rope_scaling_type`
         pooling_type (int): whether to pool (sum) embedding results by sequence id (ignored if no pooling layer)
         attention_type (int): attention type to use for embeddings
+        flash_attn_type (int): when to enable Flash Attention, from `enum llama_flash_attn_type`
         rope_freq_base (float): RoPE base frequency, 0 = from model
         rope_freq_scale (float): RoPE frequency scaling factor, 0 = from model
         yarn_ext_factor (float): YaRN extrapolation mix factor, negative = from model
@@ -826,11 +837,12 @@ class llama_context_params(ctypes.Structure):
         abort_callback_data (ctypes.ctypes.c_void_p): data for abort_callback
         embeddings (bool): if true, extract embeddings (together with logits)
         offload_kqv (bool): whether to offload the KQV ops (including the KV cache) to GPU
-        flash_attn (bool): whether to use flash attention
         no_perf (bool): whether to measure performance timings
         op_offload (bool): offload host tensor operations to device
         swa_full (bool): use full-size SWA cache
         kv_unified (bool): use a unified buffer across the input sequences when computing the attention
+        samplers (ctypes.c_void_p): backend sampler chain configuration [EXPERIMENTAL]
+        n_samplers (ctypes.c_size_t): number of backend sampler chains
     """
 
     if TYPE_CHECKING:
@@ -843,6 +855,7 @@ class llama_context_params(ctypes.Structure):
         rope_scaling_type: int
         pooling_type: int
         attention_type: int
+        flash_attn_type: int
         rope_freq_base: float
         rope_freq_scale: float
         yarn_ext_factor: float
@@ -859,11 +872,12 @@ class llama_context_params(ctypes.Structure):
         abort_callback_data: ctypes.c_void_p
         embeddings: bool
         offload_kqv: bool
-        flash_attn: bool
         no_perf: bool
         op_offload: bool
         swa_full: bool
         kv_unified: bool
+        samplers: ctypes.c_void_p
+        n_samplers: ctypes.c_size_t
 
     _fields_ = [
         ("n_ctx", ctypes.c_uint32),
@@ -875,6 +889,7 @@ class llama_context_params(ctypes.Structure):
         ("rope_scaling_type", ctypes.c_int),
         ("pooling_type", ctypes.c_int),
         ("attention_type", ctypes.c_int),
+        ("flash_attn_type", ctypes.c_int),
         ("rope_freq_base", ctypes.c_float),
         ("rope_freq_scale", ctypes.c_float),
         ("yarn_ext_factor", ctypes.c_float),
@@ -891,11 +906,12 @@ class llama_context_params(ctypes.Structure):
         ("abort_callback_data", ctypes.c_void_p),
         ("embeddings", ctypes.c_bool),
         ("offload_kqv", ctypes.c_bool),
-        ("flash_attn", ctypes.c_bool),
         ("no_perf", ctypes.c_bool),
         ("op_offload", ctypes.c_bool),
         ("swa_full", ctypes.c_bool),
         ("kv_unified", ctypes.c_bool),
+        ("samplers", ctypes.c_void_p),
+        ("n_samplers", ctypes.c_size_t),
     ]
 
 
