@@ -242,6 +242,23 @@ class Llama:
             )  # keep a reference to the array so it is not gc'd
             self.model_params.tensor_split = self._c_tensor_split
         self.model_params.vocab_only = vocab_only
+
+        # When all layers are offloaded to GPU (n_gpu_layers == -1), disable mmap
+        # to prevent the memory-mapped model file from staying resident in RAM.
+        # With mmap enabled, the entire model file remains in the page cache even
+        # after weights are copied to VRAM. Disabling mmap causes llama.cpp to use
+        # a temporary read buffer that is freed after GPU upload.
+        # See: https://github.com/abetlen/llama-cpp-python/issues/1964
+        if n_gpu_layers == -1 and use_mmap and llama_cpp.llama_supports_gpu_offload():
+            if self.verbose:
+                print(
+                    "Automatically disabling mmap because all layers are offloaded "
+                    "to GPU (n_gpu_layers=-1). This reduces host RAM usage. "
+                    "Set use_mmap=True explicitly to override this behavior.",
+                    file=sys.stderr,
+                )
+            use_mmap = False
+
         self.model_params.use_mmap = use_mmap if lora_path is None else False
         self.model_params.use_mlock = use_mlock
 
