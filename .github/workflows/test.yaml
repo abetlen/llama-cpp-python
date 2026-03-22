@@ -128,7 +128,6 @@ jobs:
           python3 -m pip install --upgrade pip
           python3 -m pip install uv
           python3 -m uv pip install -e .[all] --verbose
-          CMAKE_ARGS="-DGGML_METAL=on" python3 -m uv pip install .[all] --verbose
         shell: bash
 
       - name: Test with pytest
