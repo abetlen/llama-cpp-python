@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- fix(ci): Use the `hf` CLI instead of the deprecated `huggingface-cli` name in GitHub Actions and docs by @abetlen in #2149
+
 ## [0.3.16]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@4227c9be4268ac844921b90f31595f81236bd317
