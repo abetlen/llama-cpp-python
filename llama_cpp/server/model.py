@@ -186,18 +186,18 @@ class LlamaProxy:
                     clip_model_path=settings.clip_model_path, verbose=settings.verbose
                 )
         elif settings.chat_format == "hf-autotokenizer":
-            assert (
-                settings.hf_pretrained_model_name_or_path is not None
-            ), "hf_pretrained_model_name_or_path must be set for hf-autotokenizer"
+            assert settings.hf_pretrained_model_name_or_path is not None, (
+                "hf_pretrained_model_name_or_path must be set for hf-autotokenizer"
+            )
             chat_handler = (
                 llama_cpp.llama_chat_format.hf_autotokenizer_to_chat_completion_handler(
                     settings.hf_pretrained_model_name_or_path
                 )
             )
         elif settings.chat_format == "hf-tokenizer-config":
-            assert (
-                settings.hf_tokenizer_config_path is not None
-            ), "hf_tokenizer_config_path must be set for hf-tokenizer-config"
+            assert settings.hf_tokenizer_config_path is not None, (
+                "hf_tokenizer_config_path must be set for hf-tokenizer-config"
+            )
             chat_handler = llama_cpp.llama_chat_format.hf_tokenizer_config_to_chat_completion_handler(
                 json.load(open(settings.hf_tokenizer_config_path))
             )

@@ -10,13 +10,20 @@ import llama_cpp.llama_chat_format as llama_chat_format
 
 from llama_cpp.llama_chat_format import hf_tokenizer_config_to_chat_formatter
 
+
 def test_mistral_instruct():
     chat_template = "{{ bos_token }}{% for message in messages %}{% if (message['role'] == 'user') != (loop.index0 % 2 == 0) %}{{ raise_exception('Conversation roles must alternate user/assistant/user/assistant/...') }}{% endif %}{% if message['role'] == 'user' %}{{ '[INST] ' + message['content'] + ' [/INST]' }}{% elif message['role'] == 'assistant' %}{{ message['content'] + eos_token}}{% else %}{{ raise_exception('Only user and assistant roles are supported!') }}{% endif %}{% endfor %}"
     chat_formatter = jinja2.Template(chat_template)
     messages = [
-        llama_types.ChatCompletionRequestUserMessage(role="user", content="Instruction"),
-        llama_types.ChatCompletionRequestAssistantMessage(role="assistant", content="Model answer"),
-        llama_types.ChatCompletionRequestUserMessage(role="user", content="Follow-up instruction"),
+        llama_types.ChatCompletionRequestUserMessage(
+            role="user", content="Instruction"
+        ),
+        llama_types.ChatCompletionRequestAssistantMessage(
+            role="assistant", content="Model answer"
+        ),
+        llama_types.ChatCompletionRequestUserMessage(
+            role="user", content="Follow-up instruction"
+        ),
     ]
     response = llama_chat_format.format_mistral_instruct(
         messages=messages,
@@ -77,13 +84,11 @@ mistral_7b_tokenizer_config = """{
 
 def test_hf_tokenizer_config_str_to_chat_formatter():
     tokenizer_config = json.loads(mistral_7b_tokenizer_config)
-    chat_formatter = hf_tokenizer_config_to_chat_formatter(
-        tokenizer_config
-    )
+    chat_formatter = hf_tokenizer_config_to_chat_formatter(tokenizer_config)
     chat_formatter_respoonse = chat_formatter(
         messages=[
             ChatCompletionRequestUserMessage(role="user", content="Hello, world!"),
         ]
     )
 
-    assert chat_formatter_respoonse.prompt == ("<s>[INST] Hello, world! [/INST]</s>" "")
+    assert chat_formatter_respoonse.prompt == ("<s>[INST] Hello, world! [/INST]</s>")
