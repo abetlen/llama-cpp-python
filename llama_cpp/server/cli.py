@@ -14,7 +14,9 @@ def _get_base_type(annotation: Type[Any]) -> Type[Any]:
     elif getattr(annotation, "__origin__", None) is Union:
         assert hasattr(annotation, "__args__") and len(annotation.__args__) >= 1  # type: ignore
         non_optional_args: List[Type[Any]] = [
-            arg for arg in annotation.__args__ if arg is not type(None)  # type: ignore
+            arg
+            for arg in annotation.__args__
+            if arg is not type(None)  # type: ignore
         ]
         if non_optional_args:
             return _get_base_type(non_optional_args[0])

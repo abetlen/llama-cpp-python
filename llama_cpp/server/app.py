@@ -125,9 +125,9 @@ def create_app(
         server_settings = ServerSettings.model_validate(settings)
         model_settings = [ModelSettings.model_validate(settings)]
 
-    assert (
-        server_settings is not None and model_settings is not None
-    ), "server_settings and model_settings must be provided together"
+    assert server_settings is not None and model_settings is not None, (
+        "server_settings and model_settings must be provided together"
+    )
 
     set_server_settings(server_settings)
     middleware = [Middleware(RawContextMiddleware, plugins=(RequestIdPlugin(),))]

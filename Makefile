@@ -67,6 +67,14 @@ deploy.gh-docs:
 test:
 	python3 -m pytest --full-trace -v
 
+lint:
+	python3 -m ruff check llama_cpp tests
+	python3 -m ruff format --check llama_cpp tests
+
+format:
+	python3 -m ruff check --fix llama_cpp tests
+	python3 -m ruff format llama_cpp tests
+
 docker:
 	docker build -t llama-cpp-python:latest -f docker/simple/Dockerfile .
 
@@ -93,5 +101,7 @@ clean:
 	build.sdist \
 	deploy.pypi \
 	deploy.gh-docs \
+	lint \
+	format \
 	docker \
 	clean

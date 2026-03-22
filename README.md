@@ -752,6 +752,9 @@ pip install --upgrade pip
 # Install with pip
 pip install -e .
 
+# install development tooling (tests, docs, ruff)
+pip install -e '.[dev]'
+
 # if you want to use the fastapi / openapi server
 pip install -e '.[server]'
 
@@ -766,6 +769,17 @@ Now try running the tests
 
 ```bash
 pytest
+```
+
+And check formatting / linting before opening a PR:
+
+```bash
+python -m ruff check llama_cpp tests
+python -m ruff format --check llama_cpp tests
+
+# or use the Makefile targets
+make lint
+make format
 ```
 
 There's a `Makefile` available with useful targets.
