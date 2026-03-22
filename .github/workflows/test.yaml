@@ -22,16 +22,7 @@ jobs:
       - name: Install huggingface-hub
         run: python -m pip install huggingface-hub
       - name: Download model
-        run: |
-          python - <<'PY'
-          import os
-          from huggingface_hub import hf_hub_download
-
-          hf_hub_download(
-              repo_id=os.environ["REPO_ID"],
-              filename=os.environ["MODEL_FILE"],
-          )
-          PY
+        run: hf download ${{ env.REPO_ID }} ${{ env.MODEL_FILE }}
       - name: Cache model
         uses: actions/cache@v4
         with:
