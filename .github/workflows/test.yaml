@@ -96,7 +96,7 @@ jobs:
 
   build-macos:
     needs: download-model
-    runs-on: macos-13
+    runs-on: macos-15
     strategy:
       matrix:
         python-version: ["3.9", "3.10", "3.11", "3.12"]
@@ -127,17 +127,16 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install uv
-          python3 -m uv pip install -e .[all] --verbose
-          CMAKE_ARGS="-DLLAMA_METAL=off" python3 -m uv pip install .[all] --verbose
+          CMAKE_ARGS="-DGGML_NATIVE=off" python3 -m uv pip install -e .[all] --verbose
         shell: bash
 
       - name: Test with pytest
         run: |
           python3 -m pytest
 
-  build-macos-metal:
+  build-macos-intel:
     needs: download-model
-    runs-on: macos-13
+    runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
         with:
@@ -163,7 +162,7 @@ jobs:
       - name: Install dependencies
         run: |
           python3 -m pip install --upgrade pip
-          CMAKE_ARGS="-DLLAMA_METAL=on" python3 -m pip install .[all] --verbose
+          python3 -m pip install .[all] --verbose
         shell: bash
 
       - name: Test with pytest
