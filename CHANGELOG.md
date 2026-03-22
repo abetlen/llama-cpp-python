@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - chore(dev): Add Ruff-based formatting and a safe lint baseline, and run it in CI for pull requests and pushes to `main`
+- fix(ci): Run macOS CI on supported Apple Silicon and Intel runners by @abetlen in #2150
+- fix(ci): Use the `hf` CLI instead of the deprecated `huggingface-cli` name in GitHub Actions and docs by @abetlen in #2149
 
 ## [0.3.16]
 
