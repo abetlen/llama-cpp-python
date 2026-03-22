@@ -137,7 +137,7 @@ jobs:
 
   build-macos-metal:
     needs: download-model
-    runs-on: macos-15-intel
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
         with:
