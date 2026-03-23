@@ -242,6 +242,7 @@ def test_real_llama_embeddings(llama_cpp_model_path):
 
 def test_kv_cache_seq_rm_returns_bool(monkeypatch):
     context = internals.LlamaContext.__new__(internals.LlamaContext)
+    context._exit_stack = SimpleNamespace(close=lambda: None)
     context.memory = object()
     calls = []
 
@@ -249,7 +250,9 @@ def test_kv_cache_seq_rm_returns_bool(monkeypatch):
         calls.append((memory, seq_id, p0, p1))
         return True
 
-    monkeypatch.setattr(llama_cpp, "llama_memory_seq_rm", fake_llama_memory_seq_rm)
+    monkeypatch.setattr(
+        internals.llama_cpp, "llama_memory_seq_rm", fake_llama_memory_seq_rm
+    )
 
     assert context.kv_cache_seq_rm(-1, 4, -1) is True
     assert calls == [(context.memory, 0, 4, -1)]
@@ -270,6 +273,7 @@ def make_test_llama(kv_cache_seq_rm_return):
     llama._ctx = SimpleNamespace(
         kv_cache_seq_rm=Mock(return_value=kv_cache_seq_rm_return)
     )
+    llama._stack = SimpleNamespace(close=lambda: None)
     llama._sampler = None
     llama.eval_tokens_seen = None
     llama.reset_calls = 0
