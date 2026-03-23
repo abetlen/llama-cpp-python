@@ -46,6 +46,11 @@ jobs:
         env:
           # disable repair
           CIBW_REPAIR_WHEEL_COMMAND: ""
+          # The default Linux x86_64 matrix also includes i686, which is not a
+          # useful target for this project and currently fails in ggml's native path.
+          CIBW_ARCHS_LINUX: "auto64"
+          # Release wheels should target portable baselines, not the CI host CPU.
+          CIBW_ENVIRONMENT_MACOS: CMAKE_ARGS="-DGGML_NATIVE=off"
         with:
           package-dir: .
           output-dir: wheelhouse
@@ -101,9 +106,12 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v3.1.2
         env:
-          CIBW_SKIP: "*musllinux* pp*"
+          CIBW_SKIP: "*musllinux*"
           CIBW_REPAIR_WHEEL_COMMAND: ""
           CIBW_ARCHS: "riscv64"
+          # Build riscv64 wheels against a conservative baseline instead of
+          # enabling RVV-related extensions from the build container.
+          CIBW_ENVIRONMENT: CMAKE_ARGS="-DGGML_NATIVE=off -DGGML_RVV=off -DGGML_RV_ZFH=off -DGGML_RV_ZVFH=off -DGGML_RV_ZICBOP=off -DGGML_RV_ZIHINTPAUSE=off"
           CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-* cp314-*"
         with:
           output-dir: wheelhouse
@@ -159,6 +167,7 @@ jobs:
   release:
     name: Release
     needs: [build_wheels, build_wheels_arm64, build_wheels_riscv64, build_sdist]
+    if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
 
     steps:
