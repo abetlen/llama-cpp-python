@@ -341,7 +341,11 @@ class Llama:
         self._logits_all = logits_all if draft_model is None else True
         self.context_params.embeddings = embedding  # TODO: Rename to embeddings
         self.context_params.offload_kqv = offload_kqv
-        self.context_params.flash_attn = flash_attn
+        self.context_params.flash_attn_type = (
+            llama_cpp.LLAMA_FLASH_ATTN_TYPE_ENABLED
+            if flash_attn
+            else llama_cpp.LLAMA_FLASH_ATTN_TYPE_DISABLED
+        )
 
         if op_offload is not None:
             self.context_params.op_offload = op_offload
@@ -431,9 +435,9 @@ class Llama:
 
             self._stack.callback(free_lora_adapter)
 
-            if llama_cpp.llama_set_adapter_lora(
-                self._ctx.ctx, self._lora_adapter, self.lora_scale
-            ):
+            adapters = (llama_cpp.llama_adapter_lora_p_ctypes * 1)(self._lora_adapter)
+            scales = (ctypes.c_float * 1)(self.lora_scale)
+            if llama_cpp.llama_set_adapters_lora(self._ctx.ctx, adapters, 1, scales):
                 raise RuntimeError(
                     f"Failed to set LoRA adapter from lora path: {self.lora_path}"
                 )
@@ -726,7 +730,6 @@ class Llama:
             sampler.add_grammar(self._model, grammar)
 
         if temp < 0.0:
-            sampler.add_softmax()
             sampler.add_dist(self._seed)
         elif temp == 0.0:
             sampler.add_greedy()
@@ -1042,7 +1045,7 @@ class Llama:
         data: Union[List[List[float]], List[List[List[float]]]] = []
 
         def decode_batch(seq_sizes: List[int]):
-            llama_cpp.llama_kv_self_clear(self._ctx.ctx)
+            self._ctx.kv_cache_clear()
             self._ctx.decode(self._batch)
             self._batch.reset()
 
@@ -1113,7 +1116,7 @@ class Llama:
 
         output = data[0] if isinstance(input, str) else data
 
-        llama_cpp.llama_kv_self_clear(self._ctx.ctx)
+        self._ctx.kv_cache_clear()
         self.reset()
 
         if return_count:
@@ -2100,7 +2103,10 @@ class Llama:
             logits_all=self._logits_all,
             embedding=self.context_params.embeddings,
             offload_kqv=self.context_params.offload_kqv,
-            flash_attn=self.context_params.flash_attn,
+            flash_attn=(
+                self.context_params.flash_attn_type
+                == llama_cpp.LLAMA_FLASH_ATTN_TYPE_ENABLED
+            ),
             op_offload=self.context_params.op_offload,
             swa_full=self.context_params.swa_full,
             # Sampling Params

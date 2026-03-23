@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import ctypes
+import warnings
 
 from typing import (
     Dict,
@@ -699,8 +700,11 @@ class LlamaSampler:
         llama_cpp.llama_sampler_chain_add(self.sampler, sampler)
 
     def add_softmax(self):
-        sampler = llama_cpp.llama_sampler_init_softmax()
-        llama_cpp.llama_sampler_chain_add(self.sampler, sampler)
+        warnings.warn(
+            "add_softmax is deprecated; llama_sampler_init_dist now samples directly from logits",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
     def add_top_k(self, k: int):
         sampler = llama_cpp.llama_sampler_init_top_k(k)

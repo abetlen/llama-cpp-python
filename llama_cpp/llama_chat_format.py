@@ -2755,7 +2755,14 @@ class Llava15ChatHandler:
             ctx_params.use_gpu = True  # TODO: Make this configurable
             ctx_params.print_timings = self.verbose
             ctx_params.n_threads = llama_model.n_threads
-            ctx_params.verbosity = 2 if self.verbose else 0  # GGML_LOG_LEVEL_INFO = 2
+            ctx_params.flash_attn_type = (
+                llama_cpp.LLAMA_FLASH_ATTN_TYPE_ENABLED
+                if (
+                    llama_model.context_params.flash_attn_type
+                    == llama_cpp.LLAMA_FLASH_ATTN_TYPE_ENABLED
+                )
+                else llama_cpp.LLAMA_FLASH_ATTN_TYPE_DISABLED
+            )
 
             # Initialize mtmd context
             self.mtmd_ctx = self._mtmd_cpp.mtmd_init_from_file(
