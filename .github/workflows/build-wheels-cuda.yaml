@@ -100,9 +100,12 @@ jobs:
         run: |
           $cudaVersion = $env:CUDAVER
           if ($IsLinux) {
-            mamba install -y --strict-channel-priority -c "nvidia/label/cuda-$cudaVersion" "cuda-toolkit=$cudaVersion" "cuda-nvcc_linux-64=$cudaVersion"
+            mamba install -y --override-channels -c "nvidia/label/cuda-$cudaVersion" -c conda-forge "cuda-toolkit=$cudaVersion" "cuda-nvcc_linux-64=$cudaVersion"
           } else {
-            mamba install -y --strict-channel-priority -c "nvidia/label/cuda-$cudaVersion" "cuda-toolkit=$cudaVersion"
+            mamba install -y --override-channels -c "nvidia/label/cuda-$cudaVersion" -c conda-forge "cuda-toolkit=$cudaVersion"
+          }
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
           }
           python -m pip install build wheel
 
@@ -135,7 +138,14 @@ jobs:
           } else {
             $env:CMAKE_ARGS = ''
           }
-          $nvccVersion = ((& nvcc --version) | Select-String 'release ([0-9]+\.[0-9]+)').Matches[0].Groups[1].Value
+          $nvccPath = Join-Path $env:CONDA_PREFIX 'bin/nvcc'
+          if (-not (Test-Path $nvccPath)) {
+            $nvccPath = Join-Path $env:CONDA_PREFIX 'targets/x86_64-linux/bin/nvcc'
+          }
+          if (-not (Test-Path $nvccPath)) {
+            throw 'Failed to find nvcc in the conda environment'
+          }
+          $nvccVersion = ((& $nvccPath --version) | Select-String 'release ([0-9]+\.[0-9]+)').Matches[0].Groups[1].Value
           if (-not $nvccVersion) {
             throw 'Failed to detect the installed CUDA toolkit version'
           }
