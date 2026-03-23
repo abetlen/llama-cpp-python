@@ -99,7 +99,7 @@ jobs:
           MAMBA_NO_LOW_SPEED_LIMIT: "1"
         run: |
           $cudaVersion = $env:CUDAVER
-          mamba install -y 'cuda' -c nvidia/label/cuda-$cudaVersion
+          mamba install -y "nvidia/label/cuda-$cudaVersion::cuda-toolkit"
           python -m pip install build wheel
 
       - name: Build Wheel
@@ -108,12 +108,36 @@ jobs:
           $env:CUDA_PATH = $env:CONDA_PREFIX
           $env:CUDA_HOME = $env:CONDA_PREFIX
           $env:CUDA_TOOLKIT_ROOT_DIR = $env:CONDA_PREFIX
+          $cudaHostCompilerArg = ''
           if ($IsLinux) {
-            $env:LD_LIBRARY_PATH = $env:CONDA_PREFIX + '/lib:' + $env:LD_LIBRARY_PATH
+            if (Test-Path '/usr/bin/g++-12') {
+              $env:CC = '/usr/bin/gcc-12'
+              $env:CXX = '/usr/bin/g++-12'
+              $env:CUDAHOSTCXX = '/usr/bin/g++-12'
+              $cudaHostCompilerArg = " -DCMAKE_CUDA_HOST_COMPILER=$env:CUDAHOSTCXX"
+            }
+            $cudaTargetRoot = Join-Path $env:CONDA_PREFIX 'targets/x86_64-linux'
+            if (Test-Path (Join-Path $cudaTargetRoot 'include/cuda_runtime.h')) {
+              $env:CUDAToolkit_ROOT = $cudaTargetRoot
+              $env:CUDA_TOOLKIT_ROOT_DIR = $cudaTargetRoot
+              $env:CMAKE_ARGS = "-DCUDAToolkit_ROOT=$cudaTargetRoot -DCUDA_TOOLKIT_ROOT_DIR=$cudaTargetRoot$cudaHostCompilerArg"
+              $env:CPATH = "$cudaTargetRoot/include:$env:CPATH"
+              $env:CPLUS_INCLUDE_PATH = "$cudaTargetRoot/include:$env:CPLUS_INCLUDE_PATH"
+              $env:LIBRARY_PATH = "$cudaTargetRoot/lib:$env:LIBRARY_PATH"
+              $env:LD_LIBRARY_PATH = "$cudaTargetRoot/lib:$env:CONDA_PREFIX/lib:$env:LD_LIBRARY_PATH"
+            } else {
+              $env:LD_LIBRARY_PATH = $env:CONDA_PREFIX + '/lib:' + $env:LD_LIBRARY_PATH
+              $env:CMAKE_ARGS = $cudaHostCompilerArg.Trim()
+            }
+          } else {
+            $env:CMAKE_ARGS = ''
           }
           $env:VERBOSE = '1'
-          $env:CMAKE_ARGS = '-DGGML_CUDA=on -DCMAKE_CUDA_ARCHITECTURES=all'
-          $env:CMAKE_ARGS = "-DGGML_CUDA_FORCE_MMQ=ON $env:CMAKE_ARGS"
+          # Build portable CUDA wheels against a supported architecture set
+          # instead of `all`, which now includes targets this toolchain cannot
+          # assemble. The hosted runners are currently resolving to nvcc 13.2,
+          # which rejects sm_70 during the compiler probe.
+          $env:CMAKE_ARGS = "-DGGML_CUDA_FORCE_MMQ=ON -DGGML_CUDA=on -DCMAKE_CUDA_ARCHITECTURES=75;80;86;89;90 -DCMAKE_CUDA_FLAGS=--allow-unsupported-compiler $env:CMAKE_ARGS"
           # if ($env:AVXVER -eq 'AVX') {
           $env:CMAKE_ARGS = $env:CMAKE_ARGS + ' -DGGML_AVX2=off -DGGML_FMA=off -DGGML_F16C=off'
           # }
@@ -128,6 +152,7 @@ jobs:
           Write-Output "CUDA_VERSION=$cudaVersion" >> $env:GITHUB_ENV
 
       - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
         with:
           files: dist/*
           # Set tag_name to <tag>-cu<cuda_version>
