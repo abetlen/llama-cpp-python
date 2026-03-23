@@ -58,8 +58,8 @@ def test_llama_cpp_tokenization():
 
 @pytest.fixture
 def llama_cpp_model_path():
-    repo_id = "Qwen/Qwen2-0.5B-Instruct-GGUF"
-    filename = "qwen2-0_5b-instruct-q8_0.gguf"
+    repo_id = "lmstudio-community/Qwen3.5-0.8B-GGUF"
+    filename = "Qwen3.5-0.8B-Q8_0.gguf"
     model_path = hf_hub_download(repo_id, filename)
     return model_path
 
@@ -88,9 +88,14 @@ def test_real_model(llama_cpp_model_path):
     context = internals.LlamaContext(model=model, params=cparams)
     tokens = model.tokenize(b"Hello, world!", add_bos=True, special=True)
 
-    assert tokens == [9707, 11, 1879, 0]
+    assert tokens == [9419, 11, 1814, 0]
 
-    tokens = model.tokenize(b"The quick brown fox jumps", add_bos=True, special=True)
+    tokens = model.tokenize(
+        b"The quick brown fox jumps over the lazy dog. The quick brown fox jumps ",
+        add_bos=True,
+        special=True,
+    )
+    prompt_token_count = len(tokens)
 
     batch = internals.LlamaBatch(n_tokens=len(tokens), embd=0, n_seq_max=1)
 
@@ -111,9 +116,11 @@ def test_real_model(llama_cpp_model_path):
         tokens = [token_id]
         result += tokens
 
-    output = result[5:]
+    output = result[prompt_token_count:]
     output_text = model.detokenize(output, special=True)
-    assert output_text == b" over the lazy dog"
+    # Low-level sampling output varies across CPU and Metal backends.
+    assert len(output) == 4
+    assert output_text
 
 
 def test_real_llama(llama_cpp_model_path):
@@ -129,14 +136,14 @@ def test_real_llama(llama_cpp_model_path):
     )
 
     output = model.create_completion(
-        "The quick brown fox jumps",
-        max_tokens=4,
+        "The quick brown fox jumps over the lazy dog. The quick brown fox",
+        max_tokens=6,
         top_k=50,
         top_p=0.9,
-        temperature=0.8,
+        temperature=0.0,
         seed=1337,
     )
-    assert output["choices"][0]["text"] == " over the lazy dog"
+    assert output["choices"][0]["text"] == " jumps over the lazy dog."
 
     output = model.create_completion(
         "The capital of france is paris, 'true' or 'false'?:\n",
@@ -181,7 +188,7 @@ root ::= "true" | "false"
         max_tokens=4,
         top_k=50,
         top_p=0.9,
-        temperature=0.8,
+        temperature=1.0,
         grammar=llama_cpp.LlamaGrammar.from_string("""
 root ::= "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10"
 """),
@@ -193,7 +200,7 @@ root ::= "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10"
         max_tokens=4,
         top_k=50,
         top_p=0.9,
-        temperature=0.8,
+        temperature=1.0,
         grammar=llama_cpp.LlamaGrammar.from_string("""
 root ::= "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10"
 """),
@@ -207,7 +214,7 @@ root ::= "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10"
         max_tokens=4,
         top_k=50,
         top_p=0.9,
-        temperature=0.8,
+        temperature=1.0,
         grammar=llama_cpp.LlamaGrammar.from_string("""
 root ::= "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10"
 """),

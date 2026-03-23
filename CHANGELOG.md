@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@49bfddeca18e62fa3d39114a23e9fcbdf8a22388 and sync Python bindings by @abetlen in #2151
+- fix: Handle Qwen 3.5 hybrid prefix reuse by @codavidgarcia and @r-dh in #2152
 - chore(dev): Add Ruff-based formatting and a safe lint baseline, and run it in CI for pull requests and pushes to `main`
 - fix(ci): Run macOS CI on supported Apple Silicon and Intel runners by @abetlen in #2150
 - fix(ci): Use the `hf` CLI instead of the deprecated `huggingface-cli` name in GitHub Actions and docs by @abetlen in #2149

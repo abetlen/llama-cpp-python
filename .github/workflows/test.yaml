@@ -8,8 +8,8 @@ on:
       - main
 
 env:
-  REPO_ID: Qwen/Qwen2-0.5B-Instruct-GGUF
-  MODEL_FILE: qwen2-0_5b-instruct-q8_0.gguf
+  REPO_ID: lmstudio-community/Qwen3.5-0.8B-GGUF
+  MODEL_FILE: Qwen3.5-0.8B-Q8_0.gguf
 
 jobs:
   download-model:

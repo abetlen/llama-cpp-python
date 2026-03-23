@@ -291,10 +291,10 @@ class LlamaContext:
         assert self.memory is not None, "Memory is not initialized"
         llama_cpp.llama_memory_clear(self.memory, True)
 
-    def kv_cache_seq_rm(self, seq_id: int, p0: int, p1: int):
+    def kv_cache_seq_rm(self, seq_id: int, p0: int, p1: int) -> bool:
         assert self.memory is not None, "Memory is not initialized"
         seq_id = seq_id if seq_id >= 0 else 0
-        llama_cpp.llama_memory_seq_rm(self.memory, seq_id, p0, p1)
+        return llama_cpp.llama_memory_seq_rm(self.memory, seq_id, p0, p1)
 
     def kv_cache_seq_cp(self, seq_id_src: int, seq_id_dst: int, p0: int, p1: int):
         assert self.memory is not None, "Memory is not initialized"

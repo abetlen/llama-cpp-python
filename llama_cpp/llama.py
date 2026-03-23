@@ -891,13 +891,20 @@ class Llama:
                 else:
                     break
             if longest_prefix > 0:
-                reset = False
-                tokens = tokens[longest_prefix:]
-                self.n_tokens = longest_prefix
-                if self.verbose:
+                if self._ctx.kv_cache_seq_rm(-1, longest_prefix, -1):
+                    reset = False
+                    tokens = tokens[longest_prefix:]
+                    self.n_tokens = longest_prefix
+                    if self.verbose:
+                        print(
+                            f"Llama.generate: {longest_prefix} prefix-match hit, "
+                            f"remaining {len(tokens)} prompt tokens to eval",
+                            file=sys.stderr,
+                        )
+                elif self.verbose:
                     print(
-                        f"Llama.generate: {longest_prefix} prefix-match hit, "
-                        f"remaining {len(tokens)} prompt tokens to eval",
+                        f"Llama.generate: {longest_prefix} prefix-match found "
+                        f"but partial kv removal not supported, re-evaluating full prompt",
                         file=sys.stderr,
                     )
 

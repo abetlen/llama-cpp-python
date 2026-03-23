@@ -322,8 +322,8 @@ You'll need to install the `huggingface-hub` package to use this feature (`pip i
 
 ```python
 llm = Llama.from_pretrained(
-    repo_id="Qwen/Qwen2-0.5B-Instruct-GGUF",
-    filename="*q8_0.gguf",
+    repo_id="lmstudio-community/Qwen3.5-0.8B-GGUF",
+    filename="*Q8_0.gguf",
     verbose=False
 )
 ```
@@ -685,7 +685,7 @@ For possible options, see [llama_cpp/llama_chat_format.py](llama_cpp/llama_chat_
 If you have `huggingface-hub` installed, you can also use the `--hf_model_repo_id` flag to load a model from the Hugging Face Hub.
 
 ```bash
-python3 -m llama_cpp.server --hf_model_repo_id Qwen/Qwen2-0.5B-Instruct-GGUF --model '*q8_0.gguf'
+python3 -m llama_cpp.server --hf_model_repo_id lmstudio-community/Qwen3.5-0.8B-GGUF --model '*Q8_0.gguf'
 ```
 
 ### Web Server Features
