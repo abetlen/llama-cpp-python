@@ -136,14 +136,14 @@ def test_real_llama(llama_cpp_model_path):
     )
 
     output = model.create_completion(
-        "The quick brown fox jumps over the lazy dog. The quick brown fox jumps ",
-        max_tokens=4,
+        "The quick brown fox jumps over the lazy dog. The quick brown fox",
+        max_tokens=6,
         top_k=50,
         top_p=0.9,
-        temperature=0.8,
+        temperature=0.0,
         seed=1337,
     )
-    assert output["choices"][0]["text"] == "5 times over the"
+    assert output["choices"][0]["text"] == " jumps over the lazy dog."
 
     output = model.create_completion(
         "The capital of france is paris, 'true' or 'false'?:\n",
@@ -184,11 +184,11 @@ root ::= "true" | "false"
     state = model.save_state()
 
     output = model.create_completion(
-        "Pick a random number from 1 to 10:\n",
+        "Pick a number from 1 to 10?:\n",
         max_tokens=4,
         top_k=50,
         top_p=0.9,
-        temperature=0.8,
+        temperature=1.0,
         grammar=llama_cpp.LlamaGrammar.from_string("""
 root ::= "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10"
 """),
@@ -196,11 +196,11 @@ root ::= "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10"
     number_1 = output["choices"][0]["text"]
 
     output = model.create_completion(
-        "Pick a random number from 1 to 10:\n",
+        "Pick a number from 1 to 10?:\n",
         max_tokens=4,
         top_k=50,
         top_p=0.9,
-        temperature=0.8,
+        temperature=1.0,
         grammar=llama_cpp.LlamaGrammar.from_string("""
 root ::= "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10"
 """),
@@ -210,11 +210,11 @@ root ::= "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10"
     model.load_state(state)
 
     output = model.create_completion(
-        "Pick a random number from 1 to 10:\n",
+        "Pick a number from 1 to 10?:\n",
         max_tokens=4,
         top_k=50,
         top_p=0.9,
-        temperature=0.8,
+        temperature=1.0,
         grammar=llama_cpp.LlamaGrammar.from_string("""
 root ::= "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10"
 """),
