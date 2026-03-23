@@ -2757,7 +2757,10 @@ class Llava15ChatHandler:
             ctx_params.n_threads = llama_model.n_threads
             ctx_params.flash_attn_type = (
                 llama_cpp.LLAMA_FLASH_ATTN_TYPE_ENABLED
-                if llama_model.context_params.flash_attn
+                if (
+                    llama_model.context_params.flash_attn_type
+                    == llama_cpp.LLAMA_FLASH_ATTN_TYPE_ENABLED
+                )
                 else llama_cpp.LLAMA_FLASH_ATTN_TYPE_DISABLED
             )
 

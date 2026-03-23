@@ -993,18 +993,6 @@ class llama_context_params(ctypes.Structure):
         ("n_samplers", ctypes.c_size_t),
     ]
 
-    @property
-    def flash_attn(self) -> bool:
-        return self.flash_attn_type == LLAMA_FLASH_ATTN_TYPE_ENABLED
-
-    @flash_attn.setter
-    def flash_attn(self, enabled: bool):
-        self.flash_attn_type = (
-            LLAMA_FLASH_ATTN_TYPE_ENABLED
-            if enabled
-            else LLAMA_FLASH_ATTN_TYPE_DISABLED
-        )
-
 
 # // Signature for logging events
 # // Note that text includes the new line character at the end for most events.
