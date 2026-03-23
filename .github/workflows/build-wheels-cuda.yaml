@@ -99,12 +99,13 @@ jobs:
           MAMBA_NO_LOW_SPEED_LIMIT: "1"
         run: |
           $cudaVersion = $env:CUDAVER
+          $cudaChannel = "nvidia/label/cuda-$cudaVersion"
           if ($IsLinux) {
             # Keep nvcc, cudart, and headers on the same NVIDIA label so the
             # detected toolkit version matches the published wheel tag.
-            mamba install -y --override-channels -c "nvidia/label/cuda-$cudaVersion" "cuda-toolkit=$cudaVersion" "cuda-nvcc_linux-64=$cudaVersion" cuda-cudart cuda-cudart-dev
+            mamba install -y --strict-channel-priority --override-channels -c $cudaChannel "$cudaChannel::cuda-toolkit=$cudaVersion" "$cudaChannel::cuda-nvcc_linux-64=$cudaVersion" "$cudaChannel::cuda-cudart" "$cudaChannel::cuda-cudart-dev"
           } else {
-            mamba install -y --override-channels -c "nvidia/label/cuda-$cudaVersion" "cuda-toolkit=$cudaVersion"
+            mamba install -y --strict-channel-priority --override-channels -c $cudaChannel "$cudaChannel::cuda-toolkit=$cudaVersion"
           }
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
