@@ -431,8 +431,12 @@ class Llama:
 
             self._stack.callback(free_lora_adapter)
 
-            if llama_cpp.llama_set_adapter_lora(
-                self._ctx.ctx, self._lora_adapter, self.lora_scale
+            adapters = (llama_cpp.llama_adapter_lora_p_ctypes * 1)(
+                self._lora_adapter
+            )
+            scales = (ctypes.c_float * 1)(self.lora_scale)
+            if llama_cpp.llama_set_adapters_lora(
+                self._ctx.ctx, adapters, 1, scales
             ):
                 raise RuntimeError(
                     f"Failed to set LoRA adapter from lora path: {self.lora_path}"
@@ -1042,7 +1046,7 @@ class Llama:
         data: Union[List[List[float]], List[List[List[float]]]] = []
 
         def decode_batch(seq_sizes: List[int]):
-            llama_cpp.llama_kv_self_clear(self._ctx.ctx)
+            self._ctx.kv_cache_clear()
             self._ctx.decode(self._batch)
             self._batch.reset()
 
@@ -1113,7 +1117,7 @@ class Llama:
 
         output = data[0] if isinstance(input, str) else data
 
-        llama_cpp.llama_kv_self_clear(self._ctx.ctx)
+        self._ctx.kv_cache_clear()
         self.reset()
 
         if return_count:

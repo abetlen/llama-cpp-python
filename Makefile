@@ -82,8 +82,6 @@ run-server:
 	python3 -m llama_cpp.server --model ${MODEL}
 
 clean:
-	- cd vendor/llama.cpp && make clean
-	- cd vendor/llama.cpp && rm libllama.so
 	- rm -rf _skbuild
 	- rm llama_cpp/lib/*.so
 	- rm llama_cpp/lib/*.dylib
