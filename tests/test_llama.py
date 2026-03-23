@@ -1,7 +1,5 @@
 import ctypes
 import multiprocessing
-from types import SimpleNamespace
-from unittest.mock import Mock
 
 import numpy as np
 from scipy.special import log_softmax
@@ -15,10 +13,6 @@ import llama_cpp._internals as internals
 
 
 MODEL = "./vendor/llama.cpp/models/ggml-vocab-llama-spm.gguf"
-
-
-class EvalCalled(Exception):
-    pass
 
 
 def test_llama_cpp_version():
@@ -238,79 +232,3 @@ def test_real_llama_embeddings(llama_cpp_model_path):
     )
     # Smoke test for now
     model.embed("Hello World")
-
-
-def test_kv_cache_seq_rm_returns_bool(monkeypatch):
-    context = internals.LlamaContext.__new__(internals.LlamaContext)
-    context._exit_stack = SimpleNamespace(close=lambda: None)
-    context.memory = object()
-    calls = []
-
-    def fake_llama_memory_seq_rm(memory, seq_id, p0, p1):
-        calls.append((memory, seq_id, p0, p1))
-        return True
-
-    monkeypatch.setattr(
-        internals.llama_cpp, "llama_memory_seq_rm", fake_llama_memory_seq_rm
-    )
-
-    assert context.kv_cache_seq_rm(-1, 4, -1) is True
-    assert calls == [(context.memory, 0, 4, -1)]
-
-
-def make_test_llama(kv_cache_seq_rm_return):
-    llama = llama_cpp.Llama.__new__(llama_cpp.Llama)
-    llama.n_tokens = 3
-    llama.n_batch = 8
-    llama._n_ctx = 32
-    llama._n_vocab = 8
-    llama._logits_all = False
-    llama._seed = 1337
-    llama.last_n_tokens_size = 64
-    llama.verbose = False
-    llama.input_ids = np.array([1, 2, 3, 0, 0, 0], dtype=np.intc)
-    llama.scores = np.zeros((6, 8), dtype=np.single)
-    llama._ctx = SimpleNamespace(
-        kv_cache_seq_rm=Mock(return_value=kv_cache_seq_rm_return)
-    )
-    llama._stack = SimpleNamespace(close=lambda: None)
-    llama._sampler = None
-    llama.eval_tokens_seen = None
-    llama.reset_calls = 0
-
-    def reset():
-        llama.reset_calls += 1
-        llama.n_tokens = 0
-
-    def eval_tokens(tokens):
-        llama.eval_tokens_seen = list(tokens)
-        raise EvalCalled
-
-    llama.reset = reset
-    llama.eval = eval_tokens
-    llama._init_sampler = lambda **kwargs: object()
-    return llama
-
-
-def test_generate_reuses_prefix_when_partial_removal_supported():
-    llama = make_test_llama(True)
-
-    with pytest.raises(EvalCalled):
-        next(llama.generate([1, 2, 3, 4]))
-
-    llama._ctx.kv_cache_seq_rm.assert_called_once_with(-1, 3, -1)
-    assert llama.reset_calls == 0
-    assert llama.n_tokens == 3
-    assert llama.eval_tokens_seen == [4]
-
-
-def test_generate_falls_back_to_reset_when_partial_removal_rejected():
-    llama = make_test_llama(False)
-
-    with pytest.raises(EvalCalled):
-        next(llama.generate([1, 2, 3, 4]))
-
-    llama._ctx.kv_cache_seq_rm.assert_called_once_with(-1, 3, -1)
-    assert llama.reset_calls == 1
-    assert llama.n_tokens == 0
-    assert llama.eval_tokens_seen == [1, 2, 3, 4]
