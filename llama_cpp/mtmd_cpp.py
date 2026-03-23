@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import warnings
 from ctypes import (
     c_bool,
     c_char_p,
@@ -49,10 +50,6 @@ _libmtmd_base_path = (
 _libmtmd = load_shared_library(_libmtmd_base_name, _libmtmd_base_path)
 
 ctypes_function = ctypes_function_for_shared_library(_libmtmd)
-
-
-def _lib_has(name: str) -> bool:
-    return hasattr(_libmtmd, name)
 
 ################################################
 # mtmd.h types
@@ -187,13 +184,13 @@ def mtmd_support_audio(ctx: mtmd_context_p, /) -> bool: ...
 def mtmd_get_audio_sample_rate(ctx: mtmd_context_p, /) -> int: ...
 
 
-@ctypes_function(
-    "mtmd_get_audio_bitrate",
-    [mtmd_context_p_ctypes],
-    c_int,
-    enabled=_lib_has("mtmd_get_audio_bitrate"),
-)
+# Deprecated compatibility wrapper for the renamed mtmd_get_audio_sample_rate().
 def mtmd_get_audio_bitrate(ctx: mtmd_context_p, /) -> int:
+    warnings.warn(
+        "mtmd_get_audio_bitrate is deprecated; use mtmd_get_audio_sample_rate instead",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return mtmd_get_audio_sample_rate(ctx)
 
 

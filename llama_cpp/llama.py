@@ -730,7 +730,6 @@ class Llama:
             sampler.add_grammar(self._model, grammar)
 
         if temp < 0.0:
-            sampler.add_softmax()
             sampler.add_dist(self._seed)
         elif temp == 0.0:
             sampler.add_greedy()
