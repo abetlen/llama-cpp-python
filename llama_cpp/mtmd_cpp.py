@@ -106,14 +106,6 @@ class mtmd_context_params(Structure):
         ("cb_eval_user_data", c_void_p),
     ]
 
-    @property
-    def verbosity(self) -> int:
-        return getattr(self, "_verbosity", 0)
-
-    @verbosity.setter
-    def verbosity(self, value: int):
-        self._verbosity = int(value)
-
 
 class mtmd_input_text(Structure):
     _fields_ = [
