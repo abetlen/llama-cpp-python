@@ -435,13 +435,9 @@ class Llama:
 
             self._stack.callback(free_lora_adapter)
 
-            adapters = (llama_cpp.llama_adapter_lora_p_ctypes * 1)(
-                self._lora_adapter
-            )
+            adapters = (llama_cpp.llama_adapter_lora_p_ctypes * 1)(self._lora_adapter)
             scales = (ctypes.c_float * 1)(self.lora_scale)
-            if llama_cpp.llama_set_adapters_lora(
-                self._ctx.ctx, adapters, 1, scales
-            ):
+            if llama_cpp.llama_set_adapters_lora(self._ctx.ctx, adapters, 1, scales):
                 raise RuntimeError(
                     f"Failed to set LoRA adapter from lora path: {self.lora_path}"
                 )

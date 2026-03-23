@@ -1931,7 +1931,9 @@ def llama_adapter_meta_val_str(
 
 # // Get the number of metadata key/value pairs
 # LLAMA_API int32_t llama_adapter_meta_count(const struct llama_adapter_lora * adapter);
-@ctypes_function("llama_adapter_meta_count", [llama_adapter_lora_p_ctypes], ctypes.c_int32)
+@ctypes_function(
+    "llama_adapter_meta_count", [llama_adapter_lora_p_ctypes], ctypes.c_int32
+)
 def llama_adapter_meta_count(adapter: llama_adapter_lora_p, /) -> int:
     """Get the number of adapter metadata key/value pairs."""
     ...
@@ -2994,7 +2996,9 @@ def llama_get_embeddings_seq(
 # // Get the backend sampled token for the ith token.
 # // Returns LLAMA_TOKEN_NULL if no token was sampled.
 # LLAMA_API llama_token llama_get_sampled_token_ith(struct llama_context * ctx, int32_t i);
-@ctypes_function("llama_get_sampled_token_ith", [llama_context_p_ctypes, ctypes.c_int32], llama_token)
+@ctypes_function(
+    "llama_get_sampled_token_ith", [llama_context_p_ctypes, ctypes.c_int32], llama_token
+)
 def llama_get_sampled_token_ith(
     ctx: llama_context_p, i: Union[ctypes.c_int32, int], /
 ) -> int:
