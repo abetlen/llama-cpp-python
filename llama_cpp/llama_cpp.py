@@ -1187,7 +1187,9 @@ def llama_model_quantize_default_params() -> llama_model_quantize_params:
 
 # LLAMA_API const char * llama_flash_attn_type_name(enum llama_flash_attn_type flash_attn_type);
 @ctypes_function("llama_flash_attn_type_name", [ctypes.c_int], ctypes.c_char_p)
-def llama_flash_attn_type_name(flash_attn_type: int, /) -> Optional[bytes]: ...
+def llama_flash_attn_type_name(flash_attn_type: int, /) -> Optional[bytes]:
+    """Get the flash attention type name."""
+    ...
 
 
 # // Initialize the llama + ggml backend
@@ -1369,7 +1371,9 @@ def llama_model_init_from_user(
     set_tensor_data_ud: ctypes.c_void_p,
     params: llama_model_params,
     /,
-) -> Optional[llama_model_p]: ...
+) -> Optional[llama_model_p]:
+    """Initialize a model from user-provided metadata and tensor data."""
+    ...
 
 
 # LLAMA_API struct llama_context * llama_init_from_model(
@@ -1454,7 +1458,9 @@ def llama_params_fit(
     n_ctx_min: int,
     log_level: int,
     /,
-) -> int: ...
+) -> int:
+    """Fit model and context parameters for a model path."""
+    ...
 
 
 # LLAMA_API int64_t llama_time_us(void);
@@ -1478,7 +1484,9 @@ def llama_max_parallel_sequences() -> int: ...
 
 # LLAMA_API size_t llama_max_tensor_buft_overrides(void);
 @ctypes_function("llama_max_tensor_buft_overrides", [], ctypes.c_size_t)
-def llama_max_tensor_buft_overrides() -> int: ...
+def llama_max_tensor_buft_overrides() -> int:
+    """Get the maximum number of tensor buffer type overrides."""
+    ...
 
 
 # LLAMA_API bool llama_supports_mmap       (void);
@@ -1508,7 +1516,9 @@ def llama_n_ctx(ctx: llama_context_p, /) -> int: ...
 
 # LLAMA_API uint32_t llama_n_ctx_seq  (const struct llama_context * ctx);
 @ctypes_function("llama_n_ctx_seq", [llama_context_p_ctypes], ctypes.c_uint32)
-def llama_n_ctx_seq(ctx: llama_context_p, /) -> int: ...
+def llama_n_ctx_seq(ctx: llama_context_p, /) -> int:
+    """Get the context size per sequence."""
+    ...
 
 
 # LLAMA_API uint32_t llama_n_batch    (const struct llama_context * ctx);
@@ -1590,12 +1600,16 @@ def llama_model_n_embd(model: llama_model_p, /) -> int: ...
 
 # LLAMA_API int32_t llama_model_n_embd_inp (const struct llama_model * model);
 @ctypes_function("llama_model_n_embd_inp", [llama_model_p_ctypes], ctypes.c_int32)
-def llama_model_n_embd_inp(model: llama_model_p, /) -> int: ...
+def llama_model_n_embd_inp(model: llama_model_p, /) -> int:
+    """Get the model input embedding size."""
+    ...
 
 
 # LLAMA_API int32_t llama_model_n_embd_out (const struct llama_model * model);
 @ctypes_function("llama_model_n_embd_out", [llama_model_p_ctypes], ctypes.c_int32)
-def llama_model_n_embd_out(model: llama_model_p, /) -> int: ...
+def llama_model_n_embd_out(model: llama_model_p, /) -> int:
+    """Get the model output embedding size."""
+    ...
 
 
 # LLAMA_API int32_t llama_model_n_layer    (const struct llama_model * model);
@@ -1696,7 +1710,9 @@ def llama_model_meta_count(model: llama_model_p, /) -> int:
 # // Get sampling metadata key name. Returns nullptr if the key is invalid
 # LLAMA_API const char * llama_model_meta_key_str(enum llama_model_meta_key key);
 @ctypes_function("llama_model_meta_key_str", [ctypes.c_int], ctypes.c_char_p)
-def llama_model_meta_key_str(key: int, /) -> Optional[bytes]: ...
+def llama_model_meta_key_str(key: int, /) -> Optional[bytes]:
+    """Get sampling metadata key name. Returns None if the key is invalid."""
+    ...
 
 
 # // Get metadata key name by index
@@ -1908,13 +1924,17 @@ def llama_adapter_meta_val_str(
     buf: Union[bytes, CtypesArray[ctypes.c_char]],
     buf_size: int,
     /,
-) -> int: ...
+) -> int:
+    """Get adapter metadata value as a string by key name."""
+    ...
 
 
 # // Get the number of metadata key/value pairs
 # LLAMA_API int32_t llama_adapter_meta_count(const struct llama_adapter_lora * adapter);
 @ctypes_function("llama_adapter_meta_count", [llama_adapter_lora_p_ctypes], ctypes.c_int32)
-def llama_adapter_meta_count(adapter: llama_adapter_lora_p, /) -> int: ...
+def llama_adapter_meta_count(adapter: llama_adapter_lora_p, /) -> int:
+    """Get the number of adapter metadata key/value pairs."""
+    ...
 
 
 # // Get metadata key name by index
@@ -1935,7 +1955,9 @@ def llama_adapter_meta_key_by_index(
     buf: Union[bytes, CtypesArray[ctypes.c_char]],
     buf_size: int,
     /,
-) -> int: ...
+) -> int:
+    """Get adapter metadata key name by index."""
+    ...
 
 
 # // Get metadata value as a string by index
@@ -1956,7 +1978,9 @@ def llama_adapter_meta_val_str_by_index(
     buf: Union[bytes, CtypesArray[ctypes.c_char]],
     buf_size: int,
     /,
-) -> int: ...
+) -> int:
+    """Get adapter metadata value as a string by index."""
+    ...
 
 
 # // Manually free a LoRA adapter
@@ -1979,7 +2003,9 @@ def llama_adapter_lora_free(adapter: llama_adapter_lora_p, /): ...
 )
 def llama_adapter_get_alora_n_invocation_tokens(
     adapter: llama_adapter_lora_p, /
-) -> int: ...
+) -> int:
+    """Get the invocation token count if the current LoRA is an aLoRA."""
+    ...
 
 
 # LLAMA_API const llama_token * llama_adapter_get_alora_invocation_tokens  (const struct llama_adapter_lora * adapter);
@@ -1990,7 +2016,9 @@ def llama_adapter_get_alora_n_invocation_tokens(
 )
 def llama_adapter_get_alora_invocation_tokens(
     adapter: llama_adapter_lora_p, /
-) -> Optional[CtypesPointer[llama_token]]: ...
+) -> Optional[CtypesPointer[llama_token]]:
+    """Get the invocation tokens if the current LoRA is an aLoRA."""
+    ...
 
 
 # // The following functions operate on a llama_context, hence the naming: llama_verb_...
@@ -2018,7 +2046,9 @@ def llama_set_adapters_lora(
     n_adapters: int,
     scales: Optional[CtypesArray[ctypes.c_float]],
     /,
-) -> int: ...
+) -> int:
+    """Set LoRA adapters on the context if they differ from the current adapters."""
+    ...
 
 
 # Deprecated compatibility wrapper for the renamed llama_set_adapters_lora().
@@ -2967,7 +2997,9 @@ def llama_get_embeddings_seq(
 @ctypes_function("llama_get_sampled_token_ith", [llama_context_p_ctypes, ctypes.c_int32], llama_token)
 def llama_get_sampled_token_ith(
     ctx: llama_context_p, i: Union[ctypes.c_int32, int], /
-) -> int: ...
+) -> int:
+    """Get the backend sampled token for the ith token."""
+    ...
 
 
 # // Get the backend sampled probabilities for the ith token
@@ -2979,7 +3011,9 @@ def llama_get_sampled_token_ith(
 )
 def llama_get_sampled_probs_ith(
     ctx: llama_context_p, i: Union[ctypes.c_int32, int], /
-) -> Optional[CtypesPointer[ctypes.c_float]]: ...
+) -> Optional[CtypesPointer[ctypes.c_float]]:
+    """Get the backend sampled probabilities for the ith token."""
+    ...
 
 
 # LLAMA_API uint32_t llama_get_sampled_probs_count_ith(struct llama_context * ctx, int32_t i);
@@ -2990,7 +3024,9 @@ def llama_get_sampled_probs_ith(
 )
 def llama_get_sampled_probs_count_ith(
     ctx: llama_context_p, i: Union[ctypes.c_int32, int], /
-) -> int: ...
+) -> int:
+    """Get the backend sampled probability count for the ith token."""
+    ...
 
 
 # // Get the backend sampled logits for the ith token
@@ -3002,7 +3038,9 @@ def llama_get_sampled_probs_count_ith(
 )
 def llama_get_sampled_logits_ith(
     ctx: llama_context_p, i: Union[ctypes.c_int32, int], /
-) -> Optional[CtypesPointer[ctypes.c_float]]: ...
+) -> Optional[CtypesPointer[ctypes.c_float]]:
+    """Get the backend sampled logits for the ith token."""
+    ...
 
 
 # LLAMA_API uint32_t llama_get_sampled_logits_count_ith(struct llama_context * ctx, int32_t i);
@@ -3013,7 +3051,9 @@ def llama_get_sampled_logits_ith(
 )
 def llama_get_sampled_logits_count_ith(
     ctx: llama_context_p, i: Union[ctypes.c_int32, int], /
-) -> int: ...
+) -> int:
+    """Get the backend sampled logit count for the ith token."""
+    ...
 
 
 # // Get the backend sampled candidates for the ith token
@@ -3025,7 +3065,9 @@ def llama_get_sampled_logits_count_ith(
 )
 def llama_get_sampled_candidates_ith(
     ctx: llama_context_p, i: Union[ctypes.c_int32, int], /
-) -> Optional[CtypesPointer[llama_token]]: ...
+) -> Optional[CtypesPointer[llama_token]]:
+    """Get the backend sampled candidates for the ith token."""
+    ...
 
 
 # LLAMA_API uint32_t      llama_get_sampled_candidates_count_ith(struct llama_context * ctx, int32_t i);
@@ -3036,7 +3078,9 @@ def llama_get_sampled_candidates_ith(
 )
 def llama_get_sampled_candidates_count_ith(
     ctx: llama_context_p, i: Union[ctypes.c_int32, int], /
-) -> int: ...
+) -> int:
+    """Get the backend sampled candidate count for the ith token."""
+    ...
 
 
 # //
@@ -3780,7 +3824,9 @@ llama_sampler_i._fields_ = [
 )
 def llama_set_sampler(
     ctx: llama_context_p, seq_id: Union[llama_seq_id, int], smpl: llama_sampler_p, /
-) -> bool: ...
+) -> bool:
+    """Attach a sampler to the context."""
+    ...
 
 
 # // mirror of llama_sampler_i:
@@ -4182,7 +4228,9 @@ def llama_sampler_init_dry(
 )
 def llama_sampler_init_adaptive_p(
     target: float, decay: float, seed: int, /
-) -> llama_sampler_p: ...
+) -> llama_sampler_p:
+    """Initialize an adaptive-p sampler."""
+    ...
 
 
 # LLAMA_API struct llama_sampler * llama_sampler_init_logit_bias(

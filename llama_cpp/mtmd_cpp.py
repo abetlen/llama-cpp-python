@@ -153,12 +153,16 @@ def mtmd_free(ctx: mtmd_context_p, /): ...
 
 # MTMD_API bool mtmd_decode_use_non_causal(mtmd_context * ctx);
 @ctypes_function("mtmd_decode_use_non_causal", [mtmd_context_p_ctypes], c_bool)
-def mtmd_decode_use_non_causal(ctx: mtmd_context_p, /) -> bool: ...
+def mtmd_decode_use_non_causal(ctx: mtmd_context_p, /) -> bool:
+    """Check whether MTMD decoding uses non-causal attention."""
+    ...
 
 
 # MTMD_API bool mtmd_decode_use_mrope(mtmd_context * ctx);
 @ctypes_function("mtmd_decode_use_mrope", [mtmd_context_p_ctypes], c_bool)
-def mtmd_decode_use_mrope(ctx: mtmd_context_p, /) -> bool: ...
+def mtmd_decode_use_mrope(ctx: mtmd_context_p, /) -> bool:
+    """Check whether MTMD decoding uses mRoPE."""
+    ...
 
 
 # MTMD_API bool mtmd_support_vision(mtmd_context * ctx);
@@ -168,12 +172,16 @@ def mtmd_support_vision(ctx: mtmd_context_p, /) -> bool: ...
 
 # MTMD_API bool mtmd_support_audio(mtmd_context * ctx);
 @ctypes_function("mtmd_support_audio", [mtmd_context_p_ctypes], c_bool)
-def mtmd_support_audio(ctx: mtmd_context_p, /) -> bool: ...
+def mtmd_support_audio(ctx: mtmd_context_p, /) -> bool:
+    """Check whether MTMD supports audio."""
+    ...
 
 
 # MTMD_API int mtmd_get_audio_sample_rate(mtmd_context * ctx);
 @ctypes_function("mtmd_get_audio_sample_rate", [mtmd_context_p_ctypes], c_int)
-def mtmd_get_audio_sample_rate(ctx: mtmd_context_p, /) -> int: ...
+def mtmd_get_audio_sample_rate(ctx: mtmd_context_p, /) -> int:
+    """Get the MTMD audio sample rate."""
+    ...
 
 
 # Deprecated compatibility wrapper for the renamed mtmd_get_audio_sample_rate().
@@ -208,7 +216,9 @@ def mtmd_bitmap_init_from_audio(
     n_samples: Union[c_size_t, int],
     data: CtypesArray[c_float],
     /,
-) -> Optional[mtmd_bitmap_p]: ...
+) -> Optional[mtmd_bitmap_p]:
+    """Initialize an MTMD bitmap from audio samples."""
+    ...
 
 
 # MTMD_API void mtmd_bitmap_free(mtmd_bitmap * bitmap);
@@ -354,7 +364,9 @@ def mtmd_helper_eval_chunk_single(
     [llama_cpp.llama_log_callback, c_void_p],
     None,
 )
-def mtmd_log_set(log_callback, user_data: c_void_p, /): ...
+def mtmd_log_set(log_callback, user_data: c_void_p, /):
+    """Set the MTMD logging callback."""
+    ...
 
 
 # MTMD_API void mtmd_helper_log_set(ggml_log_callback log_callback, void * user_data);
@@ -363,4 +375,6 @@ def mtmd_log_set(log_callback, user_data: c_void_p, /): ...
     [llama_cpp.llama_log_callback, c_void_p],
     None,
 )
-def mtmd_helper_log_set(log_callback, user_data: c_void_p, /): ...
+def mtmd_helper_log_set(log_callback, user_data: c_void_p, /):
+    """Set the MTMD helper logging callback."""
+    ...
