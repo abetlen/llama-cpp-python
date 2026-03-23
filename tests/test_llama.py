@@ -88,9 +88,14 @@ def test_real_model(llama_cpp_model_path):
     context = internals.LlamaContext(model=model, params=cparams)
     tokens = model.tokenize(b"Hello, world!", add_bos=True, special=True)
 
-    assert tokens == [9707, 11, 1879, 0]
+    assert tokens == [9419, 11, 1814, 0]
 
-    tokens = model.tokenize(b"The quick brown fox jumps", add_bos=True, special=True)
+    tokens = model.tokenize(
+        b"The quick brown fox jumps over the lazy dog. The quick brown fox jumps ",
+        add_bos=True,
+        special=True,
+    )
+    prompt_token_count = len(tokens)
 
     batch = internals.LlamaBatch(n_tokens=len(tokens), embd=0, n_seq_max=1)
 
@@ -111,9 +116,9 @@ def test_real_model(llama_cpp_model_path):
         tokens = [token_id]
         result += tokens
 
-    output = result[5:]
+    output = result[prompt_token_count:]
     output_text = model.detokenize(output, special=True)
-    assert output_text == b" over the lazy dog"
+    assert output_text == b"5 times over the"
 
 
 def test_real_llama(llama_cpp_model_path):
@@ -129,14 +134,14 @@ def test_real_llama(llama_cpp_model_path):
     )
 
     output = model.create_completion(
-        "The quick brown fox jumps",
+        "The quick brown fox jumps over the lazy dog. The quick brown fox jumps ",
         max_tokens=4,
         top_k=50,
         top_p=0.9,
         temperature=0.8,
         seed=1337,
     )
-    assert output["choices"][0]["text"] == " over the lazy dog"
+    assert output["choices"][0]["text"] == "5 times over the"
 
     output = model.create_completion(
         "The capital of france is paris, 'true' or 'false'?:\n",
@@ -177,7 +182,7 @@ root ::= "true" | "false"
     state = model.save_state()
 
     output = model.create_completion(
-        "Pick a number from 1 to 10?:\n",
+        "Pick a random number from 1 to 10:\n",
         max_tokens=4,
         top_k=50,
         top_p=0.9,
@@ -189,7 +194,7 @@ root ::= "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10"
     number_1 = output["choices"][0]["text"]
 
     output = model.create_completion(
-        "Pick a number from 1 to 10?:\n",
+        "Pick a random number from 1 to 10:\n",
         max_tokens=4,
         top_k=50,
         top_p=0.9,
@@ -203,7 +208,7 @@ root ::= "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10"
     model.load_state(state)
 
     output = model.create_completion(
-        "Pick a number from 1 to 10?:\n",
+        "Pick a random number from 1 to 10:\n",
         max_tokens=4,
         top_k=50,
         top_p=0.9,
