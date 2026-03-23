@@ -46,10 +46,12 @@ jobs:
         env:
           # disable repair
           CIBW_REPAIR_WHEEL_COMMAND: ""
-          # The default Linux x86_64 matrix also includes i686, which is not a
-          # useful target for this project and currently fails in ggml's native path.
+          # Skip cibuildwheel's default i686 sidecar and keep Linux release
+          # wheels on a portable x86_64 CPU baseline.
           CIBW_ARCHS_LINUX: "auto64"
-          # Release wheels should target portable baselines, not the CI host CPU.
+          CIBW_ENVIRONMENT_LINUX: CMAKE_ARGS="-DGGML_NATIVE=off"
+          # Keep macOS release wheels on a portable CPU baseline instead of
+          # inheriting the hosted runner's native flags.
           CIBW_ENVIRONMENT_MACOS: CMAKE_ARGS="-DGGML_NATIVE=off"
         with:
           package-dir: .
@@ -106,7 +108,7 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v3.1.2
         env:
-          CIBW_SKIP: "*musllinux*"
+          CIBW_SKIP: "*musllinux* pp*"
           CIBW_REPAIR_WHEEL_COMMAND: ""
           CIBW_ARCHS: "riscv64"
           # Build riscv64 wheels against a conservative baseline instead of
