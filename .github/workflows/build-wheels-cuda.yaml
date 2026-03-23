@@ -99,12 +99,15 @@ jobs:
           MAMBA_NO_LOW_SPEED_LIMIT: "1"
         run: |
           $cudaVersion = $env:CUDAVER
-          mamba install -y "nvidia/label/cuda-$cudaVersion::cuda-toolkit"
+          if ($IsLinux) {
+            mamba install -y --strict-channel-priority -c "nvidia/label/cuda-$cudaVersion" "cuda-toolkit=$cudaVersion" "cuda-nvcc_linux-64=$cudaVersion"
+          } else {
+            mamba install -y --strict-channel-priority -c "nvidia/label/cuda-$cudaVersion" "cuda-toolkit=$cudaVersion"
+          }
           python -m pip install build wheel
 
       - name: Build Wheel
         run: |
-          $cudaVersion = $env:CUDAVER.Remove($env:CUDAVER.LastIndexOf('.')).Replace('.','')
           $env:CUDA_PATH = $env:CONDA_PREFIX
           $env:CUDA_HOME = $env:CONDA_PREFIX
           $env:CUDA_TOOLKIT_ROOT_DIR = $env:CONDA_PREFIX
@@ -132,12 +135,15 @@ jobs:
           } else {
             $env:CMAKE_ARGS = ''
           }
+          $nvccVersion = ((& nvcc --version) | Select-String 'release ([0-9]+\.[0-9]+)').Matches[0].Groups[1].Value
+          if (-not $nvccVersion) {
+            throw 'Failed to detect the installed CUDA toolkit version'
+          }
+          $cudaTagVersion = $nvccVersion.Replace('.','')
           $env:VERBOSE = '1'
-          # Build portable CUDA wheels against a supported architecture set
-          # instead of `all`, which now includes targets this toolchain cannot
-          # assemble. The hosted runners are currently resolving to nvcc 13.2,
-          # which rejects sm_70 during the compiler probe.
-          $env:CMAKE_ARGS = "-DGGML_CUDA_FORCE_MMQ=ON -DGGML_CUDA=on -DCMAKE_CUDA_ARCHITECTURES=75;80;86;89;90 -DCMAKE_CUDA_FLAGS=--allow-unsupported-compiler $env:CMAKE_ARGS"
+          # Pin a portable architecture list instead of CMake's `all`, which now
+          # includes future targets the hosted-runner toolchains cannot assemble.
+          $env:CMAKE_ARGS = "-DGGML_CUDA_FORCE_MMQ=ON -DGGML_CUDA=on -DCMAKE_CUDA_ARCHITECTURES=70;75;80;86;89;90 -DCMAKE_CUDA_FLAGS=--allow-unsupported-compiler $env:CMAKE_ARGS"
           # if ($env:AVXVER -eq 'AVX') {
           $env:CMAKE_ARGS = $env:CMAKE_ARGS + ' -DGGML_AVX2=off -DGGML_FMA=off -DGGML_F16C=off'
           # }
@@ -148,8 +154,8 @@ jobs:
           #  $env:CMAKE_ARGS = $env:CMAKE_ARGS + ' -DGGML_AVX=off -DGGML_AVX2=off -DGGML_FMA=off -DGGML_F16C=off'
           # }
           python -m build --wheel
-          # write the build tag to the output
-          Write-Output "CUDA_VERSION=$cudaVersion" >> $env:GITHUB_ENV
+          # Publish tags that reflect the actual installed toolkit version.
+          Write-Output "CUDA_VERSION=$cudaTagVersion" >> $env:GITHUB_ENV
 
       - uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
