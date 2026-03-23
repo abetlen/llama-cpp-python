@@ -103,9 +103,9 @@ jobs:
           if ($IsLinux) {
             # Keep nvcc, cudart, and headers on the same NVIDIA label so the
             # detected toolkit version matches the published wheel tag.
-            mamba install -y --strict-channel-priority --override-channels -c $cudaChannel "$cudaChannel::cuda-toolkit=$cudaVersion" "$cudaChannel::cuda-nvcc_linux-64=$cudaVersion" "$cudaChannel::cuda-cudart" "$cudaChannel::cuda-cudart-dev"
+            mamba install -y --channel-priority flexible --override-channels -c $cudaChannel "$cudaChannel::cuda-toolkit=$cudaVersion" "$cudaChannel::cuda-nvcc_linux-64=$cudaVersion" "$cudaChannel::cuda-cudart" "$cudaChannel::cuda-cudart-dev"
           } else {
-            mamba install -y --strict-channel-priority --override-channels -c $cudaChannel "$cudaChannel::cuda-toolkit=$cudaVersion"
+            mamba install -y --channel-priority flexible --override-channels -c $cudaChannel "$cudaChannel::cuda-toolkit=$cudaVersion"
           }
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
