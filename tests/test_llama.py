@@ -58,8 +58,8 @@ def test_llama_cpp_tokenization():
 
 @pytest.fixture
 def llama_cpp_model_path():
-    repo_id = "Qwen/Qwen2-0.5B-Instruct-GGUF"
-    filename = "qwen2-0_5b-instruct-q8_0.gguf"
+    repo_id = "lmstudio-community/Qwen3.5-0.8B-GGUF"
+    filename = "Qwen3.5-0.8B-Q8_0.gguf"
     model_path = hf_hub_download(repo_id, filename)
     return model_path
 

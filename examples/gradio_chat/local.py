@@ -4,10 +4,10 @@ import llama_cpp.llama_tokenizer
 import gradio as gr
 
 llama = llama_cpp.Llama.from_pretrained(
-    repo_id="Qwen/Qwen1.5-0.5B-Chat-GGUF",
-    filename="*q8_0.gguf",
+    repo_id="lmstudio-community/Qwen3.5-0.8B-GGUF",
+    filename="*Q8_0.gguf",
     tokenizer=llama_cpp.llama_tokenizer.LlamaHFTokenizer.from_pretrained(
-        "Qwen/Qwen1.5-0.5B"
+        "Qwen/Qwen3.5-0.8B"
     ),
     verbose=False,
 )
