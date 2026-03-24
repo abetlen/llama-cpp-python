@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- fix(ci): Build Docker images from the checked-out source and sanitize branch tags by @abetlen in #2156
+- fix(ci): Fix the CUDA wheel workflow and keep release tags aligned with the built toolkit by @abetlen in #2155
+- fix(ci): Speed up release wheel builds by moving arm64 off QEMU and parallelizing riscv64 by @abetlen in #2154
+
 ## [0.3.17]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@49bfddeca18e62fa3d39114a23e9fcbdf8a22388 and sync Python bindings by @abetlen in #2151
