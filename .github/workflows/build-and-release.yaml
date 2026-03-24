@@ -90,17 +90,11 @@ jobs:
           path: ./wheelhouse/*.whl
 
   build_wheels_riscv64:
-    name: Build riscv64 wheels (${{ matrix.shard.name }})
+    name: Build riscv64 wheels (${{ matrix.python }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        shard:
-          - name: cp310-cp312
-            build: "cp310-* cp311-* cp312-*"
-            artifact: wheels_riscv64_cp310_cp312
-          - name: cp313-cp314
-            build: "cp313-* cp314-*"
-            artifact: wheels_riscv64_cp313_cp314
+        python: ["cp310-*", "cp311-*", "cp312-*", "cp313-*", "cp314-*"]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -120,16 +114,16 @@ jobs:
           # Build riscv64 wheels against a conservative baseline instead of
           # enabling RVV-related extensions from the build container.
           CIBW_ENVIRONMENT: CMAKE_ARGS="-DGGML_NATIVE=off -DGGML_RVV=off -DGGML_RV_ZFH=off -DGGML_RV_ZVFH=off -DGGML_RV_ZICBOP=off -DGGML_RV_ZIHINTPAUSE=off"
-          # Split the emulated riscv64 build across multiple runners to cut
-          # wall-clock time without changing the release artifact set.
-          CIBW_BUILD: ${{ matrix.shard.build }}
+          # Split the emulated riscv64 build into one Python version per job
+          # to minimize wall-clock time without changing the release artifacts.
+          CIBW_BUILD: ${{ matrix.python }}
         with:
           output-dir: wheelhouse
 
       - name: Upload wheels as artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.shard.artifact }}
+          name: wheels_riscv64_${{ matrix.python }}
           path: ./wheelhouse/*.whl
 
   build_sdist:
