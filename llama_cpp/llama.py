@@ -81,6 +81,7 @@ class Llama:
             int
         ] = llama_cpp.LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED,
         pooling_type: int = llama_cpp.LLAMA_POOLING_TYPE_UNSPECIFIED,
+        attention_type: int = llama_cpp.LLAMA_ATTENTION_TYPE_UNSPECIFIED,
         rope_freq_base: float = 0.0,
         rope_freq_scale: float = 0.0,
         yarn_ext_factor: float = -1.0,
@@ -163,6 +164,7 @@ class Llama:
             n_threads_batch: Number of threads to use for batch processing
             rope_scaling_type: RoPE scaling type, from `enum llama_rope_scaling_type`. ref: https://github.com/ggerganov/llama.cpp/pull/2054
             pooling_type: Pooling type, from `enum llama_pooling_type`.
+            attention_type: Attention type, from `enum llama_attention_type`.
             rope_freq_base: RoPE base frequency, 0 = from model
             rope_freq_scale: RoPE frequency scaling factor, 0 = from model
             yarn_ext_factor: YaRN extrapolation mix factor, negative = from model
@@ -319,6 +321,7 @@ class Llama:
             else llama_cpp.LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED
         )
         self.context_params.pooling_type = pooling_type
+        self.context_params.attention_type = attention_type
         self.context_params.rope_freq_base = (
             rope_freq_base if rope_freq_base != 0.0 else 0
         )
@@ -2100,6 +2103,7 @@ class Llama:
             n_threads_batch=self.context_params.n_threads_batch,
             rope_scaling_type=self.context_params.rope_scaling_type,
             pooling_type=self.context_params.pooling_type,
+            attention_type=self.context_params.attention_type,
             rope_freq_base=self.context_params.rope_freq_base,
             rope_freq_scale=self.context_params.rope_freq_scale,
             yarn_ext_factor=self.context_params.yarn_ext_factor,
