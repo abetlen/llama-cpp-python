@@ -99,21 +99,63 @@ jobs:
           MAMBA_NO_LOW_SPEED_LIMIT: "1"
         run: |
           $cudaVersion = $env:CUDAVER
-          mamba install -y 'cuda' -c nvidia/label/cuda-$cudaVersion
+          $cudaChannel = "nvidia/label/cuda-$cudaVersion"
+          if ($IsLinux) {
+            # Keep nvcc, cudart, and headers on the same NVIDIA label so the
+            # detected toolkit version matches the published wheel tag.
+            mamba install -y --channel-priority flexible --override-channels -c $cudaChannel "$cudaChannel::cuda-toolkit=$cudaVersion" "$cudaChannel::cuda-nvcc_linux-64=$cudaVersion" "$cudaChannel::cuda-cudart" "$cudaChannel::cuda-cudart-dev"
+          } else {
+            mamba install -y --channel-priority flexible --override-channels -c $cudaChannel "$cudaChannel::cuda-toolkit=$cudaVersion"
+          }
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
           python -m pip install build wheel
 
       - name: Build Wheel
         run: |
-          $cudaVersion = $env:CUDAVER.Remove($env:CUDAVER.LastIndexOf('.')).Replace('.','')
           $env:CUDA_PATH = $env:CONDA_PREFIX
           $env:CUDA_HOME = $env:CONDA_PREFIX
           $env:CUDA_TOOLKIT_ROOT_DIR = $env:CONDA_PREFIX
+          $cudaHostCompilerArg = ''
+          $env:CMAKE_ARGS = ''
           if ($IsLinux) {
-            $env:LD_LIBRARY_PATH = $env:CONDA_PREFIX + '/lib:' + $env:LD_LIBRARY_PATH
+            if (Test-Path '/usr/bin/g++-12') {
+              $env:CC = '/usr/bin/gcc-12'
+              $env:CXX = '/usr/bin/g++-12'
+              $env:CUDAHOSTCXX = '/usr/bin/g++-12'
+              $cudaHostCompilerArg = " -DCMAKE_CUDA_HOST_COMPILER=$env:CUDAHOSTCXX"
+            }
+            if (Test-Path (Join-Path $env:CONDA_PREFIX 'include/cuda_runtime.h')) {
+              $env:CUDAToolkit_ROOT = $env:CONDA_PREFIX
+              $env:CUDA_TOOLKIT_ROOT_DIR = $env:CONDA_PREFIX
+              $env:CMAKE_ARGS = "-DCUDAToolkit_ROOT=$env:CONDA_PREFIX -DCUDA_TOOLKIT_ROOT_DIR=$env:CONDA_PREFIX$cudaHostCompilerArg"
+              $env:CPATH = "$env:CONDA_PREFIX/include:$env:CPATH"
+              $env:CPLUS_INCLUDE_PATH = "$env:CONDA_PREFIX/include:$env:CPLUS_INCLUDE_PATH"
+              $env:LIBRARY_PATH = "$env:CONDA_PREFIX/lib:$env:LIBRARY_PATH"
+              $env:LD_LIBRARY_PATH = "$env:CONDA_PREFIX/lib:$env:LD_LIBRARY_PATH"
+            } else {
+              $env:CMAKE_ARGS = $cudaHostCompilerArg.Trim()
+            }
           }
+          $nvccPath = Join-Path $env:CONDA_PREFIX 'bin/nvcc'
+          if (-not (Test-Path $nvccPath)) {
+            $nvccPath = Join-Path $env:CONDA_PREFIX 'targets/x86_64-linux/bin/nvcc'
+          }
+          if (-not (Test-Path $nvccPath)) {
+            throw 'Failed to find nvcc in the conda environment'
+          }
+          $env:CUDACXX = $nvccPath
+          $env:PATH = "$(Split-Path $nvccPath):$env:PATH"
+          $nvccVersion = ((& $nvccPath --version) | Select-String 'release ([0-9]+\.[0-9]+)').Matches[0].Groups[1].Value
+          if (-not $nvccVersion) {
+            throw 'Failed to detect the installed CUDA toolkit version'
+          }
+          $cudaTagVersion = $nvccVersion.Replace('.','')
           $env:VERBOSE = '1'
-          $env:CMAKE_ARGS = '-DGGML_CUDA=on -DCMAKE_CUDA_ARCHITECTURES=all'
-          $env:CMAKE_ARGS = "-DGGML_CUDA_FORCE_MMQ=ON $env:CMAKE_ARGS"
+          # Keep a portable SM set, including sm_70, instead of CMake's `all`,
+          # which now pulls in future targets the hosted-runner toolchains cannot assemble.
+          $env:CMAKE_ARGS = "-DGGML_CUDA_FORCE_MMQ=ON -DGGML_CUDA=on -DCMAKE_CUDA_ARCHITECTURES=70;75;80;86;89;90 -DCMAKE_CUDA_FLAGS=--allow-unsupported-compiler $env:CMAKE_ARGS"
           # if ($env:AVXVER -eq 'AVX') {
           $env:CMAKE_ARGS = $env:CMAKE_ARGS + ' -DGGML_AVX2=off -DGGML_FMA=off -DGGML_F16C=off'
           # }
@@ -124,10 +166,11 @@ jobs:
           #  $env:CMAKE_ARGS = $env:CMAKE_ARGS + ' -DGGML_AVX=off -DGGML_AVX2=off -DGGML_FMA=off -DGGML_F16C=off'
           # }
           python -m build --wheel
-          # write the build tag to the output
-          Write-Output "CUDA_VERSION=$cudaVersion" >> $env:GITHUB_ENV
+          # Publish tags that reflect the actual installed toolkit version.
+          Write-Output "CUDA_VERSION=$cudaTagVersion" >> $env:GITHUB_ENV
 
       - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
         with:
           files: dist/*
           # Set tag_name to <tag>-cu<cuda_version>
