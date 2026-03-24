@@ -164,6 +164,7 @@ class Llama:
             n_threads_batch: Number of threads to use for batch processing
             rope_scaling_type: RoPE scaling type, from `enum llama_rope_scaling_type`. ref: https://github.com/ggerganov/llama.cpp/pull/2054
             pooling_type: Pooling type, from `enum llama_pooling_type`.
+            attention_type: Attention type, from `enum llama_attention_type`.
             rope_freq_base: RoPE base frequency, 0 = from model
             rope_freq_scale: RoPE frequency scaling factor, 0 = from model
             yarn_ext_factor: YaRN extrapolation mix factor, negative = from model
@@ -2102,6 +2103,7 @@ class Llama:
             n_threads_batch=self.context_params.n_threads_batch,
             rope_scaling_type=self.context_params.rope_scaling_type,
             pooling_type=self.context_params.pooling_type,
+            attention_type=self.context_params.attention_type,
             rope_freq_base=self.context_params.rope_freq_base,
             rope_freq_scale=self.context_params.rope_freq_scale,
             yarn_ext_factor=self.context_params.yarn_ext_factor,
@@ -2141,6 +2143,9 @@ class Llama:
         )
 
     def __setstate__(self, state):
+        state.setdefault(
+            "attention_type", llama_cpp.LLAMA_ATTENTION_TYPE_UNSPECIFIED
+        )
         self.__init__(**state)
 
     def save_state(self) -> LlamaState:
