@@ -2143,9 +2143,6 @@ class Llama:
         )
 
     def __setstate__(self, state):
-        state.setdefault(
-            "attention_type", llama_cpp.LLAMA_ATTENTION_TYPE_UNSPECIFIED
-        )
         self.__init__(**state)
 
     def save_state(self) -> LlamaState:
