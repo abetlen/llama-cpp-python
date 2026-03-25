@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- fix(ci): Shrink CUDA wheel fatbins so CUDA releases stay under GitHub's asset size limit by @abetlen in #2158
+
 ## [0.3.18]
 
 - feat: Expose `attention_type` in `Llama.__init__` for non-causal embedding models by @jamesbiederbeck in #2143
