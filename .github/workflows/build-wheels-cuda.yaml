@@ -153,9 +153,10 @@ jobs:
           }
           $cudaTagVersion = $nvccVersion.Replace('.','')
           $env:VERBOSE = '1'
-          # Keep a portable SM set, including sm_70, instead of CMake's `all`,
-          # which now pulls in future targets the hosted-runner toolchains cannot assemble.
-          $env:CMAKE_ARGS = "-DGGML_CUDA_FORCE_MMQ=ON -DGGML_CUDA=on -DCMAKE_CUDA_ARCHITECTURES=70;75;80;86;89;90 -DCMAKE_CUDA_FLAGS=--allow-unsupported-compiler $env:CMAKE_ARGS"
+          # Build real cubins for the supported GPUs, including sm_70, and keep
+          # one forward-compatible PTX target instead of embedding PTX for every
+          # SM. This keeps the wheel under GitHub's 2 GiB release-asset limit.
+          $env:CMAKE_ARGS = "-DGGML_CUDA_FORCE_MMQ=ON -DGGML_CUDA=on -DCMAKE_CUDA_ARCHITECTURES=70-real;75-real;80-real;86-real;89-real;90-real;90-virtual -DCMAKE_CUDA_FLAGS=--allow-unsupported-compiler $env:CMAKE_ARGS"
           # if ($env:AVXVER -eq 'AVX') {
           $env:CMAKE_ARGS = $env:CMAKE_ARGS + ' -DGGML_AVX2=off -DGGML_FMA=off -DGGML_F16C=off'
           # }
