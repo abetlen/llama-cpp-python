@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- fix: Handle embedding models without KV memory and test embeddings with a real GGUF embedding model by @abetlen in #2160
 - fix(ci): Shrink CUDA wheel fatbins so CUDA releases stay under GitHub's asset size limit by @abetlen in #2158
 
 ## [0.3.18]

@@ -288,7 +288,9 @@ class LlamaContext:
         return llama_cpp.llama_pooling_type(self.ctx)
 
     def kv_cache_clear(self):
-        assert self.memory is not None, "Memory is not initialized"
+        # Embedding models with non-causal attention may not allocate memory.
+        if self.memory is None:
+            return
         llama_cpp.llama_memory_clear(self.memory, True)
 
     def kv_cache_seq_rm(self, seq_id: int, p0: int, p1: int) -> bool:
