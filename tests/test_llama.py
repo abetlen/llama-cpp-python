@@ -64,6 +64,14 @@ def llama_cpp_model_path():
     return model_path
 
 
+@pytest.fixture
+def llama_cpp_embedding_model_path():
+    repo_id = "CompendiumLabs/bge-small-en-v1.5-gguf"
+    filename = "bge-small-en-v1.5-q4_k_m.gguf"
+    model_path = hf_hub_download(repo_id, filename)
+    return model_path
+
+
 def test_real_model(llama_cpp_model_path):
     import os
 
@@ -225,9 +233,9 @@ root ::= "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10"
     assert number_1 == number_3
 
 
-def test_real_llama_embeddings(llama_cpp_model_path):
+def test_real_llama_embeddings(llama_cpp_embedding_model_path):
     model = llama_cpp.Llama(
-        llama_cpp_model_path,
+        llama_cpp_embedding_model_path,
         n_ctx=32,
         n_batch=32,
         n_ubatch=32,
@@ -237,5 +245,5 @@ def test_real_llama_embeddings(llama_cpp_model_path):
         flash_attn=True,
         embedding=True,
     )
-    # Smoke test for now
-    model.embed("Hello World")
+    embedding = model.embed("Hello World")
+    assert len(embedding) > 0
