@@ -869,7 +869,7 @@ def _format_llama2(
             m = message or ""
             ret += m + seps[i % 2]
         elif message:
-            ret += role + message + " " + seps[i % 2]
+            ret += role + str(message) + " " + seps[i % 2]
         else:
             ret += role + " "
     return ret
@@ -882,7 +882,7 @@ def _format_add_colon_single(
     ret = system_message + sep
     for role, message in messages:
         if message:
-            ret += role + ": " + message + sep
+            ret += role + ": " + str(message) + sep
         else:
             ret += role + ":"
     return ret
@@ -896,7 +896,7 @@ def _format_add_colon_two(
     ret = system_message + seps[0]
     for i, (role, message) in enumerate(messages):
         if message:
-            ret += role + ": " + message + seps[i % 2]
+            ret += role + ": " + str(message) + seps[i % 2]
         else:
             ret += role + ":"
     return ret
@@ -909,7 +909,7 @@ def _format_no_colon_single(
     ret = system_message
     for role, message in messages:
         if message:
-            ret += role + message + sep
+            ret += role + str(message) + sep
         else:
             ret += role
     return ret
@@ -922,7 +922,7 @@ def _format_add_colon_space_single(
     ret = system_message + sep
     for role, message in messages:
         if message:
-            ret += role + ": " + message + sep
+            ret += role + ": " + str(message) + sep
         else:
             ret += role + ": "  # must be end with a space
     return ret
@@ -935,7 +935,7 @@ def _format_chatml(
     ret = "" if system_message == "" else system_message + sep + "\n"
     for role, message in messages:
         if message:
-            ret += role + "\n" + message + sep + "\n"
+            ret += role + "\n" + str(message) + sep + "\n"
         else:
             ret += role + "\n"
     return ret
@@ -950,7 +950,7 @@ def _format_chatglm3(
         ret += system_message
     for role, message in messages:
         if message:
-            ret += role + "\n" + " " + message
+            ret += role + "\n" + " " + str(message)
         else:
             ret += role
     return ret
