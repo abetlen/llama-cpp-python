@@ -48,7 +48,8 @@ class ModelSettings(BaseSettings):
     )
     use_mmap: bool = Field(
         default=llama_cpp.llama_supports_mmap(),
-        description="Use mmap.",
+        description="Use mmap. When n_gpu_layers is -1 (full GPU offload), mmap is automatically "
+        "disabled to reduce host RAM usage unless explicitly set to True.",
     )
     use_mlock: bool = Field(
         default=llama_cpp.llama_supports_mlock(),
