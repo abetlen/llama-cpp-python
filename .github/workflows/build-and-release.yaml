@@ -94,6 +94,15 @@ jobs:
           submodules: "recursive"
 
       - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.9"
+
+      - name: Install dependencies
+        env:
+          RUST_LOG: trace
+        run: |
+          uv venv
+          uv pip install -e .[all] --verbose
 
       - name: Build source distribution
         run: |
