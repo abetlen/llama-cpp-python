@@ -2358,11 +2358,13 @@ class Llama:
                     )
 
                 (matching_additional_file,) = matching_additional_files
+                subfolder = str(Path(matching_additional_file).parent)
+                additional_file_name = Path(matching_additional_file).name
 
                 # download the additional file
                 hf_hub_download(
                     repo_id=repo_id,
-                    filename=matching_additional_file,
+                    filename=additional_file_name,
                     subfolder=subfolder,
                     local_dir=local_dir,
                     local_dir_use_symlinks=local_dir_use_symlinks,
