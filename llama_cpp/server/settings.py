@@ -60,7 +60,7 @@ class ModelSettings(BaseSettings):
     )
     rpc_servers: Optional[str] = Field(
         default=None,
-        description="comma seperated list of rpc servers for offloading",
+        description="comma separated list of rpc servers for offloading",
     )
     # Context Params
     seed: int = Field(
