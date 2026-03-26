@@ -1,5 +1,5 @@
 [build-system]
-requires = ["scikit-build-core[pyproject]>=0.9.2"]
+requires = ["scikit-build-core[wheels]>=0.12.2"]
 build-backend = "scikit_build_core.build"
 
 [project]
@@ -63,6 +63,7 @@ all = [
 
 [tool.scikit-build]
 wheel.packages = ["llama_cpp"]
+wheel.py-api = "py3"
 cmake.verbose = true
 cmake.minimum-version = "3.21"
 minimum-version = "0.5.1"
@@ -91,3 +92,25 @@ ignore = ["E712"]
 
 [tool.pytest.ini_options]
 testpaths = "tests"
+
+[tool.cibuildwheel]
+archs = ["auto64"]
+# llama.cpp requires glibc 2.31+. manylinux_2_34 is the oldest manylinux image with glibc 2.31.
+# see all manylinux images here: https://github.com/pypa/manylinux
+manylinux-x86_64-image = "manylinux_2_34"
+manylinux-aarch64-image = "manylinux_2_34"
+skip = "*musllinux*"  # Segmentation fault occurs on musllinux python 3.10+
+test-sources = ["tests", "vendor"]
+test-command = "pytest -v ./tests"
+test-extras = ["test"]
+test-skip = "*_riscv64"  # riscv64 cannot install test packages (e.g. numpy, scipy, pydantic-core, hf-xet, etc.)
+
+[tool.cibuildwheel.linux]
+before-build = "command -v dnf && dnf install -y openssl-devel || (command -v apk && apk add --no-cache openssl-dev) || true"
+repair-wheel-command = "auditwheel repair --exclude 'libcu*' -w {dest_dir} {wheel}"  # don't bundle CUDA libraries
+
+[tool.cibuildwheel.linux.environment]
+CMAKE_ARGS = "-DGGML_NATIVE=OFF"
+
+[tool.cibuildwheel.macos.environment]
+CMAKE_ARGS = "-DGGML_NATIVE=OFF"
