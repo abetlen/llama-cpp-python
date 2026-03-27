@@ -11,53 +11,20 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-22.04, windows-2022, macos-14, macos-15]
+        os: [ubuntu-22.04, windows-2022, macos-15]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: "recursive"
 
-      # Used to host cibuildwheel
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.9"
-
-      - name: Install dependencies (Linux/MacOS)
-        if: runner.os != 'Windows'
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install uv
-          RUST_LOG=trace python -m uv pip install -e .[all] --verbose
-        shell: bash
-
-      - name: Install dependencies (Windows)
-        if: runner.os == 'Windows'
-        env:
-          RUST_LOG: trace        
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install uv
-          python -m uv pip install -e .[all] --verbose
-        shell: cmd
-
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.22.0
-        env:
-          # disable repair
-          CIBW_REPAIR_WHEEL_COMMAND: ""
-          # Skip cibuildwheel's default i686 sidecar and keep Linux release
-          # wheels on a portable x86_64 CPU baseline.
-          CIBW_ARCHS_LINUX: "auto64"
-          CIBW_ENVIRONMENT_LINUX: CMAKE_ARGS="-DGGML_NATIVE=off"
-          # Keep macOS release wheels on a portable CPU baseline instead of
-          # inheriting the hosted runner's native flags.
-          CIBW_ENVIRONMENT_MACOS: CMAKE_ARGS="-DGGML_NATIVE=off"
+        uses: pypa/cibuildwheel@v3.4.0
         with:
           package-dir: .
           output-dir: wheelhouse
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wheels-${{ matrix.os }}
           path: ./wheelhouse/*.whl
@@ -66,25 +33,17 @@ jobs:
     name: Build arm64 wheels
     runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: "recursive"
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.22.0
-        env:
-          CIBW_SKIP: "*musllinux* pp*"
-          CIBW_REPAIR_WHEEL_COMMAND: ""
-          CIBW_ARCHS: "aarch64"
-          # Keep native arm64 builds on a portable CPU baseline instead of
-          # tuning wheels to the hosted runner.
-          CIBW_ENVIRONMENT: CMAKE_ARGS="-DGGML_NATIVE=off"
-          CIBW_BUILD: "cp38-* cp39-* cp310-* cp311-* cp312-*"
+        uses: pypa/cibuildwheel@v3.4.0
         with:
           output-dir: wheelhouse
 
       - name: Upload wheels as artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wheels_arm64
           path: ./wheelhouse/*.whl
@@ -96,50 +55,33 @@ jobs:
       fail-fast: false
       matrix:
         shard:
-          - name: cp310
-            build: "cp310-*"
-            artifact: wheels_riscv64_cp310
-          - name: cp311
-            build: "cp311-*"
-            artifact: wheels_riscv64_cp311
-          - name: cp312
-            build: "cp312-*"
-            artifact: wheels_riscv64_cp312
-          - name: cp313
-            build: "cp313-*"
-            artifact: wheels_riscv64_cp313
-          - name: cp314
-            build: "cp314-*"
-            artifact: wheels_riscv64_cp314
+          - name: manylinux
+            build: "*manylinux*"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: "recursive"
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
         with:
           platforms: linux/riscv64
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v3.1.2
+        uses: pypa/cibuildwheel@v3.4.0
         env:
-          CIBW_SKIP: "*musllinux* pp*"
-          CIBW_REPAIR_WHEEL_COMMAND: ""
           CIBW_ARCHS: "riscv64"
           # Build riscv64 wheels against a conservative baseline instead of
           # enabling RVV-related extensions from the build container.
           CIBW_ENVIRONMENT: CMAKE_ARGS="-DGGML_NATIVE=off -DGGML_RVV=off -DGGML_RV_ZFH=off -DGGML_RV_ZVFH=off -DGGML_RV_ZICBOP=off -DGGML_RV_ZIHINTPAUSE=off"
-          # Split the emulated riscv64 build into one Python version per job
-          # to minimize wall-clock time without changing the release artifacts.
           CIBW_BUILD: ${{ matrix.shard.build }}
         with:
           output-dir: wheelhouse
 
       - name: Upload wheels as artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.shard.artifact }}
+          name: wheels_riscv64_${{ matrix.shard.name }}
           path: ./wheelhouse/*.whl
 
   build_sdist:
@@ -147,39 +89,26 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: "recursive"
 
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.9"
 
-      - name: Install dependencies (Linux/MacOS)
-        if: runner.os != 'Windows'
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install uv
-          RUST_LOG=trace python -m uv pip install -e .[all] --verbose
-          python -m uv pip install build
-        shell: bash
-
-      - name: Install dependencies (Windows)
-        if: runner.os == 'Windows'
+      - name: Install dependencies
         env:
-          RUST_LOG: trace        
+          RUST_LOG: trace
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install uv
-          python -m uv pip install -e .[all] --verbose
-          python -m uv pip install build
-        shell: cmd
+          uv venv
+          uv pip install -e .[all] --verbose
 
       - name: Build source distribution
         run: |
-          python -m build --sdist
+          uv build --sdist
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: sdist
           path: ./dist/*.tar.gz
@@ -191,7 +120,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           merge-multiple: true
           path: dist
