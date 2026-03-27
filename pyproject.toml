@@ -1,5 +1,5 @@
 [build-system]
-requires = ["scikit-build-core[wheels]>=0.12.2"]
+requires = ["scikit-build-core>=0.12.2"]
 build-backend = "scikit_build_core.build"
 
 [project]
