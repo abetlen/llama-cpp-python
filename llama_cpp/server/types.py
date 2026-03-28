@@ -107,6 +107,7 @@ grammar = Field(
 
 
 class CreateCompletionRequest(BaseModel):
+    model: Optional[str] = model_field
     prompt: Union[str, List[str]] = Field(
         default="", description="The prompt to generate completions for."
     )
@@ -138,7 +139,6 @@ class CreateCompletionRequest(BaseModel):
     seed: Optional[int] = Field(None)
 
     # ignored or currently unsupported
-    model: Optional[str] = model_field
     n: Optional[int] = 1
     best_of: Optional[int] = 1
     user: Optional[str] = Field(default=None)
@@ -190,6 +190,7 @@ class ChatCompletionRequestMessage(BaseModel):
 
 
 class CreateChatCompletionRequest(BaseModel):
+    model: Optional[str] = model_field
     messages: List[llama_cpp.ChatCompletionRequestMessage] = Field(
         default=[], description="A list of messages to generate completions for."
     )
@@ -237,7 +238,6 @@ class CreateChatCompletionRequest(BaseModel):
     )
 
     # ignored or currently unsupported
-    model: Optional[str] = model_field
     n: Optional[int] = 1
     user: Optional[str] = Field(None)
 
