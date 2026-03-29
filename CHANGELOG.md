@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- ci: Publish release wheels as `py3-none` by @Bing-su in #2166
 - fix(ci): Publish distinct manylinux and musllinux CPU wheels by @abetlen in #2165
 
 ## [0.3.19]
