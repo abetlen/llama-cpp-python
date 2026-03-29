@@ -44,8 +44,11 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.22.0
         env:
-          # disable repair
+          # Keep repair disabled by default for non-Linux platforms in this job.
           CIBW_REPAIR_WHEEL_COMMAND: ""
+          # Linux needs auditwheel repair so manylinux and musllinux wheels are
+          # published with distinct platform tags instead of generic linux tags.
+          CIBW_REPAIR_WHEEL_COMMAND_LINUX: "auditwheel repair -w {dest_dir} {wheel}"
           # Skip cibuildwheel's default i686 sidecar and keep Linux release
           # wheels on a portable x86_64 CPU baseline.
           CIBW_ARCHS_LINUX: "auto64"
