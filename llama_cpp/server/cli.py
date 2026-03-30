@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import json
 
-from typing import List, Literal, Union, Any, Type, TypeVar
+from typing import List, Literal, Union, Any, Type, TypeVar, Dict
 
 from pydantic import BaseModel
 
@@ -40,6 +41,17 @@ def _contains_list_type(annotation: Type[Any] | None) -> bool:
         return False
 
 
+def _contains_dict_type(annotation: Type[Any] | None) -> bool:
+    origin = getattr(annotation, "__origin__", None)
+
+    if origin is dict or origin is Dict:
+        return True
+    elif origin in (Literal, Union):
+        return any(_contains_dict_type(arg) for arg in annotation.__args__)  # type: ignore
+    else:
+        return False
+
+
 def _parse_bool_arg(arg: str | bytes | bool) -> bool:
     if isinstance(arg, bytes):
         arg = arg.decode("utf-8")
@@ -57,6 +69,16 @@ def _parse_bool_arg(arg: str | bytes | bool) -> bool:
         raise ValueError(f"Invalid boolean argument: {arg}")
 
 
+def _parse_json_object_arg(arg: str | bytes) -> dict[str, Any]:
+    if isinstance(arg, bytes):
+        arg = arg.decode("utf-8")
+
+    value = json.loads(arg)
+    if not isinstance(value, dict):
+        raise ValueError(f"Invalid JSON object argument: {arg}")
+    return value
+
+
 def add_args_from_model(parser: argparse.ArgumentParser, model: Type[BaseModel]):
     """Add arguments from a pydantic model to an argparse parser."""
 
@@ -68,7 +90,15 @@ def add_args_from_model(parser: argparse.ArgumentParser, model: Type[BaseModel])
             _get_base_type(field.annotation) if field.annotation is not None else str
         )
         list_type = _contains_list_type(field.annotation)
-        if base_type is not bool:
+        dict_type = _contains_dict_type(field.annotation)
+        if dict_type:
+            parser.add_argument(
+                f"--{name}",
+                dest=name,
+                type=_parse_json_object_arg,
+                help=description,
+            )
+        elif base_type is not bool:
             parser.add_argument(
                 f"--{name}",
                 dest=name,

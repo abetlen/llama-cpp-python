@@ -299,6 +299,21 @@ class LlamaProxy:
             # Misc
             verbose=settings.verbose,
         )
+        if settings.chat_template_kwargs:
+            base_chat_handler = (
+                _model.chat_handler
+                or _model._chat_handlers.get(_model.chat_format)
+                or llama_cpp.llama_chat_format.get_chat_completion_handler(
+                    _model.chat_format
+                )
+            )
+
+            def chat_handler_with_kwargs(*args, **kwargs):
+                return base_chat_handler(
+                    *args, **{**settings.chat_template_kwargs, **kwargs}
+                )
+
+            _model.chat_handler = chat_handler_with_kwargs
         if settings.cache:
             if settings.cache_type == "disk":
                 if settings.verbose:
