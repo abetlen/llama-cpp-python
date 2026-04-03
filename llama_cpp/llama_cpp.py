@@ -45,6 +45,14 @@ _lib = load_shared_library(_lib_base_name, _base_path)
 ctypes_function = ctypes_function_for_shared_library(_lib)
 
 
+def _warn_deprecated(symbol: str, hint: str) -> None:
+    warnings.warn(
+        f"{symbol} is deprecated; {hint}",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
+
 # from ggml.h
 # // NOTE: always add types at the end of the enum to keep backward compatibility
 # enum ggml_type {
@@ -711,6 +719,43 @@ class llama_model_kv_override(ctypes.Structure):
         value: Union[int, float, bool, bytes]
 
 
+# struct llama_model_tensor_override {
+#     const char * pattern;
+#     enum ggml_type type;
+# };
+class llama_model_tensor_override(ctypes.Structure):
+    """Override the quantization type for tensors matching a pattern."""
+
+    _fields_ = [
+        ("pattern", ctypes.c_char_p),
+        ("type", ctypes.c_int),
+    ]
+
+    if TYPE_CHECKING:
+        pattern: Optional[bytes]
+        type: int
+
+
+# struct llama_model_imatrix_data {
+#     const char * name;
+#     const float * data;
+#     size_t size;
+# };
+class llama_model_imatrix_data(ctypes.Structure):
+    """Importance matrix data for a tensor used during quantization."""
+
+    _fields_ = [
+        ("name", ctypes.c_char_p),
+        ("data", ctypes.POINTER(ctypes.c_float)),
+        ("size", ctypes.c_size_t),
+    ]
+
+    if TYPE_CHECKING:
+        name: Optional[bytes]
+        data: CtypesPointer[ctypes.c_float]
+        size: int
+
+
 # struct llama_model_tensor_buft_override {
 #     const char * pattern;
 #     ggml_backend_buffer_type_t buft;
@@ -1022,10 +1067,10 @@ It might not exist for progress report where '.' is output repeatedly."""
 #     bool pure;                            // quantize all tensors to the default type
 #     bool keep_split;                      // quantize to the same number of shards
 #     bool dry_run;                         // calculate and show the final quantization size without performing quantization
-#     void * imatrix;                       // pointer to importance matrix data
-#     void * kv_overrides;                  // pointer to vector containing overrides
-#     void * tensor_types;                  // pointer to vector containing tensor types
-#     void * prune_layers;                  // pointer to vector containing layer indices to prune
+#     const struct llama_model_imatrix_data * imatrix;         // pointer to importance matrix data
+#     const struct llama_model_kv_override * kv_overrides;     // pointer to kv overrides
+#     const struct llama_model_tensor_override * tt_overrides; // pointer to tensor overrides
+#     const int32_t * prune_layers;                            // pointer to layer indices to prune
 # } llama_model_quantize_params;
 class llama_model_quantize_params(ctypes.Structure):
     """Parameters for llama_model_quantize
@@ -1041,10 +1086,10 @@ class llama_model_quantize_params(ctypes.Structure):
         pure (bool): quantize all tensors to the default type
         keep_split (bool): quantize to the same number of shards
         dry_run (bool): calculate and show the final quantization size without performing quantization
-        imatrix (ctypes.c_void_p): pointer to importance matrix data
-        kv_overrides (ctypes.c_void_p): pointer to vector containing overrides
-        tensor_types (ctypes.c_void_p): pointer to vector containing tensor types
-        prune_layers (ctypes.c_void_p): pointer to vector containing layer indices to prune
+        imatrix (ctypes.Array[llama_model_imatrix_data]): pointer to importance matrix data
+        kv_overrides (ctypes.Array[llama_model_kv_override]): pointer to kv overrides
+        tt_overrides (ctypes.Array[llama_model_tensor_override]): pointer to tensor overrides
+        prune_layers (ctypes.Array[ctypes.c_int32]): pointer to layer indices to prune
     """
 
     if TYPE_CHECKING:
@@ -1058,10 +1103,10 @@ class llama_model_quantize_params(ctypes.Structure):
         pure: bool
         keep_split: bool
         dry_run: bool
-        imatrix: ctypes.c_void_p
-        kv_overrides: ctypes.c_void_p
-        tensor_types: ctypes.c_void_p
-        prune_layers: ctypes.c_void_p
+        imatrix: CtypesPointer[llama_model_imatrix_data]
+        kv_overrides: CtypesPointer[llama_model_kv_override]
+        tt_overrides: CtypesPointer[llama_model_tensor_override]
+        prune_layers: CtypesPointer[ctypes.c_int32]
 
     _fields_ = [
         ("nthread", ctypes.c_int32),
@@ -1074,10 +1119,10 @@ class llama_model_quantize_params(ctypes.Structure):
         ("pure", ctypes.c_bool),
         ("keep_split", ctypes.c_bool),
         ("dry_run", ctypes.c_bool),
-        ("imatrix", ctypes.c_void_p),
-        ("kv_overrides", ctypes.c_void_p),
-        ("tensor_types", ctypes.c_void_p),
-        ("prune_layers", ctypes.c_void_p),
+        ("imatrix", ctypes.POINTER(llama_model_imatrix_data)),
+        ("kv_overrides", ctypes.POINTER(llama_model_kv_override)),
+        ("tt_overrides", ctypes.POINTER(llama_model_tensor_override)),
+        ("prune_layers", ctypes.POINTER(ctypes.c_int32)),
     ]
 
 
@@ -1272,6 +1317,19 @@ def llama_load_model_from_file(
 ) -> Optional[llama_model_p]: ...
 
 
+_llama_load_model_from_file = llama_load_model_from_file
+
+
+def llama_load_model_from_file(
+    path_model: bytes, params: llama_model_params, /
+) -> Optional[llama_model_p]:
+    _warn_deprecated(
+        "llama_load_model_from_file",
+        "use llama_model_load_from_file instead",
+    )
+    return _llama_load_model_from_file(path_model, params)
+
+
 # // Load the model from a file
 # // If the file is split into multiple parts, the file name must follow this pattern: <name>-%05d-of-%05d.gguf
 # // If the split file name does not follow this pattern, use llama_model_load_from_splits
@@ -1353,6 +1411,14 @@ def llama_model_save_to_file(model: llama_model_p, path_model: bytes, /):
 def llama_free_model(model: llama_model_p, /): ...
 
 
+_llama_free_model = llama_free_model
+
+
+def llama_free_model(model: llama_model_p, /):
+    _warn_deprecated("llama_free_model", "use llama_model_free instead")
+    return _llama_free_model(model)
+
+
 # LLAMA_API void llama_model_free(struct llama_model * model);
 @ctypes_function(
     "llama_model_free",
@@ -1417,6 +1483,19 @@ def llama_init_from_model(
 def llama_new_context_with_model(
     model: llama_model_p, params: llama_context_params, /
 ) -> Optional[llama_context_p]: ...
+
+
+_llama_new_context_with_model = llama_new_context_with_model
+
+
+def llama_new_context_with_model(
+    model: llama_model_p, params: llama_context_params, /
+) -> Optional[llama_context_p]:
+    _warn_deprecated(
+        "llama_new_context_with_model",
+        "use llama_init_from_model instead",
+    )
+    return _llama_new_context_with_model(model, params)
 
 
 # // Frees all allocated memory
@@ -1557,9 +1636,25 @@ def llama_n_seq_max(ctx: llama_context_p, /) -> int: ...
 def llama_n_ctx_train(model: llama_model_p, /) -> int: ...
 
 
+_llama_n_ctx_train = llama_n_ctx_train
+
+
+def llama_n_ctx_train(model: llama_model_p, /) -> int:
+    _warn_deprecated("llama_n_ctx_train", "use llama_model_n_ctx_train instead")
+    return _llama_n_ctx_train(model)
+
+
 # DEPRECATED(LLAMA_API int32_t llama_n_embd     (const struct llama_model * model), "use llama_model_n_embd instead");
 @ctypes_function("llama_n_embd", [llama_model_p_ctypes], ctypes.c_int32)
 def llama_n_embd(model: llama_model_p, /) -> int: ...
+
+
+_llama_n_embd = llama_n_embd
+
+
+def llama_n_embd(model: llama_model_p, /) -> int:
+    _warn_deprecated("llama_n_embd", "use llama_model_n_embd instead")
+    return _llama_n_embd(model)
 
 
 # DEPRECATED(LLAMA_API int32_t llama_n_layer    (const struct llama_model * model), "use llama_model_n_layer instead");
@@ -1567,14 +1662,38 @@ def llama_n_embd(model: llama_model_p, /) -> int: ...
 def llama_n_layer(model: llama_model_p, /) -> int: ...
 
 
+_llama_n_layer = llama_n_layer
+
+
+def llama_n_layer(model: llama_model_p, /) -> int:
+    _warn_deprecated("llama_n_layer", "use llama_model_n_layer instead")
+    return _llama_n_layer(model)
+
+
 # DEPRECATED(LLAMA_API int32_t llama_n_head     (const struct llama_model * model), "use llama_model_n_head instead");
 @ctypes_function("llama_n_head", [llama_model_p_ctypes], ctypes.c_int32)
 def llama_n_head(model: llama_model_p, /) -> int: ...
 
 
+_llama_n_head = llama_n_head
+
+
+def llama_n_head(model: llama_model_p, /) -> int:
+    _warn_deprecated("llama_n_head", "use llama_model_n_head instead")
+    return _llama_n_head(model)
+
+
 # DEPRECATED(LLAMA_API int32_t llama_n_vocab    (const struct llama_vocab * vocab), "use llama_vocab_n_tokens instead");
 @ctypes_function("llama_n_vocab", [llama_vocab_p_ctypes], ctypes.c_int32)
 def llama_n_vocab(model: llama_vocab_p, /) -> int: ...
+
+
+_llama_n_vocab = llama_n_vocab
+
+
+def llama_n_vocab(model: llama_vocab_p, /) -> int:
+    _warn_deprecated("llama_n_vocab", "use llama_vocab_n_tokens instead")
+    return _llama_n_vocab(model)
 
 
 # LLAMA_API const struct llama_model * llama_get_model   (const struct llama_context * ctx);
@@ -2381,6 +2500,14 @@ def llama_get_state_size(ctx: llama_context_p, /) -> int:
     ...
 
 
+_llama_get_state_size = llama_get_state_size
+
+
+def llama_get_state_size(ctx: llama_context_p, /) -> int:
+    _warn_deprecated("llama_get_state_size", "use llama_state_get_size instead")
+    return _llama_get_state_size(ctx)
+
+
 # // Copies the state to the specified destination address.
 # // Destination needs to have allocated enough memory.
 # // Returns the number of bytes copied
@@ -2428,6 +2555,16 @@ def llama_copy_state_data(
     ...
 
 
+_llama_copy_state_data = llama_copy_state_data
+
+
+def llama_copy_state_data(
+    ctx: llama_context_p, dst: CtypesArray[ctypes.c_uint8], /
+) -> int:
+    _warn_deprecated("llama_copy_state_data", "use llama_state_get_data instead")
+    return _llama_copy_state_data(ctx, dst)
+
+
 # // Set the state reading from the specified address
 # // Returns the number of bytes read
 # LLAMA_API size_t llama_state_set_data(
@@ -2464,6 +2601,16 @@ def llama_set_state_data(
 ) -> int:
     """Set the state reading from the specified address (DEPRECATED)"""
     ...
+
+
+_llama_set_state_data = llama_set_state_data
+
+
+def llama_set_state_data(
+    ctx: llama_context_p, src: CtypesArray[ctypes.c_uint8], /
+) -> int:
+    _warn_deprecated("llama_set_state_data", "use llama_state_set_data instead")
+    return _llama_set_state_data(ctx, src)
 
 
 # Save/load session file
@@ -2522,6 +2669,23 @@ def llama_load_session_file(
 ) -> bool: ...
 
 
+_llama_load_session_file = llama_load_session_file
+
+
+def llama_load_session_file(
+    ctx: llama_context_p,
+    path_session: bytes,
+    tokens_out: CtypesArray[llama_token],
+    n_token_capacity: Union[ctypes.c_size_t, int],
+    n_token_count_out: CtypesPointerOrRef[ctypes.c_size_t],
+    /,
+) -> bool:
+    _warn_deprecated("llama_load_session_file", "use llama_state_load_file instead")
+    return _llama_load_session_file(
+        ctx, path_session, tokens_out, n_token_capacity, n_token_count_out
+    )
+
+
 # LLAMA_API bool llama_state_save_file(
 #         struct llama_context * ctx,
 #                   const char * path_session,
@@ -2569,6 +2733,20 @@ def llama_save_session_file(
     n_token_count: Union[ctypes.c_size_t, int],
     /,
 ) -> bool: ...
+
+
+_llama_save_session_file = llama_save_session_file
+
+
+def llama_save_session_file(
+    ctx: llama_context_p,
+    path_session: bytes,
+    tokens: CtypesArray[llama_token],
+    n_token_count: Union[ctypes.c_size_t, int],
+    /,
+) -> bool:
+    _warn_deprecated("llama_save_session_file", "use llama_state_save_file instead")
+    return _llama_save_session_file(ctx, path_session, tokens, n_token_count)
 
 
 # // Get the exact size needed to copy the state of a single sequence
@@ -3300,6 +3478,16 @@ def llama_token_get_text(
 ) -> bytes: ...
 
 
+_llama_token_get_text = llama_token_get_text
+
+
+def llama_token_get_text(
+    vocab: llama_vocab_p, token: Union[llama_token, int], /
+) -> bytes:
+    _warn_deprecated("llama_token_get_text", "use llama_vocab_get_text instead")
+    return _llama_token_get_text(vocab, token)
+
+
 # DEPRECATED(LLAMA_API float llama_token_get_score(const struct llama_vocab * vocab, llama_token token), "use llama_vocab_get_score instead");
 @ctypes_function(
     "llama_token_get_score",
@@ -3309,6 +3497,16 @@ def llama_token_get_text(
 def llama_token_get_score(
     vocab: llama_vocab_p, token: Union[llama_token, int], /
 ) -> float: ...
+
+
+_llama_token_get_score = llama_token_get_score
+
+
+def llama_token_get_score(
+    vocab: llama_vocab_p, token: Union[llama_token, int], /
+) -> float:
+    _warn_deprecated("llama_token_get_score", "use llama_vocab_get_score instead")
+    return _llama_token_get_score(vocab, token)
 
 
 # DEPRECATED(LLAMA_API enum llama_token_attr llama_token_get_attr(const struct llama_vocab * vocab, llama_token token), "use llama_vocab_get_attr instead");
@@ -3322,6 +3520,16 @@ def llama_token_get_attr(
 ) -> int: ...
 
 
+_llama_token_get_attr = llama_token_get_attr
+
+
+def llama_token_get_attr(
+    vocab: llama_vocab_p, token: Union[llama_token, int], /
+) -> int:
+    _warn_deprecated("llama_token_get_attr", "use llama_vocab_get_attr instead")
+    return _llama_token_get_attr(vocab, token)
+
+
 # DEPRECATED(LLAMA_API bool llama_token_is_eog(const struct llama_vocab * vocab, llama_token token), "use llama_vocab_is_eog instead");
 @ctypes_function(
     "llama_token_is_eog",
@@ -3331,6 +3539,14 @@ def llama_token_get_attr(
 def llama_token_is_eog(
     vocab: llama_vocab_p, token: Union[llama_token, int], /
 ) -> bool: ...
+
+
+_llama_token_is_eog = llama_token_is_eog
+
+
+def llama_token_is_eog(vocab: llama_vocab_p, token: Union[llama_token, int], /) -> bool:
+    _warn_deprecated("llama_token_is_eog", "use llama_vocab_is_eog instead")
+    return _llama_token_is_eog(vocab, token)
 
 
 # DEPRECATED(LLAMA_API bool llama_token_is_control(const struct llama_vocab * vocab, llama_token token), "use llama_vocab_is_control instead");
@@ -3344,6 +3560,19 @@ def llama_token_is_control(
 ) -> bool: ...
 
 
+_llama_token_is_control = llama_token_is_control
+
+
+def llama_token_is_control(
+    vocab: llama_vocab_p, token: Union[llama_token, int], /
+) -> bool:
+    _warn_deprecated(
+        "llama_token_is_control",
+        "use llama_vocab_is_control instead",
+    )
+    return _llama_token_is_control(vocab, token)
+
+
 # DEPRECATED(LLAMA_API llama_token llama_token_bos(const struct llama_vocab * vocab), "use llama_vocab_bos instead");
 @ctypes_function(
     "llama_token_bos",
@@ -3351,6 +3580,14 @@ def llama_token_is_control(
     llama_token,
 )
 def llama_token_bos(vocab: llama_vocab_p, /) -> int: ...
+
+
+_llama_token_bos = llama_token_bos
+
+
+def llama_token_bos(vocab: llama_vocab_p, /) -> int:
+    _warn_deprecated("llama_token_bos", "use llama_vocab_bos instead")
+    return _llama_token_bos(vocab)
 
 
 # DEPRECATED(LLAMA_API llama_token llama_token_eos(const struct llama_vocab * vocab), "use llama_vocab_eos instead");
@@ -3362,6 +3599,14 @@ def llama_token_bos(vocab: llama_vocab_p, /) -> int: ...
 def llama_token_eos(vocab: llama_vocab_p, /) -> int: ...
 
 
+_llama_token_eos = llama_token_eos
+
+
+def llama_token_eos(vocab: llama_vocab_p, /) -> int:
+    _warn_deprecated("llama_token_eos", "use llama_vocab_eos instead")
+    return _llama_token_eos(vocab)
+
+
 # DEPRECATED(LLAMA_API llama_token llama_token_eot(const struct llama_vocab * vocab), "use llama_vocab_eot instead");
 @ctypes_function(
     "llama_token_eot",
@@ -3369,6 +3614,14 @@ def llama_token_eos(vocab: llama_vocab_p, /) -> int: ...
     llama_token,
 )
 def llama_token_eot(vocab: llama_vocab_p, /) -> int: ...
+
+
+_llama_token_eot = llama_token_eot
+
+
+def llama_token_eot(vocab: llama_vocab_p, /) -> int:
+    _warn_deprecated("llama_token_eot", "use llama_vocab_eot instead")
+    return _llama_token_eot(vocab)
 
 
 # DEPRECATED(LLAMA_API llama_token llama_token_cls(const struct llama_vocab * vocab), "use llama_vocab_cls instead");
@@ -3380,6 +3633,14 @@ def llama_token_eot(vocab: llama_vocab_p, /) -> int: ...
 def llama_token_cls(vocab: llama_vocab_p, /) -> int: ...
 
 
+_llama_token_cls = llama_token_cls
+
+
+def llama_token_cls(vocab: llama_vocab_p, /) -> int:
+    _warn_deprecated("llama_token_cls", "use llama_vocab_cls instead")
+    return _llama_token_cls(vocab)
+
+
 # DEPRECATED(LLAMA_API llama_token llama_token_sep(const struct llama_vocab * vocab), "use llama_vocab_sep instead");
 @ctypes_function(
     "llama_token_sep",
@@ -3387,6 +3648,14 @@ def llama_token_cls(vocab: llama_vocab_p, /) -> int: ...
     llama_token,
 )
 def llama_token_sep(vocab: llama_vocab_p, /) -> int: ...
+
+
+_llama_token_sep = llama_token_sep
+
+
+def llama_token_sep(vocab: llama_vocab_p, /) -> int:
+    _warn_deprecated("llama_token_sep", "use llama_vocab_sep instead")
+    return _llama_token_sep(vocab)
 
 
 # DEPRECATED(LLAMA_API llama_token llama_token_nl (const struct llama_vocab * vocab), "use llama_vocab_nl instead");
@@ -3398,6 +3667,14 @@ def llama_token_sep(vocab: llama_vocab_p, /) -> int: ...
 def llama_token_nl(vocab: llama_vocab_p, /) -> int: ...
 
 
+_llama_token_nl = llama_token_nl
+
+
+def llama_token_nl(vocab: llama_vocab_p, /) -> int:
+    _warn_deprecated("llama_token_nl", "use llama_vocab_nl instead")
+    return _llama_token_nl(vocab)
+
+
 # DEPRECATED(LLAMA_API llama_token llama_token_pad(const struct llama_vocab * vocab), "use llama_vocab_pad instead");
 @ctypes_function(
     "llama_token_pad",
@@ -3405,6 +3682,14 @@ def llama_token_nl(vocab: llama_vocab_p, /) -> int: ...
     llama_token,
 )
 def llama_token_pad(vocab: llama_vocab_p, /) -> int: ...
+
+
+_llama_token_pad = llama_token_pad
+
+
+def llama_token_pad(vocab: llama_vocab_p, /) -> int:
+    _warn_deprecated("llama_token_pad", "use llama_vocab_pad instead")
+    return _llama_token_pad(vocab)
 
 
 # DEPRECATED(LLAMA_API bool llama_add_bos_token(const struct llama_vocab * vocab), "use llama_vocab_get_add_bos instead");
@@ -3416,6 +3701,14 @@ def llama_token_pad(vocab: llama_vocab_p, /) -> int: ...
 def llama_add_bos_token(vocab: llama_vocab_p, /) -> bool: ...
 
 
+_llama_add_bos_token = llama_add_bos_token
+
+
+def llama_add_bos_token(vocab: llama_vocab_p, /) -> bool:
+    _warn_deprecated("llama_add_bos_token", "use llama_vocab_get_add_bos instead")
+    return _llama_add_bos_token(vocab)
+
+
 # DEPRECATED(LLAMA_API bool llama_add_eos_token(const struct llama_vocab * vocab), "use llama_vocab_get_add_eos instead");
 @ctypes_function(
     "llama_add_eos_token",
@@ -3423,6 +3716,14 @@ def llama_add_bos_token(vocab: llama_vocab_p, /) -> bool: ...
     ctypes.c_bool,
 )
 def llama_add_eos_token(vocab: llama_vocab_p, /) -> bool: ...
+
+
+_llama_add_eos_token = llama_add_eos_token
+
+
+def llama_add_eos_token(vocab: llama_vocab_p, /) -> bool:
+    _warn_deprecated("llama_add_eos_token", "use llama_vocab_get_add_eos instead")
+    return _llama_add_eos_token(vocab)
 
 
 # DEPRECATED(LLAMA_API llama_token llama_token_fim_pre(const struct llama_vocab * vocab), "use llama_vocab_fim_pre instead");
@@ -3434,6 +3735,14 @@ def llama_add_eos_token(vocab: llama_vocab_p, /) -> bool: ...
 def llama_token_fim_pre(vocab: llama_vocab_p, /) -> llama_token: ...
 
 
+_llama_token_fim_pre = llama_token_fim_pre
+
+
+def llama_token_fim_pre(vocab: llama_vocab_p, /) -> llama_token:
+    _warn_deprecated("llama_token_fim_pre", "use llama_vocab_fim_pre instead")
+    return _llama_token_fim_pre(vocab)
+
+
 # DEPRECATED(LLAMA_API llama_token llama_token_fim_suf(const struct llama_vocab * vocab), "use llama_vocab_fim_suf instead");
 @ctypes_function(
     "llama_token_fim_suf",
@@ -3441,6 +3750,14 @@ def llama_token_fim_pre(vocab: llama_vocab_p, /) -> llama_token: ...
     llama_token,
 )
 def llama_token_fim_suf(vocab: llama_vocab_p, /) -> llama_token: ...
+
+
+_llama_token_fim_suf = llama_token_fim_suf
+
+
+def llama_token_fim_suf(vocab: llama_vocab_p, /) -> llama_token:
+    _warn_deprecated("llama_token_fim_suf", "use llama_vocab_fim_suf instead")
+    return _llama_token_fim_suf(vocab)
 
 
 # DEPRECATED(LLAMA_API llama_token llama_token_fim_mid(const struct llama_vocab * vocab), "use llama_vocab_fim_mid instead");
@@ -3452,6 +3769,14 @@ def llama_token_fim_suf(vocab: llama_vocab_p, /) -> llama_token: ...
 def llama_token_fim_mid(vocab: llama_vocab_p, /) -> llama_token: ...
 
 
+_llama_token_fim_mid = llama_token_fim_mid
+
+
+def llama_token_fim_mid(vocab: llama_vocab_p, /) -> llama_token:
+    _warn_deprecated("llama_token_fim_mid", "use llama_vocab_fim_mid instead")
+    return _llama_token_fim_mid(vocab)
+
+
 # DEPRECATED(LLAMA_API llama_token llama_token_fim_pad(const struct llama_vocab * vocab), "use llama_vocab_fim_pad instead");
 @ctypes_function(
     "llama_token_fim_pad",
@@ -3459,6 +3784,14 @@ def llama_token_fim_mid(vocab: llama_vocab_p, /) -> llama_token: ...
     llama_token,
 )
 def llama_token_fim_pad(vocab: llama_vocab_p, /) -> llama_token: ...
+
+
+_llama_token_fim_pad = llama_token_fim_pad
+
+
+def llama_token_fim_pad(vocab: llama_vocab_p, /) -> llama_token:
+    _warn_deprecated("llama_token_fim_pad", "use llama_vocab_fim_pad instead")
+    return _llama_token_fim_pad(vocab)
 
 
 # DEPRECATED(LLAMA_API llama_token llama_token_fim_rep(const struct llama_vocab * vocab), "use llama_vocab_fim_rep instead");
@@ -3470,6 +3803,14 @@ def llama_token_fim_pad(vocab: llama_vocab_p, /) -> llama_token: ...
 def llama_token_fim_rep(vocab: llama_vocab_p, /) -> llama_token: ...
 
 
+_llama_token_fim_rep = llama_token_fim_rep
+
+
+def llama_token_fim_rep(vocab: llama_vocab_p, /) -> llama_token:
+    _warn_deprecated("llama_token_fim_rep", "use llama_vocab_fim_rep instead")
+    return _llama_token_fim_rep(vocab)
+
+
 # DEPRECATED(LLAMA_API llama_token llama_token_fim_sep(const struct llama_vocab * vocab), "use llama_vocab_fim_sep instead");
 @ctypes_function(
     "llama_token_fim_sep",
@@ -3477,6 +3818,14 @@ def llama_token_fim_rep(vocab: llama_vocab_p, /) -> llama_token: ...
     llama_token,
 )
 def llama_token_fim_sep(vocab: llama_vocab_p, /) -> llama_token: ...
+
+
+_llama_token_fim_sep = llama_token_fim_sep
+
+
+def llama_token_fim_sep(vocab: llama_vocab_p, /) -> llama_token:
+    _warn_deprecated("llama_token_fim_sep", "use llama_vocab_fim_sep instead")
+    return _llama_token_fim_sep(vocab)
 
 
 # // CLS is equivalent to BOS
@@ -3488,6 +3837,14 @@ def llama_token_fim_sep(vocab: llama_vocab_p, /) -> llama_token: ...
     llama_token,
 )
 def llama_vocab_cls(vocab: llama_vocab_p, /) -> llama_token: ...
+
+
+_llama_vocab_cls = llama_vocab_cls
+
+
+def llama_vocab_cls(vocab: llama_vocab_p, /) -> llama_token:
+    _warn_deprecated("llama_vocab_cls", "use llama_vocab_bos instead")
+    return _llama_vocab_cls(vocab)
 
 
 # //
@@ -4144,6 +4501,34 @@ def llama_sampler_init_grammar_lazy(
     num_trigger_tokens: int,
     /,
 ) -> llama_sampler_p: ...
+
+
+_llama_sampler_init_grammar_lazy = llama_sampler_init_grammar_lazy
+
+
+def llama_sampler_init_grammar_lazy(
+    vocab: llama_vocab_p,
+    grammar_str: bytes,
+    grammar_root: bytes,
+    trigger_words: CtypesArray[bytes],
+    num_trigger_words: int,
+    trigger_tokens: CtypesArray[llama_token],
+    num_trigger_tokens: int,
+    /,
+) -> llama_sampler_p:
+    _warn_deprecated(
+        "llama_sampler_init_grammar_lazy",
+        "use llama_sampler_init_grammar_lazy_patterns instead",
+    )
+    return _llama_sampler_init_grammar_lazy(
+        vocab,
+        grammar_str,
+        grammar_root,
+        trigger_words,
+        num_trigger_words,
+        trigger_tokens,
+        num_trigger_tokens,
+    )
 
 
 # /// @details Lazy grammar sampler, introduced in https://github.com/ggml-org/llama.cpp/pull/9639
