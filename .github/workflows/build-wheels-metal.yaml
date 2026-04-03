@@ -7,8 +7,11 @@ permissions:
 
 jobs:
   build_wheels:
-    name: Build wheels on macos-14
-    runs-on: macos-14
+    name: Build wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-14, macos-15]
 
     steps:
       - uses: actions/checkout@v4
@@ -43,6 +46,7 @@ jobs:
           output-dir: wheelhouse2
 
       - uses: actions/upload-artifact@v4
+        if: matrix.os == 'macos-14'
         with:
           name: wheels-mac
           path: ./wheelhouse2/*.whl
