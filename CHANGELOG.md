@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- fix(ci): Avoid duplicate `py3-none` release builds across wheel workflows by @abetlen in #2172
+
 ## [0.3.20]
 
 - refactor: Replace deprecated llama.cpp references in library, docs, and examples by @abetlen in #2170
