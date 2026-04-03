@@ -135,7 +135,7 @@ class LlamaModel:
         return llama_cpp.llama_vocab_eos(self.vocab)
 
     def token_cls(self) -> int:
-        return llama_cpp.llama_vocab_cls(self.vocab)
+        return llama_cpp.llama_vocab_bos(self.vocab)
 
     def token_sep(self) -> int:
         return llama_cpp.llama_vocab_sep(self.vocab)
@@ -317,9 +317,9 @@ class LlamaContext:
 
     # TODO: set_state_data
 
-    # TODO: llama_load_session_file
+    # TODO: llama_state_load_file
 
-    # TODO: llama_save_session_file
+    # TODO: llama_state_save_file
 
     def decode(self, batch: LlamaBatch):
         return_code = llama_cpp.llama_decode(
