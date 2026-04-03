@@ -7,8 +7,8 @@ permissions:
 
 jobs:
   build_wheels:
-    name: Build wheels on macos-15
-    runs-on: macos-15
+    name: Build wheels on macos-14
+    runs-on: macos-14
 
     steps:
       - uses: actions/checkout@v4

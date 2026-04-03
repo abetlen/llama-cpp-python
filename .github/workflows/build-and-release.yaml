@@ -11,9 +11,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        # Use explicit Apple Silicon and Intel macOS runners so each job
-        # produces a distinct wheel artifact.
-        os: [ubuntu-22.04, windows-2022, macos-15, macos-15-intel]
+        # Keep the Apple Silicon release build on macos-14 and use an explicit
+        # Intel runner for the x86_64 wheel so each macOS job produces a
+        # distinct artifact.
+        os: [ubuntu-22.04, windows-2022, macos-14, macos-15-intel]
 
     steps:
       - uses: actions/checkout@v4
