@@ -7,11 +7,8 @@ permissions:
 
 jobs:
   build_wheels:
-    name: Build wheels on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [macos-14, macos-15]
+    name: Build wheels on macos-15
+    runs-on: macos-15
 
     steps:
       - uses: actions/checkout@v4
@@ -38,14 +35,16 @@ jobs:
           CIBW_REPAIR_WHEEL_COMMAND: ""
           CIBW_ARCHS: "arm64"
           CIBW_ENVIRONMENT: CMAKE_ARGS="-DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_APPLE_SILICON_PROCESSOR=arm64 -DGGML_METAL=on -DCMAKE_CROSSCOMPILING=ON"
-          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-*"
+          # wheel.py-api = "py3" means one Metal wheel covers every supported
+          # CPython version, so extra selectors only repeat the same artifact.
+          CIBW_BUILD: "cp39-*"
         with:
           package-dir: .
           output-dir: wheelhouse2
 
       - uses: actions/upload-artifact@v4
         with:
-          name: wheels-mac_${{ matrix.os }}
+          name: wheels-mac
           path: ./wheelhouse2/*.whl
 
   release:
