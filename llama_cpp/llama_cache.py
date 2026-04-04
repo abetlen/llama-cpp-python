@@ -132,10 +132,7 @@ class LlamaDiskCache(BaseLlamaCache):
         _key = self._find_longest_prefix_key(key)
         if _key is None:
             raise KeyError("Key not found")
-        value: "llama_cpp.llama.LlamaState" = self.cache.pop(_key)  # type: ignore
-        # NOTE: This puts an integer as key in cache, which breaks,
-        # Llama.longest_token_prefix(k, key) above since k is not a tuple of ints/tokens
-        # self.cache.push(_key, side="front")  # type: ignore
+        value: "llama_cpp.llama.LlamaState" = self.cache.get(_key)  # type: ignore
         return value
 
     def __contains__(self, key: Sequence[int]) -> bool:
@@ -144,12 +141,5 @@ class LlamaDiskCache(BaseLlamaCache):
     def __setitem__(self, key: Sequence[int], value: "llama_cpp.llama.LlamaState"):
         print("LlamaDiskCache.__setitem__: called", file=sys.stderr)
         key = tuple(key)
-        if key in self.cache:
-            print("LlamaDiskCache.__setitem__: delete", file=sys.stderr)
-            del self.cache[key]
         self.cache[key] = value
-        print("LlamaDiskCache.__setitem__: set", file=sys.stderr)
-        while self.cache_size > self.capacity_bytes and len(self.cache) > 0:
-            key_to_remove = next(iter(self.cache))
-            del self.cache[key_to_remove]
-        print("LlamaDiskCache.__setitem__: trim", file=sys.stderr)
+        self.cache.close()
