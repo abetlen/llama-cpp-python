@@ -1759,13 +1759,13 @@ class ResponseParser:
         tool_call_count: int = 0
 
     _STREAM_PLAN_CACHE: Dict[int, Tuple[Any, Optional[Dict[str, Any]]]] = {}
-    _TOOL_SCHEMA_CACHE: Dict[int, Tuple[Any, Dict[str, Dict[str, Any]]]] = {}
+    _TOOL_INFO_CACHE: Dict[int, Tuple[Any, Dict[str, Dict[str, Any]]]] = {}
     __slots__ = (
         "_schema",
         "_tools",
         "_completion_id",
         "_choice_index",
-        "_tool_schemas",
+        "_tool_info",
         "_started",
         "_text_parts",
         "_message",
@@ -1800,7 +1800,7 @@ class ResponseParser:
         self._tools = tools
         self._completion_id = completion_id
         self._choice_index = choice_index
-        self._tool_schemas = self._cached_tool_schema_map(tools)
+        self._tool_info = self._cached_tool_info_map(tools)
         self._started = False
         self._text_parts: List[str] = []
         self._message: Dict[str, Any] = {}
@@ -2396,39 +2396,53 @@ class ResponseParser:
         return plan
 
     @staticmethod
-    def _tool_schema_map(
+    def _tool_info_map(
         tools: Optional[List[Dict[str, Any]]],
     ) -> Dict[str, Dict[str, Any]]:
         if tools is None:
             return {}
         mapping: Dict[str, Dict[str, Any]] = {}
         for tool in tools:
-            if tool.get("type") != "function":
-                continue
             function = tool.get("function", {})
             name = function.get("name")
             parameters = function.get("parameters")
-            if isinstance(name, str) and isinstance(parameters, dict):
-                mapping[name] = parameters
+            if not isinstance(name, str) or not name:
+                continue
+            tool_kind = function.get("tool_kind")
+            if not isinstance(tool_kind, str):
+                raw_type = tool.get("original_type")
+                tool_kind = raw_type if isinstance(raw_type, str) else tool.get("type", "function")
+            content_type = function.get("content_type")
+            mapping[name] = {
+                "kind": tool_kind if tool_kind in {"function", "custom"} else "function",
+                "parameters": parameters if isinstance(parameters, dict) else {},
+                "content_type": (
+                    content_type
+                    if isinstance(content_type, str) and content_type
+                    else "json"
+                    if tool_kind != "custom"
+                    else "text"
+                ),
+            }
         return mapping
 
     @classmethod
-    def _cached_tool_schema_map(
+    def _cached_tool_info_map(
         cls,
         tools: Optional[List[Dict[str, Any]]],
     ) -> Dict[str, Dict[str, Any]]:
         if tools is None:
             return {}
         cache_key = id(tools)
-        cached = cls._TOOL_SCHEMA_CACHE.get(cache_key)
+        cached = cls._TOOL_INFO_CACHE.get(cache_key)
         if cached is not None and cached[0] is tools:
             return cached[1]
-        mapping = cls._tool_schema_map(tools)
-        cls._TOOL_SCHEMA_CACHE[cache_key] = (tools, mapping)
+        mapping = cls._tool_info_map(tools)
+        cls._TOOL_INFO_CACHE[cache_key] = (tools, mapping)
         return mapping
 
     def _parameter_schema_for_tool(self, tool_name: str, parameter_name: str) -> Dict[str, Any]:
-        parameters = self._tool_schemas.get(tool_name)
+        parameters = self._tool_info.get(tool_name, {}).get("parameters")
         if not isinstance(parameters, dict):
             return {}
         properties = parameters.get("properties")
@@ -2438,6 +2452,17 @@ class ResponseParser:
         if not isinstance(parameter_schema, dict):
             return {}
         return parameter_schema
+
+    def _tool_kind_for_name(self, tool_name: str) -> str:
+        kind = self._tool_info.get(tool_name, {}).get("kind")
+        return kind if isinstance(kind, str) else "function"
+
+    def _tool_content_type_for_name(self, tool_name: str) -> Optional[str]:
+        content_type = self._tool_info.get(tool_name, {}).get("content_type")
+        return content_type if isinstance(content_type, str) else None
+
+    def _has_custom_tools(self) -> bool:
+        return any(info.get("kind") == "custom" for info in self._tool_info.values())
 
     @staticmethod
     def _append_parsed_text(parsed: Dict[str, Any], key: str, text: str) -> None:
@@ -2534,6 +2559,8 @@ class ResponseParser:
                         "arguments": "",
                     },
                 },
+                "tool_kind": "function",
+                "content_type": None,
                 "arguments_text": "",
                 "json_started": False,
                 "json_complete": False,
@@ -3069,6 +3096,7 @@ class ResponseParser:
                         return True, deltas
                     function_name = remainder[:name_end]
                     item_state["tool_call"]["function"]["name"] = function_name
+                    item_state["tool_kind"] = self._tool_kind_for_name(function_name)
                     tool_call_index = cast(int, item_state["tool_call_index"])
                     deltas.append(
                         {
@@ -3090,13 +3118,32 @@ class ResponseParser:
                     continue
                 if mode == "seek-arguments":
                     arguments_capture = item_plan["arguments_capture"]
-                    _ignored, matched, remainder, pending = self._consume_until_literal(
+                    prefix, matched, remainder, pending = self._consume_until_literal(
                         buffer,
                         arguments_capture["start"],
                     )
                     if not matched:
                         item_state["pending"] = pending
                         return True, deltas
+                    content_type = prefix.strip()
+                    if not content_type:
+                        tool_name = cast(str, item_state["tool_call"]["function"]["name"])
+                        content_type = self._tool_content_type_for_name(tool_name) or (
+                            "json" if item_state["tool_kind"] != "custom" else "text"
+                        )
+                    item_state["content_type"] = content_type
+                    if content_type != "json":
+                        item_state["tool_call"]["function"]["content_type"] = content_type
+                        deltas.append(
+                            {
+                                "tool_calls": [
+                                    {
+                                        "index": cast(int, item_state["tool_call_index"]),
+                                        "function": {"content_type": content_type},
+                                    }
+                                ]
+                            }
+                        )
                     buffer = remainder
                     item_state["mode"] = "arguments"
                     continue
@@ -3114,6 +3161,8 @@ class ResponseParser:
                             }
                         )
                     item_state["pending"] = ""
+                    if item_state["tool_kind"] == "custom":
+                        return True, deltas
                     arguments_schema = cast(Dict[str, Any], item_plan["arguments_schema"])
                     schema_type = arguments_schema.get("type")
                     if not self._advance_json_scanner(
@@ -3358,7 +3407,15 @@ class ResponseParser:
         if item_plan["kind"] == "json-message":
             if item_state["mode"] != "arguments":
                 return None
-            if item_state["pending"] or not item_state["json_started"] or not item_state["json_complete"]:
+            if item_state["pending"]:
+                return None
+            if item_state.get("tool_kind") == "custom":
+                item_state["tool_call"]["function"]["arguments"] = item_state["arguments_text"]
+                content_type = item_state.get("content_type")
+                if isinstance(content_type, str) and content_type and content_type != "json":
+                    item_state["tool_call"]["function"]["content_type"] = content_type
+                return cast(Dict[str, Any], item_state["tool_call"])
+            if not item_state["json_started"] or not item_state["json_complete"]:
                 return None
             try:
                 arguments = self._parse_response_value(
@@ -4178,7 +4235,30 @@ class ResponseParser:
             raise CompletionResponseParsingError(
                 "tool_calls function name must be a non-empty string"
             )
+        tool_kind = self._tool_kind_for_name(tool_name)
+        content_type = function.get("content_type")
+        if not isinstance(content_type, str) or not content_type:
+            content_type = self._tool_content_type_for_name(tool_name) or (
+                "json" if tool_kind != "custom" else "text"
+            )
         arguments = function.get("arguments", {})
+        if tool_kind == "custom" or content_type != "json":
+            if not isinstance(arguments, str):
+                if partial:
+                    return None
+                raise CompletionResponseParsingError(
+                    "custom tool call input must be a string"
+                )
+            normalized_function: Dict[str, Any] = {
+                "name": tool_name,
+                "arguments": arguments,
+            }
+            if content_type != "json":
+                normalized_function["content_type"] = content_type
+            return {
+                "type": tool_call.get("type", "function"),
+                "function": normalized_function,
+            }
         if not isinstance(arguments, (dict, ResponseParser.PartialJsonObject)):
             if partial:
                 return None
@@ -4214,6 +4294,7 @@ class ResponseParser:
             "function": {
                 "name": tool_name,
                 "arguments": normalized_arguments,
+                **({"content_type": content_type} if content_type != "json" else {}),
             },
         }
 
@@ -4320,7 +4401,17 @@ class ResponseParser:
         return json.dumps(value, ensure_ascii=False, separators=(",", ":")), True
 
     @classmethod
-    def _serialize_tool_arguments(cls, arguments: Any, *, partial: bool = False) -> str:
+    def _serialize_tool_arguments(
+        cls,
+        arguments: Any,
+        *,
+        partial: bool = False,
+        content_type: Optional[str] = None,
+    ) -> str:
+        if isinstance(content_type, str) and content_type and content_type != "json":
+            if isinstance(arguments, str):
+                return arguments
+            return str(arguments)
         if partial:
             if cls._contains_partial_json_value(arguments):
                 return cls._serialize_partial_json_state(arguments)[0]
@@ -4350,18 +4441,23 @@ class ResponseParser:
             normalized_tool_calls = []
             for tool_call_index, tool_call in enumerate(tool_calls):
                 function = tool_call["function"]
+                content_type = function.get("content_type")
                 arguments = self._serialize_tool_arguments(
                     function["arguments"],
                     partial=partial,
+                    content_type=content_type if isinstance(content_type, str) else None,
                 )
+                normalized_function: Dict[str, Any] = {
+                    "name": function["name"],
+                    "arguments": arguments,
+                }
+                if isinstance(content_type, str) and content_type and content_type != "json":
+                    normalized_function["content_type"] = content_type
                 normalized_tool_calls.append(
                     {
                         "id": f"call_{self._choice_index}_{function['name']}_{self._completion_id}_{tool_call_index}",
                         "type": tool_call.get("type", "function"),
-                        "function": {
-                            "name": function["name"],
-                            "arguments": arguments,
-                        },
+                        "function": normalized_function,
                     }
                 )
             message["content"] = content if content not in {None, ""} else None
@@ -4422,6 +4518,13 @@ class ResponseParser:
             function_delta: Dict[str, Any] = {}
             if function.get("name") and function.get("name") != old_function.get("name"):
                 function_delta["name"] = function["name"]
+            content_type = function.get("content_type")
+            if (
+                isinstance(content_type, str)
+                and content_type
+                and content_type != old_function.get("content_type")
+            ):
+                function_delta["content_type"] = content_type
             arguments = cast(str, function.get("arguments", ""))
             old_arguments = cast(str, old_function.get("arguments", ""))
             if old_tool_call is None and arguments == "{}":
@@ -4477,6 +4580,9 @@ class ResponseParser:
             name_delta = function_delta.get("name")
             if isinstance(name_delta, str):
                 function["name"] = cast(str, function.get("name", "")) + name_delta
+            content_type_delta = function_delta.get("content_type")
+            if isinstance(content_type_delta, str) and content_type_delta:
+                function["content_type"] = content_type_delta
             arguments_delta = function_delta.get("arguments")
             if isinstance(arguments_delta, str):
                 function["arguments"] = cast(str, function.get("arguments", "")) + arguments_delta
@@ -4484,6 +4590,30 @@ class ResponseParser:
             message["function_call"] = dict(cast(Dict[str, Any], tool_calls[0]["function"]))
 
     def parse_completion_message(self, response_text: str) -> Dict[str, Any]:
+        if self._stream_plan is not None and self._has_custom_tools():
+            parser = ResponseParser(
+                self._schema,
+                tools=self._tools,
+                completion_id=self._completion_id,
+                choice_index=self._choice_index,
+            )
+            parser.consume_completion_chunk(
+                response_text,
+                chunk_id="",
+                created=0,
+                model="",
+                finish_reason="stop",
+            )
+            return {
+                key: (
+                    [dict(item) if isinstance(item, dict) else item for item in value]
+                    if key == "tool_calls" and isinstance(value, list)
+                    else dict(value)
+                    if key == "function_call" and isinstance(value, dict)
+                    else value
+                )
+                for key, value in parser._message.items()
+            }
         parsed = self.parse_chat_response(response_text, partial=False)
         return self._parsed_chat_message(parsed=parsed)
 
@@ -4788,6 +4918,7 @@ class OpenAIFormatter:
         output_index: int
         item: Dict[str, Any]
         content_index: Optional[int] = None
+        stream_status: str = "in_progress"
 
     @dataclass
     class ResponsesStream:
@@ -4945,6 +5076,72 @@ class OpenAIFormatter:
             return OpenAIFormatter._response_text_from_content(summary)
         return ""
 
+    @staticmethod
+    def _responses_custom_tool_content_type(tool: Dict[str, Any]) -> str:
+        format_spec = tool.get("format")
+        if not isinstance(format_spec, dict):
+            return "text"
+        format_type = format_spec.get("type")
+        if isinstance(format_type, str) and format_type:
+            return "text" if format_type == "grammar" else format_type
+        return "text"
+
+    @staticmethod
+    def _responses_custom_tool_format_hint(tool: Dict[str, Any]) -> Optional[str]:
+        format_spec = tool.get("format")
+        if not isinstance(format_spec, dict):
+            return None
+        format_type = format_spec.get("type")
+        if not isinstance(format_type, str) or not format_type:
+            return None
+        if format_type == "grammar":
+            definition = format_spec.get("definition")
+            if not isinstance(definition, str) or not definition:
+                return "Input must satisfy the provided grammar."
+            syntax = format_spec.get("syntax")
+            if isinstance(syntax, str) and syntax:
+                return f"Input must satisfy this {syntax} grammar:\n{definition}"
+            return f"Input must satisfy this grammar:\n{definition}"
+        if format_type == "text":
+            return None
+        return f"Input format: {format_type}."
+
+    @classmethod
+    def _responses_custom_tool_description(cls, tool: Dict[str, Any]) -> str:
+        description = tool.get("description")
+        if not isinstance(description, str):
+            description = ""
+        content_type = cls._responses_custom_tool_content_type(tool)
+        suffix = (
+            "This is a custom freeform tool. Pass raw input rather than JSON."
+            if content_type == "text"
+            else f"This is a custom tool. Use {content_type} input rather than JSON."
+        )
+        format_hint = cls._responses_custom_tool_format_hint(tool)
+        parts = [description, suffix, format_hint]
+        return "\n\n".join(part for part in parts if part).strip()
+
+    @staticmethod
+    def _response_tool_kind_from_name(
+        tools: Optional[List[Dict[str, Any]]],
+        name: Optional[str],
+        *,
+        content_type: Optional[str] = None,
+    ) -> str:
+        if isinstance(name, str):
+            for tool in tools or []:
+                if not isinstance(tool, dict):
+                    continue
+                tool_name = tool.get("name")
+                if isinstance(tool_name, str) and tool_name == name:
+                    tool_type = tool.get("type")
+                    if tool_type == "custom":
+                        return "custom"
+                    return "function"
+        if isinstance(content_type, str) and content_type and content_type != "json":
+            return "custom"
+        return "function"
+
     def _response_reasoning_input_message(
         self,
         *,
@@ -5014,6 +5211,57 @@ class OpenAIFormatter:
                 "content": None,
                 "tool_calls": [tool_call],
                 "function_call": dict(cast(Dict[str, Any], tool_call["function"])),
+            }
+        )
+
+    def _response_custom_tool_call_input_message(
+        self,
+        item: Dict[str, Any],
+    ) -> ChatCompletionRequestMessage:
+        name = item.get("name")
+        if not isinstance(name, str) or not name:
+            raise CompletionRequestValidationError("custom_tool_call input requires name")
+        input_text = item.get("input", "")
+        if not isinstance(input_text, str):
+            raise CompletionRequestValidationError("custom_tool_call input requires string input")
+        call_id = item.get("call_id") or item.get("id") or f"call_{uuid.uuid4().hex}"
+        namespace = item.get("namespace")
+        content_type = item.get("content_type")
+        if not isinstance(content_type, str) or not content_type:
+            content_type = "text"
+        if self._uses_harmony_channels():
+            recipient = (
+                f"{namespace}.{name}"
+                if isinstance(namespace, str) and namespace
+                else f"functions.{name}"
+            )
+            return self._chat_message(
+                {
+                    "role": "assistant",
+                    "content": input_text,
+                    "channel": "commentary",
+                    "recipient": recipient,
+                    "content_type": content_type,
+                }
+            )
+        tool_call = {
+            "id": call_id,
+            "type": "function",
+            "function": {
+                "name": name,
+                "arguments": input_text,
+                "content_type": content_type,
+            },
+        }
+        return self._chat_message(
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [tool_call],
+                "function_call": {
+                    "name": name,
+                    "arguments": input_text,
+                },
             }
         )
 
@@ -5096,11 +5344,33 @@ class OpenAIFormatter:
                     function_names_by_call_id[call_id] = name
                 messages.append(message)
                 continue
+            if item_type == "custom_tool_call":
+                message = self._response_custom_tool_call_input_message(item)
+                call_id = item.get("call_id") or item.get("id")
+                name = item.get("name")
+                if isinstance(call_id, str) and isinstance(name, str):
+                    function_names_by_call_id[call_id] = name
+                messages.append(message)
+                continue
             if item_type == "function_call_output":
                 call_id = item.get("call_id")
                 if not isinstance(call_id, str) or not call_id:
                     raise CompletionRequestValidationError("function_call_output input requires call_id")
                 tool_output_data: Dict[str, Any] = {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "content": self._response_text_from_content(item.get("output", "")),
+                }
+                name = function_names_by_call_id.get(call_id)
+                if name is not None:
+                    tool_output_data["name"] = name
+                messages.append(self._chat_message(tool_output_data))
+                continue
+            if item_type == "custom_tool_call_output":
+                call_id = item.get("call_id")
+                if not isinstance(call_id, str) or not call_id:
+                    raise CompletionRequestValidationError("custom_tool_call_output input requires call_id")
+                tool_output_data = {
                     "role": "tool",
                     "tool_call_id": call_id,
                     "content": self._response_text_from_content(item.get("output", "")),
@@ -5123,9 +5393,31 @@ class OpenAIFormatter:
             return None
         normalized_tools: List[Dict[str, Any]] = []
         for tool in tools:
-            if tool.get("type") != "function":
+            tool_type = tool.get("type")
+            if tool_type == "web_search" or tool_type == "web_search_2025_08_26":
+                continue
+            if tool_type == "custom":
+                name = tool.get("name")
+                if not isinstance(name, str) or not name:
+                    raise CompletionRequestValidationError("responses custom tools require name")
+                normalized_tools.append(
+                    {
+                        "type": "function",
+                        "original_type": "custom",
+                        "function": {
+                            "name": name,
+                            "description": self._responses_custom_tool_description(tool),
+                            "parameters": None,
+                            "strict": False,
+                            "tool_kind": "custom",
+                            "content_type": self._responses_custom_tool_content_type(tool),
+                        },
+                    }
+                )
+                continue
+            if tool_type != "function":
                 raise CompletionRequestValidationError(
-                    f"unsupported responses tool type: {tool.get('type')!r}"
+                    f"unsupported responses tool type: {tool_type!r}"
                 )
             name = tool.get("name")
             if not isinstance(name, str) or not name:
@@ -5133,11 +5425,14 @@ class OpenAIFormatter:
             normalized_tools.append(
                 {
                     "type": "function",
+                    "original_type": "function",
                     "function": {
                         "name": name,
                         "description": tool.get("description"),
                         "parameters": tool.get("parameters"),
                         "strict": tool.get("strict"),
+                        "tool_kind": "function",
+                        "content_type": "json",
                     },
                 }
             )
@@ -5149,7 +5444,7 @@ class OpenAIFormatter:
     ) -> Optional[Union[str, Dict[str, Any]]]:
         if not isinstance(tool_choice, dict):
             return tool_choice
-        if tool_choice.get("type") == "function" and "name" in tool_choice:
+        if isinstance(tool_choice.get("name"), str) and tool_choice.get("type") in {"function", "custom"}:
             return {
                 "type": "function",
                 "function": {
@@ -5499,11 +5794,33 @@ class OpenAIFormatter:
             item["name"] = bare_name
         return item
 
+    @staticmethod
+    def _response_custom_tool_call_item(
+        *,
+        item_id: str,
+        call_id: str,
+        name: str,
+        input_text: str,
+    ) -> Dict[str, Any]:
+        item: Dict[str, Any] = {
+            "id": item_id,
+            "type": "custom_tool_call",
+            "call_id": call_id,
+            "name": name,
+            "input": input_text,
+        }
+        if "." in name:
+            namespace, bare_name = name.split(".", 1)
+            item["namespace"] = namespace
+            item["name"] = bare_name
+        return item
+
     def _response_output_items_from_message(
         self,
         *,
         response_id: str,
         message: Dict[str, Any],
+        tools: Optional[List[Dict[str, Any]]] = None,
         logprobs: Optional[List[Dict[str, Any]]] = None,
     ) -> List[Dict[str, Any]]:
         items: List[Dict[str, Any]] = []
@@ -5531,15 +5848,34 @@ class OpenAIFormatter:
                 call_id = tool_call.get("id")
                 if not isinstance(call_id, str) or not call_id:
                     call_id = f"call_{response_id}_{tool_call_index}"
-                items.append(
-                    self._response_function_call_item(
-                        item_id=f"fc_{response_id}_{tool_call_index}",
-                        call_id=call_id,
-                        name=name,
-                        arguments=arguments,
-                        status="completed",
-                    )
+                kind = self._response_tool_kind_from_name(
+                    tools,
+                    name,
+                    content_type=(
+                        function.get("content_type")
+                        if isinstance(function.get("content_type"), str)
+                        else None
+                    ),
                 )
+                if kind == "custom":
+                    items.append(
+                        self._response_custom_tool_call_item(
+                            item_id=f"ctc_{response_id}_{tool_call_index}",
+                            call_id=call_id,
+                            name=name,
+                            input_text=arguments,
+                        )
+                    )
+                else:
+                    items.append(
+                        self._response_function_call_item(
+                            item_id=f"fc_{response_id}_{tool_call_index}",
+                            call_id=call_id,
+                            name=name,
+                            arguments=arguments,
+                            status="completed",
+                        )
+                    )
         output_text = self._response_output_text_from_message(message)
         if output_text:
             items.append(
@@ -5658,6 +5994,7 @@ class OpenAIFormatter:
         output_items = self._response_output_items_from_message(
             response_id=response_id,
             message=message,
+            tools=body.tools,
             logprobs=logprobs,
         )
         return self._response_object(
@@ -5854,17 +6191,31 @@ class OpenAIFormatter:
         tool_call_index: int,
         call_id: Optional[str],
         name: Optional[str],
+        content_type: Optional[str] = None,
     ) -> Tuple[List[Dict[str, Any]], "OpenAIFormatter.ResponsesOutputItem"]:
         existing = state.tool_items.get(tool_call_index)
         if existing is not None:
             return [], existing
-        item = self._response_function_call_item(
-            item_id=f"fc_{state.response_id}_{tool_call_index}",
-            call_id=call_id or f"call_{state.response_id}_{tool_call_index}",
-            name=name or "",
-            arguments="",
-            status="in_progress",
+        tool_kind = self._response_tool_kind_from_name(
+            state.body.tools,
+            name,
+            content_type=content_type,
         )
+        if tool_kind == "custom":
+            item = self._response_custom_tool_call_item(
+                item_id=f"ctc_{state.response_id}_{tool_call_index}",
+                call_id=call_id or f"call_{state.response_id}_{tool_call_index}",
+                name=name or "",
+                input_text="",
+            )
+        else:
+            item = self._response_function_call_item(
+                item_id=f"fc_{state.response_id}_{tool_call_index}",
+                call_id=call_id or f"call_{state.response_id}_{tool_call_index}",
+                name=name or "",
+                arguments="",
+                status="in_progress",
+            )
         item_state = self._add_response_stream_item(state, item)
         state.tool_items[tool_call_index] = item_state
         return [
@@ -5883,6 +6234,7 @@ class OpenAIFormatter:
         call_id: Optional[str],
         name_delta: Optional[str],
         arguments_delta: Optional[str],
+        content_type: Optional[str] = None,
     ) -> None:
         if isinstance(call_id, str) and call_id:
             item["call_id"] = call_id
@@ -5894,8 +6246,11 @@ class OpenAIFormatter:
                 item["name"] = name_delta
             elif not current_name.endswith(name_delta):
                 item["name"] = current_name + name_delta
+        if isinstance(content_type, str) and content_type:
+            item["content_type"] = content_type
         if isinstance(arguments_delta, str) and arguments_delta:
-            item["arguments"] = cast(str, item.get("arguments", "")) + arguments_delta
+            key = "input" if item.get("type") == "custom_tool_call" else "arguments"
+            item[key] = cast(str, item.get(key, "")) + arguments_delta
 
     def _finalize_response_stream_items(
         self,
@@ -5976,19 +6331,32 @@ class OpenAIFormatter:
         for tool_call_index in sorted(state.tool_items):
             item_state = state.tool_items[tool_call_index]
             item = item_state.item
-            if item["status"] != "in_progress":
+            if item_state.stream_status != "in_progress":
                 continue
-            item["status"] = item_status
-            events.append(
-                self._response_event(
-                    state,
-                    "response.function_call_arguments.done",
-                    item_id=cast(str, item["id"]),
-                    output_index=item_state.output_index,
-                    name=cast(str, item["name"]),
-                    arguments=cast(str, item["arguments"]),
+            item_state.stream_status = item_status
+            if item.get("type") != "custom_tool_call":
+                item["status"] = item_status
+            if item.get("type") == "custom_tool_call":
+                events.append(
+                    self._response_event(
+                        state,
+                        "response.custom_tool_call_input.done",
+                        item_id=cast(str, item["id"]),
+                        output_index=item_state.output_index,
+                        input=cast(str, item["input"]),
+                    )
                 )
-            )
+            else:
+                events.append(
+                    self._response_event(
+                        state,
+                        "response.function_call_arguments.done",
+                        item_id=cast(str, item["id"]),
+                        output_index=item_state.output_index,
+                        name=cast(str, item["name"]),
+                        arguments=cast(str, item["arguments"]),
+                    )
+                )
             events.append(
                 self._response_event(
                     state,
@@ -6075,11 +6443,17 @@ class OpenAIFormatter:
                 function = tool_call.get("function")
                 if not isinstance(function, dict):
                     continue
+                content_type = (
+                    function.get("content_type")
+                    if isinstance(function.get("content_type"), str)
+                    else None
+                )
                 added, item_state = self._ensure_tool_stream_item(
                     state,
                     tool_call_index=tool_call_index,
                     call_id=cast(Optional[str], tool_call.get("id")),
                     name=cast(Optional[str], function.get("name")),
+                    content_type=content_type,
                 )
                 events.extend(added)
                 self._update_tool_stream_item(
@@ -6087,18 +6461,30 @@ class OpenAIFormatter:
                     call_id=cast(Optional[str], tool_call.get("id")),
                     name_delta=cast(Optional[str], function.get("name")),
                     arguments_delta=cast(Optional[str], function.get("arguments")),
+                    content_type=content_type,
                 )
                 arguments_delta = function.get("arguments")
                 if isinstance(arguments_delta, str) and arguments_delta:
-                    events.append(
-                        self._response_event(
-                            state,
-                            "response.function_call_arguments.delta",
-                            item_id=cast(str, item_state.item["id"]),
-                            output_index=item_state.output_index,
-                            delta=arguments_delta,
+                    if item_state.item.get("type") == "custom_tool_call":
+                        events.append(
+                            self._response_event(
+                                state,
+                                "response.custom_tool_call_input.delta",
+                                item_id=cast(str, item_state.item["id"]),
+                                output_index=item_state.output_index,
+                                delta=arguments_delta,
+                            )
                         )
-                    )
+                    else:
+                        events.append(
+                            self._response_event(
+                                state,
+                                "response.function_call_arguments.delta",
+                                item_id=cast(str, item_state.item["id"]),
+                                output_index=item_state.output_index,
+                                delta=arguments_delta,
+                            )
+                        )
 
         if finish_reason is not None:
             events.extend(
