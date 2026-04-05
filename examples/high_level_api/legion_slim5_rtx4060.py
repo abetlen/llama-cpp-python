@@ -7,11 +7,26 @@ Optimized llama-cpp-python configuration for:
   - SSD:  1 TB NVMe
 
 Install with CUDA support first:
-  CMAKE_ARGS="-DGGML_CUDA=on" pip install llama-cpp-python --force-reinstall --no-cache-dir
+
+  Bash / Linux / macOS:
+    CMAKE_ARGS="-DGGML_CUDA=on" pip install llama-cpp-python --force-reinstall --no-cache-dir
+
+  PowerShell (Windows):
+    $env:CMAKE_ARGS = "-DGGML_CUDA=on"
+    python -m pip install llama-cpp-python --force-reinstall --no-cache-dir
+
+  Tip (Windows): install into a virtual environment to avoid dependency conflicts
+  with other tools in your global environment:
+    python -m venv .venv-llama
+    ./.venv-llama/Scripts/Activate.ps1
+    $env:CMAKE_ARGS = "-DGGML_CUDA=on"
+    python -m pip install llama-cpp-python --force-reinstall --no-cache-dir
 """
 
 import argparse
 import json
+import os
+import sys
 
 from llama_cpp import Llama
 
@@ -90,6 +105,11 @@ def main() -> None:
         help="Prompt text",
     )
     parser.add_argument(
+        "--system-prompt",
+        default=None,
+        help="Optional system prompt prepended before the user prompt",
+    )
+    parser.add_argument(
         "--max-tokens", type=int, default=256,
         help="Maximum number of tokens to generate",
     )
@@ -102,28 +122,99 @@ def main() -> None:
         help="GPU layers to offload (-1 = all)",
     )
     parser.add_argument(
+        "--seed", type=int, default=-1,
+        help="RNG seed for reproducible output (-1 = random)",
+    )
+    parser.add_argument(
+        "--temperature", type=float, default=0.8,
+        help="Sampling temperature (0.0 = greedy, higher = more creative)",
+    )
+    parser.add_argument(
+        "--top-p", type=float, default=0.95,
+        help="Nucleus sampling probability threshold",
+    )
+    parser.add_argument(
+        "--repeat-penalty", type=float, default=1.1,
+        help="Penalty applied to repeated tokens (1.0 = disabled)",
+    )
+    parser.add_argument(
+        "--json-output", action="store_true",
+        help="Print only raw JSON output (no banner); useful for piping",
+    )
+    parser.add_argument(
         "--verbose", action="store_true",
         help="Print llama.cpp loading messages",
     )
     args = parser.parse_args()
 
-    print(f"Loading model: {args.model}")
-    print(f"GPU layers   : {'all' if args.n_gpu_layers == -1 else args.n_gpu_layers}")
-    print(f"Context size : {args.n_ctx} tokens\n")
+    # --- Validate model path -------------------------------------------------
+    model_path = os.path.abspath(args.model)
+    if not os.path.isfile(model_path):
+        print(
+            f"ERROR: model file not found: {model_path}\n"
+            "  Make sure the path is correct and the file exists.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
-    llm = build_llm(
-        model_path=args.model,
-        n_ctx=args.n_ctx,
-        n_gpu_layers=args.n_gpu_layers,
-        verbose=args.verbose,
-    )
+    if not args.json_output:
+        print(f"Loading model: {model_path}")
+        print(f"GPU layers   : {'all' if args.n_gpu_layers == -1 else args.n_gpu_layers}")
+        print(f"Context size : {args.n_ctx} tokens\n")
 
-    output = llm(
-        args.prompt,
-        max_tokens=args.max_tokens,
-        stop=["Q:", "\n\n"],
-        echo=True,
-    )
+    # --- Load model ----------------------------------------------------------
+    try:
+        llm = build_llm(
+            model_path=model_path,
+            n_ctx=args.n_ctx,
+            n_gpu_layers=args.n_gpu_layers,
+            verbose=args.verbose,
+        )
+    except Exception as exc:
+        err = str(exc)
+        print(f"ERROR: failed to load model – {err}", file=sys.stderr)
+        if args.n_gpu_layers == -1 and (
+            "out of memory" in err.lower() or "cuda" in err.lower()
+        ):
+            print(
+                "  Hint: GPU ran out of VRAM while loading all layers.\n"
+                "  Try reducing --n-gpu-layers (e.g. --n-gpu-layers 28) to keep\n"
+                "  some layers on CPU RAM instead.",
+                file=sys.stderr,
+            )
+        sys.exit(1)
+
+    # --- Build prompt --------------------------------------------------------
+    if args.system_prompt:
+        full_prompt = f"{args.system_prompt}\n\n{args.prompt}"
+    else:
+        full_prompt = args.prompt
+
+    # --- Run inference -------------------------------------------------------
+    try:
+        output = llm(
+            full_prompt,
+            max_tokens=args.max_tokens,
+            stop=["Q:", "\n\n"],
+            echo=True,
+            seed=args.seed,
+            temperature=args.temperature,
+            top_p=args.top_p,
+            repeat_penalty=args.repeat_penalty,
+        )
+    except Exception as exc:
+        err = str(exc)
+        print(f"ERROR: inference failed – {err}", file=sys.stderr)
+        if args.n_gpu_layers == -1 and (
+            "out of memory" in err.lower() or "cuda" in err.lower()
+        ):
+            print(
+                "  Hint: GPU ran out of VRAM during inference.\n"
+                "  Try reducing --n-gpu-layers (e.g. --n-gpu-layers 28) to keep\n"
+                "  some layers on CPU RAM instead.",
+                file=sys.stderr,
+            )
+        sys.exit(1)
 
     print(json.dumps(output, indent=2, ensure_ascii=False))
 
