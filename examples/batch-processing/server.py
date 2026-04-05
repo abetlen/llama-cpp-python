@@ -36,6 +36,7 @@ from collections import OrderedDict, deque
 from openai.types.completion import Completion as OpenAICompletion
 from openai.types.completion_choice import CompletionChoice, Logprobs as CompletionLogprobs
 from openai.types.completion_usage import CompletionUsage
+from openai.types.model import Model as OpenAIModel
 from openai.types.chat.chat_completion import (
     ChatCompletion,
     Choice as ChatCompletionChoice,
@@ -1316,6 +1317,7 @@ class ConfigFile(BaseModel):
     class ModelOptions(BaseModel):
         path: Optional[str] = None
         from_pretrained: Optional["ConfigFile.FromPretrainedOptions"] = None
+        alias: Optional[str] = None
         n_gpu_layers: Optional[int] = None
         split_mode: Optional[int] = None
         main_gpu: Optional[int] = None
@@ -4808,6 +4810,31 @@ class OpenAIFormatter:
     def __init__(self, model: Model) -> None:
         self.model = model
 
+    def model_id(self) -> str:
+        model_alias = getattr(self.model, "model_alias", None)
+        if isinstance(model_alias, str) and model_alias:
+            return model_alias
+        return self.model.model_path
+
+    def model_card(self) -> OpenAIModel:
+        model_path = self.model_id()
+        try:
+            created = int(Path(model_path).stat().st_mtime)
+        except OSError:
+            created = int(time.time())
+        return OpenAIModel(
+            id=model_path,
+            created=created,
+            object="model",
+            owned_by="llama-cpp-python",
+        )
+
+    def model_list(self) -> Dict[str, Any]:
+        return {
+            "object": "list",
+            "data": [self.model_card().model_dump(mode="json", exclude_none=True)],
+        }
+
     @staticmethod
     def decode_text(data: bytes) -> str:
         return data.decode("utf-8", errors="ignore")
@@ -6831,6 +6858,7 @@ class Model:
         self,
         *,
         model_path: str,
+        model_alias: Optional[str] = None,
         n_gpu_layers: Optional[int] = None,
         split_mode: Optional[int] = None,
         main_gpu: Optional[int] = None,
@@ -6873,6 +6901,7 @@ class Model:
         llama_cpp.llama_backend_init()
         self.backend_initialized = True
         self.model_path = model_path
+        self.model_alias = model_alias
         self.prompt_chunk_size = prompt_chunk_size
         self.response_schema = response_schema
         model_params, self._c_tensor_split, self._kv_overrides_array = self.build_model_params(
@@ -8860,6 +8889,11 @@ def create_app() -> FastAPI:
             )
         )
 
+    @app.get("/v1/models")
+    async def list_models() -> Dict[str, Any]:
+        service: CompletionService = app.state.service
+        return service.formatter.model_list()
+
     @app.get("/healthz")
     async def healthz() -> Dict[str, str]:
         return {"status": "ok"}
@@ -8878,6 +8912,7 @@ def main() -> None:
     model_path = config.model.resolve_model_path()
     model = Model(
         model_path=model_path,
+        model_alias=config.model.alias,
         n_gpu_layers=config.model.n_gpu_layers,
         split_mode=config.model.split_mode,
         main_gpu=config.model.main_gpu,
