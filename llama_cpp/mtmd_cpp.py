@@ -79,6 +79,12 @@ MTMD_INPUT_CHUNK_TYPE_AUDIO = 2
 
 # Structures
 class mtmd_context_params(Structure):
+    """Context parameters for MTMD initialization.
+
+    `image_marker` is deprecated upstream and kept for compatibility; use
+    `media_marker` for multimodal prompt placeholders.
+    """
+
     if TYPE_CHECKING:
         use_gpu: bool
         print_timings: bool
@@ -108,6 +114,8 @@ class mtmd_context_params(Structure):
 
 
 class mtmd_input_text(Structure):
+    """Text input passed to `mtmd_tokenize`."""
+
     _fields_ = [
         ("text", c_char_p),
         ("add_special", c_bool),
@@ -122,12 +130,16 @@ class mtmd_input_text(Structure):
 
 # MTMD_API const char * mtmd_default_marker(void);
 @ctypes_function("mtmd_default_marker", [], c_char_p)
-def mtmd_default_marker() -> bytes: ...
+def mtmd_default_marker() -> bytes:
+    """Return the default media marker."""
+    ...
 
 
 # MTMD_API struct mtmd_context_params mtmd_context_params_default(void);
 @ctypes_function("mtmd_context_params_default", [], mtmd_context_params)
-def mtmd_context_params_default() -> mtmd_context_params: ...
+def mtmd_context_params_default() -> mtmd_context_params:
+    """Return the default MTMD context parameters."""
+    ...
 
 
 # MTMD_API mtmd_context * mtmd_init_from_file(const char * mmproj_fname,
@@ -143,7 +155,9 @@ def mtmd_init_from_file(
     text_model: llama_cpp.llama_model_p,
     ctx_params: mtmd_context_params,
     /,
-) -> Optional[mtmd_context_p]: ...
+) -> Optional[mtmd_context_p]:
+    """Initialize the MTMD context from a projector file. Returns None on failure."""
+    ...
 
 
 # MTMD_API void mtmd_free(mtmd_context * ctx);
@@ -167,7 +181,9 @@ def mtmd_decode_use_mrope(ctx: mtmd_context_p, /) -> bool:
 
 # MTMD_API bool mtmd_support_vision(mtmd_context * ctx);
 @ctypes_function("mtmd_support_vision", [mtmd_context_p_ctypes], c_bool)
-def mtmd_support_vision(ctx: mtmd_context_p, /) -> bool: ...
+def mtmd_support_vision(ctx: mtmd_context_p, /) -> bool:
+    """Check whether the current model supports vision input."""
+    ...
 
 
 # MTMD_API bool mtmd_support_audio(mtmd_context * ctx);
@@ -180,7 +196,7 @@ def mtmd_support_audio(ctx: mtmd_context_p, /) -> bool:
 # MTMD_API int mtmd_get_audio_sample_rate(mtmd_context * ctx);
 @ctypes_function("mtmd_get_audio_sample_rate", [mtmd_context_p_ctypes], c_int)
 def mtmd_get_audio_sample_rate(ctx: mtmd_context_p, /) -> int:
-    """Get the MTMD audio sample rate."""
+    """Get the audio sample rate in Hz. Returns -1 if audio is not supported."""
     ...
 
 

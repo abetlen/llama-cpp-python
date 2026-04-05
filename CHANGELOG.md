@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.20]
+
+- refactor: Replace deprecated llama.cpp references in library, docs, and examples by @abetlen in #2170
+- feat: Update llama.cpp to ggerganov/llama.cpp@f49e9178767d557a522618b16ce8694f9ddac628 by @abetlen in #2169
+- feat(server): Add model-load `chat_template_kwargs` support and document the CLI/config usage by @abetlen in #2168
+- ci: Publish release wheels as `py3-none` by @Bing-su in #2166
+- fix(ci): Publish distinct manylinux and musllinux CPU wheels by @abetlen in #2165
+
 ## [0.3.19]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@c0159f9c1f874da15e94f371d136f5920b4b5335 by @abetlen in #2161

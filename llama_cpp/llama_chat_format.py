@@ -243,6 +243,7 @@ class Jinja2ChatFormatter(ChatFormatter):
             tools=tools,
             tool_choice=tool_choice,
             strftime_now=self.strftime_now,
+            **kwargs,
         )
 
         stopping_criteria = None
@@ -617,6 +618,7 @@ def chat_formatter_to_chat_completion_handler(
             function_call=function_call,
             tools=tools,
             tool_choice=tool_choice,
+            **kwargs,
         )
         prompt = llama.tokenize(
             result.prompt.encode("utf-8"),
@@ -734,7 +736,9 @@ def hf_autotokenizer_to_chat_formatter(
         **kwargs: Any,
     ) -> ChatFormatterResponse:
         tokenizer.use_default_system_prompt = False  # type: ignore
-        prompt: str = tokenizer.apply_chat_template(messages, tokenize=False)  # type: ignore
+        prompt: str = tokenizer.apply_chat_template(  # type: ignore
+            messages, tokenize=False, **kwargs
+        )
         assert isinstance(prompt, str)
         # Return formatted prompt and eos token by default
         return ChatFormatterResponse(
@@ -791,6 +795,7 @@ def hf_tokenizer_config_to_chat_formatter(
             messages=messages,
             bos_token=bos_token,
             eos_token=eos_token,
+            **kwargs,
         )
         return ChatFormatterResponse(
             prompt=prompt, stop=[eos_token, bos_token], added_special=True

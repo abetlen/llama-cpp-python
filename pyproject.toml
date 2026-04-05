@@ -63,6 +63,7 @@ all = [
 
 [tool.scikit-build]
 wheel.packages = ["llama_cpp"]
+wheel.py-api = "py3"
 cmake.verbose = true
 cmake.minimum-version = "3.21"
 minimum-version = "0.5.1"

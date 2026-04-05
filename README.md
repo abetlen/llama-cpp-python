@@ -717,16 +717,20 @@ Below is a short example demonstrating how to use the low-level API to tokenize 
 ```python
 import llama_cpp
 import ctypes
-llama_cpp.llama_backend_init(False) # Must be called once at the start of each program
-params = llama_cpp.llama_context_default_params()
+llama_cpp.llama_backend_init()  # Must be called once at the start of each program
+model_params = llama_cpp.llama_model_default_params()
+ctx_params = llama_cpp.llama_context_default_params()
+prompt = b"Q: Name the planets in the solar system? A: "
 # use bytes for char * params
-model = llama_cpp.llama_load_model_from_file(b"./models/7b/llama-model.gguf", params)
-ctx = llama_cpp.llama_new_context_with_model(model, params)
-max_tokens = params.n_ctx
+model = llama_cpp.llama_model_load_from_file(b"./models/7b/llama-model.gguf", model_params)
+ctx = llama_cpp.llama_init_from_model(model, ctx_params)
+vocab = llama_cpp.llama_model_get_vocab(model)
+max_tokens = ctx_params.n_ctx
 # use ctypes arrays for array params
 tokens = (llama_cpp.llama_token * int(max_tokens))()
-n_tokens = llama_cpp.llama_tokenize(ctx, b"Q: Name the planets in the solar system? A: ", tokens, max_tokens, llama_cpp.c_bool(True))
+n_tokens = llama_cpp.llama_tokenize(vocab, prompt, len(prompt), tokens, max_tokens, True, False)
 llama_cpp.llama_free(ctx)
+llama_cpp.llama_model_free(model)
 ```
 
 Check out the [examples folder](examples/low_level_api) for more examples of using the low-level API.
