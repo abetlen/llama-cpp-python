@@ -1749,6 +1749,7 @@ class ResponseParser:
         pending: str
         mode: str
         current_item: Optional[Dict[str, Any]]
+        current_segment: Optional[Dict[str, Any]]
         done: bool
         saw_tool_calls: bool
         parsed: Optional[Dict[str, Any]] = None
@@ -1973,6 +1974,104 @@ class ResponseParser:
         return prefix, suffix
 
     @classmethod
+    def _compile_iterator_block_pattern(
+        cls,
+        pattern: str,
+    ) -> Optional[Dict[str, Any]]:
+        first_group = pattern.find("(")
+        if first_group < 0:
+            return None
+        depth = 0
+        last_group = -1
+        escaped = False
+        for index in range(first_group, len(pattern)):
+            char = pattern[index]
+            if escaped:
+                escaped = False
+                continue
+            if char == "\\":
+                escaped = True
+                continue
+            if char == "(":
+                depth += 1
+                continue
+            if char == ")":
+                depth -= 1
+                if depth == 0:
+                    last_group = index
+                    break
+        if last_group < first_group:
+            return None
+        start = cls._regex_literal_prefix(pattern[:first_group].lstrip("^"))
+        if not start:
+            return None
+        suffix_pattern = pattern[last_group + 1 :]
+        if suffix_pattern == "":
+            return {"start": start, "end": "", "allow_eof": True}
+        eof_variant = suffix_pattern.endswith("|$)") and suffix_pattern.startswith("(?:")
+        if eof_variant:
+            suffix_pattern = suffix_pattern[3:-3]
+        end = cls._regex_literal_prefix(suffix_pattern)
+        if not end:
+            return None
+        return {"start": start, "end": end, "allow_eof": eof_variant}
+
+    @classmethod
+    def _compile_capture_pattern(
+        cls,
+        pattern: str,
+    ) -> Optional[Dict[str, Any]]:
+        normalized = pattern.lstrip("^")
+        if "(.*?)" in normalized:
+            prefix_pattern, suffix_pattern = normalized.split("(.*?)", 1)
+            start = cls._regex_literal_prefix(prefix_pattern)
+            if not start:
+                return None
+            if suffix_pattern == "":
+                return {"start": start, "end": "", "allow_eof": True}
+            eof_variant = suffix_pattern.endswith("|$)") and suffix_pattern.startswith("(?:")
+            if eof_variant:
+                suffix_pattern = suffix_pattern[3:-3]
+            end = cls._regex_literal_prefix(suffix_pattern)
+            if not end:
+                return None
+            return {"start": start, "end": end, "allow_eof": eof_variant}
+        if "(.*)" in normalized:
+            prefix_pattern, suffix_pattern = normalized.split("(.*)", 1)
+            start = cls._regex_literal_prefix(prefix_pattern)
+            if not start:
+                return None
+            if suffix_pattern == "":
+                return {"start": start, "end": "", "allow_eof": True}
+            eof_variant = suffix_pattern.endswith("|$)") and suffix_pattern.startswith("(?:")
+            if eof_variant:
+                suffix_pattern = suffix_pattern[3:-3]
+            end = cls._regex_literal_prefix(suffix_pattern)
+            if not end:
+                return None
+            return {"start": start, "end": end, "allow_eof": eof_variant}
+        return None
+
+    @classmethod
+    def _compile_word_capture_pattern(
+        cls,
+        pattern: str,
+    ) -> Optional[Dict[str, Any]]:
+        normalized = pattern.lstrip("^")
+        if r"(\w+)" not in normalized:
+            return None
+        prefix_pattern, suffix_pattern = normalized.split(r"(\w+)", 1)
+        start = cls._regex_literal_prefix(prefix_pattern)
+        if not start:
+            return None
+        end = cls._regex_literal_prefix(suffix_pattern) if suffix_pattern else ""
+        return {
+            "kind": "word",
+            "start": start,
+            "end": end,
+        }
+
+    @classmethod
     def _consume_until_any_literal(
         cls,
         text: str,
@@ -2044,9 +2143,105 @@ class ResponseParser:
                 "parameter_name_end": ">\n",
                 "parameter_end": "\n</parameter>",
             }
+        name_capture = (
+            cls._compile_word_capture_pattern(name_regex)
+            if isinstance(name_regex, str)
+            else None
+        )
+        arguments_capture = (
+            cls._compile_capture_pattern(argument_regex)
+            if isinstance(argument_regex, str)
+            else None
+        )
+        if (
+            isinstance(name_capture, dict)
+            and isinstance(arguments_capture, dict)
+            and arguments_schema.get("x-parser") == "json"
+        ):
+            arguments_value_schema = {
+                key: value
+                for key, value in arguments_schema.items()
+                if key != "x-regex"
+            }
+            return {
+                "kind": "json-message",
+                "schema": item_schema,
+                "name_capture": name_capture,
+                "arguments_capture": arguments_capture,
+                "arguments_schema": arguments_value_schema,
+            }
         return {
             "kind": "buffered",
             "schema": item_schema,
+        }
+
+    @classmethod
+    def _compile_segment_message_plan(
+        cls,
+        schema: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        if schema.get("type") != "object":
+            return None
+        if isinstance(schema.get("x-regex"), str):
+            return None
+        properties = schema.get("properties")
+        if not isinstance(properties, dict):
+            return None
+        segments: List[Dict[str, Any]] = []
+        field_segment_count = 0
+        for field_name, value_schema in properties.items():
+            if not isinstance(value_schema, dict):
+                continue
+            if field_name == "tool_calls":
+                iterator_pattern = value_schema.get("x-regex-iterator")
+                if not isinstance(iterator_pattern, str):
+                    continue
+                iterator_capture = cls._compile_iterator_block_pattern(iterator_pattern)
+                if not isinstance(iterator_capture, dict) or not iterator_capture["start"]:
+                    return None
+                items_schema = value_schema.get("items")
+                if not isinstance(items_schema, dict):
+                    return None
+                item_plan = cls._compile_tool_call_item_plan(items_schema)
+                if item_plan is None:
+                    return None
+                segments.append(
+                    {
+                        "kind": "iterator",
+                        "field": field_name,
+                        "start": iterator_capture["start"],
+                        "end": iterator_capture["end"],
+                        "allow_eof": iterator_capture["allow_eof"],
+                        "item": item_plan,
+                    }
+                )
+                continue
+            field_regex = value_schema.get("x-regex")
+            if not isinstance(field_regex, str):
+                continue
+            capture = cls._compile_capture_pattern(field_regex)
+            if not isinstance(capture, dict) or not capture["start"]:
+                return None
+            segments.append(
+                {
+                    "kind": "field",
+                    "field": field_name,
+                    "start": capture["start"],
+                    "end": capture["end"],
+                    "allow_eof": capture["allow_eof"],
+                }
+            )
+            field_segment_count += 1
+        if not segments or field_segment_count == 0:
+            return None
+        start_literals = tuple(segment["start"] for segment in segments)
+        if len(start_literals) != len(set(start_literals)):
+            return None
+        return {
+            "kind": "segment-message",
+            "segments": segments,
+            "segment_starts": start_literals,
+            "segments_by_start": {segment["start"]: segment for segment in segments},
         }
 
     @classmethod
@@ -2178,6 +2373,9 @@ class ResponseParser:
             return None
         if response_schema.get("x-parser") == "json":
             return {"kind": "json-root"}
+        segment_plan = cls._compile_segment_message_plan(response_schema)
+        if segment_plan is not None:
+            return segment_plan
         return cls._compile_tagged_message_plan(response_schema)
 
     @classmethod
@@ -2258,9 +2456,89 @@ class ResponseParser:
         else:
             self._message[key] = text
 
+    @staticmethod
+    def _advance_json_scanner(
+        item_state: Dict[str, Any],
+        text: str,
+        *,
+        schema_type: Optional[str],
+    ) -> bool:
+        started = cast(bool, item_state["json_started"])
+        complete = cast(bool, item_state["json_complete"])
+        depth = cast(int, item_state["json_depth"])
+        in_string = cast(bool, item_state["json_in_string"])
+        escaped = cast(bool, item_state["json_escaped"])
+        for char in text:
+            if complete:
+                if not char.isspace():
+                    return False
+                continue
+            if not started:
+                if char.isspace():
+                    continue
+                if schema_type == "object" and char != "{":
+                    return False
+                if schema_type == "array" and char != "[":
+                    return False
+                if char == "{":
+                    started = True
+                    depth = 1
+                    continue
+                if char == "[":
+                    started = True
+                    depth = 1
+                    continue
+                return False
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == '"':
+                    in_string = False
+                continue
+            if char == '"':
+                in_string = True
+                continue
+            if char in "{[":
+                depth += 1
+                continue
+            if char in "}]":
+                depth -= 1
+                if depth < 0:
+                    return False
+                if depth == 0:
+                    complete = True
+                continue
+        item_state["json_started"] = started
+        item_state["json_complete"] = complete
+        item_state["json_depth"] = depth
+        item_state["json_in_string"] = in_string
+        item_state["json_escaped"] = escaped
+        return True
+
     def _new_tool_call_state(self, item_plan: Dict[str, Any]) -> Dict[str, Any]:
         if item_plan["kind"] == "buffered":
             return {"kind": "buffered", "buffer": ""}
+        if item_plan["kind"] == "json-message":
+            return {
+                "kind": "json-message",
+                "pending": "",
+                "mode": "function-name",
+                "tool_call": {
+                    "type": "function",
+                    "function": {
+                        "name": "",
+                        "arguments": "",
+                    },
+                },
+                "arguments_text": "",
+                "json_started": False,
+                "json_complete": False,
+                "json_depth": 0,
+                "json_in_string": False,
+                "json_escaped": False,
+            }
         return {
             "kind": "tagged-parameters",
             "pending": "",
@@ -2283,6 +2561,7 @@ class ResponseParser:
                 pending="",
                 mode="prelude",
                 current_item=None,
+                current_segment=None,
                 done=False,
                 saw_tool_calls=False,
                 parsed={"role": "assistant"},
@@ -2294,15 +2573,28 @@ class ResponseParser:
                 pending="",
                 mode="assistant-prefix" if plan.get("assistant_prefix") else "prelude",
                 current_item=None,
+                current_segment=None,
                 done=False,
                 saw_tool_calls=False,
                 tool_call_count=0,
+            )
+        if plan["kind"] == "segment-message":
+            return ResponseParser.StreamState(
+                kind="segment-message",
+                pending="",
+                mode="segment-start",
+                current_item=None,
+                current_segment=None,
+                done=False,
+                saw_tool_calls=False,
+                parsed={"role": "assistant"},
             )
         return ResponseParser.StreamState(
             kind="tagged-message",
             pending="",
             mode="assistant-prefix" if plan.get("assistant_prefix") else "prelude",
             current_item=None,
+            current_segment=None,
             done=False,
             saw_tool_calls=False,
             parsed={"role": "assistant"},
@@ -2745,6 +3037,90 @@ class ResponseParser:
         if item_plan["kind"] == "buffered":
             item_state["buffer"] = item_state["buffer"] + text
             return True, deltas
+        if item_plan["kind"] == "json-message":
+            buffer = item_state["pending"] + text
+            item_state["pending"] = ""
+            while True:
+                mode = item_state["mode"]
+                if mode == "function-name":
+                    name_capture = item_plan["name_capture"]
+                    name_prefix = name_capture["start"]
+                    if buffer.startswith(name_prefix):
+                        remainder = buffer[len(name_prefix) :]
+                    elif name_prefix.startswith(buffer):
+                        item_state["pending"] = buffer
+                        return True, deltas
+                    else:
+                        return False, deltas
+                    name_end = 0
+                    while name_end < len(remainder) and (
+                        remainder[name_end].isalnum() or remainder[name_end] == "_"
+                    ):
+                        name_end += 1
+                    if name_end == 0:
+                        if not remainder:
+                            item_state["pending"] = buffer
+                            return True, deltas
+                        return False, deltas
+                    if name_end == len(remainder):
+                        item_state["pending"] = buffer
+                        return True, deltas
+                    function_name = remainder[:name_end]
+                    item_state["tool_call"]["function"]["name"] = function_name
+                    tool_call_index = cast(int, item_state["tool_call_index"])
+                    deltas.append(
+                        {
+                            "tool_calls": [
+                                {
+                                    "index": tool_call_index,
+                                    "id": (
+                                        f"call_{self._choice_index}_{function_name}_"
+                                        f"{self._completion_id}_{tool_call_index}"
+                                    ),
+                                    "type": "function",
+                                    "function": {"name": function_name},
+                                }
+                            ]
+                        }
+                    )
+                    buffer = remainder[name_end:]
+                    item_state["mode"] = "seek-arguments"
+                    continue
+                if mode == "seek-arguments":
+                    arguments_capture = item_plan["arguments_capture"]
+                    _ignored, matched, remainder, pending = self._consume_until_literal(
+                        buffer,
+                        arguments_capture["start"],
+                    )
+                    if not matched:
+                        item_state["pending"] = pending
+                        return True, deltas
+                    buffer = remainder
+                    item_state["mode"] = "arguments"
+                    continue
+                if mode == "arguments":
+                    if buffer:
+                        item_state["arguments_text"] = item_state["arguments_text"] + buffer
+                        deltas.append(
+                            {
+                                "tool_calls": [
+                                    {
+                                        "index": cast(int, item_state["tool_call_index"]),
+                                        "function": {"arguments": buffer},
+                                    }
+                                ]
+                            }
+                        )
+                    item_state["pending"] = ""
+                    arguments_schema = cast(Dict[str, Any], item_plan["arguments_schema"])
+                    schema_type = arguments_schema.get("type")
+                    if not self._advance_json_scanner(
+                        item_state,
+                        buffer,
+                        schema_type=schema_type if isinstance(schema_type, str) else None,
+                    ):
+                        return False, deltas
+                    return True, deltas
 
         buffer = item_state["pending"] + text
         item_state["pending"] = ""
@@ -2977,11 +3353,56 @@ class ResponseParser:
                 partial=False,
             )
             return self._normalize_tool_call_item(parsed_item, partial=False)
+        if item_plan["kind"] == "json-message":
+            if item_state["mode"] != "arguments":
+                return None
+            if item_state["pending"] or not item_state["json_started"] or not item_state["json_complete"]:
+                return None
+            try:
+                arguments = self._parse_response_value(
+                    item_state["arguments_text"],
+                    item_plan["arguments_schema"],
+                    partial=False,
+                )
+            except CompletionResponseParsingError:
+                return None
+            if arguments is None:
+                return None
+            item_state["tool_call"]["function"]["arguments"] = arguments
+            return cast(Dict[str, Any], item_state["tool_call"])
         if item_state["pending"] or item_state["current_parameter"] is not None:
             return None
         if item_state["mode"] not in {"done", "after-function-header"}:
             return None
         return cast(Dict[str, Any], item_state["tool_call"])
+
+    def _tool_call_delta(
+        self,
+        *,
+        tool_call: Dict[str, Any],
+        tool_call_index: int,
+        partial: bool,
+    ) -> Dict[str, Any]:
+        function = cast(Dict[str, Any], tool_call["function"])
+        return {
+            "tool_calls": [
+                {
+                    "index": tool_call_index,
+                    "id": (
+                        f"call_{self._choice_index}_{function['name']}_"
+                        f"{self._completion_id}_{tool_call_index}"
+                    ),
+                    "type": tool_call.get("type", "function"),
+                    "function": {
+                        "name": function["name"],
+                        "arguments": self._serialize_tool_arguments(
+                            function["arguments"],
+                            partial=partial,
+                        ),
+                    },
+                }
+            ]
+        }
 
     def _advance_stream_state(self, text: str) -> Tuple[bool, List[Dict[str, Any]]]:
         deltas: List[Dict[str, Any]] = []
@@ -2991,6 +3412,107 @@ class ResponseParser:
             return self._advance_direct_stream_state(text)
         if self._stream_state is None:
             return False, deltas
+        if self._stream_plan["kind"] == "segment-message":
+            state = self._stream_state
+            parsed = cast(Dict[str, Any], state.parsed)
+            buffer = state.pending + text
+            state.pending = ""
+            while True:
+                if state.mode == "segment-start":
+                    ignored, matched_start, remainder, pending = self._consume_until_any_literal(
+                        buffer,
+                        cast(Tuple[str, ...], self._stream_plan["segment_starts"]),
+                    )
+                    if matched_start is None:
+                        state.pending = buffer if not pending else pending
+                        return True, deltas
+                    state.current_segment = cast(
+                        Dict[str, Any],
+                        self._stream_plan["segments_by_start"][matched_start],
+                    )
+                    buffer = remainder
+                    state.mode = (
+                        "segment-tool-item"
+                        if state.current_segment["kind"] == "iterator"
+                        else "segment-field"
+                    )
+                    if state.current_segment["kind"] == "iterator":
+                        item_state = self._new_tool_call_state(state.current_segment["item"])
+                        if item_state["kind"] in {"tagged-parameters", "json-message"}:
+                            tool_calls = cast(
+                                List[Dict[str, Any]],
+                                parsed.setdefault("tool_calls", []),
+                            )
+                            tool_calls.append(item_state["tool_call"])
+                            item_state["tool_call_index"] = len(tool_calls) - 1
+                        state.current_item = item_state
+                        state.saw_tool_calls = True
+                    continue
+                if state.mode == "segment-field":
+                    current_segment = state.current_segment
+                    if not isinstance(current_segment, dict):
+                        return False, deltas
+                    segment_text, matched, remainder, pending = self._consume_until_literal(
+                        buffer,
+                        cast(str, current_segment["end"]),
+                    )
+                    field_name = cast(str, current_segment["field"])
+                    self._append_parsed_text(parsed, field_name, segment_text)
+                    if segment_text:
+                        deltas.append({field_name: segment_text})
+                    if not matched:
+                        state.pending = pending
+                        return True, deltas
+                    buffer = remainder
+                    state.current_segment = None
+                    state.mode = "segment-start"
+                    continue
+                if state.mode == "segment-tool-item":
+                    current_segment = state.current_segment
+                    if not isinstance(current_segment, dict):
+                        return False, deltas
+                    active_item_state = state.current_item
+                    if not isinstance(active_item_state, dict):
+                        return False, deltas
+                    item_text, matched, remainder, pending = self._consume_until_literal(
+                        buffer,
+                        cast(str, current_segment["end"]),
+                    )
+                    if item_text:
+                        success, item_deltas = self._advance_tool_call_state(
+                            active_item_state,
+                            item_text,
+                            cast(Dict[str, Any], current_segment["item"]),
+                        )
+                        if not success:
+                            return False, deltas
+                        deltas.extend(item_deltas)
+                    if not matched:
+                        state.pending = pending
+                        return True, deltas
+                    tool_call = self._finish_tool_call_state(
+                        active_item_state,
+                        cast(Dict[str, Any], current_segment["item"]),
+                    )
+                    if tool_call is None:
+                        return False, deltas
+                    if active_item_state["kind"] == "buffered":
+                        tool_calls = cast(List[Dict[str, Any]], parsed.setdefault("tool_calls", []))
+                        tool_call_index = len(tool_calls)
+                        tool_calls.append(tool_call)
+                        deltas.append(
+                            self._tool_call_delta(
+                                tool_call=tool_call,
+                                tool_call_index=tool_call_index,
+                                partial=False,
+                            )
+                        )
+                    state.current_item = None
+                    state.current_segment = None
+                    state.mode = "segment-start"
+                    buffer = remainder
+                    continue
+                return False, deltas
         if self._stream_plan["kind"] == "json-root":
             buffer = self._stream_state.buffer + text
             try:
@@ -4004,6 +4526,13 @@ class ResponseParser:
             return False
         if self._stream_plan["kind"] == "json-root":
             return True
+        if self._stream_plan["kind"] == "segment-message":
+            return (
+                not self._stream_state.pending
+                and self._stream_state.current_item is None
+                and self._stream_state.current_segment is None
+                and self._stream_state.mode == "segment-start"
+            )
         return (
             not self._stream_state.pending
             and self._stream_state.current_item is None
@@ -4154,12 +4683,41 @@ class ResponseParser:
                             leading_delta=role_delta,
                         )
                     self._stream_failed = True
+                elif self._stream_plan["kind"] == "segment-message":
+                    if role_delta is not None:
+                        stream_deltas = [role_delta, *stream_deltas]
+                    for delta in stream_deltas:
+                        self._apply_message_delta(self._message, delta)
+                    if finish_reason is None:
+                        return self._chunk_payloads(
+                            chunk_id=chunk_id,
+                            created=created,
+                            model=model,
+                            deltas=stream_deltas,
+                            finish_reason=None,
+                            logprobs=logprobs,
+                        )
+                    if self._stream_state_complete():
+                        return self._chunk_payloads(
+                            chunk_id=chunk_id,
+                            created=created,
+                            model=model,
+                            deltas=stream_deltas,
+                            finish_reason=(
+                                "tool_calls" if self._message.get("tool_calls") else finish_reason
+                            ),
+                            logprobs=logprobs,
+                        )
+                    self._stream_failed = True
                 else:
                     previous_message = self._message
                     partial_deltas: List[Dict[str, Any]] = []
                     assert self._stream_state is not None
                     parsed = cast(Dict[str, Any], self._stream_state.parsed)
-                    message = self._parsed_chat_message(parsed=parsed, partial=True)
+                    message = self._parsed_chat_message(
+                        parsed=parsed,
+                        partial=finish_reason is None,
+                    )
                     if finish_reason is None:
                         if role_delta is not None:
                             partial_deltas.append(role_delta)
@@ -4171,6 +4729,21 @@ class ResponseParser:
                             model=model,
                             deltas=partial_deltas,
                             finish_reason=None,
+                            logprobs=logprobs,
+                        )
+                    if self._stream_state_complete():
+                        if role_delta is not None:
+                            partial_deltas.append(role_delta)
+                        partial_deltas.extend(self._message_deltas(previous_message, message))
+                        self._message = message
+                        return self._chunk_payloads(
+                            chunk_id=chunk_id,
+                            created=created,
+                            model=model,
+                            deltas=partial_deltas,
+                            finish_reason=(
+                                "tool_calls" if message.get("tool_calls") else finish_reason
+                            ),
                             logprobs=logprobs,
                         )
                     self._stream_failed = True
