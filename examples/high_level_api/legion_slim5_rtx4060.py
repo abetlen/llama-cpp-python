@@ -174,7 +174,7 @@ def main() -> None:
         err = str(exc)
         print(f"ERROR: failed to load model – {err}", file=sys.stderr)
         if args.n_gpu_layers == -1 and (
-            "out of memory" in err.lower() or "cudaerror" in err.lower()
+            "out of memory" in err.lower() or "cuda" in err.lower()
         ):
             print(
                 "  Hint: GPU ran out of VRAM while loading all layers.\n"
@@ -206,7 +206,7 @@ def main() -> None:
         err = str(exc)
         print(f"ERROR: inference failed – {err}", file=sys.stderr)
         if args.n_gpu_layers == -1 and (
-            "out of memory" in err.lower() or "cudaerror" in err.lower()
+            "out of memory" in err.lower() or "cuda" in err.lower()
         ):
             print(
                 "  Hint: GPU ran out of VRAM during inference.\n"
