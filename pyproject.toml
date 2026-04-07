@@ -107,10 +107,12 @@ test-skip = "*_riscv64"  # riscv64 cannot install test packages (e.g. numpy, sci
 
 [tool.cibuildwheel.linux]
 before-build = "command -v dnf && dnf install -y openssl-devel || (command -v apk && apk add --no-cache openssl-dev) || true"
-repair-wheel-command = "auditwheel repair --exclude 'libcu*' -w {dest_dir} {wheel}"  # don't bundle CUDA libraries
 
 [tool.cibuildwheel.linux.environment]
 CMAKE_ARGS = "-DGGML_NATIVE=OFF"
 
 [tool.cibuildwheel.macos.environment]
 CMAKE_ARGS = "-DGGML_NATIVE=OFF"
+
+[tool.cibuildwheel.windows]
+repair-wheel-command = "pipx run delvewheel repair --analyze-existing --ignore-existing -w {dest_dir} {wheel}"
