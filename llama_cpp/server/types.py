@@ -235,6 +235,12 @@ class CreateChatCompletionRequest(BaseModel):
     response_format: Optional[llama_cpp.ChatCompletionRequestResponseFormat] = Field(
         default=None,
     )
+    reasoning_effort: Optional[
+        Literal["none", "minimal", "low", "medium", "high", "xhigh"]
+    ] = Field(
+        default=None,
+        description="Optional reasoning-effort hint exposed to chat templates as the `reasoning_effort` keyword argument.",
+    )
 
     # ignored or currently unsupported
     model: Optional[str] = model_field
