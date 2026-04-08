@@ -9,6 +9,7 @@
 #   "openai",
 #   "pydantic",
 #   "uvicorn",
+#   "websockets",
 # ]
 # ///
 
@@ -28,15 +29,18 @@ import asyncio
 import argparse
 import threading
 import multiprocessing
+import copy
 
 from pathlib import Path
 from datetime import datetime
 from dataclasses import dataclass, field
 from collections import OrderedDict, deque
 from openai.types.completion import Completion as OpenAICompletion
-from openai.types.completion_choice import CompletionChoice, Logprobs as CompletionLogprobs
+from openai.types.completion_choice import (
+    CompletionChoice,
+    Logprobs as CompletionLogprobs,
+)
 from openai.types.completion_usage import CompletionUsage
-from openai.types.model import Model as OpenAIModel
 from openai.types.chat.chat_completion import (
     ChatCompletion,
     Choice as ChatCompletionChoice,
@@ -86,7 +90,7 @@ import jinja2
 import uvicorn
 import numpy as np
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
@@ -1174,6 +1178,7 @@ class CreateChatCompletionRequest(BaseModel):
     tools: Optional[List[Dict[str, Any]]] = None
     tool_choice: Optional[Union[str, Dict[str, Any]]] = None
     response_format: Optional[Dict[str, Any]] = None
+    reasoning_effort: Optional[str] = None
 
     @field_validator("logit_bias")
     @classmethod
@@ -1208,12 +1213,50 @@ class CreateResponseRequest(BaseModel):
     tool_choice: Optional[Union[str, Dict[str, Any]]] = None
     parallel_tool_calls: bool = True
     text: Optional[Dict[str, Any]] = None
+    reasoning: Optional[Dict[str, Any]] = None
     metadata: Optional[Dict[str, str]] = None
     user: Optional[str] = None
     previous_response_id: Optional[str] = None
     conversation: Optional[Any] = None
     store: Optional[bool] = None
     truncation: Optional[Literal["auto", "disabled"]] = None
+
+
+class ResponseCreateWebSocketRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    type: Literal["response.create"]
+    model: Optional[str] = None
+    input: Any = ""
+    instructions: Optional[str] = None
+    max_output_tokens: Optional[int] = Field(default=None, ge=0)
+    temperature: Optional[float] = Field(default=0.8, ge=0.0, le=2.0)
+    top_p: Optional[float] = Field(default=0.95, ge=0.0, le=1.0)
+    stream: bool = True
+    top_logprobs: Optional[int] = Field(default=None, ge=0)
+    tools: Optional[List[Dict[str, Any]]] = None
+    tool_choice: Optional[Union[str, Dict[str, Any]]] = None
+    parallel_tool_calls: bool = True
+    text: Optional[Dict[str, Any]] = None
+    reasoning: Optional[Dict[str, Any]] = None
+    metadata: Optional[Dict[str, str]] = None
+    user: Optional[str] = None
+    previous_response_id: Optional[str] = None
+    conversation: Optional[Any] = None
+    store: Optional[bool] = None
+    truncation: Optional[Literal["auto", "disabled"]] = None
+    generate: Optional[bool] = None
+
+    def to_create_response_request(self) -> CreateResponseRequest:
+        return CreateResponseRequest.model_validate(
+            self.model_dump(mode="python", exclude={"type"})
+        )
+
+
+@dataclass
+class ResponsesWebSocketState:
+    input_items: List[Any]
+    output_items: List[Dict[str, Any]]
 
 
 class ConfigFile(BaseModel):
@@ -1316,8 +1359,8 @@ class ConfigFile(BaseModel):
 
     class ModelOptions(BaseModel):
         path: Optional[str] = None
-        from_pretrained: Optional["ConfigFile.FromPretrainedOptions"] = None
         alias: Optional[str] = None
+        from_pretrained: Optional["ConfigFile.FromPretrainedOptions"] = None
         n_gpu_layers: Optional[int] = None
         split_mode: Optional[int] = None
         main_gpu: Optional[int] = None
@@ -1356,6 +1399,7 @@ class ConfigFile(BaseModel):
         draft_model_num_pred_tokens: int = 10
         draft_model_max_ngram_size: int = 2
         response_schema: Optional[Dict[str, Any]] = None
+        store_logits: bool = True
 
         @model_validator(mode="after")
         def validate_source(self) -> "ConfigFile.ModelOptions":
@@ -1403,6 +1447,7 @@ class Jinja2ChatFormatter:
         function_call: Optional[Union[str, Dict[str, Any]]] = None,
         tools: Optional[List[Dict[str, Any]]] = None,
         tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
+        reasoning_effort: Optional[str] = None,
     ) -> Tuple[str, List[str]]:
         def raise_exception(message: str) -> None:
             raise ValueError(message)
@@ -1417,6 +1462,7 @@ class Jinja2ChatFormatter:
             function_call=function_call,
             tools=tools,
             tool_choice=tool_choice,
+            reasoning_effort=reasoning_effort,
             strftime_now=self._strftime_now,
         )
         stop = [self._eos_token] if self._eos_token else []
@@ -1443,6 +1489,13 @@ class Token:
         need_token_logprob: bool = False,
     ) -> "Token":
         text_bytes = model.token_bytes_with_prev(prev_tokens, token)
+        if not model.store_logits:
+            return cls(
+                token=token,
+                text_bytes=text_bytes,
+                token_logprob=None,
+                top_logprobs=None,
+            )
         if logprobs_count is None and not need_token_logprob:
             return cls(
                 token=token,
@@ -1759,13 +1812,13 @@ class ResponseParser:
         tool_call_count: int = 0
 
     _STREAM_PLAN_CACHE: Dict[int, Tuple[Any, Optional[Dict[str, Any]]]] = {}
-    _TOOL_INFO_CACHE: Dict[int, Tuple[Any, Dict[str, Dict[str, Any]]]] = {}
+    _TOOL_SCHEMA_CACHE: Dict[int, Tuple[Any, Dict[str, Dict[str, Any]]]] = {}
     __slots__ = (
         "_schema",
         "_tools",
         "_completion_id",
         "_choice_index",
-        "_tool_info",
+        "_tool_schemas",
         "_started",
         "_text_parts",
         "_message",
@@ -1800,7 +1853,7 @@ class ResponseParser:
         self._tools = tools
         self._completion_id = completion_id
         self._choice_index = choice_index
-        self._tool_info = self._cached_tool_info_map(tools)
+        self._tool_schemas = self._cached_tool_schema_map(tools)
         self._started = False
         self._text_parts: List[str] = []
         self._message: Dict[str, Any] = {}
@@ -2396,53 +2449,47 @@ class ResponseParser:
         return plan
 
     @staticmethod
-    def _tool_info_map(
+    def _tool_schema_map(
         tools: Optional[List[Dict[str, Any]]],
     ) -> Dict[str, Dict[str, Any]]:
         if tools is None:
             return {}
         mapping: Dict[str, Dict[str, Any]] = {}
         for tool in tools:
+            if tool.get("type") != "function":
+                continue
             function = tool.get("function", {})
             name = function.get("name")
             parameters = function.get("parameters")
-            if not isinstance(name, str) or not name:
-                continue
-            tool_kind = function.get("tool_kind")
-            if not isinstance(tool_kind, str):
-                raw_type = tool.get("original_type")
-                tool_kind = raw_type if isinstance(raw_type, str) else tool.get("type", "function")
-            content_type = function.get("content_type")
-            mapping[name] = {
-                "kind": tool_kind if tool_kind in {"function", "custom"} else "function",
-                "parameters": parameters if isinstance(parameters, dict) else {},
-                "content_type": (
-                    content_type
-                    if isinstance(content_type, str) and content_type
-                    else "json"
-                    if tool_kind != "custom"
-                    else "text"
-                ),
-            }
+            if isinstance(name, str) and isinstance(parameters, dict):
+                mapping[name] = {
+                    "parameters": parameters,
+                    "content_type": function.get("content_type"),
+                }
         return mapping
 
     @classmethod
-    def _cached_tool_info_map(
+    def _cached_tool_schema_map(
         cls,
         tools: Optional[List[Dict[str, Any]]],
     ) -> Dict[str, Dict[str, Any]]:
         if tools is None:
             return {}
         cache_key = id(tools)
-        cached = cls._TOOL_INFO_CACHE.get(cache_key)
+        cached = cls._TOOL_SCHEMA_CACHE.get(cache_key)
         if cached is not None and cached[0] is tools:
             return cached[1]
-        mapping = cls._tool_info_map(tools)
-        cls._TOOL_INFO_CACHE[cache_key] = (tools, mapping)
+        mapping = cls._tool_schema_map(tools)
+        cls._TOOL_SCHEMA_CACHE[cache_key] = (tools, mapping)
         return mapping
 
-    def _parameter_schema_for_tool(self, tool_name: str, parameter_name: str) -> Dict[str, Any]:
-        parameters = self._tool_info.get(tool_name, {}).get("parameters")
+    def _parameter_schema_for_tool(
+        self, tool_name: str, parameter_name: str
+    ) -> Dict[str, Any]:
+        tool_schema = self._tool_schemas.get(tool_name)
+        if not isinstance(tool_schema, dict):
+            return {}
+        parameters = tool_schema.get("parameters")
         if not isinstance(parameters, dict):
             return {}
         properties = parameters.get("properties")
@@ -2453,16 +2500,20 @@ class ResponseParser:
             return {}
         return parameter_schema
 
-    def _tool_kind_for_name(self, tool_name: str) -> str:
-        kind = self._tool_info.get(tool_name, {}).get("kind")
-        return kind if isinstance(kind, str) else "function"
+    def _tool_content_type(self, tool_name: str) -> Optional[str]:
+        tool_schema = self._tool_schemas.get(tool_name)
+        if not isinstance(tool_schema, dict):
+            return None
+        content_type = tool_schema.get("content_type")
+        if isinstance(content_type, str):
+            return content_type
+        return None
 
-    def _tool_content_type_for_name(self, tool_name: str) -> Optional[str]:
-        content_type = self._tool_info.get(tool_name, {}).get("content_type")
-        return content_type if isinstance(content_type, str) else None
-
-    def _has_custom_tools(self) -> bool:
-        return any(info.get("kind") == "custom" for info in self._tool_info.values())
+    def _has_text_tools(self) -> bool:
+        return any(
+            isinstance(tool_schema, dict) and tool_schema.get("content_type") == "text"
+            for tool_schema in self._tool_schemas.values()
+        )
 
     @staticmethod
     def _append_parsed_text(parsed: Dict[str, Any], key: str, text: str) -> None:
@@ -2559,8 +2610,6 @@ class ResponseParser:
                         "arguments": "",
                     },
                 },
-                "tool_kind": "function",
-                "content_type": None,
                 "arguments_text": "",
                 "json_started": False,
                 "json_complete": False,
@@ -3096,7 +3145,6 @@ class ResponseParser:
                         return True, deltas
                     function_name = remainder[:name_end]
                     item_state["tool_call"]["function"]["name"] = function_name
-                    item_state["tool_kind"] = self._tool_kind_for_name(function_name)
                     tool_call_index = cast(int, item_state["tool_call_index"])
                     deltas.append(
                         {
@@ -3118,32 +3166,13 @@ class ResponseParser:
                     continue
                 if mode == "seek-arguments":
                     arguments_capture = item_plan["arguments_capture"]
-                    prefix, matched, remainder, pending = self._consume_until_literal(
+                    _ignored, matched, remainder, pending = self._consume_until_literal(
                         buffer,
                         arguments_capture["start"],
                     )
                     if not matched:
                         item_state["pending"] = pending
                         return True, deltas
-                    content_type = prefix.strip()
-                    if not content_type:
-                        tool_name = cast(str, item_state["tool_call"]["function"]["name"])
-                        content_type = self._tool_content_type_for_name(tool_name) or (
-                            "json" if item_state["tool_kind"] != "custom" else "text"
-                        )
-                    item_state["content_type"] = content_type
-                    if content_type != "json":
-                        item_state["tool_call"]["function"]["content_type"] = content_type
-                        deltas.append(
-                            {
-                                "tool_calls": [
-                                    {
-                                        "index": cast(int, item_state["tool_call_index"]),
-                                        "function": {"content_type": content_type},
-                                    }
-                                ]
-                            }
-                        )
                     buffer = remainder
                     item_state["mode"] = "arguments"
                     continue
@@ -3161,8 +3190,6 @@ class ResponseParser:
                             }
                         )
                     item_state["pending"] = ""
-                    if item_state["tool_kind"] == "custom":
-                        return True, deltas
                     arguments_schema = cast(Dict[str, Any], item_plan["arguments_schema"])
                     schema_type = arguments_schema.get("type")
                     if not self._advance_json_scanner(
@@ -3407,15 +3434,7 @@ class ResponseParser:
         if item_plan["kind"] == "json-message":
             if item_state["mode"] != "arguments":
                 return None
-            if item_state["pending"]:
-                return None
-            if item_state.get("tool_kind") == "custom":
-                item_state["tool_call"]["function"]["arguments"] = item_state["arguments_text"]
-                content_type = item_state.get("content_type")
-                if isinstance(content_type, str) and content_type and content_type != "json":
-                    item_state["tool_call"]["function"]["content_type"] = content_type
-                return cast(Dict[str, Any], item_state["tool_call"])
-            if not item_state["json_started"] or not item_state["json_complete"]:
+            if item_state["pending"] or not item_state["json_started"] or not item_state["json_complete"]:
                 return None
             try:
                 arguments = self._parse_response_value(
@@ -3827,7 +3846,11 @@ class ResponseParser:
                 )
             captured_content = self._regex_capture(node_content, node_regex)
             if captured_content is None:
-                if partial and schema.get("type") == "object" and "x-regex-key-value" in schema:
+                if (
+                    partial
+                    and schema.get("type") == "object"
+                    and "x-regex-key-value" in schema
+                ):
                     captured_content = node_content
                 else:
                     return None
@@ -3918,6 +3941,13 @@ class ResponseParser:
                 try:
                     parsed = from_json(node_content, allow_partial=partial)
                 except ValueError as exc:
+                    if (
+                        self._has_text_tools()
+                        and schema.get("type") == "object"
+                        and schema.get("additionalProperties") is True
+                        and not schema.get("properties")
+                    ):
+                        return node_content
                     if partial:
                         return None
                     raise CompletionResponseParsingError(
@@ -3926,7 +3956,8 @@ class ResponseParser:
                 stripped_schema = {
                     key: value
                     for key, value in schema.items()
-                    if key not in {
+                    if key
+                    not in {
                         "x-parser",
                         "x-parser-args",
                         "x-regex",
@@ -3934,7 +3965,9 @@ class ResponseParser:
                         "x-regex-key-value",
                     }
                 }
-                return self._parse_response_value(parsed, stripped_schema, partial=partial)
+                return self._parse_response_value(
+                    parsed, stripped_schema, partial=partial
+                )
         schema_type = schema.get("type")
         if schema_type == "string":
             return node_content
@@ -3984,7 +4017,11 @@ class ResponseParser:
                         if parsed_value is not None:
                             parsed_object[key] = parsed_value
                 if not partial:
-                    missing = [key for key in schema.get("required", []) if key not in parsed_object]
+                    missing = [
+                        key
+                        for key in schema.get("required", [])
+                        if key not in parsed_object
+                    ]
                     if missing:
                         raise CompletionResponseParsingError(
                             f"response did not match response_schema: missing {', '.join(missing)}"
@@ -3992,7 +4029,9 @@ class ResponseParser:
                 return parsed_object
             parsed_object_from_text: Dict[str, Any] = {}
             for key, value_schema in properties.items():
-                value = self._parse_response_value(node_content, value_schema, partial=partial)
+                value = self._parse_response_value(
+                    node_content, value_schema, partial=partial
+                )
                 if value is None:
                     continue
                 if isinstance(value, list) and not value:
@@ -4019,7 +4058,9 @@ class ResponseParser:
             except (TypeError, ValueError):
                 return None
         if schema_type == "number":
-            if isinstance(node_content, (int, float)) and not isinstance(node_content, bool):
+            if isinstance(node_content, (int, float)) and not isinstance(
+                node_content, bool
+            ):
                 return node_content
             if partial and isinstance(node_content, str) and not node_content:
                 return None
@@ -4038,7 +4079,9 @@ class ResponseParser:
         one_of = schema.get("oneOf")
         if isinstance(one_of, list):
             for option in one_of:
-                value = self._parse_response_value(node_content, option, partial=partial)
+                value = self._parse_response_value(
+                    node_content, option, partial=partial
+                )
                 if value is not None:
                     return value
             return None
@@ -4132,6 +4175,11 @@ class ResponseParser:
         *,
         partial: bool,
     ) -> Dict[str, Any]:
+        if self._tool_content_type(tool_name) == "text":
+            raw_input = arguments.get("input", "")
+            if not isinstance(raw_input, str):
+                raw_input = str(raw_input)
+            return {"input": raw_input}
         if self._tools is None:
             raise CompletionResponseParsingError(
                 f"response included tool call '{tool_name}' but the request declared no tools"
@@ -4235,30 +4283,22 @@ class ResponseParser:
             raise CompletionResponseParsingError(
                 "tool_calls function name must be a non-empty string"
             )
-        tool_kind = self._tool_kind_for_name(tool_name)
-        content_type = function.get("content_type")
-        if not isinstance(content_type, str) or not content_type:
-            content_type = self._tool_content_type_for_name(tool_name) or (
-                "json" if tool_kind != "custom" else "text"
-            )
-        arguments = function.get("arguments", {})
-        if tool_kind == "custom" or content_type != "json":
+        if self._tool_content_type(tool_name) == "text":
+            arguments = function.get("arguments", "")
             if not isinstance(arguments, str):
                 if partial:
                     return None
                 raise CompletionResponseParsingError(
-                    "custom tool call input must be a string"
+                    "tool_calls function arguments must be a string for text tools"
                 )
-            normalized_function: Dict[str, Any] = {
-                "name": tool_name,
-                "arguments": arguments,
-            }
-            if content_type != "json":
-                normalized_function["content_type"] = content_type
             return {
                 "type": tool_call.get("type", "function"),
-                "function": normalized_function,
+                "function": {
+                    "name": tool_name,
+                    "arguments": arguments,
+                },
             }
+        arguments = function.get("arguments", {})
         if not isinstance(arguments, (dict, ResponseParser.PartialJsonObject)):
             if partial:
                 return None
@@ -4294,7 +4334,6 @@ class ResponseParser:
             "function": {
                 "name": tool_name,
                 "arguments": normalized_arguments,
-                **({"content_type": content_type} if content_type != "json" else {}),
             },
         }
 
@@ -4401,17 +4440,7 @@ class ResponseParser:
         return json.dumps(value, ensure_ascii=False, separators=(",", ":")), True
 
     @classmethod
-    def _serialize_tool_arguments(
-        cls,
-        arguments: Any,
-        *,
-        partial: bool = False,
-        content_type: Optional[str] = None,
-    ) -> str:
-        if isinstance(content_type, str) and content_type and content_type != "json":
-            if isinstance(arguments, str):
-                return arguments
-            return str(arguments)
+    def _serialize_tool_arguments(cls, arguments: Any, *, partial: bool = False) -> str:
         if partial:
             if cls._contains_partial_json_value(arguments):
                 return cls._serialize_partial_json_state(arguments)[0]
@@ -4441,23 +4470,26 @@ class ResponseParser:
             normalized_tool_calls = []
             for tool_call_index, tool_call in enumerate(tool_calls):
                 function = tool_call["function"]
-                content_type = function.get("content_type")
-                arguments = self._serialize_tool_arguments(
-                    function["arguments"],
-                    partial=partial,
-                    content_type=content_type if isinstance(content_type, str) else None,
-                )
-                normalized_function: Dict[str, Any] = {
-                    "name": function["name"],
-                    "arguments": arguments,
-                }
-                if isinstance(content_type, str) and content_type and content_type != "json":
-                    normalized_function["content_type"] = content_type
+                if self._tool_content_type(function["name"]) == "text":
+                    raw_arguments = function["arguments"]
+                    arguments = (
+                        raw_arguments
+                        if isinstance(raw_arguments, str)
+                        else str(raw_arguments)
+                    )
+                else:
+                    arguments = self._serialize_tool_arguments(
+                        function["arguments"],
+                        partial=partial,
+                    )
                 normalized_tool_calls.append(
                     {
                         "id": f"call_{self._choice_index}_{function['name']}_{self._completion_id}_{tool_call_index}",
                         "type": tool_call.get("type", "function"),
-                        "function": normalized_function,
+                        "function": {
+                            "name": function["name"],
+                            "arguments": arguments,
+                        },
                     }
                 )
             message["content"] = content if content not in {None, ""} else None
@@ -4518,13 +4550,6 @@ class ResponseParser:
             function_delta: Dict[str, Any] = {}
             if function.get("name") and function.get("name") != old_function.get("name"):
                 function_delta["name"] = function["name"]
-            content_type = function.get("content_type")
-            if (
-                isinstance(content_type, str)
-                and content_type
-                and content_type != old_function.get("content_type")
-            ):
-                function_delta["content_type"] = content_type
             arguments = cast(str, function.get("arguments", ""))
             old_arguments = cast(str, old_function.get("arguments", ""))
             if old_tool_call is None and arguments == "{}":
@@ -4580,9 +4605,6 @@ class ResponseParser:
             name_delta = function_delta.get("name")
             if isinstance(name_delta, str):
                 function["name"] = cast(str, function.get("name", "")) + name_delta
-            content_type_delta = function_delta.get("content_type")
-            if isinstance(content_type_delta, str) and content_type_delta:
-                function["content_type"] = content_type_delta
             arguments_delta = function_delta.get("arguments")
             if isinstance(arguments_delta, str):
                 function["arguments"] = cast(str, function.get("arguments", "")) + arguments_delta
@@ -4590,30 +4612,6 @@ class ResponseParser:
             message["function_call"] = dict(cast(Dict[str, Any], tool_calls[0]["function"]))
 
     def parse_completion_message(self, response_text: str) -> Dict[str, Any]:
-        if self._stream_plan is not None and self._has_custom_tools():
-            parser = ResponseParser(
-                self._schema,
-                tools=self._tools,
-                completion_id=self._completion_id,
-                choice_index=self._choice_index,
-            )
-            parser.consume_completion_chunk(
-                response_text,
-                chunk_id="",
-                created=0,
-                model="",
-                finish_reason="stop",
-            )
-            return {
-                key: (
-                    [dict(item) if isinstance(item, dict) else item for item in value]
-                    if key == "tool_calls" and isinstance(value, list)
-                    else dict(value)
-                    if key == "function_call" and isinstance(value, dict)
-                    else value
-                )
-                for key, value in parser._message.items()
-            }
         parsed = self.parse_chat_response(response_text, partial=False)
         return self._parsed_chat_message(parsed=parsed)
 
@@ -4918,7 +4916,6 @@ class OpenAIFormatter:
         output_index: int
         item: Dict[str, Any]
         content_index: Optional[int] = None
-        stream_status: str = "in_progress"
 
     @dataclass
     class ResponsesStream:
@@ -4940,31 +4937,6 @@ class OpenAIFormatter:
 
     def __init__(self, model: Model) -> None:
         self.model = model
-
-    def model_id(self) -> str:
-        model_alias = getattr(self.model, "model_alias", None)
-        if isinstance(model_alias, str) and model_alias:
-            return model_alias
-        return self.model.model_path
-
-    def model_card(self) -> OpenAIModel:
-        model_path = self.model_id()
-        try:
-            created = int(Path(model_path).stat().st_mtime)
-        except OSError:
-            created = int(time.time())
-        return OpenAIModel(
-            id=model_path,
-            created=created,
-            object="model",
-            owned_by="llama-cpp-python",
-        )
-
-    def model_list(self) -> Dict[str, Any]:
-        return {
-            "object": "list",
-            "data": [self.model_card().model_dump(mode="json", exclude_none=True)],
-        }
 
     @staticmethod
     def decode_text(data: bytes) -> str:
@@ -5043,6 +5015,18 @@ class OpenAIFormatter:
         return "developer" if "developer" in self._chat_template_text() else "system"
 
     @staticmethod
+    def _response_reasoning_effort(
+        body: CreateResponseRequest,
+    ) -> Optional[str]:
+        reasoning = body.reasoning
+        if not isinstance(reasoning, dict):
+            return None
+        effort = reasoning.get("effort")
+        if effort in {"low", "medium", "high"}:
+            return cast(str, effort)
+        return None
+
+    @staticmethod
     def _response_text_from_content(content: Any) -> str:
         if isinstance(content, str):
             return content
@@ -5076,72 +5060,6 @@ class OpenAIFormatter:
             return OpenAIFormatter._response_text_from_content(summary)
         return ""
 
-    @staticmethod
-    def _responses_custom_tool_content_type(tool: Dict[str, Any]) -> str:
-        format_spec = tool.get("format")
-        if not isinstance(format_spec, dict):
-            return "text"
-        format_type = format_spec.get("type")
-        if isinstance(format_type, str) and format_type:
-            return "text" if format_type == "grammar" else format_type
-        return "text"
-
-    @staticmethod
-    def _responses_custom_tool_format_hint(tool: Dict[str, Any]) -> Optional[str]:
-        format_spec = tool.get("format")
-        if not isinstance(format_spec, dict):
-            return None
-        format_type = format_spec.get("type")
-        if not isinstance(format_type, str) or not format_type:
-            return None
-        if format_type == "grammar":
-            definition = format_spec.get("definition")
-            if not isinstance(definition, str) or not definition:
-                return "Input must satisfy the provided grammar."
-            syntax = format_spec.get("syntax")
-            if isinstance(syntax, str) and syntax:
-                return f"Input must satisfy this {syntax} grammar:\n{definition}"
-            return f"Input must satisfy this grammar:\n{definition}"
-        if format_type == "text":
-            return None
-        return f"Input format: {format_type}."
-
-    @classmethod
-    def _responses_custom_tool_description(cls, tool: Dict[str, Any]) -> str:
-        description = tool.get("description")
-        if not isinstance(description, str):
-            description = ""
-        content_type = cls._responses_custom_tool_content_type(tool)
-        suffix = (
-            "This is a custom freeform tool. Pass raw input rather than JSON."
-            if content_type == "text"
-            else f"This is a custom tool. Use {content_type} input rather than JSON."
-        )
-        format_hint = cls._responses_custom_tool_format_hint(tool)
-        parts = [description, suffix, format_hint]
-        return "\n\n".join(part for part in parts if part).strip()
-
-    @staticmethod
-    def _response_tool_kind_from_name(
-        tools: Optional[List[Dict[str, Any]]],
-        name: Optional[str],
-        *,
-        content_type: Optional[str] = None,
-    ) -> str:
-        if isinstance(name, str):
-            for tool in tools or []:
-                if not isinstance(tool, dict):
-                    continue
-                tool_name = tool.get("name")
-                if isinstance(tool_name, str) and tool_name == name:
-                    tool_type = tool.get("type")
-                    if tool_type == "custom":
-                        return "custom"
-                    return "function"
-        if isinstance(content_type, str) and content_type and content_type != "json":
-            return "custom"
-        return "function"
-
     def _response_reasoning_input_message(
         self,
         *,
@@ -5170,6 +5088,33 @@ class OpenAIFormatter:
             }
         )
 
+    @staticmethod
+    def _response_tool_call_input_message(
+        *,
+        name: str,
+        arguments: str,
+        call_id: str,
+        content_type: Optional[str] = None,
+    ) -> ChatCompletionRequestMessage:
+        function: Dict[str, Any] = {
+            "name": name,
+            "arguments": arguments,
+        }
+        if isinstance(content_type, str) and content_type:
+            function["content_type"] = content_type
+        tool_call = {
+            "id": call_id,
+            "type": "function",
+            "function": function,
+        }
+        message: Dict[str, Any] = {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [tool_call],
+            "function_call": dict(function),
+        }
+        return OpenAIFormatter._chat_message(message)
+
     def _response_function_call_input_message(
         self,
         item: Dict[str, Any],
@@ -5181,37 +5126,11 @@ class OpenAIFormatter:
         if not isinstance(arguments, str):
             raise CompletionRequestValidationError("function_call input requires string arguments")
         call_id = item.get("call_id") or item.get("id") or f"call_{uuid.uuid4().hex}"
-        namespace = item.get("namespace")
-        if self._uses_harmony_channels():
-            recipient = (
-                f"{namespace}.{name}"
-                if isinstance(namespace, str) and namespace
-                else f"functions.{name}"
-            )
-            return self._chat_message(
-                {
-                    "role": "assistant",
-                    "content": arguments,
-                    "channel": "commentary",
-                    "recipient": recipient,
-                    "content_type": "json",
-                }
-            )
-        tool_call = {
-            "id": call_id,
-            "type": "function",
-            "function": {
-                "name": name,
-                "arguments": arguments,
-            },
-        }
-        return self._chat_message(
-            {
-                "role": "assistant",
-                "content": None,
-                "tool_calls": [tool_call],
-                "function_call": dict(cast(Dict[str, Any], tool_call["function"])),
-            }
+        return self._response_tool_call_input_message(
+            name=name,
+            arguments=arguments,
+            call_id=call_id,
+            content_type="json",
         )
 
     def _response_custom_tool_call_input_message(
@@ -5225,58 +5144,32 @@ class OpenAIFormatter:
         if not isinstance(input_text, str):
             raise CompletionRequestValidationError("custom_tool_call input requires string input")
         call_id = item.get("call_id") or item.get("id") or f"call_{uuid.uuid4().hex}"
-        namespace = item.get("namespace")
         content_type = item.get("content_type")
         if not isinstance(content_type, str) or not content_type:
             content_type = "text"
-        if self._uses_harmony_channels():
-            recipient = (
-                f"{namespace}.{name}"
-                if isinstance(namespace, str) and namespace
-                else f"functions.{name}"
-            )
-            return self._chat_message(
-                {
-                    "role": "assistant",
-                    "content": input_text,
-                    "channel": "commentary",
-                    "recipient": recipient,
-                    "content_type": content_type,
-                }
-            )
-        tool_call = {
-            "id": call_id,
-            "type": "function",
-            "function": {
-                "name": name,
-                "arguments": input_text,
-                "content_type": content_type,
-            },
-        }
-        return self._chat_message(
-            {
-                "role": "assistant",
-                "content": None,
-                "tool_calls": [tool_call],
-                "function_call": {
-                    "name": name,
-                    "arguments": input_text,
-                },
-            }
+        return self._response_tool_call_input_message(
+            name=name,
+            arguments=input_text,
+            call_id=call_id,
+            content_type=content_type,
         )
 
     def responses_input_to_chat_messages(
         self,
         body: CreateResponseRequest,
     ) -> List[ChatCompletionRequestMessage]:
-        if body.previous_response_id is not None:
-            raise CompletionRequestValidationError("previous_response_id is not supported in stateless /v1/responses")
         if body.conversation is not None:
-            raise CompletionRequestValidationError("conversation is not supported in stateless /v1/responses")
+            raise CompletionRequestValidationError(
+                "conversation is not supported in stateless /v1/responses"
+            )
         if body.store:
-            raise CompletionRequestValidationError("store=true is not supported in stateless /v1/responses")
+            raise CompletionRequestValidationError(
+                "store=true is not supported in stateless /v1/responses"
+            )
         if body.truncation not in {None, "disabled"}:
-            raise CompletionRequestValidationError("only truncation='disabled' is supported")
+            raise CompletionRequestValidationError(
+                "only truncation='disabled' is supported"
+            )
 
         messages: List[ChatCompletionRequestMessage] = []
         if body.instructions is not None:
@@ -5304,22 +5197,76 @@ class OpenAIFormatter:
         if isinstance(items, dict):
             items = [items]
         if not isinstance(items, list):
-            raise CompletionRequestValidationError("responses input must be a string, object, or list")
+            raise CompletionRequestValidationError(
+                "responses input must be a string, object, or list"
+            )
+
+        leading_preamble: List[str] = []
+        item_start_index = 0
+        while item_start_index < len(items):
+            item = items[item_start_index]
+            if not isinstance(item, dict):
+                break
+            item_type = item.get("type")
+            if item_type is None and "role" in item:
+                item_type = "message"
+            if item_type != "message":
+                break
+            role = item.get("role", "user")
+            if role not in {"developer", "system"}:
+                break
+            leading_preamble.append(
+                self._response_text_from_content(item.get("content", ""))
+            )
+            item_start_index += 1
+
+        if leading_preamble:
+            preamble_parts: List[str] = []
+            if messages:
+                first_content = messages[0].content
+                if isinstance(first_content, str) and first_content:
+                    preamble_parts.append(first_content)
+                messages = []
+            preamble_parts.extend(text for text in leading_preamble if text)
+            if preamble_parts:
+                messages.append(
+                    self._chat_message(
+                        {
+                            "role": self._instructions_role(),
+                            "content": "\n\n".join(preamble_parts),
+                        }
+                    )
+                )
 
         function_names_by_call_id: Dict[str, str] = {}
-        for item in items:
+        for item in items[item_start_index:]:
             if not isinstance(item, dict):
-                raise CompletionRequestValidationError("responses input items must be objects")
+                raise CompletionRequestValidationError(
+                    "responses input items must be objects"
+                )
             item_type = item.get("type")
             if item_type is None and "role" in item:
                 item_type = "message"
             if item_type == "message":
                 role = item.get("role", "user")
-                if role not in {"user", "assistant", "system", "developer", "tool", "function"}:
-                    raise CompletionRequestValidationError(f"unsupported responses message role: {role!r}")
+                if role not in {
+                    "user",
+                    "assistant",
+                    "system",
+                    "developer",
+                    "tool",
+                    "function",
+                }:
+                    raise CompletionRequestValidationError(
+                        f"unsupported responses message role: {role!r}"
+                    )
+                if role == "function":
+                    role = "tool"
                 data: Dict[str, Any] = {
                     "role": role,
-                    "content": self._response_text_from_content(item.get("content", "")),
+                    "content": self._response_text_from_content(
+                        item.get("content", "")
+                    ),
                 }
                 phase = item.get("phase")
                 if isinstance(phase, str):
@@ -5355,7 +5302,9 @@ class OpenAIFormatter:
             if item_type == "function_call_output":
                 call_id = item.get("call_id")
                 if not isinstance(call_id, str) or not call_id:
-                    raise CompletionRequestValidationError("function_call_output input requires call_id")
+                    raise CompletionRequestValidationError(
+                        "function_call_output input requires call_id"
+                    )
                 tool_output_data: Dict[str, Any] = {
                     "role": "tool",
                     "tool_call_id": call_id,
@@ -5369,7 +5318,9 @@ class OpenAIFormatter:
             if item_type == "custom_tool_call_output":
                 call_id = item.get("call_id")
                 if not isinstance(call_id, str) or not call_id:
-                    raise CompletionRequestValidationError("custom_tool_call_output input requires call_id")
+                    raise CompletionRequestValidationError(
+                        "custom_tool_call_output input requires call_id"
+                    )
                 tool_output_data = {
                     "role": "tool",
                     "tool_call_id": call_id,
@@ -5385,6 +5336,76 @@ class OpenAIFormatter:
             )
         return messages
 
+    @staticmethod
+    def _clone_response_input_items(input_items: Any) -> List[Any]:
+        if isinstance(input_items, list):
+            return copy.deepcopy(input_items)
+        if isinstance(input_items, dict):
+            return [copy.deepcopy(input_items)]
+        return [copy.deepcopy(input_items)]
+
+    @staticmethod
+    def _normalize_response_output_item_for_input(
+        item: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        item_type = item.get("type")
+        if item_type == "message":
+            role = item.get("role")
+            if not isinstance(role, str):
+                return None
+            normalized: Dict[str, Any] = {
+                "type": "message",
+                "role": role,
+                "content": copy.deepcopy(item.get("content", [])),
+            }
+            for key in ("id", "phase", "status"):
+                value = item.get(key)
+                if value is not None:
+                    normalized[key] = copy.deepcopy(value)
+            return normalized
+        if item_type == "reasoning":
+            normalized = {
+                "type": "reasoning",
+                "content": copy.deepcopy(item.get("content", [])),
+            }
+            for key in ("id", "summary", "status"):
+                value = item.get(key)
+                if value is not None:
+                    normalized[key] = copy.deepcopy(value)
+            return normalized
+        if item_type == "function_call":
+            normalized = {
+                "type": "function_call",
+                "call_id": copy.deepcopy(item.get("call_id")),
+                "name": copy.deepcopy(item.get("name")),
+                "arguments": copy.deepcopy(item.get("arguments", "")),
+            }
+            namespace = item.get("namespace")
+            item_id = item.get("id")
+            if item_id is not None:
+                normalized["id"] = copy.deepcopy(item_id)
+            if namespace is not None:
+                normalized["namespace"] = copy.deepcopy(namespace)
+            return normalized
+        if item_type == "custom_tool_call":
+            normalized = {
+                "type": "custom_tool_call",
+                "call_id": copy.deepcopy(item.get("call_id")),
+                "name": copy.deepcopy(item.get("name")),
+                "input": copy.deepcopy(item.get("input", "")),
+            }
+            namespace = item.get("namespace")
+            content_type = item.get("content_type")
+            item_id = item.get("id")
+            if item_id is not None:
+                normalized["id"] = copy.deepcopy(item_id)
+            if namespace is not None:
+                normalized["namespace"] = copy.deepcopy(namespace)
+            if content_type is not None:
+                normalized["content_type"] = copy.deepcopy(content_type)
+            return normalized
+        return None
+
     def _responses_tools_to_chat_tools(
         self,
         tools: Optional[List[Dict[str, Any]]],
@@ -5394,47 +5415,60 @@ class OpenAIFormatter:
         normalized_tools: List[Dict[str, Any]] = []
         for tool in tools:
             tool_type = tool.get("type")
-            if tool_type == "web_search" or tool_type == "web_search_2025_08_26":
+            if tool_type == "web_search":
+                continue
+            name = tool.get("name")
+            if not isinstance(name, str) or not name:
+                raise CompletionRequestValidationError("responses tools require name")
+            if tool_type == "function":
+                normalized_tools.append(
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": name,
+                            "description": tool.get("description"),
+                            "parameters": tool.get("parameters"),
+                            "strict": tool.get("strict"),
+                        },
+                    }
+                )
                 continue
             if tool_type == "custom":
-                name = tool.get("name")
-                if not isinstance(name, str) or not name:
-                    raise CompletionRequestValidationError("responses custom tools require name")
+                tool_format = tool.get("format")
+                syntax = (
+                    tool_format.get("syntax") if isinstance(tool_format, dict) else None
+                )
+                definition = (
+                    tool_format.get("definition")
+                    if isinstance(tool_format, dict)
+                    else None
+                )
+                description = cast(Optional[str], tool.get("description")) or ""
+                if isinstance(syntax, str) and isinstance(definition, str):
+                    if description:
+                        description = f"{description}\n\n{syntax}:\n{definition}"
+                    else:
+                        description = f"{syntax}:\n{definition}"
                 normalized_tools.append(
                     {
                         "type": "function",
                         "original_type": "custom",
                         "function": {
                             "name": name,
-                            "description": self._responses_custom_tool_description(tool),
-                            "parameters": None,
-                            "strict": False,
-                            "tool_kind": "custom",
-                            "content_type": self._responses_custom_tool_content_type(tool),
+                            "description": description or None,
+                            "parameters": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": True,
+                            },
+                            "strict": tool.get("strict"),
+                            "content_type": "text",
                         },
                     }
                 )
                 continue
-            if tool_type != "function":
-                raise CompletionRequestValidationError(
-                    f"unsupported responses tool type: {tool_type!r}"
-                )
-            name = tool.get("name")
-            if not isinstance(name, str) or not name:
-                raise CompletionRequestValidationError("responses function tools require name")
-            normalized_tools.append(
-                {
-                    "type": "function",
-                    "original_type": "function",
-                    "function": {
-                        "name": name,
-                        "description": tool.get("description"),
-                        "parameters": tool.get("parameters"),
-                        "strict": tool.get("strict"),
-                        "tool_kind": "function",
-                        "content_type": "json",
-                    },
-                }
+            raise CompletionRequestValidationError(
+                f"unsupported responses tool type: {tool_type!r}"
             )
         return normalized_tools
 
@@ -5444,7 +5478,7 @@ class OpenAIFormatter:
     ) -> Optional[Union[str, Dict[str, Any]]]:
         if not isinstance(tool_choice, dict):
             return tool_choice
-        if isinstance(tool_choice.get("name"), str) and tool_choice.get("type") in {"function", "custom"}:
+        if tool_choice.get("type") in {"function", "custom"} and "name" in tool_choice:
             return {
                 "type": "function",
                 "function": {
@@ -5511,6 +5545,7 @@ class OpenAIFormatter:
                 if isinstance(body.text.get("format"), dict)
                 else None
             ),
+            reasoning_effort=self._response_reasoning_effort(body),
         )
 
     def _response_parser(
@@ -5583,6 +5618,7 @@ class OpenAIFormatter:
                 function_call=body.function_call,
                 tools=body.tools,
                 tool_choice=body.tool_choice,
+                reasoning_effort=body.reasoning_effort,
             )
             tool_name, grammar_text = self._chat_tool_name_and_grammar(body)
         except ValueError as exc:
@@ -5636,6 +5672,9 @@ class OpenAIFormatter:
 
     @staticmethod
     def _response_reasoning_text_from_message(message: Dict[str, Any]) -> str:
+        thinking = message.get("thinking")
+        if isinstance(thinking, str) and thinking:
+            return thinking
         reasoning_content = message.get("reasoning_content")
         if isinstance(reasoning_content, str) and reasoning_content:
             return reasoning_content
@@ -5815,15 +5854,38 @@ class OpenAIFormatter:
             item["name"] = bare_name
         return item
 
+    @staticmethod
+    def _responses_tool_type_by_name(
+        tools: Optional[List[Dict[str, Any]]],
+    ) -> Dict[str, str]:
+        if tools is None:
+            return {}
+        tool_types: Dict[str, str] = {}
+        for tool in tools:
+            if not isinstance(tool, dict):
+                continue
+            tool_type = tool.get("original_type") or tool.get("type")
+            if not isinstance(tool_type, str):
+                continue
+            function = tool.get("function")
+            if isinstance(function, dict):
+                name = function.get("name")
+            else:
+                name = tool.get("name")
+            if isinstance(name, str) and name:
+                tool_types[name] = tool_type
+        return tool_types
+
     def _response_output_items_from_message(
         self,
         *,
         response_id: str,
         message: Dict[str, Any],
-        tools: Optional[List[Dict[str, Any]]] = None,
         logprobs: Optional[List[Dict[str, Any]]] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
     ) -> List[Dict[str, Any]]:
         items: List[Dict[str, Any]] = []
+        tool_types_by_name = self._responses_tool_type_by_name(tools)
         reasoning_text = self._response_reasoning_text_from_message(message)
         if reasoning_text:
             items.append(
@@ -5848,34 +5910,26 @@ class OpenAIFormatter:
                 call_id = tool_call.get("id")
                 if not isinstance(call_id, str) or not call_id:
                     call_id = f"call_{response_id}_{tool_call_index}"
-                kind = self._response_tool_kind_from_name(
-                    tools,
-                    name,
-                    content_type=(
-                        function.get("content_type")
-                        if isinstance(function.get("content_type"), str)
-                        else None
-                    ),
-                )
-                if kind == "custom":
+                tool_type = tool_types_by_name.get(name, "function")
+                if tool_type == "custom":
                     items.append(
                         self._response_custom_tool_call_item(
-                            item_id=f"ctc_{response_id}_{tool_call_index}",
+                            item_id=f"fc_{response_id}_{tool_call_index}",
                             call_id=call_id,
                             name=name,
                             input_text=arguments,
                         )
                     )
-                else:
-                    items.append(
-                        self._response_function_call_item(
-                            item_id=f"fc_{response_id}_{tool_call_index}",
-                            call_id=call_id,
-                            name=name,
-                            arguments=arguments,
-                            status="completed",
-                        )
+                    continue
+                items.append(
+                    self._response_function_call_item(
+                        item_id=f"fc_{response_id}_{tool_call_index}",
+                        call_id=call_id,
+                        name=name,
+                        arguments=arguments,
+                        status="completed",
                     )
+                )
         output_text = self._response_output_text_from_message(message)
         if output_text:
             items.append(
@@ -5958,7 +6012,7 @@ class OpenAIFormatter:
             "output": list(output_items),
             "parallel_tool_calls": body.parallel_tool_calls,
             "reasoning": {
-                "effort": None,
+                "effort": self._response_reasoning_effort(body),
                 "summary": None,
             },
             "store": False,
@@ -5994,8 +6048,8 @@ class OpenAIFormatter:
         output_items = self._response_output_items_from_message(
             response_id=response_id,
             message=message,
-            tools=body.tools,
             logprobs=logprobs,
+            tools=cast(Optional[List[Dict[str, Any]]], body.tools),
         )
         return self._response_object(
             body=body,
@@ -6191,28 +6245,27 @@ class OpenAIFormatter:
         tool_call_index: int,
         call_id: Optional[str],
         name: Optional[str],
-        content_type: Optional[str] = None,
     ) -> Tuple[List[Dict[str, Any]], "OpenAIFormatter.ResponsesOutputItem"]:
         existing = state.tool_items.get(tool_call_index)
         if existing is not None:
             return [], existing
-        tool_kind = self._response_tool_kind_from_name(
-            state.body.tools,
-            name,
-            content_type=content_type,
-        )
-        if tool_kind == "custom":
+        tool_types_by_name = self._responses_tool_type_by_name(state.body.tools)
+        tool_type = tool_types_by_name.get(name or "", "function")
+        item_id = f"fc_{state.response_id}_{tool_call_index}"
+        resolved_call_id = call_id or f"call_{state.response_id}_{tool_call_index}"
+        resolved_name = name or ""
+        if tool_type == "custom":
             item = self._response_custom_tool_call_item(
-                item_id=f"ctc_{state.response_id}_{tool_call_index}",
-                call_id=call_id or f"call_{state.response_id}_{tool_call_index}",
-                name=name or "",
+                item_id=item_id,
+                call_id=resolved_call_id,
+                name=resolved_name,
                 input_text="",
             )
         else:
             item = self._response_function_call_item(
-                item_id=f"fc_{state.response_id}_{tool_call_index}",
-                call_id=call_id or f"call_{state.response_id}_{tool_call_index}",
-                name=name or "",
+                item_id=item_id,
+                call_id=resolved_call_id,
+                name=resolved_name,
                 arguments="",
                 status="in_progress",
             )
@@ -6234,7 +6287,6 @@ class OpenAIFormatter:
         call_id: Optional[str],
         name_delta: Optional[str],
         arguments_delta: Optional[str],
-        content_type: Optional[str] = None,
     ) -> None:
         if isinstance(call_id, str) and call_id:
             item["call_id"] = call_id
@@ -6246,11 +6298,13 @@ class OpenAIFormatter:
                 item["name"] = name_delta
             elif not current_name.endswith(name_delta):
                 item["name"] = current_name + name_delta
-        if isinstance(content_type, str) and content_type:
-            item["content_type"] = content_type
         if isinstance(arguments_delta, str) and arguments_delta:
-            key = "input" if item.get("type") == "custom_tool_call" else "arguments"
-            item[key] = cast(str, item.get(key, "")) + arguments_delta
+            if item.get("type") == "custom_tool_call":
+                item["input"] = cast(str, item.get("input", "")) + arguments_delta
+            else:
+                item["arguments"] = (
+                    cast(str, item.get("arguments", "")) + arguments_delta
+                )
 
     def _finalize_response_stream_items(
         self,
@@ -6261,7 +6315,10 @@ class OpenAIFormatter:
         events: List[Dict[str, Any]] = []
         item_status = self._response_item_status(finish_reason)
 
-        if state.reasoning_item is not None and state.reasoning_item.item["status"] == "in_progress":
+        if (
+            state.reasoning_item is not None
+            and state.reasoning_item.item["status"] == "in_progress"
+        ):
             item = state.reasoning_item.item
             item["status"] = item_status
             part = cast(List[Dict[str, Any]], item["content"])[0]
@@ -6294,7 +6351,10 @@ class OpenAIFormatter:
                 )
             )
 
-        if state.message_item is not None and state.message_item.item["status"] == "in_progress":
+        if (
+            state.message_item is not None
+            and state.message_item.item["status"] == "in_progress"
+        ):
             item = state.message_item.item
             item["status"] = item_status
             part = cast(List[Dict[str, Any]], item["content"])[0]
@@ -6331,11 +6391,11 @@ class OpenAIFormatter:
         for tool_call_index in sorted(state.tool_items):
             item_state = state.tool_items[tool_call_index]
             item = item_state.item
-            if item_state.stream_status != "in_progress":
+            if (
+                item.get("status") != "in_progress"
+                and item.get("type") != "custom_tool_call"
+            ):
                 continue
-            item_state.stream_status = item_status
-            if item.get("type") != "custom_tool_call":
-                item["status"] = item_status
             if item.get("type") == "custom_tool_call":
                 events.append(
                     self._response_event(
@@ -6343,10 +6403,11 @@ class OpenAIFormatter:
                         "response.custom_tool_call_input.done",
                         item_id=cast(str, item["id"]),
                         output_index=item_state.output_index,
-                        input=cast(str, item["input"]),
+                        input=cast(str, item.get("input", "")),
                     )
                 )
             else:
+                item["status"] = item_status
                 events.append(
                     self._response_event(
                         state,
@@ -6366,8 +6427,10 @@ class OpenAIFormatter:
                 )
             )
 
-        state.final_status, state.incomplete_details = self._response_status_and_incomplete_details(
-            finish_reason=finish_reason,
+        state.final_status, state.incomplete_details = (
+            self._response_status_and_incomplete_details(
+                finish_reason=finish_reason,
+            )
         )
         return events
 
@@ -6396,6 +6459,9 @@ class OpenAIFormatter:
                 state.message_item.item["phase"] = phase
 
         reasoning_delta = delta.get("reasoning_content")
+        if not isinstance(reasoning_delta, str) or not reasoning_delta:
+            candidate = delta.get("thinking")
+            reasoning_delta = candidate if isinstance(candidate, str) else None
         if isinstance(reasoning_delta, str) and reasoning_delta:
             added, item_state = self._ensure_reasoning_stream_item(state)
             events.extend(added)
@@ -6419,7 +6485,9 @@ class OpenAIFormatter:
             part = cast(List[Dict[str, Any]], item_state.item["content"])[0]
             part["text"] += content_delta
             if logprobs:
-                cast(List[Dict[str, Any]], part.setdefault("logprobs", [])).extend(logprobs)
+                cast(List[Dict[str, Any]], part.setdefault("logprobs", [])).extend(
+                    logprobs
+                )
             events.append(
                 self._response_event(
                     state,
@@ -6443,17 +6511,11 @@ class OpenAIFormatter:
                 function = tool_call.get("function")
                 if not isinstance(function, dict):
                     continue
-                content_type = (
-                    function.get("content_type")
-                    if isinstance(function.get("content_type"), str)
-                    else None
-                )
                 added, item_state = self._ensure_tool_stream_item(
                     state,
                     tool_call_index=tool_call_index,
                     call_id=cast(Optional[str], tool_call.get("id")),
                     name=cast(Optional[str], function.get("name")),
-                    content_type=content_type,
                 )
                 events.extend(added)
                 self._update_tool_stream_item(
@@ -6461,7 +6523,6 @@ class OpenAIFormatter:
                     call_id=cast(Optional[str], tool_call.get("id")),
                     name_delta=cast(Optional[str], function.get("name")),
                     arguments_delta=cast(Optional[str], function.get("arguments")),
-                    content_type=content_type,
                 )
                 arguments_delta = function.get("arguments")
                 if isinstance(arguments_delta, str) and arguments_delta:
@@ -6475,16 +6536,16 @@ class OpenAIFormatter:
                                 delta=arguments_delta,
                             )
                         )
-                    else:
-                        events.append(
-                            self._response_event(
-                                state,
-                                "response.function_call_arguments.delta",
-                                item_id=cast(str, item_state.item["id"]),
-                                output_index=item_state.output_index,
-                                delta=arguments_delta,
-                            )
+                        continue
+                    events.append(
+                        self._response_event(
+                            state,
+                            "response.function_call_arguments.delta",
+                            item_id=cast(str, item_state.item["id"]),
+                            output_index=item_state.output_index,
+                            delta=arguments_delta,
                         )
+                    )
 
         if finish_reason is not None:
             events.extend(
@@ -7283,6 +7344,7 @@ class Model:
         draft_model_num_pred_tokens: int = 10,
         draft_model_max_ngram_size: int = 2,
         response_schema: Optional[Dict[str, Any]] = None,
+        store_logits: bool = True,
     ) -> None:
         llama_cpp.llama_backend_init()
         self.backend_initialized = True
@@ -7290,15 +7352,18 @@ class Model:
         self.model_alias = model_alias
         self.prompt_chunk_size = prompt_chunk_size
         self.response_schema = response_schema
-        model_params, self._c_tensor_split, self._kv_overrides_array = self.build_model_params(
-            n_gpu_layers=n_gpu_layers,
-            split_mode=split_mode,
-            main_gpu=main_gpu,
-            tensor_split=tensor_split,
-            vocab_only=vocab_only,
-            use_mmap=use_mmap,
-            use_mlock=use_mlock,
-            kv_overrides=kv_overrides,
+        self.store_logits = store_logits
+        model_params, self._c_tensor_split, self._kv_overrides_array = (
+            self.build_model_params(
+                n_gpu_layers=n_gpu_layers,
+                split_mode=split_mode,
+                main_gpu=main_gpu,
+                tensor_split=tensor_split,
+                vocab_only=vocab_only,
+                use_mmap=use_mmap,
+                use_mlock=use_mlock,
+                kv_overrides=kv_overrides,
+            )
         )
         llama_model = llama_cpp.llama_model_load_from_file(
             model_path.encode("utf-8"),
@@ -7319,9 +7384,13 @@ class Model:
         elif llama_cpp.llama_model_is_hybrid(llama_model):
             self.memory_model = "hybrid"
         else:
-            self.memory_model = "attention-unified" if kv_unified else "attention-partitioned"
+            self.memory_model = (
+                "attention-unified" if kv_unified else "attention-partitioned"
+            )
         if draft_model is not None and not self.memory_model.startswith("attention"):
-            raise RuntimeError("speculative decoding is only supported for attention models")
+            raise RuntimeError(
+                "speculative decoding is only supported for attention models"
+            )
         context_params = self.build_context_params(
             n_ctx=n_ctx,
             n_batch=n_batch,
@@ -7682,6 +7751,7 @@ class Model:
         function_call: Optional[Union[str, Dict[str, Any]]] = None,
         tools: Optional[List[Dict[str, Any]]] = None,
         tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
+        reasoning_effort: Optional[str] = None,
     ) -> Tuple[str, List[int], List[str]]:
         if self.chat_formatter is None:
             raise ValueError("model does not provide a GGUF chat template")
@@ -7691,6 +7761,7 @@ class Model:
             function_call=function_call,
             tools=tools,
             tool_choice=tool_choice,
+            reasoning_effort=reasoning_effort,
         )
         prompt_tokens = self.tokenize(prompt, add_bos=False, special=True)
         return prompt, prompt_tokens, formatter_stop
@@ -8966,7 +9037,9 @@ def create_app() -> FastAPI:
         stream: CompletionStream,
         cancel: Callable[[], None],
     ) -> OpenAICompletion | Response:
-        disconnect_task = asyncio.create_task(watch_http_disconnect(http_request, cancel))
+        disconnect_task = asyncio.create_task(
+            watch_http_disconnect(http_request, cancel)
+        )
         try:
             return await asyncio.to_thread(formatter.collect_completion, stream)
         except asyncio.CancelledError:
@@ -9023,9 +9096,13 @@ def create_app() -> FastAPI:
         http_request: Request,
         stream: CompletionStream,
         cancel: Callable[[], None],
-        chunk_payloads: Callable[[CompletionChunk], Iterable[BaseModel | Dict[str, Any]]],
+        chunk_payloads: Callable[
+            [CompletionChunk], Iterable[BaseModel | Dict[str, Any]]
+        ],
     ) -> AsyncIterator[bytes]:
-        disconnect_task = asyncio.create_task(watch_http_disconnect(http_request, cancel))
+        disconnect_task = asyncio.create_task(
+            watch_http_disconnect(http_request, cancel)
+        )
         try:
             while True:
                 done, chunk = await asyncio.to_thread(
@@ -9043,7 +9120,10 @@ def create_app() -> FastAPI:
             raise
         except BaseException as exc:
             cancel()
-            if isinstance(exc, CompletionRequestCancelledError) and await http_request.is_disconnected():
+            if (
+                isinstance(exc, CompletionRequestCancelledError)
+                and await http_request.is_disconnected()
+            ):
                 return
             raise
         finally:
@@ -9056,10 +9136,16 @@ def create_app() -> FastAPI:
         cancel: Callable[[], None],
         *,
         initial_payloads: Iterable[BaseModel | Dict[str, Any]],
-        chunk_payloads: Callable[[CompletionChunk], Iterable[BaseModel | Dict[str, Any]]],
-        done_payloads: Callable[[Optional[OpenAICompletion]], Iterable[BaseModel | Dict[str, Any]]],
+        chunk_payloads: Callable[
+            [CompletionChunk], Iterable[BaseModel | Dict[str, Any]]
+        ],
+        done_payloads: Callable[
+            [Optional[OpenAICompletion]], Iterable[BaseModel | Dict[str, Any]]
+        ],
     ) -> AsyncIterator[bytes]:
-        disconnect_task = asyncio.create_task(watch_http_disconnect(http_request, cancel))
+        disconnect_task = asyncio.create_task(
+            watch_http_disconnect(http_request, cancel)
+        )
         try:
             for payload in initial_payloads:
                 yield formatter.encode_sse_payload(payload)
@@ -9081,11 +9167,46 @@ def create_app() -> FastAPI:
             raise
         except BaseException as exc:
             cancel()
-            if isinstance(exc, CompletionRequestCancelledError) and await http_request.is_disconnected():
+            if (
+                isinstance(exc, CompletionRequestCancelledError)
+                and await http_request.is_disconnected()
+            ):
                 return
             raise
         finally:
             disconnect_task.cancel()
+
+    async def stream_websocket_responses(
+        websocket: WebSocket,
+        formatter: OpenAIFormatter,
+        stream: CompletionStream,
+        cancel: Callable[[], None],
+        *,
+        initial_payloads: Iterable[BaseModel | Dict[str, Any]],
+        chunk_payloads: Callable[
+            [CompletionChunk], Iterable[BaseModel | Dict[str, Any]]
+        ],
+        done_payloads: Callable[
+            [Optional[OpenAICompletion]], Iterable[BaseModel | Dict[str, Any]]
+        ],
+    ) -> None:
+        try:
+            for payload in initial_payloads:
+                await websocket.send_json(payload)
+            while True:
+                done, chunk, result = await asyncio.to_thread(
+                    formatter.next_stream_output,
+                    stream,
+                )
+                if done:
+                    for payload in done_payloads(result):
+                        await websocket.send_json(payload)
+                    break
+                assert chunk is not None
+                for payload in chunk_payloads(chunk):
+                    await websocket.send_json(payload)
+        finally:
+            stream.close()
 
     @app.post("/v1/completions")
     async def create_completion(http_request: Request, body: CreateCompletionRequest):
@@ -9105,7 +9226,9 @@ def create_app() -> FastAPI:
                 ]
             except CompletionRequestValidationError as exc:
                 raise bad_request(exc) from exc
-            results = await collect_completion_results(formatter, http_request, submissions)
+            results = await collect_completion_results(
+                formatter, http_request, submissions
+            )
             if isinstance(results, Response):
                 return results
             return JSONResponse(
@@ -9115,7 +9238,9 @@ def create_app() -> FastAPI:
                 )
             )
         try:
-            stream, cancel = service.submit(body.model_copy(update={"prompt": prompts[0]}))
+            stream, cancel = service.submit(
+                body.model_copy(update={"prompt": prompts[0]})
+            )
         except CompletionRequestValidationError as exc:
             raise bad_request(exc) from exc
         if body.stream:
@@ -9129,18 +9254,24 @@ def create_app() -> FastAPI:
                 ),
                 media_type="text/event-stream",
             )
-        result = await collect_completion_result(formatter, http_request, stream, cancel)
+        result = await collect_completion_result(
+            formatter, http_request, stream, cancel
+        )
         if isinstance(result, Response):
             return result
         return JSONResponse(result.model_dump(mode="json", exclude_none=True))
 
     @app.post("/v1/chat/completions")
-    async def create_chat_completion(http_request: Request, body: CreateChatCompletionRequest):
+    async def create_chat_completion(
+        http_request: Request, body: CreateChatCompletionRequest
+    ):
         service: CompletionService = app.state.service
         formatter = service.formatter
         try:
-            payload, prompt_text, prompt_tokens, grammar_text, tool_name = formatter.completion_request_from_chat_request(
-                body,
+            payload, prompt_text, prompt_tokens, grammar_text, tool_name = (
+                formatter.completion_request_from_chat_request(
+                    body,
+                )
             )
         except CompletionRequestValidationError as exc:
             raise bad_request(exc) from exc
@@ -9182,7 +9313,9 @@ def create_app() -> FastAPI:
                 ),
                 media_type="text/event-stream",
             )
-        completion = await collect_completion_result(formatter, http_request, stream, cancel)
+        completion = await collect_completion_result(
+            formatter, http_request, stream, cancel
+        )
         if isinstance(completion, Response):
             return completion
         chat_response = formatter.convert_completion_response_to_chat(
@@ -9192,7 +9325,9 @@ def create_app() -> FastAPI:
             tools=body.tools,
         )
         if isinstance(chat_response, BaseModel):
-            return JSONResponse(chat_response.model_dump(mode="json", exclude_none=True))
+            return JSONResponse(
+                chat_response.model_dump(mode="json", exclude_none=True)
+            )
         return JSONResponse(chat_response)
 
     @app.post("/v1/responses")
@@ -9201,8 +9336,10 @@ def create_app() -> FastAPI:
         formatter = service.formatter
         try:
             chat_body = formatter.chat_request_from_responses_request(body)
-            payload, prompt_text, prompt_tokens, grammar_text, tool_name = formatter.completion_request_from_chat_request(
-                chat_body,
+            payload, prompt_text, prompt_tokens, grammar_text, tool_name = (
+                formatter.completion_request_from_chat_request(
+                    chat_body,
+                )
             )
         except CompletionRequestValidationError as exc:
             raise bad_request(exc) from exc
@@ -9256,14 +9393,18 @@ def create_app() -> FastAPI:
                     cancel,
                     initial_payloads=formatter.start_response_stream(stream_state),
                     chunk_payloads=response_chunk_payloads,
-                    done_payloads=lambda completion: formatter.response_stream_terminal_events(
-                        stream_state,
-                        completion,
+                    done_payloads=lambda completion: (
+                        formatter.response_stream_terminal_events(
+                            stream_state,
+                            completion,
+                        )
                     ),
                 ),
                 media_type="text/event-stream",
             )
-        completion = await collect_completion_result(formatter, http_request, stream, cancel)
+        completion = await collect_completion_result(
+            formatter, http_request, stream, cancel
+        )
         if isinstance(completion, Response):
             return completion
         return JSONResponse(
@@ -9275,10 +9416,168 @@ def create_app() -> FastAPI:
             )
         )
 
+    @app.websocket("/v1/responses")
+    async def responses_websocket(websocket: WebSocket):
+        await websocket.accept()
+        service: CompletionService = app.state.service
+        formatter = service.formatter
+        # HTTP /v1/responses remains stateless. The websocket transport keeps
+        # per-connection response history so Codex can use previous_response_id
+        # within a single live session.
+        websocket_response_history: Dict[str, ResponsesWebSocketState] = {}
+
+        def websocket_request_with_ephemeral_history(
+            ws_body: ResponseCreateWebSocketRequest,
+        ) -> CreateResponseRequest:
+            body = ws_body.to_create_response_request()
+            previous_response_id = body.previous_response_id
+            if previous_response_id is None:
+                return body
+            prior_state = websocket_response_history.get(previous_response_id)
+            if prior_state is None:
+                raise CompletionRequestValidationError(
+                    f"unknown previous_response_id: {previous_response_id}"
+                )
+            current_items = formatter._clone_response_input_items(body.input)
+            replay_items = formatter._clone_response_input_items(
+                prior_state.input_items
+            )
+            for item in prior_state.output_items:
+                normalized = formatter._normalize_response_output_item_for_input(item)
+                if normalized is not None:
+                    replay_items.append(normalized)
+            replay_items.extend(current_items)
+            return body.model_copy(
+                update={
+                    "input": replay_items,
+                    "previous_response_id": None,
+                }
+            )
+
+        async def send_error(message: str) -> None:
+            await websocket.send_json(
+                {
+                    "type": "error",
+                    "error": {
+                        "message": message,
+                    },
+                }
+            )
+
+        try:
+            while True:
+                try:
+                    payload = await websocket.receive_json()
+                except WebSocketDisconnect:
+                    break
+                except Exception:
+                    await send_error("invalid websocket request payload")
+                    continue
+
+                try:
+                    ws_body = ResponseCreateWebSocketRequest.model_validate(payload)
+                    body = websocket_request_with_ephemeral_history(ws_body)
+                    if ws_body.generate is False:
+                        body = body.model_copy(update={"max_output_tokens": 0})
+                    chat_body = formatter.chat_request_from_responses_request(body)
+                    (
+                        completion_payload,
+                        prompt_text,
+                        prompt_tokens,
+                        grammar_text,
+                        tool_name,
+                    ) = formatter.completion_request_from_chat_request(chat_body)
+                    request = CompletionRequest.from_prepared(
+                        model=service.scheduler.model,
+                        payload=completion_payload,
+                        prompt_text=prompt_text,
+                        prompt_tokens=prompt_tokens,
+                        grammar_text=grammar_text,
+                        chat_tool_name=tool_name,
+                    )
+                    stream, cancel = service.submit_request(request)
+                except CompletionRequestValidationError as exc:
+                    await send_error(str(exc))
+                    continue
+
+                started_indices: set[int] = set()
+                parsed_states: Dict[int, ResponseParser] = {}
+                stream_state = OpenAIFormatter.ResponsesStream(
+                    body=body,
+                    response_id="resp_" + request.id,
+                    created_at=float(request.created),
+                    model=service.scheduler.model.model_path,
+                )
+
+                def response_chunk_payloads(
+                    completion_chunk: CompletionChunk,
+                ) -> Iterable[BaseModel | Dict[str, Any]]:
+                    chat_chunks = formatter.convert_completion_chunk_to_chat_chunks(
+                        completion_chunk,
+                        started_indices,
+                        tool_name,
+                        tools=chat_body.tools,
+                        parsed_states=parsed_states,
+                    )
+                    payloads: List[BaseModel | Dict[str, Any]] = []
+                    for chat_chunk in chat_chunks:
+                        payloads.extend(
+                            formatter.convert_chat_chunk_to_response_events(
+                                chat_chunk,
+                                stream_state,
+                            )
+                        )
+                    return payloads
+
+                try:
+                    await stream_websocket_responses(
+                        websocket,
+                        formatter,
+                        stream,
+                        cancel,
+                        initial_payloads=formatter.start_response_stream(stream_state),
+                        chunk_payloads=response_chunk_payloads,
+                        done_payloads=lambda completion: (
+                            formatter.response_stream_terminal_events(
+                                stream_state,
+                                completion,
+                            )
+                        ),
+                    )
+                    websocket_response_history[stream_state.response_id] = (
+                        ResponsesWebSocketState(
+                            input_items=formatter._clone_response_input_items(
+                                body.input
+                            ),
+                            output_items=copy.deepcopy(stream_state.output),
+                        )
+                    )
+                except WebSocketDisconnect:
+                    cancel()
+                    break
+                except BaseException as exc:
+                    cancel()
+                    await send_error(str(exc))
+        except WebSocketDisconnect:
+            pass
+
     @app.get("/v1/models")
     async def list_models() -> Dict[str, Any]:
-        service: CompletionService = app.state.service
-        return service.formatter.model_list()
+        service = app.state.service
+        model = service.scheduler.model
+        model_id = getattr(model, "model_alias", None) or model.model_path
+        created = int(time.time())
+        return {
+            "object": "list",
+            "data": [
+                {
+                    "id": model_id,
+                    "object": "model",
+                    "created": created,
+                    "owned_by": "llama-cpp-python",
+                }
+            ],
+        }
 
     @app.get("/healthz")
     async def healthz() -> Dict[str, str]:
@@ -9337,11 +9636,14 @@ def main() -> None:
         draft_model_num_pred_tokens=config.model.draft_model_num_pred_tokens,
         draft_model_max_ngram_size=config.model.draft_model_max_ngram_size,
         response_schema=config.model.response_schema,
+        store_logits=config.model.store_logits,
     )
     scheduler = CompletionScheduler(model)
     APP.state.service = CompletionService(scheduler)
     try:
-        uvicorn.run(APP, host=config.server.host, port=config.server.port, log_level="info")
+        uvicorn.run(
+            APP, host=config.server.host, port=config.server.port, log_level="info"
+        )
     finally:
         APP.state.service.close()
 
