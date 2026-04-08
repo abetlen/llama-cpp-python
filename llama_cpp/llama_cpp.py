@@ -88,7 +88,8 @@ def _warn_deprecated(symbol: str, hint: str) -> None:
 #     GGML_TYPE_IQ1_M   = 29,
 #     GGML_TYPE_MXFP4   = 39,
 #     GGML_TYPE_NVFP4   = 40,
-#     GGML_TYPE_COUNT,
+#     GGML_TYPE_Q1_0    = 41,
+#     GGML_TYPE_COUNT   = 42,
 # };
 GGML_TYPE_F32 = 0
 GGML_TYPE_F16 = 1
@@ -120,7 +121,8 @@ GGML_TYPE_F64 = 28
 GGML_TYPE_IQ1_M = 29
 GGML_TYPE_MXFP4 = 39
 GGML_TYPE_NVFP4 = 40
-GGML_TYPE_COUNT = 41
+GGML_TYPE_Q1_0 = 41
+GGML_TYPE_COUNT = 42
 
 # from ggml-backend.h
 # typedef bool (*ggml_backend_sched_eval_callback)(struct ggml_tensor * t, bool ask, void * user_data);
@@ -406,6 +408,7 @@ LLAMA_TOKEN_ATTR_SINGLE_WORD = 1 << 9
 #     LLAMA_FTYPE_MOSTLY_TQ2_0         = 37, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_MXFP4_MOE     = 38, // except 1d tensors
 #     LLAMA_FTYPE_MOSTLY_NVFP4         = 39, // except 1d tensors
+#     LLAMA_FTYPE_MOSTLY_Q1_0          = 40, // except 1d tensors
 #
 #     LLAMA_FTYPE_GUESSED = 1024, // not specified in the model file
 # };
@@ -446,6 +449,7 @@ LLAMA_FTYPE_MOSTLY_TQ1_0 = 36
 LLAMA_FTYPE_MOSTLY_TQ2_0 = 37
 LLAMA_FTYPE_MOSTLY_MXFP4_MOE = 38
 LLAMA_FTYPE_MOSTLY_NVFP4 = 39
+LLAMA_FTYPE_MOSTLY_Q1_0 = 40
 LLAMA_FTYPE_GUESSED = 1024
 
 # enum llama_rope_scaling_type {
