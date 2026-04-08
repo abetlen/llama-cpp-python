@@ -716,6 +716,8 @@ def chat_formatter_to_chat_completion_handler(
             return _convert_completion_to_chat_function(
                 tool_name, completion_or_chunks, stream
             )
+        llama.reset()
+        llama._ctx.kv_cache_clear()
         return _convert_completion_to_chat(completion_or_chunks, stream=stream)
 
     return chat_completion_handler
