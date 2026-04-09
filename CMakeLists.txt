@@ -41,6 +41,11 @@ function(llama_cpp_python_install_target target)
                 INSTALL_RPATH "$ORIGIN"
                 BUILD_WITH_INSTALL_RPATH TRUE
             )
+        set_target_properties(${target} PROPERTIES
+            NO_SONAME TRUE
+            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+            LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+        )
         endif()
     endif()
 endfunction()
