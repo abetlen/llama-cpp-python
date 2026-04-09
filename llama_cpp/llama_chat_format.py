@@ -3231,7 +3231,7 @@ class Llava15ChatHandler:
 
 class ObsidianChatHandler(Llava15ChatHandler):
     # Prompt Format
-    # The model followed ChatML format. However, with ### as the seperator
+    # The model followed ChatML format. However, with ### as the separator
 
     # <|im_start|>user
     # What is this sign about?\n<image>
