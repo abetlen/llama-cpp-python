@@ -7,6 +7,7 @@ import ctypes
 import dataclasses
 import random
 import string
+import importlib.metadata
 
 from datetime import datetime
 from contextlib import ExitStack
@@ -162,6 +163,15 @@ def register_chat_completion_handler(name: str):
 
 ### Chat Formatter ###
 
+def load_chat_formats():
+    """
+    This method will use the entrypoint llama_cpp_python.register_chat_format in the available
+    packages and load them to allow external packages to contribute to the chat format handler
+    """
+    registry = LlamaChatCompletionHandlerRegistry()
+    for entry_point in importlib.metadata.entry_points(group='llama_cpp_python.register_chat_format'):
+        load = entry_point.load()
+        load(registry)
 
 @dataclasses.dataclass
 class ChatFormatterResponse:
