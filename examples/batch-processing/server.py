@@ -1360,6 +1360,7 @@ class ConfigFile(BaseModel):
     class ModelOptions(BaseModel):
         path: Optional[str] = None
         alias: Optional[str] = None
+        chat_template: Optional[str] = None
         from_pretrained: Optional["ConfigFile.FromPretrainedOptions"] = None
         n_gpu_layers: Optional[int] = None
         split_mode: Optional[int] = None
@@ -1369,12 +1370,16 @@ class ConfigFile(BaseModel):
         use_mmap: Optional[bool] = None
         use_mlock: Optional[bool] = None
         kv_overrides: Optional[Dict[str, Union[bool, int, float, str]]] = None
-        n_ctx: int = 1024
-        n_batch: int = 256
+        n_ctx: Optional[int] = None
+        n_batch: Optional[int] = None
         n_ubatch: Optional[int] = None
-        n_seq_max: int = 64
-        threads: int = Field(default_factory=lambda: max(multiprocessing.cpu_count() // 2, 1))
-        threads_batch: int = Field(default_factory=lambda: max(multiprocessing.cpu_count(), 1))
+        n_seq_max: Optional[int] = None
+        threads: Optional[int] = Field(
+            default_factory=lambda: max(multiprocessing.cpu_count(), 1)
+        )
+        threads_batch: Optional[int] = Field(
+            default_factory=lambda: max(multiprocessing.cpu_count(), 1)
+        )
         rope_scaling_type: Optional[int] = None
         pooling_type: Optional[int] = None
         attention_type: Optional[int] = None
@@ -1394,6 +1399,7 @@ class ConfigFile(BaseModel):
         type_v: Optional[int] = None
         prompt_chunk_size: int = 32
         max_seq_len: Optional[int] = None
+        max_output_tokens: Optional[int] = Field(default=None, ge=0)
         kv_unified: bool = True
         draft_model: Optional[Literal["prompt-lookup-decoding"]] = None
         draft_model_num_pred_tokens: int = 10
@@ -1429,15 +1435,23 @@ class Jinja2ChatFormatter:
         self._eos_token = eos_token
         self._bos_token = bos_token
         self._template_text = template
-        self._template = ImmutableSandboxedEnvironment(
+        environment = ImmutableSandboxedEnvironment(
             loader=jinja2.BaseLoader(),
             trim_blocks=True,
             lstrip_blocks=True,
-        ).from_string(template)
+        )
+        environment.filters["from_json"] = self._from_json
+        self._template = environment.from_string(template)
 
     @staticmethod
     def _strftime_now(format_string: str) -> str:
         return datetime.now().strftime(format_string)
+
+    @staticmethod
+    def _from_json(value: Any) -> Any:
+        if isinstance(value, str):
+            return json.loads(value)
+        return value
 
     def format(
         self,
@@ -1651,6 +1665,8 @@ class CompletionRequest:
         on_error: Optional[Callable[[BaseException], None]] = None,
     ) -> "CompletionRequest":
         ctx_limit = model.max_seq_len
+        if model.max_output_tokens is not None:
+            ctx_limit = min(ctx_limit, len(prompt_tokens) + model.max_output_tokens)
         if payload.max_tokens is None:
             effective_max_len = ctx_limit
         else:
@@ -1818,6 +1834,7 @@ class ResponseParser:
         "_tools",
         "_completion_id",
         "_choice_index",
+        "_prompt_opens_leading_capture",
         "_tool_schemas",
         "_started",
         "_text_parts",
@@ -1848,11 +1865,13 @@ class ResponseParser:
         tools: Optional[List[Dict[str, Any]]] = None,
         completion_id: str = "",
         choice_index: int = 0,
+        prompt_opens_leading_capture: bool = False,
     ) -> None:
         self._schema = schema
         self._tools = tools
         self._completion_id = completion_id
         self._choice_index = choice_index
+        self._prompt_opens_leading_capture = prompt_opens_leading_capture
         self._tool_schemas = self._cached_tool_schema_map(tools)
         self._started = False
         self._text_parts: List[str] = []
@@ -1922,6 +1941,16 @@ class ResponseParser:
                 if self._direct.assistant_prefix
                 else self.DIRECT_MODE_PRELUDE
             )
+            if (
+                self._prompt_opens_leading_capture
+                and self._direct.leading_capture_field is not None
+                and self._direct.leading_capture_implicit
+            ):
+                self._direct.mode = (
+                    self.DIRECT_MODE_LEADING_CAPTURE
+                    if not self._direct.assistant_prefix
+                    else self.DIRECT_MODE_ASSISTANT_PREFIX
+                )
             self._stream_state = None
         else:
             self._stream_state = (
@@ -2963,6 +2992,7 @@ class ResponseParser:
         leading_capture_end = self._direct.leading_capture_end
         leading_capture_strip_after = self._direct.leading_capture_strip_after
         leading_capture_implicit = self._direct.leading_capture_implicit
+        prompt_opens_leading_capture = self._prompt_opens_leading_capture
         iterator_start = self._direct.iterator_start
         iterator_end = self._direct.iterator_end
         content_end_markers = self._direct.content_end_markers
@@ -2982,6 +3012,9 @@ class ResponseParser:
                 continue
             if mode == self.DIRECT_MODE_PRELUDE:
                 if leading_capture_field is not None:
+                    if prompt_opens_leading_capture and leading_capture_implicit:
+                        mode = self.DIRECT_MODE_LEADING_CAPTURE
+                        continue
                     if buffer.startswith(leading_capture_start):
                         buffer = buffer[len(leading_capture_start) :]
                         mode = self.DIRECT_MODE_LEADING_CAPTURE
@@ -5007,6 +5040,12 @@ class OpenAIFormatter:
         template = self._chat_template_text()
         return "reasoning_content" in template or "<think>" in template
 
+    def _prompt_opens_leading_capture(self) -> bool:
+        template = self._chat_template_text()
+        if "<think>" not in template:
+            return False
+        return "add_generation_prompt" in template
+
     @staticmethod
     def _chat_message(data: Dict[str, Any]) -> ChatCompletionRequestMessage:
         return ChatCompletionRequestMessage.model_validate(data)
@@ -5562,6 +5601,7 @@ class OpenAIFormatter:
             tools=tools,
             completion_id=completion_id,
             choice_index=choice_index,
+            prompt_opens_leading_capture=self._prompt_opens_leading_capture(),
         )
 
     def parse_chat_response(
@@ -7306,6 +7346,7 @@ class Model:
         *,
         model_path: str,
         model_alias: Optional[str] = None,
+        chat_template: Optional[str] = None,
         n_gpu_layers: Optional[int] = None,
         split_mode: Optional[int] = None,
         main_gpu: Optional[int] = None,
@@ -7314,12 +7355,12 @@ class Model:
         use_mmap: Optional[bool] = None,
         use_mlock: Optional[bool] = None,
         kv_overrides: Optional[Dict[str, Union[bool, int, float, str]]] = None,
-        n_ctx: int,
-        n_batch: int,
+        n_ctx: Optional[int],
+        n_batch: Optional[int],
         n_ubatch: Optional[int] = None,
-        n_seq_max: int,
-        n_threads: int,
-        n_threads_batch: int,
+        n_seq_max: Optional[int],
+        n_threads: Optional[int],
+        n_threads_batch: Optional[int],
         rope_scaling_type: Optional[int] = None,
         pooling_type: Optional[int] = None,
         attention_type: Optional[int] = None,
@@ -7340,6 +7381,7 @@ class Model:
         prompt_chunk_size: int,
         kv_unified: bool = True,
         max_seq_len: Optional[int] = None,
+        max_output_tokens: Optional[int] = None,
         draft_model: Optional[str] = None,
         draft_model_num_pred_tokens: int = 10,
         draft_model_max_ngram_size: int = 2,
@@ -7350,9 +7392,11 @@ class Model:
         self.backend_initialized = True
         self.model_path = model_path
         self.model_alias = model_alias
+        self.chat_template_override = chat_template
         self.prompt_chunk_size = prompt_chunk_size
         self.response_schema = response_schema
         self.store_logits = store_logits
+        self.max_output_tokens = max_output_tokens
         model_params, self._c_tensor_split, self._kv_overrides_array = (
             self.build_model_params(
                 n_gpu_layers=n_gpu_layers,
@@ -7391,8 +7435,9 @@ class Model:
             raise RuntimeError(
                 "speculative decoding is only supported for attention models"
             )
+        n_ctx_train = int(llama_cpp.llama_model_n_ctx_train(llama_model))
         context_params = self.build_context_params(
-            n_ctx=n_ctx,
+            n_ctx=n_ctx if n_ctx is not None else n_ctx_train,
             n_batch=n_batch,
             n_ubatch=n_ubatch,
             n_seq_max=n_seq_max,
@@ -7426,7 +7471,7 @@ class Model:
         self.n_ctx_seq = int(llama_cpp.llama_n_ctx_seq(ctx))
         self.n_seq_max = int(llama_cpp.llama_n_seq_max(ctx))
         self.n_batch = int(llama_cpp.llama_n_batch(ctx))
-        self.n_ctx_train = int(llama_cpp.llama_model_n_ctx_train(llama_model))
+        self.n_ctx_train = n_ctx_train
         self.n_vocab = int(llama_cpp.llama_vocab_n_tokens(self.vocab))
         self.kv_unified = kv_unified
         self.max_seq_len_limit = min(self.request_context_limit, self.n_ctx_train)
@@ -7548,12 +7593,12 @@ class Model:
     @staticmethod
     def build_context_params(
         *,
-        n_ctx: int,
-        n_batch: int,
+        n_ctx: Optional[int],
+        n_batch: Optional[int],
         n_ubatch: Optional[int],
-        n_seq_max: int,
-        n_threads: int,
-        n_threads_batch: int,
+        n_seq_max: Optional[int],
+        n_threads: Optional[int],
+        n_threads_batch: Optional[int],
         rope_scaling_type: Optional[int],
         pooling_type: Optional[int],
         attention_type: Optional[int],
@@ -7574,13 +7619,18 @@ class Model:
         kv_unified: bool,
     ) -> Any:
         context_params = llama_cpp.llama_context_default_params()
-        context_params.n_ctx = n_ctx
-        context_params.n_batch = min(n_ctx, n_batch)
+        if n_ctx is not None:
+            context_params.n_ctx = n_ctx
+        if n_batch is not None:
+            context_params.n_batch = min(int(context_params.n_ctx), n_batch)
         if n_ubatch is not None:
-            context_params.n_ubatch = min(context_params.n_batch, n_ubatch)
-        context_params.n_seq_max = n_seq_max
-        context_params.n_threads = n_threads
-        context_params.n_threads_batch = n_threads_batch
+            context_params.n_ubatch = min(int(context_params.n_batch), n_ubatch)
+        if n_seq_max is not None:
+            context_params.n_seq_max = n_seq_max
+        if n_threads is not None:
+            context_params.n_threads = n_threads
+        if n_threads_batch is not None:
+            context_params.n_threads_batch = n_threads_batch
         if rope_scaling_type is not None:
             context_params.rope_scaling_type = rope_scaling_type
         if pooling_type is not None:
@@ -7668,8 +7718,12 @@ class Model:
             capacity = count + 1
 
     def _build_chat_formatter(self) -> Optional[Jinja2ChatFormatter]:
-        template = llama_cpp.llama_model_chat_template(self.llama_model, None)
-        if not template:
+        template_text = self.chat_template_override
+        if template_text is None:
+            template = llama_cpp.llama_model_chat_template(self.llama_model, None)
+            if template:
+                template_text = template.decode("utf-8", errors="ignore")
+        if not template_text:
             return None
         bos_token = ""
         eos_token = ""
@@ -7680,7 +7734,7 @@ class Model:
             eos_text = llama_cpp.llama_vocab_get_text(self.vocab, self.eos_token)
             eos_token = eos_text.decode("utf-8", errors="ignore") if eos_text else ""
         return Jinja2ChatFormatter(
-            template=template.decode("utf-8", errors="ignore"),
+            template=template_text,
             bos_token=bos_token,
             eos_token=eos_token,
         )
@@ -9598,6 +9652,7 @@ def main() -> None:
     model = Model(
         model_path=model_path,
         model_alias=config.model.alias,
+        chat_template=config.model.chat_template,
         n_gpu_layers=config.model.n_gpu_layers,
         split_mode=config.model.split_mode,
         main_gpu=config.model.main_gpu,
@@ -9632,6 +9687,7 @@ def main() -> None:
         prompt_chunk_size=config.model.prompt_chunk_size,
         kv_unified=config.model.kv_unified,
         max_seq_len=config.model.max_seq_len,
+        max_output_tokens=config.model.max_output_tokens,
         draft_model=config.model.draft_model,
         draft_model_num_pred_tokens=config.model.draft_model_num_pred_tokens,
         draft_model_max_ngram_size=config.model.draft_model_max_ngram_size,
