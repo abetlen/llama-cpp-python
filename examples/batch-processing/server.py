@@ -30,6 +30,7 @@ import argparse
 import threading
 import multiprocessing
 import copy
+import shutil
 
 from pathlib import Path
 from datetime import datetime
@@ -769,20 +770,20 @@ class JsonSchemaConverter:
         return converter.format_grammar()
 
 
-class PrefixTrie:
+class RadixTrie:
     __slots__ = ("root", "sequences", "sequence_lengths")
 
     @dataclass
     class Node:
-        token: Optional[int] = None
-        parent: Optional["PrefixTrie.Node"] = None
-        children: Dict[int, "PrefixTrie.Node"] = field(default_factory=dict)
+        label: Tuple[int, ...] = ()
+        parent: Optional["RadixTrie.Node"] = None
+        children: Dict[int, "RadixTrie.Node"] = field(default_factory=dict)
         sequences: set[int] = field(default_factory=set)
         tails: set[int] = field(default_factory=set)
 
     def __init__(self) -> None:
-        self.root = PrefixTrie.Node()
-        self.sequences: Dict[int, PrefixTrie.Node] = {}
+        self.root = RadixTrie.Node()
+        self.sequences: Dict[int, RadixTrie.Node] = {}
         self.sequence_lengths: Dict[int, int] = {}
 
     @staticmethod
@@ -804,6 +805,63 @@ class PrefixTrie:
             return next(iter(preferred))
         return next(iter(candidates))
 
+    @staticmethod
+    def _common_prefix_len(
+        label: Sequence[int],
+        tokens: Sequence[int],
+        offset: int,
+    ) -> int:
+        limit = min(len(label), len(tokens) - offset)
+        match_len = 0
+        while match_len < limit and label[match_len] == tokens[offset + match_len]:
+            match_len += 1
+        return match_len
+
+    def _split_child(
+        self,
+        parent: "RadixTrie.Node",
+        child: "RadixTrie.Node",
+        prefix_len: int,
+    ) -> "RadixTrie.Node":
+        assert 0 < prefix_len < len(child.label)
+        prefix = child.label[:prefix_len]
+        suffix = child.label[prefix_len:]
+        middle = RadixTrie.Node(
+            label=prefix,
+            parent=parent,
+            sequences=set(child.sequences),
+        )
+        parent.children[prefix[0]] = middle
+        child.label = suffix
+        child.parent = middle
+        middle.children[suffix[0]] = child
+        return middle
+
+    def _locate_prefix_node(
+        self,
+        sequence_id: int,
+        keep_len: int,
+    ) -> "RadixTrie.Node":
+        total_len = self.sequence_lengths[sequence_id]
+        assert 0 <= keep_len <= total_len
+        if keep_len == 0:
+            return self.root
+        node = self.sequences[sequence_id]
+        drop_len = total_len - keep_len
+        while node is not self.root:
+            label_len = len(node.label)
+            if drop_len == 0:
+                return node
+            if drop_len < label_len:
+                parent = node.parent
+                assert parent is not None
+                return self._split_child(parent, node, label_len - drop_len)
+            drop_len -= label_len
+            parent = node.parent
+            assert parent is not None
+            node = parent
+        return self.root
+
     def extend(
         self,
         sequence_id: int,
@@ -811,20 +869,51 @@ class PrefixTrie:
     ) -> None:
         assert sequence_id >= 0
         node = self.sequences.get(sequence_id, self.root)
-        if tokens and node is not self.root:
+        if tokens:
             node.tails.discard(sequence_id)
         length = self.sequence_lengths.get(sequence_id, 0)
-        for token in tokens:
+        index = 0
+        while index < len(tokens):
+            token = tokens[index]
             child = node.children.get(token)
             if child is None:
-                child = PrefixTrie.Node(token=token, parent=node)
+                child = RadixTrie.Node(
+                    label=tuple(tokens[index:]),
+                    parent=node,
+                    sequences={sequence_id},
+                )
                 node.children[token] = child
-            child.sequences.add(sequence_id)
-            node = child
-            length += 1
+                node = child
+                length += len(tokens) - index
+                index = len(tokens)
+                break
+            match_len = self._common_prefix_len(child.label, tokens, index)
+            if match_len == len(child.label):
+                child.sequences.add(sequence_id)
+                node = child
+                length += match_len
+                index += match_len
+                continue
+            node = self._split_child(node, child, match_len)
+            node.sequences.add(sequence_id)
+            length += match_len
+            index += match_len
+            if index == len(tokens):
+                break
+            suffix = RadixTrie.Node(
+                label=tuple(tokens[index:]),
+                parent=node,
+                sequences={sequence_id},
+            )
+            node.children[suffix.label[0]] = suffix
+            node = suffix
+            length += len(tokens) - index
+            index = len(tokens)
+            break
         if node is self.root:
             self.sequences.pop(sequence_id, None)
             self.sequence_lengths.pop(sequence_id, None)
+            self.root.tails.discard(sequence_id)
         else:
             self.sequences[sequence_id] = node
             self.sequence_lengths[sequence_id] = length
@@ -837,26 +926,27 @@ class PrefixTrie:
         assert sequence_id >= 0
         assert sequence_id in self.sequence_lengths
         assert 0 <= keep_len <= self.sequence_lengths[sequence_id]
+        current_len = self.sequence_lengths[sequence_id]
+        if keep_len == current_len:
+            return
+        boundary = self._locate_prefix_node(sequence_id, keep_len)
         node = self.sequences.get(sequence_id, self.root)
         if node is not self.root:
             node.tails.discard(sequence_id)
-        drop = self.sequence_lengths[sequence_id] - keep_len
-        while node is not self.root and drop > 0:
+        while node is not boundary:
             node.sequences.remove(sequence_id)
             parent = node.parent
             assert parent is not None
             if not node.sequences:
-                assert node.token is not None
-                del parent.children[node.token]
+                del parent.children[node.label[0]]
             node = parent
-            drop -= 1
-        if node is self.root:
+        if boundary is self.root:
             self.sequences.pop(sequence_id, None)
             self.sequence_lengths.pop(sequence_id, None)
         else:
-            self.sequences[sequence_id] = node
+            self.sequences[sequence_id] = boundary
             self.sequence_lengths[sequence_id] = keep_len
-            node.tails.add(sequence_id)
+            boundary.tails.add(sequence_id)
 
     def copy(self, source_sequence_id: int, dest_sequence_id: int, keep_len: int) -> None:
         assert source_sequence_id >= 0
@@ -864,11 +954,12 @@ class PrefixTrie:
         assert source_sequence_id in self.sequence_lengths
         assert dest_sequence_id not in self.sequence_lengths
         assert 0 <= keep_len <= self.sequence_lengths[source_sequence_id]
-        node = self.sequences[source_sequence_id]
-        for _ in range(self.sequence_lengths[source_sequence_id] - keep_len):
-            parent = node.parent
-            assert parent is not None
-            node = parent
+        if keep_len == 0:
+            self.sequences[dest_sequence_id] = self.root
+            self.sequence_lengths[dest_sequence_id] = 0
+            self.root.tails.add(dest_sequence_id)
+            return
+        node = self._locate_prefix_node(source_sequence_id, keep_len)
         self.sequences[dest_sequence_id] = node
         self.sequence_lengths[dest_sequence_id] = keep_len
         node.tails.add(dest_sequence_id)
@@ -883,14 +974,15 @@ class PrefixTrie:
         target_len = length if keep_len is None else keep_len
         assert 0 <= target_len <= length
         node = self.sequences[sequence_id]
-        values: List[int] = []
+        labels: List[Tuple[int, ...]] = []
         while node is not self.root:
-            assert node.token is not None
-            values.append(node.token)
+            labels.append(node.label)
             parent = node.parent
             assert parent is not None
             node = parent
-        values.reverse()
+        values: List[int] = []
+        for label in reversed(labels):
+            values.extend(label)
         return values[:target_len]
 
     def longest_prefix(
@@ -903,15 +995,20 @@ class PrefixTrie:
         node = self.root
         longest_sequence_id = -1
         longest_length = 0
-        for index, token in enumerate(tokens):
-            child = node.children.get(token)
+        index = 0
+        while index < len(tokens):
+            child = node.children.get(tokens[index])
             if child is None:
                 break
+            match_len = self._common_prefix_len(child.label, tokens, index)
+            if match_len < len(child.label):
+                break
             node = child
+            index += match_len
             candidates = node.tails if exact_only else node.sequences
             if candidates:
                 longest_sequence_id = self._pick_sequence(candidates, preferred_sequences)
-                longest_length = index + 1
+                longest_length = index
         return longest_sequence_id, longest_length
 
 
@@ -1272,41 +1369,39 @@ class ConfigFile(BaseModel):
         local_dir_use_symlinks: Union[bool, Literal["auto"]] = "auto"
         cache_dir: Optional[str] = None
 
-        def resolve_model_path(self) -> str:
+        @staticmethod
+        def _pattern_has_glob(pattern: str) -> bool:
+            return any(char in pattern for char in "*?[]")
+
+        @staticmethod
+        def _subfolder_for_repo_file(repo_file: str) -> Optional[str]:
+            subfolder = str(Path(repo_file).parent)
+            return None if subfolder == "." else subfolder
+
+        def _cached_repo_file_list(self) -> List[str]:
+            from huggingface_hub import scan_cache_dir
+
             try:
-                from huggingface_hub import HfFileSystem, hf_hub_download
-                from huggingface_hub.utils import validate_repo_id
-            except ImportError as exc:
-                raise ImportError(
-                    "model.from_pretrained requires the huggingface-hub package. "
-                    "You can install it with `pip install huggingface-hub`."
-                ) from exc
+                cache_info = scan_cache_dir(self.cache_dir)
+            except Exception:
+                return []
 
-            validate_repo_id(self.repo_id)
-            hffs = HfFileSystem()
-            files = [
-                file["name"] if isinstance(file, dict) else file
-                for file in hffs.ls(self.repo_id, recursive=True)
-            ]
-            file_list = [str(Path(file).relative_to(self.repo_id)) for file in files]
+            cached_files: set[str] = set()
+            for repo in cache_info.repos:
+                if repo.repo_type != "model" or repo.repo_id != self.repo_id:
+                    continue
+                for revision in repo.revisions:
+                    for cached_file in revision.files:
+                        cached_files.add(cached_file.file_name)
+            return sorted(cached_files)
 
-            matching_files = [file for file in file_list if fnmatch.fnmatch(file, self.filename)]
-            if len(matching_files) == 0:
-                raise ValueError(
-                    f"No file found in {self.repo_id} that match {self.filename}\n\n"
-                    f"Available Files:\n{json.dumps(file_list)}"
-                )
-            if len(matching_files) > 1:
-                raise ValueError(
-                    f"Multiple files found in {self.repo_id} matching {self.filename}\n\n"
-                    f"Available Files:\n{json.dumps(files)}"
-                )
+        def _download_repo_file(self, repo_file: str) -> str:
+            from huggingface_hub import hf_hub_download
 
-            (matching_file,) = matching_files
-            subfolder = str(Path(matching_file).parent)
-            filename = Path(matching_file).name
+            filename = Path(repo_file).name
+            subfolder = self._subfolder_for_repo_file(repo_file)
 
-            hf_hub_download(
+            download_kwargs = dict(
                 repo_id=self.repo_id,
                 filename=filename,
                 subfolder=subfolder,
@@ -1315,47 +1410,91 @@ class ConfigFile(BaseModel):
                 cache_dir=self.cache_dir,
             )
 
+            try:
+                resolved_path = hf_hub_download(**download_kwargs)
+            except Exception as exc:
+                try:
+                    cached_path = cast(
+                        str,
+                        hf_hub_download(
+                            repo_id=self.repo_id,
+                            filename=filename,
+                            subfolder=subfolder,
+                            cache_dir=self.cache_dir,
+                            local_files_only=True,
+                        ),
+                    )
+                except Exception:
+                    raise exc
+
+                if self.local_dir is None:
+                    return cached_path
+
+                resolved_path = os.path.join(self.local_dir, repo_file)
+                resolved_parent = os.path.dirname(resolved_path)
+                if resolved_parent:
+                    os.makedirs(resolved_parent, exist_ok=True)
+                shutil.copy2(cached_path, resolved_path)
+
+            return cast(str, resolved_path)
+
+        @staticmethod
+        def _match_single_file(pattern: str, file_list: Sequence[str]) -> str:
+            matching_files = [file for file in file_list if fnmatch.fnmatch(file, pattern)]
+            if len(matching_files) == 0:
+                raise ValueError(
+                    f"No file found matching {pattern}\n\n"
+                    f"Available Files:\n{json.dumps(list(file_list))}"
+                )
+            if len(matching_files) > 1:
+                raise ValueError(
+                    f"Multiple files found matching {pattern}\n\n"
+                    f"Available Files:\n{json.dumps(list(file_list))}"
+                )
+            return matching_files[0]
+
+        def resolve_model_path(self) -> str:
+            try:
+                from huggingface_hub import HfFileSystem
+                from huggingface_hub.utils import validate_repo_id
+            except ImportError as exc:
+                raise ImportError(
+                    "model.from_pretrained requires the huggingface-hub package. "
+                    "You can install it with `pip install huggingface-hub`."
+                ) from exc
+
+            validate_repo_id(self.repo_id)
+            requested_patterns = [self.filename, *(self.additional_files or [])]
+            if not any(self._pattern_has_glob(pattern) for pattern in requested_patterns):
+                model_path = self._download_repo_file(self.filename)
+                if self.additional_files:
+                    for additional_file_name in self.additional_files:
+                        self._download_repo_file(additional_file_name)
+                return model_path
+
+            try:
+                hffs = HfFileSystem()
+                files = [
+                    file["name"] if isinstance(file, dict) else file
+                    for file in hffs.ls(self.repo_id, recursive=True)
+                ]
+                file_list = [str(Path(file).relative_to(self.repo_id)) for file in files]
+            except Exception as exc:
+                file_list = self._cached_repo_file_list()
+                if not file_list:
+                    raise exc
+
+            matching_file = self._match_single_file(self.filename, file_list)
+            model_path = self._download_repo_file(matching_file)
+
             if self.additional_files:
                 for additional_file_name in self.additional_files:
-                    matching_additional_files = [
-                        file
-                        for file in file_list
-                        if fnmatch.fnmatch(file, additional_file_name)
-                    ]
-                    if len(matching_additional_files) == 0:
-                        raise ValueError(
-                            f"No file found in {self.repo_id} that match {additional_file_name}\n\n"
-                            f"Available Files:\n{json.dumps(file_list)}"
-                        )
-                    if len(matching_additional_files) > 1:
-                        raise ValueError(
-                            f"Multiple files found in {self.repo_id} matching {additional_file_name}\n\n"
-                            f"Available Files:\n{json.dumps(files)}"
-                        )
-                    (matching_additional_file,) = matching_additional_files
-                    hf_hub_download(
-                        repo_id=self.repo_id,
-                        filename=matching_additional_file,
-                        subfolder=subfolder,
-                        local_dir=self.local_dir,
-                        local_dir_use_symlinks=self.local_dir_use_symlinks,
-                        cache_dir=self.cache_dir,
+                    matching_additional_file = self._match_single_file(
+                        additional_file_name, file_list
                     )
+                    self._download_repo_file(matching_additional_file)
 
-            if self.local_dir is None:
-                return cast(
-                    str,
-                    hf_hub_download(
-                        repo_id=self.repo_id,
-                        filename=filename,
-                        subfolder=subfolder,
-                        local_dir=self.local_dir,
-                        local_dir_use_symlinks=self.local_dir_use_symlinks,
-                        cache_dir=self.cache_dir,
-                        local_files_only=True,
-                    ),
-                )
-            return os.path.join(self.local_dir, filename)
+            return model_path
 
     class ModelOptions(BaseModel):
         path: Optional[str] = None
@@ -1397,7 +1536,6 @@ class ConfigFile(BaseModel):
         no_perf: Optional[bool] = None
         type_k: Optional[int] = None
         type_v: Optional[int] = None
-        prompt_chunk_size: int = 32
         max_seq_len: Optional[int] = None
         max_output_tokens: Optional[int] = Field(default=None, ge=0)
         kv_unified: bool = True
@@ -1412,6 +1550,15 @@ class ConfigFile(BaseModel):
             if (self.path is None) == (self.from_pretrained is None):
                 raise ValueError("exactly one of model.path or model.from_pretrained is required")
             return self
+
+        @field_validator("chat_template", mode="before")
+        @classmethod
+        def normalize_chat_template(cls, value: Any) -> Any:
+            if isinstance(value, list):
+                if not all(isinstance(item, str) for item in value):
+                    raise TypeError("model.chat_template list entries must be strings")
+                return "".join(value)
+            return value
 
         def resolve_model_path(self) -> str:
             if self.from_pretrained is not None:
@@ -1444,14 +1591,42 @@ class Jinja2ChatFormatter:
         self._template = environment.from_string(template)
 
     @staticmethod
-    def _strftime_now(format_string: str) -> str:
-        return datetime.now().strftime(format_string)
-
-    @staticmethod
     def _from_json(value: Any) -> Any:
         if isinstance(value, str):
             return json.loads(value)
         return value
+
+    def _render(
+        self,
+        *,
+        messages: List[ChatCompletionRequestMessage],
+        functions: Optional[List[Dict[str, Any]]] = None,
+        function_call: Optional[Union[str, Dict[str, Any]]] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
+        reasoning_effort: Optional[str] = None,
+        add_generation_prompt: bool,
+        strftime_now: Callable[[str], str],
+    ) -> str:
+        def raise_exception(message: str) -> None:
+            raise ValueError(message)
+
+        return cast(
+            str,
+            self._template.render(
+                messages=[message.model_dump(exclude_none=True) for message in messages],
+                eos_token=self._eos_token,
+                bos_token=self._bos_token,
+                raise_exception=raise_exception,
+                add_generation_prompt=add_generation_prompt,
+                functions=functions,
+                function_call=function_call,
+                tools=tools,
+                tool_choice=tool_choice,
+                reasoning_effort=reasoning_effort,
+                strftime_now=strftime_now,
+            ),
+        )
 
     def format(
         self,
@@ -1462,25 +1637,35 @@ class Jinja2ChatFormatter:
         tools: Optional[List[Dict[str, Any]]] = None,
         tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
         reasoning_effort: Optional[str] = None,
-    ) -> Tuple[str, List[str]]:
-        def raise_exception(message: str) -> None:
-            raise ValueError(message)
+    ) -> Tuple[str, str, List[str]]:
+        render_time = datetime.now()
 
-        prompt = self._template.render(
-            messages=[message.model_dump(exclude_none=True) for message in messages],
-            eos_token=self._eos_token,
-            bos_token=self._bos_token,
-            raise_exception=raise_exception,
-            add_generation_prompt=True,
+        def strftime_now(format_string: str) -> str:
+            return render_time.strftime(format_string)
+
+        chat_template = self._render(
+            messages=messages,
             functions=functions,
             function_call=function_call,
             tools=tools,
             tool_choice=tool_choice,
             reasoning_effort=reasoning_effort,
-            strftime_now=self._strftime_now,
+            add_generation_prompt=False,
+            strftime_now=strftime_now,
         )
+        prompt = self._render(
+            messages=messages,
+            functions=functions,
+            function_call=function_call,
+            tools=tools,
+            tool_choice=tool_choice,
+            reasoning_effort=reasoning_effort,
+            add_generation_prompt=True,
+            strftime_now=strftime_now,
+        )
+        generation_prompt = prompt[len(chat_template) :] if prompt.startswith(chat_template) else ""
         stop = [self._eos_token] if self._eos_token else []
-        return prompt, stop
+        return prompt, generation_prompt, stop
 
 
 @dataclass
@@ -1491,18 +1676,43 @@ class Token:
     top_logprobs: Optional[Dict[str, float]]
 
     @classmethod
+    def from_token(
+        cls,
+        *,
+        model: Model,
+        prev_tokens: Sequence[int],
+        prev_text_bytes: Optional[Union[bytes, bytearray]] = None,
+        token: int,
+    ) -> "Token":
+        return cls(
+            token=token,
+            text_bytes=(
+                model.token_bytes_with_prev_bytes(prev_tokens, prev_text_bytes, token)
+                if prev_text_bytes is not None
+                else model.token_bytes_with_prev(prev_tokens, token)
+            ),
+            token_logprob=None,
+            top_logprobs=None,
+        )
+
+    @classmethod
     def from_logits(
         cls,
         *,
         model: Model,
         formatter: OpenAIFormatter,
         prev_tokens: Sequence[int],
+        prev_text_bytes: Optional[Union[bytes, bytearray]] = None,
         token: int,
         logits: np.ndarray,
         logprobs_count: Optional[int],
         need_token_logprob: bool = False,
     ) -> "Token":
-        text_bytes = model.token_bytes_with_prev(prev_tokens, token)
+        text_bytes = (
+            model.token_bytes_with_prev_bytes(prev_tokens, prev_text_bytes, token)
+            if prev_text_bytes is not None
+            else model.token_bytes_with_prev(prev_tokens, token)
+        )
         if not model.store_logits:
             return cls(
                 token=token,
@@ -1556,6 +1766,7 @@ class Completion:
     completion_tokens: List[int] = field(default_factory=list)
     token_records: List[Token] = field(default_factory=list)
     rendered_bytes: bytearray = field(default_factory=bytearray)
+    detokenized_prefix_bytes: bytearray = field(default_factory=bytearray)
     pending_input_tokens: List[int] = field(default_factory=list)
     draft_tokens: List[int] = field(default_factory=list)
     pending_finish_reason: Optional[str] = None
@@ -1834,7 +2045,7 @@ class ResponseParser:
         "_tools",
         "_completion_id",
         "_choice_index",
-        "_prompt_opens_leading_capture",
+        "_generation_prompt",
         "_tool_schemas",
         "_started",
         "_text_parts",
@@ -1865,13 +2076,13 @@ class ResponseParser:
         tools: Optional[List[Dict[str, Any]]] = None,
         completion_id: str = "",
         choice_index: int = 0,
-        prompt_opens_leading_capture: bool = False,
+        generation_prompt: str = "",
     ) -> None:
         self._schema = schema
         self._tools = tools
         self._completion_id = completion_id
         self._choice_index = choice_index
-        self._prompt_opens_leading_capture = prompt_opens_leading_capture
+        self._generation_prompt = generation_prompt
         self._tool_schemas = self._cached_tool_schema_map(tools)
         self._started = False
         self._text_parts: List[str] = []
@@ -1941,22 +2152,16 @@ class ResponseParser:
                 if self._direct.assistant_prefix
                 else self.DIRECT_MODE_PRELUDE
             )
-            if (
-                self._prompt_opens_leading_capture
-                and self._direct.leading_capture_field is not None
-                and self._direct.leading_capture_implicit
-            ):
-                self._direct.mode = (
-                    self.DIRECT_MODE_LEADING_CAPTURE
-                    if not self._direct.assistant_prefix
-                    else self.DIRECT_MODE_ASSISTANT_PREFIX
-                )
             self._stream_state = None
         else:
             self._stream_state = (
                 self._new_stream_state(self._stream_plan) if self._stream_plan is not None else None
             )
         self._stream_failed = False
+        if self._generation_prompt and self._stream_plan is not None:
+            success, _ignored = self._advance_stream_state(self._generation_prompt)
+            if not success:
+                self._stream_failed = True
 
     @property
     def started(self) -> bool:
@@ -2992,7 +3197,6 @@ class ResponseParser:
         leading_capture_end = self._direct.leading_capture_end
         leading_capture_strip_after = self._direct.leading_capture_strip_after
         leading_capture_implicit = self._direct.leading_capture_implicit
-        prompt_opens_leading_capture = self._prompt_opens_leading_capture
         iterator_start = self._direct.iterator_start
         iterator_end = self._direct.iterator_end
         content_end_markers = self._direct.content_end_markers
@@ -3012,9 +3216,6 @@ class ResponseParser:
                 continue
             if mode == self.DIRECT_MODE_PRELUDE:
                 if leading_capture_field is not None:
-                    if prompt_opens_leading_capture and leading_capture_implicit:
-                        mode = self.DIRECT_MODE_LEADING_CAPTURE
-                        continue
                     if buffer.startswith(leading_capture_start):
                         buffer = buffer[len(leading_capture_start) :]
                         mode = self.DIRECT_MODE_LEADING_CAPTURE
@@ -4266,8 +4467,9 @@ class ResponseParser:
         *,
         partial: bool,
     ) -> Dict[str, Any]:
+        full_response_text = self._generation_prompt + response_text
         parsed = self._parse_response_value(
-            response_text,
+            full_response_text,
             self._schema,
             partial=partial,
         )
@@ -4275,7 +4477,7 @@ class ResponseParser:
             raise CompletionResponseParsingError("response_schema must produce an object")
         if partial:
             self._trim_partial_tool_call_prefix(
-                response_text=response_text,
+                response_text=full_response_text,
                 parsed=parsed,
             )
         tool_calls = parsed.get("tool_calls")
@@ -4290,6 +4492,10 @@ class ResponseParser:
                 parsed["tool_calls"] = normalized_tool_calls
             else:
                 parsed.pop("tool_calls", None)
+        for field in ("reasoning_content", "thinking"):
+            value = parsed.get(field)
+            if isinstance(value, str) and not value.strip():
+                parsed.pop(field, None)
         return parsed
 
     def _normalize_tool_call_item(
@@ -5040,12 +5246,6 @@ class OpenAIFormatter:
         template = self._chat_template_text()
         return "reasoning_content" in template or "<think>" in template
 
-    def _prompt_opens_leading_capture(self) -> bool:
-        template = self._chat_template_text()
-        if "<think>" not in template:
-            return False
-        return "add_generation_prompt" in template
-
     @staticmethod
     def _chat_message(data: Dict[str, Any]) -> ChatCompletionRequestMessage:
         return ChatCompletionRequestMessage.model_validate(data)
@@ -5593,6 +5793,7 @@ class OpenAIFormatter:
         tools: Optional[List[Dict[str, Any]]] = None,
         completion_id: str = "",
         choice_index: int = 0,
+        generation_prompt: str = "",
     ) -> ResponseParser:
         if self.model.response_schema is None:
             raise CompletionResponseParsingError("model does not define response_schema")
@@ -5601,7 +5802,7 @@ class OpenAIFormatter:
             tools=tools,
             completion_id=completion_id,
             choice_index=choice_index,
-            prompt_opens_leading_capture=self._prompt_opens_leading_capture(),
+            generation_prompt=generation_prompt,
         )
 
     def parse_chat_response(
@@ -5610,8 +5811,12 @@ class OpenAIFormatter:
         *,
         tools: Optional[List[Dict[str, Any]]] = None,
         partial: bool,
+        generation_prompt: str = "",
     ) -> Dict[str, Any]:
-        return self._response_parser(tools=tools).parse_chat_response(
+        return self._response_parser(
+            tools=tools,
+            generation_prompt=generation_prompt,
+        ).parse_chat_response(
             response_text,
             partial=partial,
         )
@@ -5650,9 +5855,16 @@ class OpenAIFormatter:
     def completion_request_from_chat_request(
         self,
         body: CreateChatCompletionRequest,
-    ) -> Tuple[CreateCompletionRequest, str, List[int], Optional[str], Optional[str]]:
+    ) -> Tuple[
+        CreateCompletionRequest,
+        str,
+        str,
+        List[int],
+        Optional[str],
+        Optional[str],
+    ]:
         try:
-            prompt_text, prompt_tokens, formatter_stop = self.model.build_chat_prompt(
+            prompt_text, generation_prompt, prompt_tokens, formatter_stop = self.model.build_chat_prompt(
                 body.messages,
                 functions=body.functions,
                 function_call=body.function_call,
@@ -5696,7 +5908,7 @@ class OpenAIFormatter:
             n=body.n,
             user=body.user,
         )
-        return payload, prompt_text, prompt_tokens, grammar_text, tool_name
+        return payload, prompt_text, generation_prompt, prompt_tokens, grammar_text, tool_name
 
     @staticmethod
     def _response_phase_from_message(message: Dict[str, Any]) -> Optional[str]:
@@ -6113,11 +6325,13 @@ class OpenAIFormatter:
         tool_name: Optional[str] = None,
         *,
         tools: Optional[List[Dict[str, Any]]] = None,
+        generation_prompt: str = "",
     ) -> Dict[str, Any]:
         chat_response = self.convert_completion_response_to_chat(
             completion,
             tool_name,
             tools=tools,
+            generation_prompt=generation_prompt,
         )
         if isinstance(chat_response, BaseModel):
             chat_payload = chat_response.model_dump(mode="json", exclude_none=True)
@@ -6762,6 +6976,7 @@ class OpenAIFormatter:
         *,
         functions: Optional[List[Dict[str, Any]]] = None,
         tools: Optional[List[Dict[str, Any]]] = None,
+        generation_prompt: str = "",
     ) -> ChatCompletion | Dict[str, Any]:
         normalized_tools = self._normalized_tools(functions=functions, tools=tools)
         if self.model.response_schema is not None:
@@ -6771,6 +6986,7 @@ class OpenAIFormatter:
                     tools=normalized_tools,
                     completion_id=completion.id,
                     choice_index=choice.index,
+                    generation_prompt=generation_prompt,
                 )
                 message = parser.parse_completion_message(choice.text)
                 logprobs = self._convert_completion_logprobs_to_chat_choice(choice.logprobs)
@@ -6834,6 +7050,7 @@ class OpenAIFormatter:
         functions: Optional[List[Dict[str, Any]]] = None,
         tools: Optional[List[Dict[str, Any]]] = None,
         parsed_states: Optional[Dict[int, Any]] = None,
+        generation_prompt: str = "",
     ) -> List[ChatCompletionChunk | Dict[str, Any]]:
         normalized_tools = self._normalized_tools(functions=functions, tools=tools)
         if self.model.response_schema is not None:
@@ -6848,6 +7065,7 @@ class OpenAIFormatter:
                         tools=normalized_tools,
                         completion_id=chunk["id"],
                         choice_index=index,
+                        generation_prompt=generation_prompt,
                     )
                     parsed_states[index] = parser
                 logprobs = self._convert_completion_logprobs_to_chat_chunk(
@@ -7378,7 +7596,6 @@ class Model:
         no_perf: Optional[bool] = None,
         type_k: Optional[int] = None,
         type_v: Optional[int] = None,
-        prompt_chunk_size: int,
         kv_unified: bool = True,
         max_seq_len: Optional[int] = None,
         max_output_tokens: Optional[int] = None,
@@ -7393,7 +7610,6 @@ class Model:
         self.model_path = model_path
         self.model_alias = model_alias
         self.chat_template_override = chat_template
-        self.prompt_chunk_size = prompt_chunk_size
         self.response_schema = response_schema
         self.store_logits = store_logits
         self.max_output_tokens = max_output_tokens
@@ -7806,10 +8022,10 @@ class Model:
         tools: Optional[List[Dict[str, Any]]] = None,
         tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
         reasoning_effort: Optional[str] = None,
-    ) -> Tuple[str, List[int], List[str]]:
+    ) -> Tuple[str, str, List[int], List[str]]:
         if self.chat_formatter is None:
             raise ValueError("model does not provide a GGUF chat template")
-        prompt, formatter_stop = self.chat_formatter.format(
+        prompt, generation_prompt, formatter_stop = self.chat_formatter.format(
             messages=messages,
             functions=functions,
             function_call=function_call,
@@ -7818,7 +8034,7 @@ class Model:
             reasoning_effort=reasoning_effort,
         )
         prompt_tokens = self.tokenize(prompt, add_bos=False, special=True)
-        return prompt, prompt_tokens, formatter_stop
+        return prompt, generation_prompt, prompt_tokens, formatter_stop
 
     def detokenize(self, tokens: Sequence[int]) -> bytes:
         if not tokens:
@@ -7849,6 +8065,15 @@ class Model:
         current = self.detokenize([*prev_tokens, token])
         previous = self.detokenize(prev_tokens)
         return current[len(previous) :]
+
+    def token_bytes_with_prev_bytes(
+        self,
+        prev_tokens: Sequence[int],
+        prev_text_bytes: Union[bytes, bytearray],
+        token: int,
+    ) -> bytes:
+        current = self.detokenize([*prev_tokens, token])
+        return current[len(prev_text_bytes) :]
 
     def clear_batch(self) -> None:
         self.batch.n_tokens = 0
@@ -7914,7 +8139,7 @@ class MemoryPolicy(abc.ABC):
 
 class AttentionMemoryPolicy(MemoryPolicy):
     def match_prefix(self, tokens: Sequence[int]) -> Tuple[int, int]:
-        return self.scheduler.prefix_trie.longest_prefix(
+        return self.scheduler.radix_trie.longest_prefix(
             tokens,
             preferred_sequences=self.scheduler.free_sequences,
         )
@@ -7939,7 +8164,7 @@ class AttentionMemoryPolicy(MemoryPolicy):
             base_seq_id = match_seq_id
             del self.scheduler.free_sequences[base_seq_id]
             self.scheduler.claimed_sequences.add(base_seq_id)
-            if self.scheduler.prefix_trie.length(base_seq_id) > reuse_len:
+            if self.scheduler.radix_trie.length(base_seq_id) > reuse_len:
                 self.scheduler.truncate_sequence(base_seq_id, reuse_len)
         else:
             base_seq_id = self.scheduler.unused_sequences.pop()
@@ -8010,15 +8235,20 @@ class UnifiedAttentionMemoryPolicy(AttentionMemoryPolicy):
     ) -> None:
         if keep_len <= 0:
             return
-        source_length = self.scheduler.prefix_trie.length(source_sequence_id)
+        source_length = self.scheduler.radix_trie.length(source_sequence_id)
+        copy_p0 = 0
+        copy_p1 = keep_len
+        if not self.scheduler.model.kv_unified:
+            copy_p0 = -1
+            copy_p1 = -1
         llama_cpp.llama_memory_seq_cp(
             self.scheduler.model.mem,
             source_sequence_id,
             dest_sequence_id,
-            0,
-            keep_len,
+            copy_p0,
+            copy_p1,
         )
-        self.scheduler.prefix_trie.copy(source_sequence_id, dest_sequence_id, keep_len)
+        self.scheduler.radix_trie.copy(source_sequence_id, dest_sequence_id, keep_len)
         self.scheduler.sequence_history.copy(
             source_sequence_id,
             dest_sequence_id,
@@ -8054,7 +8284,7 @@ class PartitionedAttentionMemoryPolicy(AttentionMemoryPolicy):
     ) -> None:
         if keep_len <= 0:
             return
-        source_length = self.scheduler.prefix_trie.length(source_sequence_id)
+        source_length = self.scheduler.radix_trie.length(source_sequence_id)
         llama_cpp.llama_memory_seq_cp(
             self.scheduler.model.mem,
             source_sequence_id,
@@ -8064,14 +8294,14 @@ class PartitionedAttentionMemoryPolicy(AttentionMemoryPolicy):
         )
         if source_length > keep_len:
             llama_cpp.llama_memory_seq_rm(self.scheduler.model.mem, dest_sequence_id, keep_len, -1)
-        prefix_tokens = self.scheduler.prefix_trie.tokens(source_sequence_id, keep_len)
-        self.scheduler.prefix_trie.copy(source_sequence_id, dest_sequence_id, keep_len)
+        prefix_tokens = self.scheduler.radix_trie.tokens(source_sequence_id, keep_len)
+        self.scheduler.radix_trie.copy(source_sequence_id, dest_sequence_id, keep_len)
         self.scheduler.sequence_history.extend(dest_sequence_id, prefix_tokens)
 
 
 class CheckpointMemoryPolicy(MemoryPolicy):
     def exact_checkpoint_match(self, tokens: Sequence[int]) -> Tuple[int, int]:
-        match_seq_id, match_length = self.scheduler.prefix_trie.longest_prefix(
+        match_seq_id, match_length = self.scheduler.radix_trie.longest_prefix(
             tokens,
             preferred_sequences=self.scheduler.free_sequences,
             exact_only=True,
@@ -8151,15 +8381,20 @@ class CheckpointMemoryPolicy(MemoryPolicy):
     ) -> None:
         if keep_len <= 0:
             return
-        source_length = self.scheduler.prefix_trie.length(source_sequence_id)
+        source_length = self.scheduler.radix_trie.length(source_sequence_id)
+        copy_p0 = 0
+        copy_p1 = keep_len
+        if not self.scheduler.model.kv_unified:
+            copy_p0 = -1
+            copy_p1 = -1
         llama_cpp.llama_memory_seq_cp(
             self.scheduler.model.mem,
             source_sequence_id,
             dest_sequence_id,
-            0,
-            keep_len,
+            copy_p0,
+            copy_p1,
         )
-        self.scheduler.prefix_trie.copy(source_sequence_id, dest_sequence_id, keep_len)
+        self.scheduler.radix_trie.copy(source_sequence_id, dest_sequence_id, keep_len)
         self.scheduler.sequence_history.copy(
             source_sequence_id,
             dest_sequence_id,
@@ -8183,7 +8418,7 @@ class CompletionScheduler:
     def __init__(self, model: Model) -> None:
         self.model = model
         self.formatter = OpenAIFormatter(model)
-        self.prefix_trie = PrefixTrie()
+        self.radix_trie = RadixTrie()
         self.sequence_history = SequenceHistory()
         self.checkpoint_logits: Dict[int, np.ndarray] = {}
         self.claimed_sequences: set[int] = set()
@@ -8193,8 +8428,7 @@ class CompletionScheduler:
         self.pending_requests: Deque[CompletionRequest] = deque()
         self.active_request_ids: set[str] = set()
         self.closed = False
-        self.completion_round_robin = 0
-        self.prompt_round_robin = 0
+        self.sequence_round_robin = 0
         self.speculative_stats: Dict[str, int] = {
             "draft_proposals": 0,
             "draft_tokens_proposed": 0,
@@ -8290,141 +8524,180 @@ class CompletionScheduler:
             and not self.requests[request_id].prompt_done
             and not self.requests[request_id].cancelled
         ]
-        has_generation = any(
-            completion.pending_input_tokens and not completion.finished
-            for request_id in self.active_request_ids
-            for completion in self.requests[request_id].completions
-        )
-        generation_capacity = self.model.n_batch
-        if prompt_requests and has_generation and self.model.n_batch > 1:
-            prompt_capacity = min(self.model.prompt_chunk_size, self.model.n_batch - 1)
-            generation_capacity = self.model.n_batch - prompt_capacity
-        completion_items = self.build_generation_items(generation_capacity)
-        completion_token_count = sum(len(item.tokens) for item in completion_items)
-        prompt_items = self.build_prompt_items(
-            self.model.n_batch - completion_token_count,
-            completion_token_count,
-            prompt_requests=prompt_requests,
-        )
-        return [*completion_items, *prompt_items]
-
-    def build_generation_items(self, capacity: int) -> List[CompletionScheduler.BatchItem]:
-        items: List[CompletionScheduler.BatchItem] = []
-        if capacity <= 0:
-            return items
         completions = [
             completion
             for request_id in self.active_request_ids
             for completion in self.requests[request_id].completions
-            if completion.pending_input_tokens and not completion.finished
+            if (completion.pending_input_tokens or completion.draft_tokens)
+            and not completion.finished
         ]
-        if not completions:
-            return items
-        start = self.completion_round_robin % len(completions)
-        ordered = completions[start:] + completions[:start]
+        if not prompt_requests and not completions:
+            return []
+
+        ordered_sequences = self._ordered_pending_sequences(prompt_requests, completions)
+        allocations = self._allocate_pending_tokens(
+            ordered_sequences,
+            self.model.n_batch,
+        )
+        if ordered_sequences:
+            self.sequence_round_robin += 1
+
+        items: List[CompletionScheduler.BatchItem] = []
         output_index = 0
-        used = 0
-        for completion in ordered:
-            if used >= capacity:
-                break
-            if not completion.pending_input_tokens:
+        for source in ordered_sequences:
+            token_count = allocations.get(self._pending_sequence_id(source), 0)
+            if token_count <= 0:
                 continue
-            request = self.requests[completion.request_id]
-            start_pos = self.prefix_trie.length(completion.seq_id)
-            pending_tokens = list(completion.pending_input_tokens)
-            remaining = capacity - used
-            if len(pending_tokens) > remaining:
-                break
-            draft_tokens: List[int] = []
-            if completion.pending_finish_reason is None and completion.draft_tokens:
-                draft_capacity = remaining - len(pending_tokens)
-                if draft_capacity > 0:
-                    draft_tokens = list(completion.draft_tokens[:draft_capacity])
-            scheduled_tokens = [*pending_tokens, *draft_tokens]
-            items.append(
-                CompletionScheduler.BatchItem(
-                    kind="token",
-                    request_id=request.id,
-                    seq_id=completion.seq_id,
-                    start_pos=start_pos,
-                    tokens=scheduled_tokens,
-                    output_indices=list(range(output_index, output_index + len(scheduled_tokens))),
-                    completion_index=completion.index,
-                    pending_count=len(pending_tokens),
-                )
+            item, output_index = self._build_pending_batch_item(
+                source,
+                token_count,
+                output_index,
             )
-            output_index += len(scheduled_tokens)
-            used += len(scheduled_tokens)
-        self.completion_round_robin += len(items)
+            items.append(item)
         return items
 
-    def build_prompt_items(
+    def _ordered_pending_sequences(
         self,
-        remaining_capacity: int,
-        generation_output_count: int,
-        *,
-        prompt_requests: Optional[List[CompletionRequest]] = None,
-    ) -> List[CompletionScheduler.BatchItem]:
-        if remaining_capacity <= 0:
+        prompt_requests: Sequence[CompletionRequest],
+        completions: Sequence[Completion],
+    ) -> List[Union[CompletionRequest, Completion]]:
+        if not prompt_requests and not completions:
             return []
-        requests = prompt_requests
-        if requests is None:
-            requests = [
-                self.requests[request_id]
-                for request_id in self.active_request_ids
-                if self.requests[request_id].admitted
-                and not self.requests[request_id].prompt_done
-                and not self.requests[request_id].cancelled
-            ]
-        if not requests:
-            return []
-        start = self.prompt_round_robin % len(requests)
-        ordered = requests[start:] + requests[:start]
-        items: List[CompletionScheduler.BatchItem] = []
-        output_index = generation_output_count
-        used = 0
-        for request in ordered:
-            if used >= remaining_capacity:
-                break
-            assert request.base_seq_id is not None
-            remaining_prompt = request.prompt_tokens[request.prompt_cursor :]
-            if not remaining_prompt:
-                request.prompt_done = True
-                self.start_completions(request, prompt_row_index=None)
+        prompt_by_request_id = {request.id: request for request in prompt_requests}
+        completions_by_request_id: Dict[str, List[Completion]] = {}
+        for completion in completions:
+            completions_by_request_id.setdefault(completion.request_id, []).append(completion)
+        sequence_list: List[Union[CompletionRequest, Completion]] = []
+        for request_id, request in self.requests.items():
+            if request_id not in self.active_request_ids or request.cancelled:
                 continue
-            chunk_size = min(
-                len(remaining_prompt),
-                self.model.prompt_chunk_size,
-                remaining_capacity - used,
-            )
-            if chunk_size <= 0:
+            prompt_request = prompt_by_request_id.get(request_id)
+            if prompt_request is not None:
+                sequence_list.append(prompt_request)
+            sequence_list.extend(completions_by_request_id.get(request_id, []))
+        if not sequence_list:
+            return []
+        start = self.sequence_round_robin % len(sequence_list)
+        return sequence_list[start:] + sequence_list[:start]
+
+    def _pending_sequence_id(
+        self,
+        source: Union[CompletionRequest, Completion],
+    ) -> int:
+        if isinstance(source, CompletionRequest):
+            if source.base_seq_id is None:
+                raise RuntimeError("prompt sequence is missing base seq id")
+            return source.base_seq_id
+        return source.seq_id
+
+    def _pending_tokens_length(
+        self,
+        source: Union[CompletionRequest, Completion],
+    ) -> int:
+        if isinstance(source, CompletionRequest):
+            return len(source.prompt_tokens) - source.prompt_cursor
+        draft_count = len(source.draft_tokens) if source.pending_finish_reason is None else 0
+        return len(source.pending_input_tokens) + draft_count
+
+    def _allocate_pending_tokens(
+        self,
+        sources: Sequence[Union[CompletionRequest, Completion]],
+        capacity: int,
+    ) -> Dict[int, int]:
+        allocations: Dict[int, int] = {}
+        active = [source for source in sources if self._pending_tokens_length(source) > 0]
+        remaining_capacity = capacity
+
+        for source in active:
+            if remaining_capacity <= 0:
                 break
-            chunk = list(remaining_prompt[:chunk_size])
-            ends_prompt = request.prompt_cursor + chunk_size == len(request.prompt_tokens)
-            output_indices: List[Optional[int]] = [None] * chunk_size
-            if request.payload.echo and request.payload.logprobs is not None:
-                for index in range(chunk_size):
+            seq_id = self._pending_sequence_id(source)
+            allocations[seq_id] = 1
+            remaining_capacity -= 1
+
+        while remaining_capacity > 0 and active:
+            share = max(1, remaining_capacity // len(active))
+            progress = False
+            next_active: List[Union[CompletionRequest, Completion]] = []
+            for source in active:
+                seq_id = self._pending_sequence_id(source)
+                remaining_tokens = self._pending_tokens_length(source) - allocations.get(seq_id, 0)
+                if remaining_tokens <= 0:
+                    continue
+                allocation = min(remaining_tokens, share, remaining_capacity)
+                if allocation <= 0:
+                    next_active.append(source)
+                    continue
+                allocations[seq_id] = allocations.get(seq_id, 0) + allocation
+                remaining_capacity -= allocation
+                progress = True
+                if remaining_tokens > allocation and remaining_capacity > 0:
+                    next_active.append(source)
+            if not progress:
+                break
+            active = next_active
+        return allocations
+
+    def _build_pending_batch_item(
+        self,
+        source: Union[CompletionRequest, Completion],
+        token_count: int,
+        output_index: int,
+    ) -> Tuple["CompletionScheduler.BatchItem", int]:
+        if isinstance(source, CompletionRequest):
+            if source.base_seq_id is None:
+                raise RuntimeError("prompt sequence is missing base seq id")
+            remaining_prompt = source.prompt_tokens[source.prompt_cursor :]
+            chunk = list(remaining_prompt[:token_count])
+            ends_prompt = source.prompt_cursor + len(chunk) == len(source.prompt_tokens)
+            output_indices: List[Optional[int]] = [None] * len(chunk)
+            if source.payload.echo and source.payload.logprobs is not None:
+                for index in range(len(chunk)):
                     output_indices[index] = output_index
                     output_index += 1
-            elif self.model.exact_checkpoints_only:
+            elif self.model.exact_checkpoints_only and chunk:
                 output_indices[-1] = output_index
                 output_index += 1
-            elif ends_prompt:
+            elif ends_prompt and chunk:
                 output_indices[-1] = output_index
                 output_index += 1
-            items.append(
+            return (
                 CompletionScheduler.BatchItem(
                     kind="prompt",
-                    request_id=request.id,
-                    seq_id=request.base_seq_id,
-                    start_pos=request.prompt_cursor,
+                    request_id=source.id,
+                    seq_id=source.base_seq_id,
+                    start_pos=source.prompt_cursor,
                     tokens=chunk,
                     output_indices=output_indices,
-                )
+                ),
+                output_index,
             )
-            used += chunk_size
-        self.prompt_round_robin += len(items)
-        return items
+
+        request = self.requests[source.request_id]
+        pending_count = min(token_count, len(source.pending_input_tokens))
+        draft_count = max(0, token_count - pending_count)
+        scheduled_tokens = [
+            *source.pending_input_tokens[:pending_count],
+            *(
+                source.draft_tokens[:draft_count]
+                if source.pending_finish_reason is None
+                else []
+            ),
+        ]
+        output_indices = list(range(output_index, output_index + len(scheduled_tokens)))
+        return (
+            CompletionScheduler.BatchItem(
+                kind="token",
+                request_id=request.id,
+                seq_id=source.seq_id,
+                start_pos=self.radix_trie.length(source.seq_id),
+                tokens=list(scheduled_tokens),
+                output_indices=output_indices,
+                completion_index=source.index,
+                pending_count=pending_count,
+            ),
+            output_index + len(scheduled_tokens),
+        )
 
     def process_batch(self, items: List[CompletionScheduler.BatchItem]) -> None:
         output_count = sum(
@@ -8436,7 +8709,7 @@ class CompletionScheduler:
             request = self.requests[item.request_id]
             if request.cancelled:
                 continue
-            self.prefix_trie.extend(item.seq_id, item.tokens)
+            self.radix_trie.extend(item.seq_id, item.tokens)
             self.sequence_history.extend(item.seq_id, item.tokens)
             if item.kind == "prompt":
                 request.capture_prompt_logprobs(
@@ -8451,12 +8724,15 @@ class CompletionScheduler:
                     self.last_output_index(item.output_indices),
                     output_count,
                 )
-                if prompt_row_index is not None:
-                    self.checkpoint_logits[item.seq_id] = self.model.logits(prompt_row_index)
+                prompt_logits = (
+                    self.model.logits(prompt_row_index)
+                    if prompt_row_index is not None
+                    else None
+                )
                 request.prompt_cursor += len(item.tokens)
                 if request.prompt_cursor == len(request.prompt_tokens):
                     request.prompt_done = True
-                    request.prompt_logits = self.checkpoint_logits.get(item.seq_id)
+                    request.prompt_logits = prompt_logits
                     self.maybe_save_prompt_checkpoint(request)
                     self.start_completions(
                         request,
@@ -8542,6 +8818,7 @@ class CompletionScheduler:
                     model=self.model,
                     formatter=self.formatter,
                     prev_tokens=[*completion.prompt_tokens, *completion.completion_tokens],
+                    prev_text_bytes=completion.detokenized_prefix_bytes,
                     token=sampled_token,
                     logits=logits,
                     logprobs_count=completion.logprobs,
@@ -8560,6 +8837,7 @@ class CompletionScheduler:
                 model=self.model,
                 formatter=self.formatter,
                 prev_tokens=[*completion.prompt_tokens, *completion.completion_tokens],
+                prev_text_bytes=completion.detokenized_prefix_bytes,
                 token=draft_token,
                 logits=logits,
                 logprobs_count=completion.logprobs,
@@ -8601,6 +8879,7 @@ class CompletionScheduler:
             model=self.model,
             formatter=self.formatter,
             prev_tokens=[*completion.prompt_tokens, *completion.completion_tokens],
+            prev_text_bytes=completion.detokenized_prefix_bytes,
             token=next_token,
             logits=final_logits,
             logprobs_count=completion.logprobs,
@@ -8620,26 +8899,32 @@ class CompletionScheduler:
             not self.model.exact_checkpoints_only
             or request.prompt_checkpoint_saved
             or request.base_seq_id is None
+            or not request.prompt_tokens
             or request.prompt_logits is None
             or not self.unused_sequences
         ):
             return
         checkpoint_seq_id = self.unused_sequences.pop()
+        copy_p0 = 0
+        copy_p1 = len(request.prompt_tokens)
+        if not self.model.kv_unified:
+            copy_p0 = -1
+            copy_p1 = -1
         llama_cpp.llama_memory_seq_cp(
             self.model.mem,
             request.base_seq_id,
             checkpoint_seq_id,
-            0,
-            len(request.prompt_tokens),
+            copy_p0,
+            copy_p1,
         )
-        self.prefix_trie.copy(request.base_seq_id, checkpoint_seq_id, len(request.prompt_tokens))
+        self.radix_trie.copy(request.base_seq_id, checkpoint_seq_id, len(request.prompt_tokens))
         self.sequence_history.copy(
             request.base_seq_id,
             checkpoint_seq_id,
-            self.prefix_trie.length(request.base_seq_id),
+            self.radix_trie.length(request.base_seq_id),
             len(request.prompt_tokens),
         )
-        self.checkpoint_logits[checkpoint_seq_id] = request.prompt_logits.copy()
+        self.checkpoint_logits[checkpoint_seq_id] = request.prompt_logits
         self.free_sequences[checkpoint_seq_id] = None
         self.free_sequences.move_to_end(checkpoint_seq_id)
         request.prompt_checkpoint_saved = True
@@ -8679,6 +8964,7 @@ class CompletionScheduler:
             if request.payload.logit_bias
             else None
         )
+        prompt_text_bytes = self.model.detokenize(prompt_tokens) if prompt_tokens else b""
         for offset, seq_id in enumerate(request.completion_seq_ids):
             if offset > 0:
                 if prompt_tokens:
@@ -8710,6 +8996,7 @@ class CompletionScheduler:
                     max_total_tokens=request.effective_max_len,
                     stop_sequences=stop_sequences,
                     logprobs=request.payload.logprobs,
+                    detokenized_prefix_bytes=bytearray(prompt_text_bytes),
                     rank_by_score=(
                         request.payload.best_of is not None
                         and request.payload.best_of > request.payload.n
@@ -8735,18 +9022,29 @@ class CompletionScheduler:
             return
         if row_index is None:
             raise RuntimeError("missing logits row")
-        logits = self.model.logits(row_index)
-        self.checkpoint_logits[completion.seq_id] = logits
         token = completion.sampler.sample(self.model.ctx, row_index)
-        record = Token.from_logits(
-            model=self.model,
-            formatter=self.formatter,
-            prev_tokens=[*completion.prompt_tokens, *completion.completion_tokens],
-            token=token,
-            logits=logits,
-            logprobs_count=completion.logprobs,
-            need_token_logprob=completion.needs_token_logprob,
-        )
+        prev_tokens = [*completion.prompt_tokens, *completion.completion_tokens]
+        if self.model.store_logits or completion.needs_token_logprob:
+            logits = self.model.logits(row_index)
+            if self.model.store_logits:
+                self.checkpoint_logits[completion.seq_id] = logits
+            record = Token.from_logits(
+                model=self.model,
+                formatter=self.formatter,
+                prev_tokens=prev_tokens,
+                prev_text_bytes=completion.detokenized_prefix_bytes,
+                token=token,
+                logits=logits,
+                logprobs_count=completion.logprobs,
+                need_token_logprob=completion.needs_token_logprob,
+            )
+        else:
+            record = Token.from_token(
+                model=self.model,
+                prev_tokens=prev_tokens,
+                prev_text_bytes=completion.detokenized_prefix_bytes,
+                token=token,
+            )
         finish_reason = self.handle_completion_token(
             completion,
             token,
@@ -8763,17 +9061,28 @@ class CompletionScheduler:
     ) -> None:
         if completion.finished:
             return
-        self.checkpoint_logits[completion.seq_id] = logits.copy()
         token = completion.sampler.sample_logits(logits)
-        record = Token.from_logits(
-            model=self.model,
-            formatter=self.formatter,
-            prev_tokens=[*completion.prompt_tokens, *completion.completion_tokens],
-            token=token,
-            logits=logits,
-            logprobs_count=completion.logprobs,
-            need_token_logprob=completion.needs_token_logprob,
-        )
+        prev_tokens = [*completion.prompt_tokens, *completion.completion_tokens]
+        if self.model.store_logits or completion.needs_token_logprob:
+            if self.model.store_logits:
+                self.checkpoint_logits[completion.seq_id] = logits.copy()
+            record = Token.from_logits(
+                model=self.model,
+                formatter=self.formatter,
+                prev_tokens=prev_tokens,
+                prev_text_bytes=completion.detokenized_prefix_bytes,
+                token=token,
+                logits=logits,
+                logprobs_count=completion.logprobs,
+                need_token_logprob=completion.needs_token_logprob,
+            )
+        else:
+            record = Token.from_token(
+                model=self.model,
+                prev_tokens=prev_tokens,
+                prev_text_bytes=completion.detokenized_prefix_bytes,
+                token=token,
+            )
         finish_reason = self.handle_completion_token(
             completion,
             token,
@@ -8797,6 +9106,7 @@ class CompletionScheduler:
         completion.completion_tokens.append(token)
         completion.token_records.append(record)
         completion.rendered_bytes.extend(record.text_bytes)
+        completion.detokenized_prefix_bytes.extend(record.text_bytes)
         finish_reason: Optional[str] = None
         if llama_cpp.llama_vocab_is_eog(self.model.vocab, token):
             finish_reason = "stop"
@@ -8865,11 +9175,11 @@ class CompletionScheduler:
             request.on_done(result)
 
     def truncate_sequence(self, seq_id: int, keep_len: int) -> None:
-        current_len = self.prefix_trie.length(seq_id)
+        current_len = self.radix_trie.length(seq_id)
         if current_len <= keep_len:
             return
         llama_cpp.llama_memory_seq_rm(self.model.mem, seq_id, keep_len, -1)
-        self.prefix_trie.truncate(seq_id, keep_len)
+        self.radix_trie.truncate(seq_id, keep_len)
         self.sequence_history.truncate(seq_id, current_len, keep_len)
         self.checkpoint_logits.pop(seq_id, None)
 
@@ -9322,7 +9632,7 @@ def create_app() -> FastAPI:
         service: CompletionService = app.state.service
         formatter = service.formatter
         try:
-            payload, prompt_text, prompt_tokens, grammar_text, tool_name = (
+            payload, prompt_text, generation_prompt, prompt_tokens, grammar_text, tool_name = (
                 formatter.completion_request_from_chat_request(
                     body,
                 )
@@ -9354,6 +9664,7 @@ def create_app() -> FastAPI:
                     functions=body.functions,
                     tools=body.tools,
                     parsed_states=parsed_states,
+                    generation_prompt=generation_prompt,
                 )
 
             parsed_states: Dict[int, Dict[str, Any]] = {}
@@ -9377,6 +9688,7 @@ def create_app() -> FastAPI:
             tool_name,
             functions=body.functions,
             tools=body.tools,
+            generation_prompt=generation_prompt,
         )
         if isinstance(chat_response, BaseModel):
             return JSONResponse(
@@ -9390,7 +9702,7 @@ def create_app() -> FastAPI:
         formatter = service.formatter
         try:
             chat_body = formatter.chat_request_from_responses_request(body)
-            payload, prompt_text, prompt_tokens, grammar_text, tool_name = (
+            payload, prompt_text, generation_prompt, prompt_tokens, grammar_text, tool_name = (
                 formatter.completion_request_from_chat_request(
                     chat_body,
                 )
@@ -9428,6 +9740,7 @@ def create_app() -> FastAPI:
                     tool_name,
                     tools=chat_body.tools,
                     parsed_states=parsed_states,
+                    generation_prompt=generation_prompt,
                 )
                 payloads: List[BaseModel | Dict[str, Any]] = []
                 for chat_chunk in chat_chunks:
@@ -9467,6 +9780,7 @@ def create_app() -> FastAPI:
                 body,
                 tool_name,
                 tools=chat_body.tools,
+                generation_prompt=generation_prompt,
             )
         )
 
@@ -9537,6 +9851,7 @@ def create_app() -> FastAPI:
                     (
                         completion_payload,
                         prompt_text,
+                        generation_prompt,
                         prompt_tokens,
                         grammar_text,
                         tool_name,
@@ -9572,6 +9887,7 @@ def create_app() -> FastAPI:
                         tool_name,
                         tools=chat_body.tools,
                         parsed_states=parsed_states,
+                        generation_prompt=generation_prompt,
                     )
                     payloads: List[BaseModel | Dict[str, Any]] = []
                     for chat_chunk in chat_chunks:
@@ -9684,7 +10000,6 @@ def main() -> None:
         no_perf=config.model.no_perf,
         type_k=config.model.type_k,
         type_v=config.model.type_v,
-        prompt_chunk_size=config.model.prompt_chunk_size,
         kv_unified=config.model.kv_unified,
         max_seq_len=config.model.max_seq_len,
         max_output_tokens=config.model.max_output_tokens,
