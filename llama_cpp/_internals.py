@@ -76,7 +76,7 @@ class LlamaModel:
         self._exit_stack.callback(free_model)
 
     def close(self):
-        if self.sampler is not None:
+        if hasattr(self, "sampler") and self.sampler is not None:
             # NOTE: Must remove custom samplers before free or llama.cpp will try to free them
             for i, _ in reversed(self.custom_samplers):
                 llama_cpp.llama_sampler_chain_remove(self.sampler, i)
