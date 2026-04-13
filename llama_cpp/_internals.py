@@ -182,9 +182,12 @@ class LlamaModel:
         return list(tokens[:n_tokens])
 
     def token_to_piece(self, token: int, special: bool = False) -> bytes:
-        buf = ctypes.create_string_buffer(32)
-        llama_cpp.llama_token_to_piece(self.vocab, token, buf, 32, 0, special)
-        return bytes(buf)
+        size = 32
+        buffer = (ctypes.c_char * size)()
+        n = llama_cpp.llama_token_to_piece(
+            self.vocab, llama_cpp.llama_token(token), buffer, size, 0, special
+        )
+        return bytes(buffer[:n])
 
     def detokenize(self, tokens: List[int], special: bool = False) -> bytes:
         output = b""
@@ -503,13 +506,17 @@ class LlamaBatch:
     def set_batch(self, batch: Sequence[int], n_past: int, logits_all: bool):
         n_tokens = len(batch)
         self.batch.n_tokens = n_tokens
+        token_arr = np.ctypeslib.as_array(self.batch.token, shape=(n_tokens,))
+        token_arr[:] = batch
+        pos_arr = np.ctypeslib.as_array(self.batch.pos, shape=(n_tokens,))
+        pos_arr[:] = np.arange(n_past, n_past + n_tokens, dtype=pos_arr.dtype)
+        n_seq_id_arr = np.ctypeslib.as_array(self.batch.n_seq_id, shape=(n_tokens,))
+        n_seq_id_arr[:] = 1
+        logits_arr = np.ctypeslib.as_array(self.batch.logits, shape=(n_tokens,))
+        logits_arr[:] = logits_all
+        logits_arr[n_tokens - 1] = True
         for i in range(n_tokens):
-            self.batch.token[i] = batch[i]
-            self.batch.pos[i] = n_past + i
             self.batch.seq_id[i][0] = 0
-            self.batch.n_seq_id[i] = 1
-            self.batch.logits[i] = logits_all
-        self.batch.logits[n_tokens - 1] = True
 
     def add_sequence(self, batch: Sequence[int], seq_id: int, logits_all: bool):
         n_tokens = len(batch)
