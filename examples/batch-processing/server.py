@@ -5683,11 +5683,24 @@ class OpenAIFormatter:
                     else None
                 )
                 description = cast(Optional[str], tool.get("description")) or ""
+                text_tool_guidance = (
+                    "This is a text tool. When calling it, the "
+                    "`function.arguments` field itself must be the raw input string. "
+                    "Do not wrap the input in JSON and do not use an object such as "
+                    "'{\"input\": \"...\"}' or '{\"patch\": \"...\"}'."
+                )
                 if isinstance(syntax, str) and isinstance(definition, str):
                     if description:
-                        description = f"{description}\n\n{syntax}:\n{definition}"
+                        description = (
+                            f"{description}\n\n{text_tool_guidance}\n\n"
+                            f"{syntax}:\n{definition}"
+                        )
                     else:
-                        description = f"{syntax}:\n{definition}"
+                        description = f"{text_tool_guidance}\n\n{syntax}:\n{definition}"
+                elif description:
+                    description = f"{description}\n\n{text_tool_guidance}"
+                else:
+                    description = text_tool_guidance
                 normalized_tools.append(
                     {
                         "type": "function",
@@ -5697,8 +5710,17 @@ class OpenAIFormatter:
                             "description": description or None,
                             "parameters": {
                                 "type": "object",
-                                "properties": {},
-                                "additionalProperties": True,
+                                "properties": {
+                                    "input": {
+                                        "type": "string",
+                                        "description": (
+                                            "Raw input text for this tool. "
+                                            "For apply_patch, put the full patch here."
+                                        ),
+                                    },
+                                },
+                                "required": ["input"],
+                                "additionalProperties": False,
                             },
                             "strict": tool.get("strict"),
                             "content_type": "text",
@@ -6534,8 +6556,8 @@ class OpenAIFormatter:
             )
         ], item_state
 
-    @staticmethod
     def _update_tool_stream_item(
+        self,
         item: Dict[str, Any],
         *,
         call_id: Optional[str],
@@ -6554,11 +6576,40 @@ class OpenAIFormatter:
                 item["name"] = current_name + name_delta
         if isinstance(arguments_delta, str) and arguments_delta:
             if item.get("type") == "custom_tool_call":
-                item["input"] = cast(str, item.get("input", "")) + arguments_delta
+                raw_arguments = cast(str, item.get("_raw_arguments", "")) + arguments_delta
+                item["_raw_arguments"] = raw_arguments
+                normalized_input = self._normalize_text_tool_payload(raw_arguments)
+                if normalized_input is not None:
+                    item["input"] = normalized_input
             else:
                 item["arguments"] = (
                     cast(str, item.get("arguments", "")) + arguments_delta
                 )
+
+    @staticmethod
+    def _normalize_text_tool_payload(payload: str) -> Optional[str]:
+        if payload == "":
+            return ""
+        stripped = payload.lstrip()
+        if not stripped:
+            return ""
+        if stripped[0] not in '{["':
+            return payload
+        try:
+            decoded = json.loads(payload)
+        except Exception:
+            return None
+        if isinstance(decoded, str):
+            return decoded
+        if isinstance(decoded, dict):
+            input_value = decoded.get("input")
+            if isinstance(input_value, str):
+                return input_value
+            if len(decoded) == 1:
+                sole_value = next(iter(decoded.values()))
+                if isinstance(sole_value, str):
+                    return sole_value
+        return payload
 
     def _finalize_response_stream_items(
         self,
@@ -6645,6 +6696,7 @@ class OpenAIFormatter:
         for tool_call_index in sorted(state.tool_items):
             item_state = state.tool_items[tool_call_index]
             item = item_state.item
+            item.pop("_raw_arguments", None)
             if (
                 item.get("status") != "in_progress"
                 and item.get("type") != "custom_tool_call"
@@ -6772,6 +6824,7 @@ class OpenAIFormatter:
                     name=cast(Optional[str], function.get("name")),
                 )
                 events.extend(added)
+                previous_input = cast(str, item_state.item.get("input", ""))
                 self._update_tool_stream_item(
                     item_state.item,
                     call_id=cast(Optional[str], tool_call.get("id")),
@@ -6781,13 +6834,19 @@ class OpenAIFormatter:
                 arguments_delta = function.get("arguments")
                 if isinstance(arguments_delta, str) and arguments_delta:
                     if item_state.item.get("type") == "custom_tool_call":
+                        current_input = cast(str, item_state.item.get("input", ""))
+                        if not current_input or current_input == previous_input:
+                            continue
+                        delta_text = current_input
+                        if current_input.startswith(previous_input):
+                            delta_text = current_input[len(previous_input) :]
                         events.append(
                             self._response_event(
                                 state,
                                 "response.custom_tool_call_input.delta",
                                 item_id=cast(str, item_state.item["id"]),
                                 output_index=item_state.output_index,
-                                delta=arguments_delta,
+                                delta=delta_text,
                             )
                         )
                         continue
