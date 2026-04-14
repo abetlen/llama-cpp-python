@@ -34,6 +34,21 @@ class suppress_stdout_stderr(object):
         self.old_stdout = self.sys.stdout
         self.old_stderr = self.sys.stderr
 
+        # In Jupyter notebooks, ipykernel replaces sys.stdout/stderr with
+        # OutStream objects that hold their own copy of the original fd in
+        # _original_stdstream_copy. This bypasses our dup2 redirect, so we
+        # need to point that copy at the real fd temporarily.
+        self._saved_stdout_copy = getattr(
+            self.sys.stdout, "_original_stdstream_copy", None
+        )
+        self._saved_stderr_copy = getattr(
+            self.sys.stderr, "_original_stdstream_copy", None
+        )
+        if self._saved_stdout_copy is not None:
+            self.sys.stdout._original_stdstream_copy = self.old_stdout_fileno_undup
+        if self._saved_stderr_copy is not None:
+            self.sys.stderr._original_stdstream_copy = self.old_stderr_fileno_undup
+
         self.os.dup2(outnull_file.fileno(), self.old_stdout_fileno_undup)
         self.os.dup2(errnull_file.fileno(), self.old_stderr_fileno_undup)
 
@@ -45,7 +60,6 @@ class suppress_stdout_stderr(object):
         if self.disable:
             return
 
-        # Check if sys.stdout and sys.stderr have fileno method
         self.sys.stdout = self.old_stdout
         self.sys.stderr = self.old_stderr
 
@@ -54,6 +68,12 @@ class suppress_stdout_stderr(object):
 
         self.os.close(self.old_stdout_fileno)
         self.os.close(self.old_stderr_fileno)
+
+        # Restore ipykernel's OutStream fd copies
+        if self._saved_stdout_copy is not None:
+            self.sys.stdout._original_stdstream_copy = self._saved_stdout_copy
+        if self._saved_stderr_copy is not None:
+            self.sys.stderr._original_stdstream_copy = self._saved_stderr_copy
 
 
 class MetaSingleton(type):
