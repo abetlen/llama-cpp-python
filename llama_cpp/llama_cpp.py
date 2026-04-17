@@ -503,13 +503,15 @@ LLAMA_FLASH_ATTN_TYPE_ENABLED = 1
 
 
 # enum llama_split_mode {
-#     LLAMA_SPLIT_MODE_NONE  = 0, // single GPU
-#     LLAMA_SPLIT_MODE_LAYER = 1, // split layers and KV across GPUs
-#     LLAMA_SPLIT_MODE_ROW   = 2, // split layers and KV across GPUs, use tensor parallelism if supported
+#     LLAMA_SPLIT_MODE_NONE   = 0, // single GPU
+#     LLAMA_SPLIT_MODE_LAYER  = 1, // split layers and KV across GPUs
+#     LLAMA_SPLIT_MODE_ROW    = 2, // split layers and KV across GPUs, use tensor parallelism if supported
+#     LLAMA_SPLIT_MODE_TENSOR = 3,
 # };
 LLAMA_SPLIT_MODE_NONE = 0
 LLAMA_SPLIT_MODE_LAYER = 1
 LLAMA_SPLIT_MODE_ROW = 2
+LLAMA_SPLIT_MODE_TENSOR = 3
 
 
 # typedef struct llama_token_data {
