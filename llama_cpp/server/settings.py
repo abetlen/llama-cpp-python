@@ -208,7 +208,7 @@ class ServerSettings(BaseSettings):
 
     # Uvicorn Settings
     host: str = Field(default="localhost", description="Listen address")
-    port: int = Field(default=8000, description="Listen port")
+    port: int = Field(default=8080, description="Listen port")
     ssl_keyfile: Optional[str] = Field(
         default=None, description="SSL key file for HTTPS"
     )
