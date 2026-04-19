@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import json
+import logging
 import typing
 import contextlib
 
@@ -17,6 +18,7 @@ from starlette.concurrency import run_in_threadpool, iterate_in_threadpool
 from fastapi import Depends, FastAPI, APIRouter, Request, HTTPException, status, Body
 from fastapi.middleware import Middleware
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from fastapi.security import HTTPBearer
 from sse_starlette.sse import EventSourceResponse
 from starlette_context.plugins import RequestIdPlugin  # type: ignore
@@ -130,7 +132,18 @@ def create_app(
     )
 
     set_server_settings(server_settings)
+
+    logger = logging.getLogger(__name__)
+    ssl_enabled = bool(server_settings.ssl_keyfile and server_settings.ssl_certfile)
+    if not ssl_enabled:
+        logger.warning(
+            "SSL is not configured. The server is running over plain HTTP, "
+            "which is not secure. Pass --ssl_keyfile and --ssl_certfile to enable HTTPS."
+        )
+
     middleware = [Middleware(RawContextMiddleware, plugins=(RequestIdPlugin(),))]
+    if ssl_enabled:
+        middleware.append(Middleware(HTTPSRedirectMiddleware))
     app = FastAPI(
         middleware=middleware,
         title="🦙 llama.cpp Python API",
