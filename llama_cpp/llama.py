@@ -887,18 +887,9 @@ class Llama:
 
         # Check for kv cache prefix match
         if reset and self.n_tokens > 0:
-            cached = self._input_ids
-            n = min(len(cached), len(tokens) - 1)
-            if n > 0:
-                eq = np.asarray(cached[:n]) == np.asarray(
-                    tokens[:n]
-                )
-                mismatch = np.argmin(eq)
-                longest_prefix = (
-                    int(n) if eq[mismatch] else int(mismatch)
-                )
-            else:
-                longest_prefix = 0
+            longest_prefix = Llama.longest_token_prefix(
+                self._input_ids, tokens[:-1]
+            )
             if longest_prefix > 0:
                 if self._ctx.kv_cache_seq_rm(-1, longest_prefix, -1):
                     reset = False
@@ -1319,10 +1310,10 @@ class Llama:
             try:
                 cache_item = self.cache[prompt_tokens]
                 cache_prefix_len = Llama.longest_token_prefix(
-                    cache_item.input_ids.tolist(), prompt_tokens
+                    cache_item.input_ids, prompt_tokens
                 )
                 eval_prefix_len = Llama.longest_token_prefix(
-                    self._input_ids.tolist(), prompt_tokens
+                    self._input_ids, prompt_tokens
                 )
                 if cache_prefix_len > eval_prefix_len:
                     self.load_state(cache_item)
@@ -2257,7 +2248,10 @@ class Llama:
         return subtract_maxs - out
 
     @staticmethod
-    def longest_token_prefix(a: Sequence[int], b: Sequence[int]):
+    def longest_token_prefix(
+        a: Union[Sequence[int], npt.NDArray[np.intc]],
+        b: Union[Sequence[int], npt.NDArray[np.intc]],
+    ) -> int:
         n = min(len(a), len(b))
         if n == 0:
             return 0
