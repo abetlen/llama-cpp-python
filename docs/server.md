@@ -25,10 +25,19 @@ python3 -m llama_cpp.server --model <model_path>
 You can also pass chat-template kwargs at model load time from the CLI:
 
 ```bash
+# Linux / macOS (bash)
 python3 -m llama_cpp.server \
   --model <model_path> \
   --chat_format chatml \
   --chat_template_kwargs '{"enable_thinking": true}'
+```
+
+```powershell
+# Windows (PowerShell) – use a backtick ` for line continuation, not a backslash \
+python -m llama_cpp.server `
+  --model <model_path> `
+  --chat_format chatml `
+  --chat_template_kwargs '{\"enable_thinking\": true}'
 ```
 
 ### Server options
