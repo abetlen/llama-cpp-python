@@ -1,0 +1,55 @@
+name: Protect Important Branches
+
+on:
+  workflow_dispatch:
+
+permissions:
+  administration: write
+
+jobs:
+  create-ruleset:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create branch ruleset for main
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              const { data: ruleset } = await github.request(
+                'POST /repos/{owner}/{repo}/rulesets',
+                {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: 'Protect main branch',
+                  target: 'branch',
+                  enforcement: 'active',
+                  conditions: {
+                    ref_name: {
+                      include: ['refs/heads/main'],
+                      exclude: [],
+                    },
+                  },
+                  rules: [
+                    { type: 'deletion' },
+                    { type: 'non_fast_forward' },
+                    { type: 'required_linear_history' },
+                    {
+                      type: 'required_status_checks',
+                      parameters: {
+                        strict_required_status_checks_policy: false,
+                        do_not_enforce_on_create: false,
+                        required_status_checks: [
+                          { context: 'ruff' },
+                        ],
+                      },
+                    },
+                  ],
+                }
+              );
+              console.log(`Ruleset created: ${ruleset.name} (id: ${ruleset.id})`);
+            } catch (error) {
+              core.setFailed(
+                `Failed to create ruleset: ${error.message}. ` +
+                'Ensure the token has administration:write permission and no duplicate ruleset exists.'
+              );
+            }
