@@ -1239,8 +1239,23 @@ class CreateCompletionRequest(BaseModel):
         raise ValueError("prompt must be a string, token ids, list of strings, or list of token-id lists")
 
 
+class ChatCompletionFunctionCall(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    name: str
+    arguments: Optional[str] = None
+
+
+class ChatCompletionToolCall(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: Optional[str] = None
+    type: Literal["function"] = "function"
+    function: ChatCompletionFunctionCall
+
+
 class ChatCompletionRequestMessage(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     role: Literal["system", "developer", "user", "assistant", "tool", "function"] = Field(
         default="user"
@@ -1248,8 +1263,62 @@ class ChatCompletionRequestMessage(BaseModel):
     content: Optional[str] = Field(default="")
     name: Optional[str] = Field(default=None)
     tool_call_id: Optional[str] = Field(default=None)
-    function_call: Optional[Dict[str, Any]] = Field(default=None)
-    tool_calls: Optional[List[Dict[str, Any]]] = Field(default=None)
+    function_call: Optional[ChatCompletionFunctionCall] = Field(default=None)
+    tool_calls: Optional[List[ChatCompletionToolCall]] = Field(default=None)
+
+
+class ChatCompletionFunctionDefinition(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    name: str
+    description: Optional[str] = None
+    parameters: Optional[Dict[str, Any]] = None
+
+
+class ChatCompletionToolFunction(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    name: str
+    description: Optional[str] = None
+    parameters: Optional[Dict[str, Any]] = None
+    strict: Optional[bool] = None
+
+
+class ChatCompletionTool(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    type: Literal["function"]
+    function: ChatCompletionToolFunction
+
+
+class ChatCompletionFunctionCallOption(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    name: str
+
+
+class ChatCompletionToolChoiceObject(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    type: Literal["function"]
+    function: ChatCompletionFunctionCallOption
+
+
+class ChatCompletionResponseFormatJsonSchema(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    name: Optional[str] = None
+    description: Optional[str] = None
+    schema_: Optional[Dict[str, Any]] = Field(default=None, alias="schema")
+    strict: Optional[bool] = None
+
+
+class ChatCompletionResponseFormat(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    type: Literal["text", "json_object", "json_schema"]
+    schema_: Optional[Dict[str, Any]] = Field(default=None, alias="schema")
+    json_schema: Optional[ChatCompletionResponseFormatJsonSchema] = None
 
 
 class CreateChatCompletionRequest(BaseModel):
@@ -1270,12 +1339,18 @@ class CreateChatCompletionRequest(BaseModel):
     model: Optional[str] = None
     n: int = Field(default=1, ge=1)
     user: Optional[str] = None
-    functions: Optional[List[Dict[str, Any]]] = None
-    function_call: Optional[Union[str, Dict[str, Any]]] = None
-    tools: Optional[List[Dict[str, Any]]] = None
-    tool_choice: Optional[Union[str, Dict[str, Any]]] = None
-    response_format: Optional[Dict[str, Any]] = None
-    reasoning_effort: Optional[str] = None
+    functions: Optional[List[ChatCompletionFunctionDefinition]] = None
+    function_call: Optional[
+        Union[Literal["none", "auto"], ChatCompletionFunctionCallOption]
+    ] = None
+    tools: Optional[List[ChatCompletionTool]] = None
+    tool_choice: Optional[
+        Union[Literal["none", "auto", "required"], ChatCompletionToolChoiceObject]
+    ] = None
+    response_format: Optional[ChatCompletionResponseFormat] = None
+    reasoning_effort: Optional[
+        Literal["low", "medium", "high", "minimal", "none"]
+    ] = None
 
     @field_validator("logit_bias")
     @classmethod
@@ -1295,6 +1370,85 @@ class CreateChatCompletionRequest(BaseModel):
         return self
 
 
+class ResponsesFunctionTool(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    type: Literal["function"]
+    name: str
+    description: Optional[str] = None
+    parameters: Optional[Dict[str, Any]] = None
+    strict: Optional[bool] = None
+
+
+class ResponsesCustomToolFormat(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    syntax: Optional[str] = None
+    definition: Optional[str] = None
+
+
+class ResponsesCustomTool(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    type: Literal["custom"]
+    name: str
+    description: Optional[str] = None
+    format: Optional[ResponsesCustomToolFormat] = None
+    strict: Optional[bool] = None
+
+
+class ResponsesWebSearchTool(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    type: Literal["web_search"]
+
+
+ResponsesToolDefinition = Union[
+    ResponsesFunctionTool,
+    ResponsesCustomTool,
+    ResponsesWebSearchTool,
+]
+
+
+class ResponsesToolChoiceObject(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    type: Literal["function", "custom"]
+    name: str
+
+
+ResponsesToolChoice = Union[
+    Literal["auto", "none", "required"],
+    ResponsesToolChoiceObject,
+]
+
+
+class ResponsesTextFormatJsonSchema(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    schema_: Dict[str, Any] = Field(alias="schema")
+
+
+class ResponsesTextFormat(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    type: Literal["text", "json_object", "json_schema"]
+    schema_: Optional[Dict[str, Any]] = Field(default=None, alias="schema")
+    json_schema: Optional[ResponsesTextFormatJsonSchema] = None
+
+
+class ResponsesTextOptions(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    format: Optional[ResponsesTextFormat] = None
+
+
+class ResponsesReasoningOptions(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    effort: Optional[Literal["low", "medium", "high"]] = None
+
+
 class CreateResponseRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -1306,15 +1460,15 @@ class CreateResponseRequest(BaseModel):
     stream: bool = False
     top_logprobs: Optional[int] = Field(default=None, ge=0)
     model: Optional[str] = None
-    tools: Optional[List[Dict[str, Any]]] = None
-    tool_choice: Optional[Union[str, Dict[str, Any]]] = None
+    tools: Optional[List["ResponsesToolDefinition"]] = None
+    tool_choice: Optional["ResponsesToolChoice"] = None
     parallel_tool_calls: bool = True
-    text: Optional[Dict[str, Any]] = None
-    reasoning: Optional[Dict[str, Any]] = None
+    text: Optional["ResponsesTextOptions"] = None
+    reasoning: Optional["ResponsesReasoningOptions"] = None
     metadata: Optional[Dict[str, str]] = None
     user: Optional[str] = None
     previous_response_id: Optional[str] = None
-    conversation: Optional[Any] = None
+    conversation: Optional[str] = None
     store: Optional[bool] = None
     truncation: Optional[Literal["auto", "disabled"]] = None
 
@@ -1331,15 +1485,15 @@ class ResponseCreateWebSocketRequest(BaseModel):
     top_p: Optional[float] = Field(default=0.95, ge=0.0, le=1.0)
     stream: bool = True
     top_logprobs: Optional[int] = Field(default=None, ge=0)
-    tools: Optional[List[Dict[str, Any]]] = None
-    tool_choice: Optional[Union[str, Dict[str, Any]]] = None
+    tools: Optional[List["ResponsesToolDefinition"]] = None
+    tool_choice: Optional["ResponsesToolChoice"] = None
     parallel_tool_calls: bool = True
-    text: Optional[Dict[str, Any]] = None
-    reasoning: Optional[Dict[str, Any]] = None
+    text: Optional["ResponsesTextOptions"] = None
+    reasoning: Optional["ResponsesReasoningOptions"] = None
     metadata: Optional[Dict[str, str]] = None
     user: Optional[str] = None
     previous_response_id: Optional[str] = None
-    conversation: Optional[Any] = None
+    conversation: Optional[str] = None
     store: Optional[bool] = None
     truncation: Optional[Literal["auto", "disabled"]] = None
     generate: Optional[bool] = None
@@ -1348,6 +1502,22 @@ class ResponseCreateWebSocketRequest(BaseModel):
         return CreateResponseRequest.model_validate(
             self.model_dump(mode="python", exclude={"type"})
         )
+
+
+class ModelCardResponse(BaseModel):
+    id: str
+    object: Literal["model"] = "model"
+    created: int
+    owned_by: str
+
+
+class ModelListResponse(BaseModel):
+    object: Literal["list"] = "list"
+    data: List[ModelCardResponse]
+
+
+class HealthzResponse(BaseModel):
+    status: Literal["ok"] = "ok"
 
 
 @dataclass
@@ -1791,6 +1961,54 @@ class Completion:
     @property
     def max_stop_sequence_length(self) -> int:
         return max((len(stop) for stop in self.stop_sequences), default=0)
+
+
+@dataclass
+class SchedulerMetrics:
+    started_at: float = field(default_factory=time.time)
+    requests_submitted_total: int = 0
+    requests_admitted_total: int = 0
+    requests_completed_total: int = 0
+    requests_cancelled_total: int = 0
+    requests_failed_total: int = 0
+    prompt_tokens_total: int = 0
+    prompt_seconds_total: float = 0.0
+    tokens_predicted_total: int = 0
+    tokens_predicted_seconds_total: float = 0.0
+    n_decode_total: int = 0
+    n_tokens_max: int = 0
+    n_busy_slots_total: int = 0
+    checkpoint_hits_total: int = 0
+    checkpoint_saves_total: int = 0
+    checkpoint_evictions_total: int = 0
+
+    def observe_decode(
+        self,
+        items: Sequence[Any],
+        elapsed_seconds: float,
+    ) -> None:
+        if not items:
+            return
+        total_tokens = sum(len(item.tokens) for item in items)
+        if total_tokens <= 0:
+            return
+        prompt_tokens = sum(
+            len(item.tokens) for item in items if getattr(item, "kind", None) == "prompt"
+        )
+        generation_tokens = total_tokens - prompt_tokens
+        self.n_decode_total += 1
+        self.n_busy_slots_total += len(items)
+        self.n_tokens_max = max(self.n_tokens_max, total_tokens)
+        self.prompt_tokens_total += prompt_tokens
+        if prompt_tokens > 0:
+            self.prompt_seconds_total += elapsed_seconds * (prompt_tokens / total_tokens)
+        if generation_tokens > 0:
+            self.tokens_predicted_seconds_total += elapsed_seconds * (
+                generation_tokens / total_tokens
+            )
+
+    def observe_predicted_token(self) -> None:
+        self.tokens_predicted_total += 1
 
 
 @dataclass
@@ -5224,14 +5442,36 @@ class OpenAIFormatter:
                 return cast(OpenAICompletion, result)
 
     @staticmethod
+    def _modelish_to_python(value: Any) -> Any:
+        if isinstance(value, BaseModel):
+            return value.model_dump(mode="python", exclude_none=True, by_alias=True)
+        if isinstance(value, list):
+            return [OpenAIFormatter._modelish_to_python(item) for item in value]
+        return value
+
+    @staticmethod
     def _normalized_tools(
         *,
-        functions: Optional[List[Dict[str, Any]]] = None,
-        tools: Optional[List[Dict[str, Any]]] = None,
+        functions: Optional[List[Any]] = None,
+        tools: Optional[List[Any]] = None,
     ) -> Optional[List[Dict[str, Any]]]:
         if functions is not None:
-            return [{"type": "function", "function": function} for function in functions]
-        return tools
+            return [
+                {
+                    "type": "function",
+                    "function": cast(
+                        Dict[str, Any],
+                        OpenAIFormatter._modelish_to_python(function),
+                    ),
+                }
+                for function in functions
+            ]
+        if tools is None:
+            return None
+        return [
+            cast(Dict[str, Any], OpenAIFormatter._modelish_to_python(tool))
+            for tool in tools
+        ]
 
     def _chat_template_text(self) -> str:
         if self.model.chat_formatter is None:
@@ -5258,9 +5498,9 @@ class OpenAIFormatter:
         body: CreateResponseRequest,
     ) -> Optional[str]:
         reasoning = body.reasoning
-        if not isinstance(reasoning, dict):
+        if reasoning is None:
             return None
-        effort = reasoning.get("effort")
+        effort = reasoning.effort
         if effort in {"low", "medium", "high"}:
             return cast(str, effort)
         return None
@@ -5647,42 +5887,34 @@ class OpenAIFormatter:
 
     def _responses_tools_to_chat_tools(
         self,
-        tools: Optional[List[Dict[str, Any]]],
+        tools: Optional[List[ResponsesToolDefinition]],
     ) -> Optional[List[Dict[str, Any]]]:
         if tools is None:
             return None
         normalized_tools: List[Dict[str, Any]] = []
         for tool in tools:
-            tool_type = tool.get("type")
+            tool_type = tool.type
             if tool_type == "web_search":
                 continue
-            name = tool.get("name")
-            if not isinstance(name, str) or not name:
-                raise CompletionRequestValidationError("responses tools require name")
+            name = tool.name
             if tool_type == "function":
                 normalized_tools.append(
                     {
                         "type": "function",
                         "function": {
                             "name": name,
-                            "description": tool.get("description"),
-                            "parameters": tool.get("parameters"),
-                            "strict": tool.get("strict"),
+                            "description": tool.description,
+                            "parameters": tool.parameters,
+                            "strict": tool.strict,
                         },
                     }
                 )
                 continue
             if tool_type == "custom":
-                tool_format = tool.get("format")
-                syntax = (
-                    tool_format.get("syntax") if isinstance(tool_format, dict) else None
-                )
-                definition = (
-                    tool_format.get("definition")
-                    if isinstance(tool_format, dict)
-                    else None
-                )
-                description = cast(Optional[str], tool.get("description")) or ""
+                tool_format = tool.format
+                syntax = tool_format.syntax if tool_format is not None else None
+                definition = tool_format.definition if tool_format is not None else None
+                description = tool.description or ""
                 text_tool_guidance = (
                     "This is a text tool. When calling it, the "
                     "`function.arguments` field itself must be the raw input string. "
@@ -5722,7 +5954,7 @@ class OpenAIFormatter:
                                 "required": ["input"],
                                 "additionalProperties": False,
                             },
-                            "strict": tool.get("strict"),
+                            "strict": tool.strict,
                             "content_type": "text",
                         },
                     }
@@ -5735,15 +5967,15 @@ class OpenAIFormatter:
 
     @staticmethod
     def _responses_tool_choice_to_chat_tool_choice(
-        tool_choice: Optional[Union[str, Dict[str, Any]]],
+        tool_choice: Optional[ResponsesToolChoice],
     ) -> Optional[Union[str, Dict[str, Any]]]:
-        if not isinstance(tool_choice, dict):
+        if tool_choice is None or isinstance(tool_choice, str):
             return tool_choice
-        if tool_choice.get("type") in {"function", "custom"} and "name" in tool_choice:
+        if tool_choice.type in {"function", "custom"}:
             return {
                 "type": "function",
                 "function": {
-                    "name": tool_choice["name"],
+                    "name": tool_choice.name,
                 },
             }
         return tool_choice
@@ -5801,10 +6033,12 @@ class OpenAIFormatter:
             tool_choice=self._responses_tool_choice_to_chat_tool_choice(body.tool_choice),
             response_format=(
                 None
-                if body.text is None
-                else body.text.get("format")
-                if isinstance(body.text.get("format"), dict)
-                else None
+                if body.text is None or body.text.format is None
+                else body.text.format.model_dump(
+                    mode="python",
+                    exclude_none=True,
+                    by_alias=True,
+                )
             ),
             reasoning_effort=self._response_reasoning_effort(body),
         )
@@ -5848,18 +6082,31 @@ class OpenAIFormatter:
         body: CreateChatCompletionRequest,
     ) -> Tuple[Optional[str], Optional[str]]:
         tools = self._normalized_tools(functions=body.functions, tools=body.tools)
-        tool_choice: Optional[Union[str, Dict[str, Any]]] = body.tool_choice
+        tool_choice: Optional[Union[str, Dict[str, Any]]] = cast(
+            Optional[Union[str, Dict[str, Any]]],
+            self._modelish_to_python(body.tool_choice),
+        )
         if body.function_call is not None:
             if isinstance(body.function_call, str) and body.function_call in {"none", "auto"}:
                 tool_choice = body.function_call
-            elif isinstance(body.function_call, dict) and "name" in body.function_call:
-                tool_choice = {
-                    "type": "function",
-                    "function": {
-                        "name": body.function_call["name"],
-                    },
-                }
-        grammar_text = self._grammar_for_response_format(body.response_format)
+            else:
+                normalized_function_call = cast(
+                    Optional[Dict[str, Any]],
+                    self._modelish_to_python(body.function_call),
+                )
+                if isinstance(normalized_function_call, dict) and "name" in normalized_function_call:
+                    tool_choice = {
+                        "type": "function",
+                        "function": {
+                            "name": normalized_function_call["name"],
+                        },
+                    }
+        grammar_text = self._grammar_for_response_format(
+            cast(
+                Optional[Dict[str, Any]],
+                self._modelish_to_python(body.response_format),
+            )
+        )
         if not isinstance(tool_choice, dict):
             return None, grammar_text
         if tools is None:
@@ -5885,13 +6132,36 @@ class OpenAIFormatter:
         Optional[str],
         Optional[str],
     ]:
+        functions = (
+            [
+                cast(
+                    Dict[str, Any],
+                    self._modelish_to_python(function),
+                )
+                for function in body.functions
+            ]
+            if body.functions is not None
+            else None
+        )
+        normalized_tools = cast(
+            Optional[List[Dict[str, Any]]],
+            self._normalized_tools(tools=body.tools),
+        )
+        normalized_function_call = cast(
+            Optional[Union[str, Dict[str, Any]]],
+            self._modelish_to_python(body.function_call),
+        )
+        normalized_tool_choice = cast(
+            Optional[Union[str, Dict[str, Any]]],
+            self._modelish_to_python(body.tool_choice),
+        )
         try:
             prompt_text, generation_prompt, prompt_tokens, formatter_stop = self.model.build_chat_prompt(
                 body.messages,
-                functions=body.functions,
-                function_call=body.function_call,
-                tools=body.tools,
-                tool_choice=body.tool_choice,
+                functions=functions,
+                function_call=normalized_function_call,
+                tools=normalized_tools,
+                tool_choice=normalized_tool_choice,
                 reasoning_effort=body.reasoning_effort,
             )
             tool_name, grammar_text = self._chat_tool_name_and_grammar(body)
@@ -6130,12 +6400,14 @@ class OpenAIFormatter:
 
     @staticmethod
     def _responses_tool_type_by_name(
-        tools: Optional[List[Dict[str, Any]]],
+        tools: Optional[List[Any]],
     ) -> Dict[str, str]:
         if tools is None:
             return {}
         tool_types: Dict[str, str] = {}
         for tool in tools:
+            if isinstance(tool, BaseModel):
+                tool = tool.model_dump(mode="python", exclude_none=True)
             if not isinstance(tool, dict):
                 continue
             tool_type = tool.get("original_type") or tool.get("type")
@@ -6291,13 +6563,30 @@ class OpenAIFormatter:
             },
             "store": False,
             "temperature": body.temperature,
-            "tool_choice": body.tool_choice or "auto",
-            "tools": body.tools or [],
+            "tool_choice": (
+                body.tool_choice.model_dump(mode="python", exclude_none=True)
+                if isinstance(body.tool_choice, BaseModel)
+                else body.tool_choice or "auto"
+            ),
+            "tools": (
+                [
+                    tool.model_dump(mode="python", exclude_none=True)
+                    if isinstance(tool, BaseModel)
+                    else tool
+                    for tool in body.tools
+                ]
+                if body.tools
+                else []
+            ),
             "top_p": body.top_p,
             "max_output_tokens": body.max_output_tokens,
             "previous_response_id": None,
             "status": status,
-            "text": body.text or {"format": {"type": "text"}},
+            "text": (
+                body.text.model_dump(mode="python", exclude_none=True, by_alias=True)
+                if body.text is not None
+                else {"format": {"type": "text"}}
+            ),
             "top_logprobs": body.top_logprobs,
             "truncation": body.truncation,
             "usage": usage,
@@ -6323,7 +6612,7 @@ class OpenAIFormatter:
             response_id=response_id,
             message=message,
             logprobs=logprobs,
-            tools=cast(Optional[List[Dict[str, Any]]], body.tools),
+            tools=cast(Optional[List[Any]], body.tools),
         )
         return self._response_object(
             body=body,
@@ -8407,6 +8696,7 @@ class CheckpointMemoryPolicy(MemoryPolicy):
             del self.scheduler.free_sequences[base_seq_id]
             self.scheduler.claimed_sequences.add(base_seq_id)
             request.prompt_logits = self.scheduler.checkpoint_logits.get(base_seq_id)
+            self.scheduler.metrics.checkpoint_hits_total += 1
         else:
             base_seq_id = self.scheduler.unused_sequences.pop()
             self.scheduler.claimed_sequences.add(base_seq_id)
@@ -8479,6 +8769,7 @@ class CompletionScheduler:
         self.formatter = OpenAIFormatter(model)
         self.radix_trie = RadixTrie()
         self.sequence_history = SequenceHistory()
+        self.metrics = SchedulerMetrics()
         self.checkpoint_logits: Dict[int, np.ndarray] = {}
         self.claimed_sequences: set[int] = set()
         self.free_sequences: "OrderedDict[int, None]" = OrderedDict()
@@ -8512,6 +8803,7 @@ class CompletionScheduler:
             raise RuntimeError("scheduler closed")
         self.requests[request.id] = request
         self.pending_requests.append(request)
+        self.metrics.requests_submitted_total += 1
         return request.id
 
     def cancel(self, request_id: str) -> None:
@@ -8544,6 +8836,7 @@ class CompletionScheduler:
                 tokens=item.tokens,
                 output_indices=item.output_indices,
             )
+        decode_started_at = time.perf_counter()
         try:
             self.model.decode()
         except BaseException as exc:  # noqa: BLE001
@@ -8553,6 +8846,10 @@ class CompletionScheduler:
                 self.pending_requests.remove(request)
                 self.fail_request(request, exc)
             return True
+        self.metrics.observe_decode(
+            batch_items,
+            time.perf_counter() - decode_started_at,
+        )
         self.process_batch(batch_items)
         self.finalize_cancelled()
         return True
@@ -8574,6 +8871,8 @@ class CompletionScheduler:
 
     def admit_request(self, request: CompletionRequest) -> None:
         self.memory_policy.admit_request(request)
+        if request.admitted:
+            self.metrics.requests_admitted_total += 1
 
     def build_batch(self) -> List[CompletionScheduler.BatchItem]:
         prompt_requests = [
@@ -8987,6 +9286,7 @@ class CompletionScheduler:
         self.free_sequences[checkpoint_seq_id] = None
         self.free_sequences.move_to_end(checkpoint_seq_id)
         request.prompt_checkpoint_saved = True
+        self.metrics.checkpoint_saves_total += 1
 
     @staticmethod
     def output_arg(output_index: Optional[int], output_count: int) -> Optional[int]:
@@ -9163,6 +9463,7 @@ class CompletionScheduler:
             completion.score_sum += record.token_logprob
         rendered_start = len(completion.rendered_bytes)
         completion.completion_tokens.append(token)
+        self.metrics.observe_predicted_token()
         completion.token_records.append(record)
         completion.rendered_bytes.extend(record.text_bytes)
         completion.detokenized_prefix_bytes.extend(record.text_bytes)
@@ -9229,6 +9530,7 @@ class CompletionScheduler:
             return
         selected = request.selected_completions()
         result = self.formatter.build_completion_response(request, selected)
+        self.metrics.requests_completed_total += 1
         self.release_request(request)
         if request.on_done is not None:
             request.on_done(result)
@@ -9255,6 +9557,7 @@ class CompletionScheduler:
         del self.free_sequences[seq_id]
         self.checkpoint_logits.pop(seq_id, None)
         self.unused_sequences.append(seq_id)
+        self.metrics.checkpoint_evictions_total += 1
 
     def release_request(self, request: CompletionRequest) -> None:
         for completion in request.completions:
@@ -9272,8 +9575,212 @@ class CompletionScheduler:
             self.release_request(request)
         else:
             self.requests.pop(request.id, None)
+        if isinstance(exc, CompletionRequestCancelledError):
+            self.metrics.requests_cancelled_total += 1
+        else:
+            self.metrics.requests_failed_total += 1
         if request.on_error is not None:
             request.on_error(exc)
+
+    @staticmethod
+    def _format_prometheus_value(value: Union[int, float]) -> str:
+        if isinstance(value, int):
+            return str(value)
+        if not math.isfinite(value):
+            raise ValueError(f"invalid Prometheus metric value: {value}")
+        return format(value, ".16g")
+
+    def render_prometheus_metrics(self) -> str:
+        active_completions = sum(
+            1
+            for request_id in self.active_request_ids
+            for completion in self.requests[request_id].completions
+            if not completion.finished
+        )
+        checkpoint_entries = sum(
+            1 for seq_id in self.free_sequences if seq_id in self.checkpoint_logits
+        )
+        prompt_tokens_seconds = (
+            self.metrics.prompt_tokens_total / self.metrics.prompt_seconds_total
+            if self.metrics.prompt_seconds_total > 0
+            else 0.0
+        )
+        predicted_tokens_seconds = (
+            self.metrics.tokens_predicted_total
+            / self.metrics.tokens_predicted_seconds_total
+            if self.metrics.tokens_predicted_seconds_total > 0
+            else 0.0
+        )
+        n_busy_slots_per_decode = (
+            self.metrics.n_busy_slots_total / self.metrics.n_decode_total
+            if self.metrics.n_decode_total > 0
+            else 0.0
+        )
+        metrics_def: List[Tuple[str, str, str, Union[int, float]]] = [
+            (
+                "counter",
+                "llamacpp:prompt_tokens_total",
+                "Number of prompt tokens processed.",
+                self.metrics.prompt_tokens_total,
+            ),
+            (
+                "counter",
+                "llamacpp:prompt_seconds_total",
+                "Estimated prompt processing time in seconds.",
+                self.metrics.prompt_seconds_total,
+            ),
+            (
+                "counter",
+                "llamacpp:tokens_predicted_total",
+                "Number of generated tokens processed.",
+                self.metrics.tokens_predicted_total,
+            ),
+            (
+                "counter",
+                "llamacpp:tokens_predicted_seconds_total",
+                "Estimated generation processing time in seconds.",
+                self.metrics.tokens_predicted_seconds_total,
+            ),
+            (
+                "counter",
+                "llamacpp:n_decode_total",
+                "Total number of llama_decode() calls.",
+                self.metrics.n_decode_total,
+            ),
+            (
+                "counter",
+                "llamacpp:n_tokens_max",
+                "Largest observed n_tokens.",
+                self.metrics.n_tokens_max,
+            ),
+            (
+                "gauge",
+                "llamacpp:n_busy_slots_per_decode",
+                "Average number of busy sequences per llama_decode() call.",
+                n_busy_slots_per_decode,
+            ),
+            (
+                "gauge",
+                "llamacpp:prompt_tokens_seconds",
+                "Average prompt throughput in tokens/s.",
+                prompt_tokens_seconds,
+            ),
+            (
+                "gauge",
+                "llamacpp:predicted_tokens_seconds",
+                "Average generation throughput in tokens/s.",
+                predicted_tokens_seconds,
+            ),
+            (
+                "gauge",
+                "llamacpp:requests_processing",
+                "Number of requests processing.",
+                len(self.active_request_ids),
+            ),
+            (
+                "gauge",
+                "llamacpp:requests_deferred",
+                "Number of requests deferred.",
+                len(self.pending_requests),
+            ),
+            (
+                "counter",
+                "batch_server:requests_submitted_total",
+                "Number of requests submitted.",
+                self.metrics.requests_submitted_total,
+            ),
+            (
+                "counter",
+                "batch_server:requests_admitted_total",
+                "Number of requests admitted.",
+                self.metrics.requests_admitted_total,
+            ),
+            (
+                "counter",
+                "batch_server:requests_completed_total",
+                "Number of requests completed successfully.",
+                self.metrics.requests_completed_total,
+            ),
+            (
+                "counter",
+                "batch_server:requests_cancelled_total",
+                "Number of requests cancelled.",
+                self.metrics.requests_cancelled_total,
+            ),
+            (
+                "counter",
+                "batch_server:requests_failed_total",
+                "Number of requests failed.",
+                self.metrics.requests_failed_total,
+            ),
+            (
+                "gauge",
+                "batch_server:active_completions",
+                "Number of active unfinished completions.",
+                active_completions,
+            ),
+            (
+                "gauge",
+                "batch_server:claimed_sequences",
+                "Number of claimed sequence ids.",
+                len(self.claimed_sequences),
+            ),
+            (
+                "gauge",
+                "batch_server:free_sequences",
+                "Number of reusable free sequence ids.",
+                len(self.free_sequences),
+            ),
+            (
+                "gauge",
+                "batch_server:unused_sequences",
+                "Number of unused sequence ids.",
+                len(self.unused_sequences),
+            ),
+            (
+                "gauge",
+                "batch_server:checkpoint_entries",
+                "Number of free sequence checkpoints with stored logits.",
+                checkpoint_entries,
+            ),
+            (
+                "counter",
+                "batch_server:checkpoint_hits_total",
+                "Number of exact checkpoint hits.",
+                self.metrics.checkpoint_hits_total,
+            ),
+            (
+                "counter",
+                "batch_server:checkpoint_saves_total",
+                "Number of prompt checkpoints saved.",
+                self.metrics.checkpoint_saves_total,
+            ),
+            (
+                "counter",
+                "batch_server:checkpoint_evictions_total",
+                "Number of free checkpoints evicted.",
+                self.metrics.checkpoint_evictions_total,
+            ),
+            (
+                "gauge",
+                "batch_server:radix_trie_sequences",
+                "Number of sequences tracked in the radix trie.",
+                len(self.radix_trie.sequence_lengths),
+            ),
+            (
+                "gauge",
+                "batch_server:radix_trie_tokens",
+                "Total tokens tracked in the radix trie.",
+                self.sequence_history.size,
+            ),
+        ]
+        lines: List[str] = []
+        for metric_type, name, help_text, value in metrics_def:
+            lines.append(f"# HELP {name} {help_text}")
+            lines.append(f"# TYPE {name} {metric_type}")
+            lines.append(f"{name} {self._format_prometheus_value(value)}")
+        lines.append("")
+        return "\n".join(lines)
 
     def finalize_cancelled(self) -> bool:
         finalized = False
@@ -9317,6 +9824,29 @@ class CompletionService:
                 raise RuntimeError("completion service closed")
             self.commands.append(command)
             self.condition.notify_all()
+
+    def call_on_scheduler(self, callback: Callable[[], Any]) -> Any:
+        result_box: Dict[str, Any] = {}
+        error_box: Dict[str, BaseException] = {}
+        done = threading.Event()
+
+        def run_callback() -> None:
+            try:
+                result_box["result"] = callback()
+            except BaseException as exc:  # noqa: BLE001
+                error_box["error"] = exc
+            finally:
+                done.set()
+
+        self.enqueue(run_callback)
+        done.wait()
+        if "error" in error_box:
+            raise error_box["error"]
+        return result_box.get("result")
+
+    def render_prometheus_metrics(self) -> str:
+        metrics = self.call_on_scheduler(self.scheduler.render_prometheus_metrics)
+        return cast(str, metrics)
 
     def run_loop(self) -> None:
         while True:
@@ -9414,6 +9944,7 @@ class CompletionService:
 
 def create_app() -> FastAPI:
     app = FastAPI()
+    app.state.service = None
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -9698,6 +10229,21 @@ def create_app() -> FastAPI:
             )
         except CompletionRequestValidationError as exc:
             raise bad_request(exc) from exc
+        normalized_functions = (
+            [
+                cast(
+                    Dict[str, Any],
+                    formatter._modelish_to_python(function),
+                )
+                for function in body.functions
+            ]
+            if body.functions is not None
+            else None
+        )
+        normalized_tools = cast(
+            Optional[List[Dict[str, Any]]],
+            formatter._normalized_tools(tools=body.tools),
+        )
         try:
             request = CompletionRequest.from_prepared(
                 model=service.scheduler.model,
@@ -9720,8 +10266,8 @@ def create_app() -> FastAPI:
                     completion_chunk,
                     started_indices,
                     tool_name,
-                    functions=body.functions,
-                    tools=body.tools,
+                    functions=normalized_functions,
+                    tools=normalized_tools,
                     parsed_states=parsed_states,
                     generation_prompt=generation_prompt,
                 )
@@ -9745,8 +10291,8 @@ def create_app() -> FastAPI:
         chat_response = formatter.convert_completion_response_to_chat(
             completion,
             tool_name,
-            functions=body.functions,
-            tools=body.tools,
+            functions=normalized_functions,
+            tools=normalized_tools,
             generation_prompt=generation_prompt,
         )
         if isinstance(chat_response, BaseModel):
@@ -9768,6 +10314,10 @@ def create_app() -> FastAPI:
             )
         except CompletionRequestValidationError as exc:
             raise bad_request(exc) from exc
+        normalized_response_tools = cast(
+            Optional[List[Dict[str, Any]]],
+            formatter._normalized_tools(tools=chat_body.tools),
+        )
         try:
             request = CompletionRequest.from_prepared(
                 model=service.scheduler.model,
@@ -9797,7 +10347,7 @@ def create_app() -> FastAPI:
                     completion_chunk,
                     started_indices,
                     tool_name,
-                    tools=chat_body.tools,
+                    tools=normalized_response_tools,
                     parsed_states=parsed_states,
                     generation_prompt=generation_prompt,
                 )
@@ -9838,7 +10388,7 @@ def create_app() -> FastAPI:
                 completion,
                 body,
                 tool_name,
-                tools=chat_body.tools,
+                tools=normalized_response_tools,
                 generation_prompt=generation_prompt,
             )
         )
@@ -9915,6 +10465,10 @@ def create_app() -> FastAPI:
                         grammar_text,
                         tool_name,
                     ) = formatter.completion_request_from_chat_request(chat_body)
+                    normalized_response_tools = cast(
+                        Optional[List[Dict[str, Any]]],
+                        formatter._normalized_tools(tools=chat_body.tools),
+                    )
                     request = CompletionRequest.from_prepared(
                         model=service.scheduler.model,
                         payload=completion_payload,
@@ -9944,7 +10498,7 @@ def create_app() -> FastAPI:
                         completion_chunk,
                         started_indices,
                         tool_name,
-                        tools=chat_body.tools,
+                        tools=normalized_response_tools,
                         parsed_states=parsed_states,
                         generation_prompt=generation_prompt,
                     )
@@ -9990,27 +10544,36 @@ def create_app() -> FastAPI:
         except WebSocketDisconnect:
             pass
 
-    @app.get("/v1/models")
-    async def list_models() -> Dict[str, Any]:
+    @app.get("/v1/models", response_model=ModelListResponse)
+    async def list_models() -> ModelListResponse:
         service = app.state.service
         model = service.scheduler.model
         model_id = getattr(model, "model_alias", None) or model.model_path
         created = int(time.time())
-        return {
-            "object": "list",
-            "data": [
-                {
-                    "id": model_id,
-                    "object": "model",
-                    "created": created,
-                    "owned_by": "llama-cpp-python",
-                }
-            ],
-        }
+        return ModelListResponse(
+            data=[
+                ModelCardResponse(
+                    id=model_id,
+                    created=created,
+                    owned_by="llama-cpp-python",
+                )
+            ]
+        )
 
-    @app.get("/healthz")
-    async def healthz() -> Dict[str, str]:
-        return {"status": "ok"}
+    @app.get("/healthz", response_model=HealthzResponse)
+    async def healthz() -> HealthzResponse:
+        return HealthzResponse()
+
+    @app.get("/metrics")
+    async def metrics() -> Response:
+        service = cast(Optional[CompletionService], getattr(app.state, "service", None))
+        if service is None:
+            raise HTTPException(status_code=503, detail="completion service unavailable")
+        payload = await asyncio.to_thread(service.render_prometheus_metrics)
+        return Response(
+            payload,
+            media_type="text/plain; version=0.0.4; charset=utf-8",
+        )
 
     return app
 
