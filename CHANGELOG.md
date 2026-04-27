@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- feat: Update llama.cpp to ggerganov/llama.cpp@f53577432 and sync Python bindings
 - feat: Update llama.cpp to ggerganov/llama.cpp@3bd9aa1f9 and sync Python bindings
 
 ## [0.3.20]
