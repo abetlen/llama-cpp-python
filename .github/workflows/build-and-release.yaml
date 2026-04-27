@@ -82,7 +82,9 @@ jobs:
           # Keep native arm64 builds on a portable CPU baseline instead of
           # tuning wheels to the hosted runner.
           CIBW_ENVIRONMENT: CMAKE_ARGS="-DGGML_NATIVE=off"
-          CIBW_BUILD: "cp38-* cp39-* cp310-* cp311-* cp312-*"
+          # The release wheel is tagged py3-none, so one build covers all
+          # supported Python versions and avoids duplicate wheel names.
+          CIBW_BUILD: "cp38-*"
         with:
           output-dir: wheelhouse
 
