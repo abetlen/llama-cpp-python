@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@f53577432 and sync Python bindings
+- fix(ci): Build one arm64 release wheel for `py3-none` wheel publishing
 
 ## [0.3.20]
 
