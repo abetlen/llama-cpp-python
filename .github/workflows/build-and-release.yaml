@@ -51,10 +51,13 @@ jobs:
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: "LD_LIBRARY_PATH=/project/llama_cpp/lib auditwheel repair -w {dest_dir} {wheel}"
           # The release wheel is tagged py3-none, so one build per platform
           # covers all supported Python versions and avoids duplicate names.
-          CIBW_BUILD: "cp38-*"
+          CIBW_BUILD_LINUX: "cp38-*"
+          CIBW_BUILD_MACOS: "cp39-*"
+          CIBW_BUILD_WINDOWS: "cp39-*"
           # Skip cibuildwheel's default i686 sidecar and keep Linux release
           # wheels on a portable x86_64 CPU baseline.
           CIBW_ARCHS_LINUX: "auto64"
+          CIBW_ARCHS_WINDOWS: "AMD64"
           CIBW_ENVIRONMENT_LINUX: CMAKE_ARGS="-DGGML_NATIVE=off"
           # Keep macOS release wheels on a portable CPU baseline instead of
           # inheriting the hosted runner's native flags.
