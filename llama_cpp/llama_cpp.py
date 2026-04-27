@@ -1516,54 +1516,6 @@ def llama_free(ctx: llama_context_p, /):
     ...
 
 
-# enum llama_params_fit_status {
-#     LLAMA_PARAMS_FIT_STATUS_SUCCESS = 0,
-#     LLAMA_PARAMS_FIT_STATUS_FAILURE = 1,
-#     LLAMA_PARAMS_FIT_STATUS_ERROR   = 2,
-# };
-LLAMA_PARAMS_FIT_STATUS_SUCCESS = 0
-LLAMA_PARAMS_FIT_STATUS_FAILURE = 1
-LLAMA_PARAMS_FIT_STATUS_ERROR = 2
-
-
-# LLAMA_API enum llama_params_fit_status llama_params_fit(
-#                                const char   * path_model,
-#                 struct llama_model_params   * mparams,
-#                 struct llama_context_params * cparams,
-#                                       float * tensor_split,
-#     struct llama_model_tensor_buft_override * tensor_buft_overrides,
-#                                      size_t * margins,
-#                                    uint32_t   n_ctx_min,
-#                         enum ggml_log_level   log_level);
-@ctypes_function(
-    "llama_params_fit",
-    [
-        ctypes.c_char_p,
-        ctypes.POINTER(llama_model_params),
-        ctypes.POINTER(llama_context_params),
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_void_p,
-        ctypes.POINTER(ctypes.c_size_t),
-        ctypes.c_uint32,
-        ctypes.c_int,
-    ],
-    ctypes.c_int,
-)
-def llama_params_fit(
-    path_model: bytes,
-    mparams: CtypesPointerOrRef[llama_model_params],
-    cparams: CtypesPointerOrRef[llama_context_params],
-    tensor_split: Optional[CtypesPointer[ctypes.c_float]],
-    tensor_buft_overrides: ctypes.c_void_p,
-    margins: Optional[CtypesPointer[ctypes.c_size_t]],
-    n_ctx_min: int,
-    log_level: int,
-    /,
-) -> int:
-    """Fit model and context parameters for a model path."""
-    ...
-
-
 # LLAMA_API int64_t llama_time_us(void);
 @ctypes_function(
     "llama_time_us",
@@ -4867,13 +4819,6 @@ def llama_perf_sampler_print(chain: llama_sampler_p, /): ...
     None,
 )
 def llama_perf_sampler_reset(chain: llama_sampler_p, /): ...
-
-
-# // print a breakdown of per-device memory use via LLAMA_LOG:
-@ctypes_function("llama_memory_breakdown_print", [llama_context_p_ctypes], None)
-def llama_memory_breakdown_print(ctx: llama_context_p, /):
-    """Print a breakdown of per-device memory use."""
-    ...
 
 
 # //
