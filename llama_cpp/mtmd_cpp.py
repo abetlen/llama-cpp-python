@@ -8,9 +8,9 @@ from ctypes import (
     c_int,
     c_uint8,
     c_uint32,
+    c_size_t,
     c_float,
     c_void_p,
-    c_size_t,
     POINTER,
     _Pointer,  # type: ignore
     Structure,
@@ -123,6 +123,17 @@ class mtmd_input_text(Structure):
     ]
 
 
+class mtmd_decoder_pos(Structure):
+    """Decoder attention position for M-RoPE models."""
+
+    _fields_ = [
+        ("t", c_uint32),
+        ("x", c_uint32),
+        ("y", c_uint32),
+        ("z", c_uint32),
+    ]
+
+
 ################################################
 # mtmd.h functions
 ################################################
@@ -165,35 +176,41 @@ def mtmd_init_from_file(
 def mtmd_free(ctx: mtmd_context_p, /): ...
 
 
-# MTMD_API bool mtmd_decode_use_non_causal(mtmd_context * ctx);
-@ctypes_function("mtmd_decode_use_non_causal", [mtmd_context_p_ctypes], c_bool)
-def mtmd_decode_use_non_causal(ctx: mtmd_context_p, /) -> bool:
+# MTMD_API bool mtmd_decode_use_non_causal(const mtmd_context * ctx, const mtmd_input_chunk * chunk);
+@ctypes_function(
+    "mtmd_decode_use_non_causal",
+    [mtmd_context_p_ctypes, mtmd_input_chunk_p_ctypes],
+    c_bool,
+)
+def mtmd_decode_use_non_causal(
+    ctx: mtmd_context_p, chunk: Optional[mtmd_input_chunk_p], /
+) -> bool:
     """Check whether MTMD decoding uses non-causal attention."""
     ...
 
 
-# MTMD_API bool mtmd_decode_use_mrope(mtmd_context * ctx);
+# MTMD_API bool mtmd_decode_use_mrope(const mtmd_context * ctx);
 @ctypes_function("mtmd_decode_use_mrope", [mtmd_context_p_ctypes], c_bool)
 def mtmd_decode_use_mrope(ctx: mtmd_context_p, /) -> bool:
     """Check whether MTMD decoding uses mRoPE."""
     ...
 
 
-# MTMD_API bool mtmd_support_vision(mtmd_context * ctx);
+# MTMD_API bool mtmd_support_vision(const mtmd_context * ctx);
 @ctypes_function("mtmd_support_vision", [mtmd_context_p_ctypes], c_bool)
 def mtmd_support_vision(ctx: mtmd_context_p, /) -> bool:
     """Check whether the current model supports vision input."""
     ...
 
 
-# MTMD_API bool mtmd_support_audio(mtmd_context * ctx);
+# MTMD_API bool mtmd_support_audio(const mtmd_context * ctx);
 @ctypes_function("mtmd_support_audio", [mtmd_context_p_ctypes], c_bool)
 def mtmd_support_audio(ctx: mtmd_context_p, /) -> bool:
     """Check whether MTMD supports audio."""
     ...
 
 
-# MTMD_API int mtmd_get_audio_sample_rate(mtmd_context * ctx);
+# MTMD_API int mtmd_get_audio_sample_rate(const mtmd_context * ctx);
 @ctypes_function("mtmd_get_audio_sample_rate", [mtmd_context_p_ctypes], c_int)
 def mtmd_get_audio_sample_rate(ctx: mtmd_context_p, /) -> int:
     """Get the audio sample rate in Hz. Returns -1 if audio is not supported."""
@@ -418,14 +435,16 @@ def mtmd_image_tokens_get_n_tokens(image_tokens: mtmd_image_tokens_p, /) -> int:
     ...
 
 
-# MTMD_API size_t mtmd_image_tokens_get_nx(const mtmd_image_tokens * image_tokens);
+# DEPRECATED(MTMD_API size_t mtmd_image_tokens_get_nx(const mtmd_image_tokens * image_tokens),
+#            "use mtmd_image_tokens_get_decoder_pos() instead");
 @ctypes_function("mtmd_image_tokens_get_nx", [mtmd_image_tokens_p_ctypes], c_size_t)
 def mtmd_image_tokens_get_nx(image_tokens: mtmd_image_tokens_p, /) -> int:
     """Get the image token grid width."""
     ...
 
 
-# MTMD_API size_t mtmd_image_tokens_get_ny(const mtmd_image_tokens * image_tokens);
+# DEPRECATED(MTMD_API size_t mtmd_image_tokens_get_ny(const mtmd_image_tokens * image_tokens),
+#            "use mtmd_image_tokens_get_decoder_pos() instead");
 @ctypes_function("mtmd_image_tokens_get_ny", [mtmd_image_tokens_p_ctypes], c_size_t)
 def mtmd_image_tokens_get_ny(image_tokens: mtmd_image_tokens_p, /) -> int:
     """Get the image token grid height."""
@@ -447,6 +466,23 @@ def mtmd_image_tokens_get_id(image_tokens: mtmd_image_tokens_p, /) -> Optional[b
 )
 def mtmd_image_tokens_get_n_pos(image_tokens: mtmd_image_tokens_p, /) -> int:
     """Get the number of positions consumed by the image tokens."""
+    ...
+
+
+# MTMD_API struct mtmd_decoder_pos mtmd_image_tokens_get_decoder_pos(
+#     const mtmd_image_tokens * image_tokens, llama_pos pos_0, size_t i);
+@ctypes_function(
+    "mtmd_image_tokens_get_decoder_pos",
+    [mtmd_image_tokens_p_ctypes, llama_cpp.llama_pos, c_size_t],
+    mtmd_decoder_pos,
+)
+def mtmd_image_tokens_get_decoder_pos(
+    image_tokens: mtmd_image_tokens_p,
+    pos_0: llama_cpp.llama_pos,
+    i: Union[c_size_t, int],
+    /,
+) -> mtmd_decoder_pos:
+    """Get decoder attention position for an image embedding token."""
     ...
 
 
@@ -531,6 +567,23 @@ def mtmd_helper_get_n_tokens(chunks: mtmd_input_chunks_p, /) -> int: ...
 )
 def mtmd_helper_get_n_pos(chunks: mtmd_input_chunks_p, /) -> int:
     """Count the total positions consumed by the chunks."""
+    ...
+
+
+# MTMD_API void mtmd_helper_image_get_decoder_pos(
+#     const mtmd_image_tokens * image, llama_pos pos_0, struct mtmd_decoder_pos * out_pos);
+@ctypes_function(
+    "mtmd_helper_image_get_decoder_pos",
+    [mtmd_image_tokens_p_ctypes, llama_cpp.llama_pos, POINTER(mtmd_decoder_pos)],
+    None,
+)
+def mtmd_helper_image_get_decoder_pos(
+    image: mtmd_image_tokens_p,
+    pos_0: llama_cpp.llama_pos,
+    out_pos: "_Pointer[mtmd_decoder_pos]",
+    /,
+):
+    """Fill decoder attention positions for all image embedding tokens."""
     ...
 
 
