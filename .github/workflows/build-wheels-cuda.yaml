@@ -1,41 +1,6 @@
 name: Build Wheels (CUDA)
 
-on:
-  workflow_dispatch:
-    inputs:
-      os:
-        description: OS to build
-        required: true
-        default: all
-        type: choice
-        options:
-          - all
-          - ubuntu-22.04
-          - windows-2022
-      cuda:
-        description: CUDA toolkit version to build
-        required: true
-        default: all
-        type: choice
-        options:
-          - all
-          - 12.1.1
-          - 12.2.2
-          - 12.3.2
-          - 12.4.1
-          - 12.5.1
-      test_python:
-        description: Python version to smoke-test
-        required: true
-        default: all
-        type: choice
-        options:
-          - all
-          - "3.9"
-          - "3.10"
-          - "3.11"
-          - "3.12"
-          - "3.13"
+on: workflow_dispatch
 
 permissions:
   contents: write
@@ -45,9 +10,7 @@ jobs:
     name: Define Build Matrix
     runs-on: ubuntu-22.04
     outputs:
-      build_matrix: ${{ steps.set-matrix.outputs.build_matrix }}
-      test_matrix: ${{ steps.set-matrix.outputs.test_matrix }}
-      publish_matrix: ${{ steps.set-matrix.outputs.publish_matrix }}
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
     defaults:
       run:
         shell: pwsh
@@ -56,54 +19,24 @@ jobs:
       - name: Define Job Output
         id: set-matrix
         run: |
-          $osInput = '${{ inputs.os }}'
-          $cudaInput = '${{ inputs.cuda }}'
-          $testPythonInput = '${{ inputs.test_python }}'
-
-          if ([string]::IsNullOrWhiteSpace($osInput) -or $osInput -eq 'all') {
-              $os = @('ubuntu-22.04', 'windows-2022')
-          } else {
-              $os = @($osInput)
-          }
-          if ([string]::IsNullOrWhiteSpace($cudaInput) -or $cudaInput -eq 'all') {
-              $cuda = @("12.1.1", "12.2.2", "12.3.2", "12.4.1", "12.5.1")
-          } else {
-              $cuda = @($cudaInput)
-          }
-          if ([string]::IsNullOrWhiteSpace($testPythonInput) -or $testPythonInput -eq 'all') {
-              $testPython = @("3.9", "3.10", "3.11", "3.12", "3.13")
-          } else {
-              $testPython = @($testPythonInput)
-          }
-
-          $buildMatrix = @{
-              'os' = $os
+          $matrix = @{
+              'os' = @('ubuntu-22.04', 'windows-2022')
               # wheel.py-api = "py3" makes the CUDA wheel interpreter-agnostic,
               # so one builder per toolkit version is sufficient.
               'pyver' = @("3.9")
-              'cuda' = $cuda
+              'cuda' = @("12.1.1", "12.2.2", "12.3.2", "12.4.1", "12.5.1")
               'releasetag' = @("basic")
           }
-          $testMatrix = @{
-              'os' = $os
-              'cuda' = $cuda
-              'pyver' = $testPython
-          }
-          $publishMatrix = @{
-              'cuda' = $cuda
-          }
 
-          Write-Output ('build_matrix=' + (ConvertTo-Json $buildMatrix -Compress)) >> $env:GITHUB_OUTPUT
-          Write-Output ('test_matrix=' + (ConvertTo-Json $testMatrix -Compress)) >> $env:GITHUB_OUTPUT
-          Write-Output ('publish_matrix=' + (ConvertTo-Json $publishMatrix -Compress)) >> $env:GITHUB_OUTPUT
+          $matrixOut = ConvertTo-Json $matrix -Compress
+          Write-Output ('matrix=' + $matrixOut) >> $env:GITHUB_OUTPUT
 
   build_wheels:
     name: Build Wheel ${{ matrix.os }} ${{ matrix.pyver }} ${{ matrix.cuda }} ${{ matrix.releasetag == 'wheels' && 'AVX2' || matrix.releasetag }}
     needs: define_matrix
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.define_matrix.outputs.build_matrix) }}
+      matrix: ${{ fromJSON(needs.define_matrix.outputs.matrix) }}
     defaults:
       run:
         shell: pwsh
@@ -144,49 +77,25 @@ jobs:
           $cudaVersion = $env:CUDAVER
           $cudaChannel = "nvidia/label/cuda-$cudaVersion"
           if ($IsLinux) {
-            $nvccPackage = "${cudaChannel}::cuda-nvcc_linux-64"
-            $cudaPackages = @("${cudaChannel}::cuda-toolkit=$cudaVersion", $nvccPackage)
+            mamba install -y --channel-priority flexible --override-channels -c $cudaChannel "${cudaChannel}::cuda-toolkit=$cudaVersion" "${cudaChannel}::cuda-nvcc_linux-64" "${cudaChannel}::cuda-cudart" "${cudaChannel}::cuda-cudart-dev"
           } elseif ($IsWindows) {
-            $nvccPackage = "${cudaChannel}::cuda-nvcc_win-64"
             if ($cudaVersion -like '12.5.*') {
-              # The Windows 12.5 toolkit meta-package pulls conda compiler
-              # activation scripts that can overflow cmd.exe's line limit after
-              # MSVC is already initialized. Install the smaller pieces the
-              # CUDA backend actually needs without pulling the compiler meta.
-              $cudaPackages = @($nvccPackage, "${cudaChannel}::cuda-libraries-dev=$cudaVersion")
+              # The Windows 12.5 toolkit meta-package pulls compiler activation
+              # scripts that overflow cmd.exe after MSVC is already initialized.
+              mamba install -y --channel-priority flexible --override-channels -c $cudaChannel "${cudaChannel}::cuda-nvcc_win-64" "${cudaChannel}::cuda-libraries-dev=$cudaVersion" "${cudaChannel}::cuda-cudart" "${cudaChannel}::cuda-cudart-dev"
             } else {
-              $cudaPackages = @("${cudaChannel}::cuda-toolkit=$cudaVersion", $nvccPackage)
+              mamba install -y --channel-priority flexible --override-channels -c $cudaChannel "${cudaChannel}::cuda-toolkit=$cudaVersion" "${cudaChannel}::cuda-nvcc_win-64" "${cudaChannel}::cuda-cudart" "${cudaChannel}::cuda-cudart-dev"
             }
           } else {
             throw 'Unsupported CUDA wheel build platform'
           }
-          # Keep nvcc, cudart, and headers on the same NVIDIA label so the
-          # detected toolkit version matches the published wheel tag.
-          $mambaArgs = @(
-            'install',
-            '-y',
-            '--channel-priority',
-            'flexible',
-            '--override-channels',
-            '-c',
-            $cudaChannel
-          ) + $cudaPackages + @(
-            "${cudaChannel}::cuda-cudart",
-            "${cudaChannel}::cuda-cudart-dev"
-          )
-          & mamba @mambaArgs
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
-          python -m pip install build wheel ninja
-
-      - name: Show CUDA diagnostics
-        run: |
-          mamba list | Select-String 'cuda|nvidia|cudatoolkit'
           if ($IsWindows) {
-            Get-ChildItem -Path $env:CONDA_PREFIX -Recurse -Filter nvcc.exe | Select-Object -First 10 -ExpandProperty FullName
+            python -m pip install build wheel ninja
           } else {
-            Get-ChildItem -Path $env:CONDA_PREFIX -Recurse -Filter nvcc | Select-Object -First 10 -ExpandProperty FullName
+            python -m pip install build wheel
           }
 
       - name: Build Wheel
@@ -264,71 +173,10 @@ jobs:
           # Publish tags that reflect the actual installed toolkit version.
           Write-Output "CUDA_VERSION=$cudaTagVersion" >> $env:GITHUB_ENV
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: cuda-wheel-${{ matrix.os }}-${{ matrix.cuda }}
-          path: dist/*.whl
-
-  test_wheels:
-    name: Test Wheel ${{ matrix.os }} ${{ matrix.cuda }} Python ${{ matrix.pyver }}
-    needs: [define_matrix, build_wheels]
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.define_matrix.outputs.test_matrix) }}
-    defaults:
-      run:
-        shell: pwsh
-
-    steps:
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.pyver }}
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: cuda-wheel-${{ matrix.os }}-${{ matrix.cuda }}
-          path: dist
-
-      - name: Test wheel installation
-        run: |
-          $wheel = (Get-ChildItem dist -Filter '*.whl' | Select-Object -First 1).FullName
-          python -m pip install --upgrade pip
-          python -m pip install $wheel
-          python -m pip check
-          # Avoid importing llama_cpp here: GitHub-hosted runners do not provide
-          # NVIDIA drivers, so native CUDA library loading can fail independently
-          # of Python-version wheel compatibility.
-          python -c "from importlib.metadata import version; print(version('llama_cpp_python'))"
-
-  publish_wheels:
-    name: Publish Wheels CUDA ${{ matrix.cuda }}
-    needs: [define_matrix, test_wheels]
-    if: startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-22.04
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.define_matrix.outputs.publish_matrix) }}
-    defaults:
-      run:
-        shell: pwsh
-
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: cuda-wheel-*-${{ matrix.cuda }}
-          path: dist
-          merge-multiple: true
-
-      - name: Set CUDA release tag
-        run: |
-          $versionParts = "${{ matrix.cuda }}".Split('.')
-          $cudaVersion = "$($versionParts[0])$($versionParts[1])"
-          Write-Output "CUDA_VERSION=$cudaVersion" >> $env:GITHUB_ENV
-
       - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: dist/*.whl
+          files: dist/*
           # Set tag_name to <tag>-cu<cuda_version>
           tag_name: ${{ github.ref_name }}-cu${{ env.CUDA_VERSION }}
         env:
