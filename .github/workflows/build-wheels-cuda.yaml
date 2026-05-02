@@ -151,9 +151,9 @@ jobs:
             if ($cudaVersion -like '12.5.*') {
               # The Windows 12.5 toolkit meta-package pulls conda compiler
               # activation scripts that can overflow cmd.exe's line limit after
-              # MSVC is already initialized. The build only needs nvcc, cudart,
-              # and headers from the NVIDIA label.
-              $cudaPackages = @($nvccPackage)
+              # MSVC is already initialized. Install the smaller pieces the
+              # CUDA backend actually needs without pulling the compiler meta.
+              $cudaPackages = @($nvccPackage, "${cudaChannel}::cuda-libraries-dev=$cudaVersion")
             } else {
               $cudaPackages = @("${cudaChannel}::cuda-toolkit=$cudaVersion", $nvccPackage)
             }
