@@ -23,6 +23,7 @@ on:
           - 12.2.2
           - 12.3.2
           - 12.4.1
+          - 12.5.1
       test_python:
         description: Python version to smoke-test
         required: true
@@ -65,7 +66,7 @@ jobs:
               $os = @($osInput)
           }
           if ([string]::IsNullOrWhiteSpace($cudaInput) -or $cudaInput -eq 'all') {
-              $cuda = @("12.1.1", "12.2.2", "12.3.2", "12.4.1") #, "12.5.1", "12.6.1")
+              $cuda = @("12.1.1", "12.2.2", "12.3.2", "12.4.1", "12.5.1")
           } else {
               $cuda = @($cudaInput)
           }
@@ -143,9 +144,9 @@ jobs:
           $cudaVersion = $env:CUDAVER
           $cudaChannel = "nvidia/label/cuda-$cudaVersion"
           if ($IsLinux) {
-            $nvccPackage = "${cudaChannel}::cuda-nvcc_linux-64=$cudaVersion"
+            $nvccPackage = "${cudaChannel}::cuda-nvcc_linux-64"
           } elseif ($IsWindows) {
-            $nvccPackage = "${cudaChannel}::cuda-nvcc_win-64=$cudaVersion"
+            $nvccPackage = "${cudaChannel}::cuda-nvcc_win-64"
           } else {
             throw 'Unsupported CUDA wheel build platform'
           }
