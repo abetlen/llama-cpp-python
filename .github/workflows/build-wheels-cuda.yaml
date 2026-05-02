@@ -111,11 +111,11 @@ jobs:
       AVXVER: ${{ matrix.releasetag }}
 
     steps:
-      - name: Add MSBuild to PATH
+      - name: Set up MSVC
         if: runner.os == 'Windows'
-        uses: microsoft/setup-msbuild@v2
+        uses: ilammy/msvc-dev-cmd@v1
         with:
-          vs-version: '[17.0,18.0)'
+          arch: x64
 
       - uses: actions/checkout@v4
         with:
@@ -134,45 +134,6 @@ jobs:
           miniforge-version: latest
           add-pip-as-python-dependency: true
           auto-activate-base: false
-
-      - name: VS Integration Cache
-        id: vs-integration-cache
-        if: runner.os == 'Windows'
-        uses: actions/cache@v4
-        with:
-          path: ./MSBuildExtensions
-          key: cuda-${{ matrix.cuda }}-vs2022-integration
-
-      - name: Get Visual Studio Integration
-        if: runner.os == 'Windows' && steps.vs-integration-cache.outputs.cache-hit != 'true'
-        run: |
-          if ($env:CUDAVER -eq '12.1.1') {$x = '12.1.0'} else {$x = $env:CUDAVER}
-          $links = (Invoke-RestMethod 'https://raw.githubusercontent.com/Jimver/cuda-toolkit/master/src/links/windows-links.ts').Trim().split().where({$_ -ne ''})
-          for ($i=$q=0;$i -lt $links.count -and $q -lt 2;$i++) {if ($links[$i] -eq "'$x',") {$q++}}
-          Invoke-RestMethod $links[$i].Trim("'") -OutFile 'cudainstaller.zip'
-          & 'C:\Program Files\7-Zip\7z.exe' e cudainstaller.zip -oMSBuildExtensions -r *\MSBuildExtensions\* > $null
-          Remove-Item 'cudainstaller.zip'
-
-      - name: Install Visual Studio Integration
-        if: runner.os == 'Windows'
-        run: |
-          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          $vsInstallPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-          if (-not $vsInstallPath) {
-            throw 'Failed to find a Visual Studio installation with VC tools'
-          }
-
-          $source = (gi '.\MSBuildExtensions').FullName + '\*'
-          $vcMsbuildPath = Join-Path $vsInstallPath 'MSBuild\Microsoft\VC'
-          $buildCustomizationDirs = Get-ChildItem -Path $vcMsbuildPath -Directory -Filter BuildCustomizations -Recurse
-          if (-not $buildCustomizationDirs) {
-            throw "Failed to find Visual Studio BuildCustomizations under $vcMsbuildPath"
-          }
-          $buildCustomizationDirs.FullName.ForEach({ Copy-Item $source $_ -Force })
-
-          $cupath = 'CUDA_PATH_V' + $env:CUDAVER.Remove($env:CUDAVER.LastIndexOf('.')).Replace('.','_')
-          $cudaRoot = Join-Path $env:CONDA_PREFIX 'Library'
-          echo "$cupath=$cudaRoot" >> $env:GITHUB_ENV
 
       - name: Install Dependencies
         env:
@@ -194,7 +155,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
-          python -m pip install build wheel
+          python -m pip install build wheel ninja
 
       - name: Show CUDA diagnostics
         run: |
@@ -235,6 +196,9 @@ jobs:
             $env:LIBRARY_PATH = "$cudaRoot/lib$pathSeparator$env:CONDA_PREFIX/lib$pathSeparator$env:LIBRARY_PATH"
             $env:LD_LIBRARY_PATH = "$cudaRoot/lib$pathSeparator$env:CONDA_PREFIX/lib$pathSeparator$env:LD_LIBRARY_PATH"
           } elseif ($IsWindows) {
+            $ninjaPath = (Get-Command ninja -ErrorAction Stop).Source
+            $env:CMAKE_GENERATOR = 'Ninja'
+            $env:CMAKE_MAKE_PROGRAM = $ninjaPath
             $env:PATH = "$(Join-Path $cudaRoot 'bin')$pathSeparator$env:PATH"
           }
 
@@ -256,6 +220,9 @@ jobs:
           }
           $env:CUDACXX = $nvccPath
           $env:PATH = "$(Split-Path $nvccPath)$pathSeparator$env:PATH"
+          if ($IsWindows) {
+            $env:CMAKE_ARGS = "-DCMAKE_CUDA_COMPILER=$nvccPath -DCMAKE_MAKE_PROGRAM=$env:CMAKE_MAKE_PROGRAM $env:CMAKE_ARGS"
+          }
           $nvccVersion = ((& $nvccPath --version) | Select-String 'release ([0-9]+\.[0-9]+)').Matches[0].Groups[1].Value
           if (-not $nvccVersion) {
             throw 'Failed to detect the installed CUDA toolkit version'
