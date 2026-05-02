@@ -1,6 +1,40 @@
 name: Build Wheels (CUDA)
 
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+    inputs:
+      os:
+        description: OS to build
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - ubuntu-22.04
+          - windows-2022
+      cuda:
+        description: CUDA toolkit version to build
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - 12.1.1
+          - 12.2.2
+          - 12.3.2
+          - 12.4.1
+      test_python:
+        description: Python version to smoke-test
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - "3.9"
+          - "3.10"
+          - "3.11"
+          - "3.12"
+          - "3.13"
 
 permissions:
   contents: write
@@ -10,7 +44,9 @@ jobs:
     name: Define Build Matrix
     runs-on: ubuntu-22.04
     outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      build_matrix: ${{ steps.set-matrix.outputs.build_matrix }}
+      test_matrix: ${{ steps.set-matrix.outputs.test_matrix }}
+      publish_matrix: ${{ steps.set-matrix.outputs.publish_matrix }}
     defaults:
       run:
         shell: pwsh
@@ -19,22 +55,54 @@ jobs:
       - name: Define Job Output
         id: set-matrix
         run: |
-          $matrix = @{
-              'os' = @('ubuntu-22.04') #, 'windows-2022')
-              'pyver' = @("3.9", "3.10", "3.11", "3.12")
-              'cuda' = @("12.1.1", "12.2.2", "12.3.2", "12.4.1") #, "12.5.1", "12.6.1")
-              'releasetag' = @("basic")
+          $osInput = '${{ inputs.os }}'
+          $cudaInput = '${{ inputs.cuda }}'
+          $testPythonInput = '${{ inputs.test_python }}'
+
+          if ([string]::IsNullOrWhiteSpace($osInput) -or $osInput -eq 'all') {
+              $os = @('ubuntu-22.04', 'windows-2022')
+          } else {
+              $os = @($osInput)
+          }
+          if ([string]::IsNullOrWhiteSpace($cudaInput) -or $cudaInput -eq 'all') {
+              $cuda = @("12.1.1", "12.2.2", "12.3.2", "12.4.1") #, "12.5.1", "12.6.1")
+          } else {
+              $cuda = @($cudaInput)
+          }
+          if ([string]::IsNullOrWhiteSpace($testPythonInput) -or $testPythonInput -eq 'all') {
+              $testPython = @("3.9", "3.10", "3.11", "3.12", "3.13")
+          } else {
+              $testPython = @($testPythonInput)
           }
 
-          $matrixOut = ConvertTo-Json $matrix -Compress
-          Write-Output ('matrix=' + $matrixOut) >> $env:GITHUB_OUTPUT
+          $buildMatrix = @{
+              'os' = $os
+              # wheel.py-api = "py3" makes the CUDA wheel interpreter-agnostic,
+              # so one builder per toolkit version is sufficient.
+              'pyver' = @("3.9")
+              'cuda' = $cuda
+              'releasetag' = @("basic")
+          }
+          $testMatrix = @{
+              'os' = $os
+              'cuda' = $cuda
+              'pyver' = $testPython
+          }
+          $publishMatrix = @{
+              'cuda' = $cuda
+          }
+
+          Write-Output ('build_matrix=' + (ConvertTo-Json $buildMatrix -Compress)) >> $env:GITHUB_OUTPUT
+          Write-Output ('test_matrix=' + (ConvertTo-Json $testMatrix -Compress)) >> $env:GITHUB_OUTPUT
+          Write-Output ('publish_matrix=' + (ConvertTo-Json $publishMatrix -Compress)) >> $env:GITHUB_OUTPUT
 
   build_wheels:
     name: Build Wheel ${{ matrix.os }} ${{ matrix.pyver }} ${{ matrix.cuda }} ${{ matrix.releasetag == 'wheels' && 'AVX2' || matrix.releasetag }}
     needs: define_matrix
     runs-on: ${{ matrix.os }}
     strategy:
-      matrix: ${{ fromJSON(needs.define_matrix.outputs.matrix) }}
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.define_matrix.outputs.build_matrix) }}
     defaults:
       run:
         shell: pwsh
@@ -47,7 +115,7 @@ jobs:
         if: runner.os == 'Windows'
         uses: microsoft/setup-msbuild@v2
         with:
-          vs-version: '[16.11,16.12)'
+          vs-version: '[17.0,18.0)'
 
       - uses: actions/checkout@v4
         with:
@@ -73,7 +141,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ./MSBuildExtensions
-          key: cuda-${{ matrix.cuda }}-vs-integration
+          key: cuda-${{ matrix.cuda }}-vs2022-integration
 
       - name: Get Visual Studio Integration
         if: runner.os == 'Windows' && steps.vs-integration-cache.outputs.cache-hit != 'true'
@@ -88,10 +156,23 @@ jobs:
       - name: Install Visual Studio Integration
         if: runner.os == 'Windows'
         run: |
-          $y = (gi '.\MSBuildExtensions').fullname + '\*'
-          (gi 'C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\MSBuild\Microsoft\VC\*\BuildCustomizations').fullname.foreach({cp $y $_})
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsInstallPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vsInstallPath) {
+            throw 'Failed to find a Visual Studio installation with VC tools'
+          }
+
+          $source = (gi '.\MSBuildExtensions').FullName + '\*'
+          $vcMsbuildPath = Join-Path $vsInstallPath 'MSBuild\Microsoft\VC'
+          $buildCustomizationDirs = Get-ChildItem -Path $vcMsbuildPath -Directory -Filter BuildCustomizations -Recurse
+          if (-not $buildCustomizationDirs) {
+            throw "Failed to find Visual Studio BuildCustomizations under $vcMsbuildPath"
+          }
+          $buildCustomizationDirs.FullName.ForEach({ Copy-Item $source $_ -Force })
+
           $cupath = 'CUDA_PATH_V' + $env:CUDAVER.Remove($env:CUDAVER.LastIndexOf('.')).Replace('.','_')
-          echo "$cupath=$env:CONDA_PREFIX" >> $env:GITHUB_ENV
+          $cudaRoot = Join-Path $env:CONDA_PREFIX 'Library'
+          echo "$cupath=$cudaRoot" >> $env:GITHUB_ENV
 
       - name: Install Dependencies
         env:
@@ -101,24 +182,46 @@ jobs:
           $cudaVersion = $env:CUDAVER
           $cudaChannel = "nvidia/label/cuda-$cudaVersion"
           if ($IsLinux) {
-            # Keep nvcc, cudart, and headers on the same NVIDIA label so the
-            # detected toolkit version matches the published wheel tag.
-            mamba install -y --channel-priority flexible --override-channels -c $cudaChannel "$cudaChannel::cuda-toolkit=$cudaVersion" "$cudaChannel::cuda-nvcc_linux-64=$cudaVersion" "$cudaChannel::cuda-cudart" "$cudaChannel::cuda-cudart-dev"
+            $nvccPackage = "${cudaChannel}::cuda-nvcc_linux-64=$cudaVersion"
+          } elseif ($IsWindows) {
+            $nvccPackage = "${cudaChannel}::cuda-nvcc_win-64=$cudaVersion"
           } else {
-            mamba install -y --channel-priority flexible --override-channels -c $cudaChannel "$cudaChannel::cuda-toolkit=$cudaVersion"
+            throw 'Unsupported CUDA wheel build platform'
           }
+          # Keep nvcc, cudart, and headers on the same NVIDIA label so the
+          # detected toolkit version matches the published wheel tag.
+          mamba install -y --channel-priority flexible --override-channels -c $cudaChannel "${cudaChannel}::cuda-toolkit=$cudaVersion" $nvccPackage "${cudaChannel}::cuda-cudart" "${cudaChannel}::cuda-cudart-dev"
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
           python -m pip install build wheel
 
+      - name: Show CUDA diagnostics
+        run: |
+          mamba list | Select-String 'cuda|nvidia|cudatoolkit'
+          if ($IsWindows) {
+            Get-ChildItem -Path $env:CONDA_PREFIX -Recurse -Filter nvcc.exe | Select-Object -First 10 -ExpandProperty FullName
+          } else {
+            Get-ChildItem -Path $env:CONDA_PREFIX -Recurse -Filter nvcc | Select-Object -First 10 -ExpandProperty FullName
+          }
+
       - name: Build Wheel
         run: |
-          $env:CUDA_PATH = $env:CONDA_PREFIX
-          $env:CUDA_HOME = $env:CONDA_PREFIX
-          $env:CUDA_TOOLKIT_ROOT_DIR = $env:CONDA_PREFIX
+          $pathSeparator = if ($IsWindows) { ';' } else { ':' }
+          if ($IsWindows) {
+            $cudaRoot = Join-Path $env:CONDA_PREFIX 'Library'
+          } elseif (Test-Path (Join-Path $env:CONDA_PREFIX 'targets/x86_64-linux/include/cuda_runtime.h')) {
+            $cudaRoot = Join-Path $env:CONDA_PREFIX 'targets/x86_64-linux'
+          } else {
+            $cudaRoot = $env:CONDA_PREFIX
+          }
+
+          $env:CUDA_PATH = $cudaRoot
+          $env:CUDA_HOME = $cudaRoot
+          $env:CUDAToolkit_ROOT = $cudaRoot
+          $env:CUDA_TOOLKIT_ROOT_DIR = $cudaRoot
           $cudaHostCompilerArg = ''
-          $env:CMAKE_ARGS = ''
+          $env:CMAKE_ARGS = "-DCUDAToolkit_ROOT=$cudaRoot -DCUDA_TOOLKIT_ROOT_DIR=$cudaRoot"
           if ($IsLinux) {
             if (Test-Path '/usr/bin/g++-12') {
               $env:CC = '/usr/bin/gcc-12'
@@ -126,27 +229,33 @@ jobs:
               $env:CUDAHOSTCXX = '/usr/bin/g++-12'
               $cudaHostCompilerArg = " -DCMAKE_CUDA_HOST_COMPILER=$env:CUDAHOSTCXX"
             }
-            if (Test-Path (Join-Path $env:CONDA_PREFIX 'include/cuda_runtime.h')) {
-              $env:CUDAToolkit_ROOT = $env:CONDA_PREFIX
-              $env:CUDA_TOOLKIT_ROOT_DIR = $env:CONDA_PREFIX
-              $env:CMAKE_ARGS = "-DCUDAToolkit_ROOT=$env:CONDA_PREFIX -DCUDA_TOOLKIT_ROOT_DIR=$env:CONDA_PREFIX$cudaHostCompilerArg"
-              $env:CPATH = "$env:CONDA_PREFIX/include:$env:CPATH"
-              $env:CPLUS_INCLUDE_PATH = "$env:CONDA_PREFIX/include:$env:CPLUS_INCLUDE_PATH"
-              $env:LIBRARY_PATH = "$env:CONDA_PREFIX/lib:$env:LIBRARY_PATH"
-              $env:LD_LIBRARY_PATH = "$env:CONDA_PREFIX/lib:$env:LD_LIBRARY_PATH"
-            } else {
-              $env:CMAKE_ARGS = $cudaHostCompilerArg.Trim()
-            }
+            $env:CMAKE_ARGS = "-DCUDAToolkit_ROOT=$cudaRoot -DCUDA_TOOLKIT_ROOT_DIR=$cudaRoot$cudaHostCompilerArg"
+            $env:CPATH = "$cudaRoot/include$pathSeparator$env:CPATH"
+            $env:CPLUS_INCLUDE_PATH = "$cudaRoot/include$pathSeparator$env:CPLUS_INCLUDE_PATH"
+            $env:LIBRARY_PATH = "$cudaRoot/lib$pathSeparator$env:CONDA_PREFIX/lib$pathSeparator$env:LIBRARY_PATH"
+            $env:LD_LIBRARY_PATH = "$cudaRoot/lib$pathSeparator$env:CONDA_PREFIX/lib$pathSeparator$env:LD_LIBRARY_PATH"
+          } elseif ($IsWindows) {
+            $env:PATH = "$(Join-Path $cudaRoot 'bin')$pathSeparator$env:PATH"
           }
-          $nvccPath = Join-Path $env:CONDA_PREFIX 'bin/nvcc'
-          if (-not (Test-Path $nvccPath)) {
-            $nvccPath = Join-Path $env:CONDA_PREFIX 'targets/x86_64-linux/bin/nvcc'
+
+          if ($IsWindows) {
+            $nvccCandidates = @(
+              (Join-Path $cudaRoot 'bin\nvcc.exe'),
+              (Join-Path $env:CONDA_PREFIX 'Library\bin\nvcc.exe'),
+              (Join-Path $env:CONDA_PREFIX 'bin\nvcc.exe')
+            )
+          } else {
+            $nvccCandidates = @(
+              (Join-Path $env:CONDA_PREFIX 'bin/nvcc'),
+              (Join-Path $env:CONDA_PREFIX 'targets/x86_64-linux/bin/nvcc')
+            )
           }
-          if (-not (Test-Path $nvccPath)) {
+          $nvccPath = $nvccCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $nvccPath) {
             throw 'Failed to find nvcc in the conda environment'
           }
           $env:CUDACXX = $nvccPath
-          $env:PATH = "$(Split-Path $nvccPath):$env:PATH"
+          $env:PATH = "$(Split-Path $nvccPath)$pathSeparator$env:PATH"
           $nvccVersion = ((& $nvccPath --version) | Select-String 'release ([0-9]+\.[0-9]+)').Matches[0].Groups[1].Value
           if (-not $nvccVersion) {
             throw 'Failed to detect the installed CUDA toolkit version'
@@ -157,23 +266,76 @@ jobs:
           # one forward-compatible PTX target instead of embedding PTX for every
           # SM. This keeps the wheel under GitHub's 2 GiB release-asset limit.
           $env:CMAKE_ARGS = "-DGGML_CUDA_FORCE_MMQ=ON -DGGML_CUDA=on -DCMAKE_CUDA_ARCHITECTURES=70-real;75-real;80-real;86-real;89-real;90-real;90-virtual -DCMAKE_CUDA_FLAGS=--allow-unsupported-compiler $env:CMAKE_ARGS"
-          # if ($env:AVXVER -eq 'AVX') {
           $env:CMAKE_ARGS = $env:CMAKE_ARGS + ' -DGGML_AVX2=off -DGGML_FMA=off -DGGML_F16C=off'
-          # }
-          # if ($env:AVXVER -eq 'AVX512') {
-          #  $env:CMAKE_ARGS = $env:CMAKE_ARGS + ' -DGGML_AVX512=on'
-          # }
-          # if ($env:AVXVER -eq 'basic') {
-          #  $env:CMAKE_ARGS = $env:CMAKE_ARGS + ' -DGGML_AVX=off -DGGML_AVX2=off -DGGML_FMA=off -DGGML_F16C=off'
-          # }
           python -m build --wheel
           # Publish tags that reflect the actual installed toolkit version.
           Write-Output "CUDA_VERSION=$cudaTagVersion" >> $env:GITHUB_ENV
 
-      - uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
+      - uses: actions/upload-artifact@v4
         with:
-          files: dist/*
+          name: cuda-wheel-${{ matrix.os }}-${{ matrix.cuda }}
+          path: dist/*.whl
+
+  test_wheels:
+    name: Test Wheel ${{ matrix.os }} ${{ matrix.cuda }} Python ${{ matrix.pyver }}
+    needs: [define_matrix, build_wheels]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.define_matrix.outputs.test_matrix) }}
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.pyver }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: cuda-wheel-${{ matrix.os }}-${{ matrix.cuda }}
+          path: dist
+
+      - name: Test wheel installation
+        run: |
+          $wheel = (Get-ChildItem dist -Filter '*.whl' | Select-Object -First 1).FullName
+          python -m pip install --upgrade pip
+          python -m pip install $wheel
+          python -m pip check
+          # Avoid importing llama_cpp here: GitHub-hosted runners do not provide
+          # NVIDIA drivers, so native CUDA library loading can fail independently
+          # of Python-version wheel compatibility.
+          python -c "from importlib.metadata import version; print(version('llama_cpp_python'))"
+
+  publish_wheels:
+    name: Publish Wheels CUDA ${{ matrix.cuda }}
+    needs: [define_matrix, test_wheels]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.define_matrix.outputs.publish_matrix) }}
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: cuda-wheel-*-${{ matrix.cuda }}
+          path: dist
+          merge-multiple: true
+
+      - name: Set CUDA release tag
+        run: |
+          $versionParts = "${{ matrix.cuda }}".Split('.')
+          $cudaVersion = "$($versionParts[0])$($versionParts[1])"
+          Write-Output "CUDA_VERSION=$cudaVersion" >> $env:GITHUB_ENV
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.whl
           # Set tag_name to <tag>-cu<cuda_version>
           tag_name: ${{ github.ref_name }}-cu${{ env.CUDA_VERSION }}
         env:
