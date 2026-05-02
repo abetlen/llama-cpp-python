@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@63d93d173
+- feat(ci): Re-enable Windows CUDA wheels and add CUDA 12.5.1 wheel builds
 
 ## [0.3.21]
 
