@@ -182,7 +182,8 @@ jobs:
           $env:CUDAToolkit_ROOT = $cudaRoot
           $env:CUDA_TOOLKIT_ROOT_DIR = $cudaRoot
           $cudaHostCompilerArg = ''
-          $env:CMAKE_ARGS = "-DCUDAToolkit_ROOT=$cudaRoot -DCUDA_TOOLKIT_ROOT_DIR=$cudaRoot"
+          $cudaRootCmake = $cudaRoot.Replace('\', '/')
+          $env:CMAKE_ARGS = "-DCUDAToolkit_ROOT=$cudaRootCmake -DCUDA_TOOLKIT_ROOT_DIR=$cudaRootCmake"
           if ($IsLinux) {
             if (Test-Path '/usr/bin/g++-12') {
               $env:CC = '/usr/bin/gcc-12'
@@ -196,7 +197,7 @@ jobs:
             $env:LIBRARY_PATH = "$cudaRoot/lib$pathSeparator$env:CONDA_PREFIX/lib$pathSeparator$env:LIBRARY_PATH"
             $env:LD_LIBRARY_PATH = "$cudaRoot/lib$pathSeparator$env:CONDA_PREFIX/lib$pathSeparator$env:LD_LIBRARY_PATH"
           } elseif ($IsWindows) {
-            $ninjaPath = (Get-Command ninja -ErrorAction Stop).Source
+            $ninjaPath = ((Get-Command ninja -ErrorAction Stop).Source).Replace('\', '/')
             $env:CMAKE_GENERATOR = 'Ninja'
             $env:CMAKE_MAKE_PROGRAM = $ninjaPath
             $env:PATH = "$(Join-Path $cudaRoot 'bin')$pathSeparator$env:PATH"
@@ -221,7 +222,9 @@ jobs:
           $env:CUDACXX = $nvccPath
           $env:PATH = "$(Split-Path $nvccPath)$pathSeparator$env:PATH"
           if ($IsWindows) {
-            $env:CMAKE_ARGS = "-DCMAKE_CUDA_COMPILER=$nvccPath -DCMAKE_MAKE_PROGRAM=$env:CMAKE_MAKE_PROGRAM $env:CMAKE_ARGS"
+            $nvccPathCmake = $nvccPath.Replace('\', '/')
+            $env:CUDACXX = $nvccPathCmake
+            $env:CMAKE_ARGS = "-DCMAKE_CUDA_COMPILER=$nvccPathCmake -DCMAKE_MAKE_PROGRAM=$env:CMAKE_MAKE_PROGRAM $env:CMAKE_ARGS"
           }
           $nvccVersion = ((& $nvccPath --version) | Select-String 'release ([0-9]+\.[0-9]+)').Matches[0].Groups[1].Value
           if (-not $nvccVersion) {
