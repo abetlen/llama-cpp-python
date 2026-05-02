@@ -26,6 +26,11 @@ jobs:
               'pyver' = @("3.9")
               'cuda' = @("12.1.1", "12.2.2", "12.3.2", "12.4.1", "12.5.1")
               'releasetag' = @("basic")
+              'exclude' = @(
+                @{ 'os' = 'windows-2022'; 'cuda' = '12.1.1' },
+                @{ 'os' = 'windows-2022'; 'cuda' = '12.2.2' },
+                @{ 'os' = 'windows-2022'; 'cuda' = '12.3.2' }
+              )
           }
 
           $matrixOut = ConvertTo-Json $matrix -Compress
