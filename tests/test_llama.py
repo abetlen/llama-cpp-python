@@ -247,3 +247,18 @@ def test_real_llama_embeddings(llama_cpp_embedding_model_path):
     )
     embedding = model.embed("Hello World")
     assert len(embedding) > 0
+
+    prompts = ["Hello World", "A different prompt"]
+    individual_embeddings = [model.embed(prompt) for prompt in prompts]
+    batched_embeddings = model.embed(prompts)
+
+    assert len(batched_embeddings) == len(prompts)
+    for individual, batched in zip(individual_embeddings, batched_embeddings):
+        np.testing.assert_allclose(batched, individual, rtol=1e-4, atol=1e-4)
+
+    repeated_embeddings = model.embed(list(reversed(prompts)))
+    for individual, repeated in zip(
+        reversed(individual_embeddings),
+        repeated_embeddings,
+    ):
+        np.testing.assert_allclose(repeated, individual, rtol=1e-4, atol=1e-4)
