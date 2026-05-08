@@ -75,7 +75,6 @@ class Llama:
         n_ctx: int = 512,
         n_batch: int = 512,
         n_ubatch: int = 512,
-        n_seq_max: Optional[int] = None,
         n_threads: Optional[int] = None,
         n_threads_batch: Optional[int] = None,
         rope_scaling_type: Optional[
@@ -161,9 +160,6 @@ class Llama:
             n_ctx: Text context, 0 = from model
             n_batch: Prompt processing maximum batch size
             n_ubatch: Physical batch size
-            n_seq_max: Maximum number of sequences. If None, embedding contexts
-                use min(n_batch, llama_max_parallel_sequences()) and
-                non-embedding contexts use the llama.cpp default.
             n_threads: Number of threads to use for generation
             n_threads_batch: Number of threads to use for batch processing
             rope_scaling_type: RoPE scaling type, from `enum llama_rope_scaling_type`. ref: https://github.com/ggerganov/llama.cpp/pull/2054
@@ -401,16 +397,7 @@ class Llama:
             self.context_params.n_batch = self.n_batch
             self.context_params.n_ubatch = min(self.n_batch, n_ubatch)
 
-        if n_seq_max is not None:
-            n_seq_max_limit = llama_cpp.llama_max_parallel_sequences()
-            if n_seq_max <= 0:
-                raise ValueError("n_seq_max must be greater than 0")
-            if n_seq_max > n_seq_max_limit:
-                raise ValueError(
-                    f"n_seq_max must be less than or equal to {n_seq_max_limit}"
-                )
-            self.context_params.n_seq_max = n_seq_max
-        elif embedding:
+        if embedding:
             self.context_params.n_seq_max = min(
                 self.n_batch,
                 llama_cpp.llama_max_parallel_sequences(),
@@ -2119,7 +2106,6 @@ class Llama:
             n_ctx=self.context_params.n_ctx,
             n_batch=self.n_batch,
             n_ubatch=self.context_params.n_ubatch,
-            n_seq_max=self.context_params.n_seq_max,
             n_threads=self.context_params.n_threads,
             n_threads_batch=self.context_params.n_threads_batch,
             rope_scaling_type=self.context_params.rope_scaling_type,
