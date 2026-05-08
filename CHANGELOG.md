@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - fix: Correct batched embedding outputs for multi-sequence `embed()` calls by @Anai-Guo in #2205
+- fix: Configure embedding contexts with enough sequence slots for batched `embed()` calls
 
 ## [0.3.22]
 

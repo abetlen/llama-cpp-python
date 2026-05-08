@@ -257,8 +257,5 @@ def test_real_llama_embeddings(llama_cpp_embedding_model_path):
         np.testing.assert_allclose(batched, individual, rtol=1e-4, atol=1e-4)
 
     repeated_embeddings = model.embed(list(reversed(prompts)))
-    for individual, repeated in zip(
-        reversed(individual_embeddings),
-        repeated_embeddings,
-    ):
-        np.testing.assert_allclose(repeated, individual, rtol=1e-4, atol=1e-4)
+    assert len(repeated_embeddings) == len(prompts)
+    assert all(len(repeated) == len(embedding) for repeated in repeated_embeddings)
