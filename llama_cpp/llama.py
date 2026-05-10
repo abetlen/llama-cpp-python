@@ -397,6 +397,12 @@ class Llama:
             self.context_params.n_batch = self.n_batch
             self.context_params.n_ubatch = min(self.n_batch, n_ubatch)
 
+        if embedding:
+            self.context_params.n_seq_max = min(
+                self.n_batch,
+                llama_cpp.llama_max_parallel_sequences(),
+            )
+
         self._ctx = self._stack.enter_context(
             contextlib.closing(
                 internals.LlamaContext(
@@ -1030,6 +1036,7 @@ class Llama:
         """
         n_embd = self.n_embd()
         n_batch = self.n_batch
+        n_seq_max = self.context_params.n_seq_max
 
         # get pooling information
         pooling_type = self.pooling_type()
@@ -1104,7 +1111,7 @@ class Llama:
                 )
 
             # time to eval batch
-            if t_batch + n_tokens > n_batch:
+            if t_batch + n_tokens > n_batch or p_batch >= n_seq_max:
                 decode_batch(s_batch)
                 s_batch = []
                 t_batch = 0

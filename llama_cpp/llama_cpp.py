@@ -199,6 +199,8 @@ llama_token = ctypes.c_int32
 llama_token_p = ctypes.POINTER(llama_token)
 # typedef int32_t llama_seq_id;
 llama_seq_id = ctypes.c_int32
+# typedef uint32_t llama_state_seq_flags;
+llama_state_seq_flags = ctypes.c_uint32
 
 
 # enum llama_vocab_type {
@@ -2831,6 +2833,92 @@ def llama_state_seq_load_file(
     tokens_out: CtypesArray[llama_token],
     n_token_capacity: Union[ctypes.c_size_t, int],
     n_token_count_out: CtypesPointerOrRef[ctypes.c_size_t],
+    /,
+) -> int: ...
+
+
+# for backwards-compat
+# define LLAMA_STATE_SEQ_FLAGS_SWA_ONLY 1
+LLAMA_STATE_SEQ_FLAGS_SWA_ONLY = 1
+
+# work only with partial states, such as SWA KV cache or recurrent cache
+# (e.g. Mamba)
+# define LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY 1
+LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY = 1
+
+# keeps the tensor data on device buffers
+# (i.e. not accessible in host memory, but faster save/load)
+# define LLAMA_STATE_SEQ_FLAGS_ON_DEVICE 2
+LLAMA_STATE_SEQ_FLAGS_ON_DEVICE = 2
+
+
+# LLAMA_API size_t llama_state_seq_get_size_ext(
+#         struct llama_context * ctx,
+#                 llama_seq_id   seq_id,
+#        llama_state_seq_flags   flags);
+@ctypes_function(
+    "llama_state_seq_get_size_ext",
+    [llama_context_p_ctypes, llama_seq_id, llama_state_seq_flags],
+    ctypes.c_size_t,
+)
+def llama_state_seq_get_size_ext(
+    ctx: llama_context_p,
+    seq_id: llama_seq_id,
+    flags: llama_state_seq_flags,
+    /,
+) -> int: ...
+
+
+# LLAMA_API size_t llama_state_seq_get_data_ext(
+#         struct llama_context * ctx,
+#                      uint8_t * dst,
+#                       size_t   size,
+#                 llama_seq_id   seq_id,
+#        llama_state_seq_flags   flags);
+@ctypes_function(
+    "llama_state_seq_get_data_ext",
+    [
+        llama_context_p_ctypes,
+        ctypes.POINTER(ctypes.c_uint8),
+        ctypes.c_size_t,
+        llama_seq_id,
+        llama_state_seq_flags,
+    ],
+    ctypes.c_size_t,
+)
+def llama_state_seq_get_data_ext(
+    ctx: llama_context_p,
+    dst: CtypesArray[ctypes.c_uint8],
+    size: Union[ctypes.c_size_t, int],
+    seq_id: llama_seq_id,
+    flags: llama_state_seq_flags,
+    /,
+) -> int: ...
+
+
+# LLAMA_API size_t llama_state_seq_set_data_ext(
+#         struct llama_context * ctx,
+#                const uint8_t * src,
+#                       size_t   size,
+#                 llama_seq_id   dest_seq_id,
+#        llama_state_seq_flags   flags);
+@ctypes_function(
+    "llama_state_seq_set_data_ext",
+    [
+        llama_context_p_ctypes,
+        ctypes.POINTER(ctypes.c_uint8),
+        ctypes.c_size_t,
+        llama_seq_id,
+        llama_state_seq_flags,
+    ],
+    ctypes.c_size_t,
+)
+def llama_state_seq_set_data_ext(
+    ctx: llama_context_p,
+    src: CtypesArray[ctypes.c_uint8],
+    size: Union[ctypes.c_size_t, int],
+    dest_seq_id: llama_seq_id,
+    flags: llama_state_seq_flags,
     /,
 ) -> int: ...
 
