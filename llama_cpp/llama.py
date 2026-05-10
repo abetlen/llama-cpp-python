@@ -1040,7 +1040,13 @@ class Llama:
 
         # get pooling information
         pooling_type = self.pooling_type()
-        logits_all = pooling_type == llama_cpp.LLAMA_POOLING_TYPE_NONE
+        # In embedding mode every input token must be marked as an output, regardless of
+        # pooling type. llama.cpp would otherwise override per-token `logits[i]` and emit
+        # "embeddings required but some input tokens were not marked as outputs ->
+        # overriding" once per input. Pooling NONE vs MEAN/CLS only changes how the
+        # per-token outputs are read back (see decode_batch below), not whether they are
+        # produced. See abetlen/llama-cpp-python#2208.
+        logits_all = True
 
         if self.context_params.embeddings is False:
             raise RuntimeError(
