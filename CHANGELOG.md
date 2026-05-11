@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.23]
+
 - feat: Update llama.cpp to ggerganov/llama.cpp@7d442abf
 - fix: Correct batched embedding outputs for multi-sequence `embed()` calls by @Anai-Guo in #2205
 - fix: Configure embedding contexts with enough sequence slots for batched `embed()` calls
