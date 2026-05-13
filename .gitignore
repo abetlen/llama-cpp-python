@@ -179,5 +179,3 @@ cython_debug/
 
 # downloaded model .bin files
 docker/open_llama/*.bin
-test_model.gguf
-.claude/
