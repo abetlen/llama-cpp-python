@@ -402,7 +402,7 @@ class Llama:
                 self.n_batch,
                 llama_cpp.llama_max_parallel_sequences(),
             )
-
+            self.context_params.kv_unified = True
         self._ctx = self._stack.enter_context(
             contextlib.closing(
                 internals.LlamaContext(
