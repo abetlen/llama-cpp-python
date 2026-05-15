@@ -134,6 +134,10 @@ class mtmd_decoder_pos(Structure):
     ]
 
 
+# struct mtmd_caps {
+#     bool inp_vision;
+#     bool inp_audio;
+# };
 class mtmd_caps(Structure):
     """Capabilities exposed by an mmproj file."""
 
