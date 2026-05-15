@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- feat: Update llama.cpp to ggerganov/llama.cpp@91e84fed6 and sync Python bindings
 - fix: Enable unified KV cache for embedding contexts to preserve full per-sequence context in batch embedding calls by @SanjanaB123 in #2217
 
 ## [0.3.23]

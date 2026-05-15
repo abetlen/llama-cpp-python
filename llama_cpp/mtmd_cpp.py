@@ -134,6 +134,19 @@ class mtmd_decoder_pos(Structure):
     ]
 
 
+class mtmd_caps(Structure):
+    """Capabilities exposed by an mmproj file."""
+
+    if TYPE_CHECKING:
+        inp_vision: bool
+        inp_audio: bool
+
+    _fields_ = [
+        ("inp_vision", c_bool),
+        ("inp_audio", c_bool),
+    ]
+
+
 ################################################
 # mtmd.h functions
 ################################################
@@ -512,6 +525,13 @@ def mtmd_encode_chunk(ctx: mtmd_context_p, chunk: mtmd_input_chunk_p, /) -> int:
 @ctypes_function("mtmd_get_output_embd", [mtmd_context_p_ctypes], POINTER(c_float))
 def mtmd_get_output_embd(ctx: mtmd_context_p, /) -> Optional[CtypesArray[c_float]]:
     """Get output embeddings from the last encode pass."""
+    ...
+
+
+# MTMD_API struct mtmd_caps mtmd_get_cap_from_file(const char * mmproj_fname);
+@ctypes_function("mtmd_get_cap_from_file", [c_char_p], mtmd_caps)
+def mtmd_get_cap_from_file(mmproj_fname: bytes, /) -> mtmd_caps:
+    """Get mmproj capabilities without initializing a full MTMD context."""
     ...
 
 
