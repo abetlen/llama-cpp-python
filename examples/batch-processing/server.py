@@ -8,6 +8,7 @@
 #   "numpy",
 #   "openai",
 #   "pydantic",
+#   "safetensors",
 #   "uvicorn",
 #   "websockets",
 # ]
@@ -82,6 +83,7 @@ from typing import (
     Deque,
     Literal,
     Iterator,
+    Protocol,
     TypedDict,
     cast,
     AsyncIterator,
@@ -1531,6 +1533,11 @@ class ConfigFile(BaseModel):
         host: str = "127.0.0.1"
         port: int = 8000
 
+    class DiskCacheOptions(BaseModel):
+        path: str
+        max_bytes: int = Field(ge=0)
+        min_tokens: int = Field(default=128, ge=1)
+
     class FromPretrainedOptions(BaseModel):
         repo_id: str
         filename: str
@@ -1738,6 +1745,7 @@ class ConfigFile(BaseModel):
 
     server: "ConfigFile.ServerOptions" = Field(default_factory=lambda: ConfigFile.ServerOptions())
     model: "ConfigFile.ModelOptions"
+    disk_cache: Optional["ConfigFile.DiskCacheOptions"] = None
 
     @classmethod
     def load(cls, path: str) -> "ConfigFile":
@@ -1981,6 +1989,12 @@ class SchedulerMetrics:
     checkpoint_hits_total: int = 0
     checkpoint_saves_total: int = 0
     checkpoint_evictions_total: int = 0
+    sequence_cache_hits_total: int = 0
+    sequence_cache_save_requests_total: int = 0
+    sequence_cache_lookup_failures_total: int = 0
+    sequence_cache_load_failures_total: int = 0
+    sequence_cache_save_failures_total: int = 0
+    sequence_cache_tokens_loaded_total: int = 0
 
     def observe_decode(
         self,
@@ -2011,6 +2025,44 @@ class SchedulerMetrics:
         self.tokens_predicted_total += 1
 
 
+class SequenceCache(Protocol):
+    """Optional external sequence-state cache; storage and eviction stay outside the scheduler."""
+
+    @dataclass(frozen=True)
+    class Match:
+        tokens: Tuple[int, ...]
+        has_prompt_logits: bool = False
+
+        @property
+        def length(self) -> int:
+            return len(self.tokens)
+
+    @dataclass
+    class Load:
+        tokens: List[int]
+        prompt_logits: Optional[np.ndarray] = None
+
+    def lookup(self, tokens: Sequence[int]) -> Optional["SequenceCache.Match"]:
+        ...
+
+    def load(
+        self,
+        match: "SequenceCache.Match",
+        model: "Model",
+        seq_id: int,
+    ) -> Optional["SequenceCache.Load"]:
+        ...
+
+    def save(
+        self,
+        model: "Model",
+        seq_id: int,
+        tokens: Sequence[int],
+        prompt_logits: Optional[np.ndarray],
+    ) -> None:
+        ...
+
+
 @dataclass
 class CompletionRequest:
     payload: CreateCompletionRequest
@@ -2024,6 +2076,8 @@ class CompletionRequest:
     prompt_cursor: int = 0
     match_sequence_id: int = -1
     match_length: int = 0
+    sequence_cache_match: Optional[SequenceCache.Match] = None
+    sequence_cache_match_length: int = 0
     prompt_logits: Optional[np.ndarray] = None
     base_seq_id: Optional[int] = None
     sibling_seq_ids: List[int] = field(default_factory=list)
@@ -8457,6 +8511,344 @@ class Model:
         return np.ctypeslib.as_array(ptr, shape=(self.n_vocab,)).copy()
 
 
+class SequenceDiskCache:
+    """Directory-backed cache for serialized llama.cpp sequence state."""
+
+    @dataclass
+    class Entry:
+        entry_id: int
+        path: Path
+        tokens: Tuple[int, ...]
+        size_bytes: int
+        has_prompt_logits: bool
+        last_accessed: float
+
+    @dataclass(frozen=True)
+    class Header:
+        tokens: Tuple[int, ...]
+        has_prompt_logits: bool
+
+    @dataclass
+    class Payload:
+        tokens: List[int]
+        state_bytes: np.ndarray
+        prompt_logits: Optional[np.ndarray]
+
+    FORMAT_VERSION = "1"
+
+    TENSOR_TOKENS = "tokens"
+    TENSOR_STATE = "state"
+    TENSOR_PROMPT_LOGITS = "prompt_logits"
+
+    METADATA_FORMAT = "sequence_cache_format"
+    METADATA_MODEL_PATH = "model_path"
+    METADATA_MODEL_SIZE = "model_size_bytes"
+    METADATA_MODEL_MTIME = "model_mtime_ns"
+    METADATA_MEMORY_MODEL = "memory_model"
+    METADATA_N_CTX = "n_ctx"
+    METADATA_N_CTX_SEQ = "n_ctx_seq"
+    METADATA_N_SEQ_MAX = "n_seq_max"
+    METADATA_N_VOCAB = "n_vocab"
+    METADATA_KV_UNIFIED = "kv_unified"
+
+    def __init__(
+        self,
+        *,
+        path: Union[str, Path],
+        max_bytes: int,
+        model: "Model",
+        min_tokens: int = 128,
+    ) -> None:
+        self.path = Path(path)
+        self.path.mkdir(parents=True, exist_ok=True)
+        self.max_bytes = max(0, int(max_bytes))
+        self.min_tokens = max(1, int(min_tokens))
+        self._metadata = self._model_metadata(model)
+        self._trie = RadixTrie()
+        self._entries_by_id: Dict[int, SequenceDiskCache.Entry] = {}
+        self._entries_by_tokens: Dict[Tuple[int, ...], SequenceDiskCache.Entry] = {}
+        self._next_entry_id = 0
+        self._size_bytes = 0
+        self._load_entries()
+        self._evict_if_needed()
+
+    @classmethod
+    def _model_metadata(cls, model: "Model") -> Dict[str, str]:
+        model_path = Path(model.model_path).resolve()
+        try:
+            model_stat = model_path.stat()
+            model_size = str(model_stat.st_size)
+            model_mtime_ns = str(model_stat.st_mtime_ns)
+        except OSError:
+            model_size = ""
+            model_mtime_ns = ""
+
+        return {
+            cls.METADATA_FORMAT: cls.FORMAT_VERSION,
+            cls.METADATA_MODEL_PATH: str(model_path),
+            cls.METADATA_MODEL_SIZE: model_size,
+            cls.METADATA_MODEL_MTIME: model_mtime_ns,
+            cls.METADATA_MEMORY_MODEL: model.memory_model,
+            cls.METADATA_N_CTX: str(model.n_ctx),
+            cls.METADATA_N_CTX_SEQ: str(model.n_ctx_seq),
+            cls.METADATA_N_SEQ_MAX: str(model.n_seq_max),
+            cls.METADATA_N_VOCAB: str(model.n_vocab),
+            cls.METADATA_KV_UNIFIED: str(int(model.kv_unified)),
+        }
+
+    @staticmethod
+    def _safe_open(path: Path) -> Any:
+        try:
+            from safetensors import safe_open
+        except ImportError as exc:
+            raise ImportError(
+                "disk_cache requires safetensors. Install it with `pip install safetensors`."
+            ) from exc
+
+        return safe_open(str(path), framework="numpy")
+
+    @staticmethod
+    def _save_file(
+        tensors: Dict[str, np.ndarray],
+        path: Path,
+        metadata: Dict[str, str],
+    ) -> None:
+        from safetensors.numpy import save_file
+
+        save_file(tensors, str(path), metadata=metadata)
+
+    def _metadata_compatible(self, metadata: Optional[Dict[str, str]]) -> bool:
+        if metadata is None:
+            return False
+        return all(metadata.get(key) == value for key, value in self._metadata.items())
+
+    def _read_entry_header(self, path: Path) -> Optional["SequenceDiskCache.Header"]:
+        with self._safe_open(path) as tensors:
+            if not self._metadata_compatible(tensors.metadata()):
+                return None
+            tokens_array = tensors.get_tensor(self.TENSOR_TOKENS)
+            has_prompt_logits = self.TENSOR_PROMPT_LOGITS in tensors.keys()
+        tokens = tuple(int(token) for token in tokens_array.tolist())
+        if len(tokens) < self.min_tokens:
+            return None
+        return SequenceDiskCache.Header(
+            tokens=tokens,
+            has_prompt_logits=has_prompt_logits,
+        )
+
+    def _read_entry_payload(
+        self,
+        entry: "SequenceDiskCache.Entry",
+    ) -> "SequenceDiskCache.Payload":
+        with self._safe_open(entry.path) as tensors:
+            tokens = [
+                int(token)
+                for token in tensors.get_tensor(self.TENSOR_TOKENS).tolist()
+            ]
+            state_bytes = np.ascontiguousarray(
+                tensors.get_tensor(self.TENSOR_STATE),
+                dtype=np.uint8,
+            )
+            prompt_logits = (
+                tensors.get_tensor(self.TENSOR_PROMPT_LOGITS)
+                if entry.has_prompt_logits
+                and self.TENSOR_PROMPT_LOGITS in tensors.keys()
+                else None
+            )
+        return SequenceDiskCache.Payload(
+            tokens=tokens,
+            state_bytes=state_bytes,
+            prompt_logits=prompt_logits,
+        )
+
+    def _write_entry(
+        self,
+        path: Path,
+        tensors: Dict[str, np.ndarray],
+    ) -> None:
+        tmp_path = path.with_name(f"{path.name}.tmp")
+        try:
+            self._save_file(tensors, tmp_path, self._metadata)
+            os.replace(tmp_path, path)
+        except Exception:
+            try:
+                tmp_path.unlink()
+            except FileNotFoundError:
+                pass
+            raise
+
+    def _load_entries(self) -> None:
+        for path in sorted(self.path.glob("*.safetensors")):
+            try:
+                header = self._read_entry_header(path)
+                if header is None:
+                    continue
+                self._add_entry(
+                    path=path,
+                    tokens=header.tokens,
+                    has_prompt_logits=header.has_prompt_logits,
+                    last_accessed=path.stat().st_mtime,
+                )
+            except Exception:  # noqa: BLE001
+                continue
+
+    def _add_entry(
+        self,
+        *,
+        path: Path,
+        tokens: Tuple[int, ...],
+        has_prompt_logits: bool,
+        last_accessed: Optional[float] = None,
+    ) -> None:
+        existing = self._entries_by_tokens.get(tokens)
+        if existing is not None:
+            self._remove_entry(existing)
+        entry_id = self._next_entry_id
+        self._next_entry_id += 1
+        size_bytes = path.stat().st_size
+        entry = SequenceDiskCache.Entry(
+            entry_id=entry_id,
+            path=path,
+            tokens=tokens,
+            size_bytes=size_bytes,
+            has_prompt_logits=has_prompt_logits,
+            last_accessed=last_accessed if last_accessed is not None else time.time(),
+        )
+        self._entries_by_id[entry_id] = entry
+        self._entries_by_tokens[tokens] = entry
+        self._trie.extend(entry_id, tokens)
+        self._size_bytes += size_bytes
+
+    def _remove_entry(self, entry: "SequenceDiskCache.Entry") -> None:
+        if entry.entry_id in self._trie.sequence_lengths:
+            self._trie.truncate(entry.entry_id, 0)
+        self._entries_by_id.pop(entry.entry_id, None)
+        if self._entries_by_tokens.get(entry.tokens) is entry:
+            self._entries_by_tokens.pop(entry.tokens, None)
+        self._size_bytes = max(0, self._size_bytes - entry.size_bytes)
+        try:
+            entry.path.unlink()
+        except FileNotFoundError:
+            pass
+
+    @staticmethod
+    def _touch(entry: "SequenceDiskCache.Entry") -> None:
+        entry.last_accessed = time.time()
+        try:
+            os.utime(entry.path, None)
+        except OSError:
+            pass
+
+    def _oldest_entry(self) -> Optional["SequenceDiskCache.Entry"]:
+        if not self._entries_by_id:
+            return None
+        return min(
+            self._entries_by_id.values(),
+            key=lambda item: (item.last_accessed, item.size_bytes),
+        )
+
+    def _evict_until(self, target_bytes: int) -> None:
+        while self._size_bytes > target_bytes:
+            entry = self._oldest_entry()
+            if entry is None:
+                return
+            self._remove_entry(entry)
+
+    def _evict_if_needed(self) -> None:
+        if self.max_bytes <= 0:
+            for entry in list(self._entries_by_id.values()):
+                self._remove_entry(entry)
+            return
+        if self._size_bytes > self.max_bytes:
+            self._evict_until(self.max_bytes)
+            self._evict_until(int(self.max_bytes * 0.9))
+
+    def lookup(self, tokens: Sequence[int]) -> Optional[SequenceCache.Match]:
+        if not tokens:
+            return None
+        entry_id, _match_length = self._trie.longest_prefix(tokens)
+        entry = self._entries_by_id.get(entry_id)
+        if entry is None:
+            return None
+        self._touch(entry)
+        return SequenceCache.Match(
+            tokens=entry.tokens,
+            has_prompt_logits=entry.has_prompt_logits,
+        )
+
+    def load(
+        self,
+        match: SequenceCache.Match,
+        model: "Model",
+        seq_id: int,
+    ) -> Optional[SequenceCache.Load]:
+        entry = self._entries_by_tokens.get(match.tokens)
+        if entry is None:
+            return None
+
+        payload = self._read_entry_payload(entry)
+        ptr = payload.state_bytes.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
+        loaded_bytes = int(
+            llama_cpp.llama_state_seq_set_data(
+                model.ctx,
+                ptr,
+                int(payload.state_bytes.size),
+                seq_id,
+            )
+        )
+        if loaded_bytes != int(payload.state_bytes.size):
+            return None
+        self._touch(entry)
+        return SequenceCache.Load(
+            tokens=payload.tokens,
+            prompt_logits=(
+                np.asarray(payload.prompt_logits, dtype=np.float32)
+                if payload.prompt_logits is not None
+                else None
+            ),
+        )
+
+    def save(
+        self,
+        model: "Model",
+        seq_id: int,
+        tokens: Sequence[int],
+        prompt_logits: Optional[np.ndarray],
+    ) -> None:
+        if len(tokens) < self.min_tokens or self.max_bytes <= 0:
+            return
+        state_size = int(llama_cpp.llama_state_seq_get_size(model.ctx, seq_id))
+        if state_size <= 0:
+            return
+        state_buffer = (ctypes.c_uint8 * state_size)()
+        state_bytes = int(
+            llama_cpp.llama_state_seq_get_data(
+                model.ctx,
+                state_buffer,
+                state_size,
+                seq_id,
+            )
+        )
+        if state_bytes <= 0:
+            return
+        state = np.ctypeslib.as_array(state_buffer, shape=(state_bytes,)).copy()
+        entry_tokens = tuple(int(token) for token in tokens)
+        tensors: Dict[str, np.ndarray] = {
+            self.TENSOR_TOKENS: np.asarray(entry_tokens, dtype=np.int32),
+            self.TENSOR_STATE: state,
+        }
+        if prompt_logits is not None:
+            tensors[self.TENSOR_PROMPT_LOGITS] = np.asarray(prompt_logits, dtype=np.float32)
+        path = self.path / f"{uuid.uuid4().hex}.safetensors"
+        self._write_entry(path, tensors)
+        self._add_entry(
+            path=path,
+            tokens=entry_tokens,
+            has_prompt_logits=prompt_logits is not None,
+        )
+        self._evict_if_needed()
+
+
 class MemoryPolicy(abc.ABC):
     def __init__(self, scheduler: CompletionScheduler) -> None:
         self.scheduler = scheduler
@@ -8466,6 +8858,47 @@ class MemoryPolicy(abc.ABC):
         if best_free is not None:
             reclaim_order.append(best_free)
         return reclaim_order
+
+    @staticmethod
+    def generation_kv_for_request(
+        request: CompletionRequest,
+        prompt_length: int,
+    ) -> int:
+        return request.internal_completion_count * (
+            request.effective_max_len - prompt_length
+        )
+
+    @staticmethod
+    def attention_kv_required(
+        prompt_length: int,
+        reused_tokens: int,
+        generation_kv: int,
+    ) -> int:
+        return prompt_length - reused_tokens + generation_kv
+
+    def try_set_sequence_cache_match(
+        self,
+        request: CompletionRequest,
+        resident_reuse_len: int,
+        required_sequence_ids: int,
+        required_attn_kv: Optional[int] = None,
+        skip_attention_budget_when_unbounded: bool = False,
+    ) -> bool:
+        cache_match_length = self.scheduler.find_sequence_cache_match(
+            request,
+            resident_reuse_len,
+        )
+        if cache_match_length <= resident_reuse_len:
+            return False
+        has_sequence_budget = len(self.scheduler.unused_sequences) >= required_sequence_ids
+        has_attention_budget = required_attn_kv is None or (
+            skip_attention_budget_when_unbounded
+            and not self.scheduler.model.has_attention_budget
+        ) or self.scheduler.sequence_history.size + required_attn_kv <= self.scheduler.model.n_ctx
+        if has_sequence_budget and has_attention_budget:
+            return True
+        self.scheduler.clear_sequence_cache_match(request)
+        return False
 
     @abc.abstractmethod
     def can_admit(self, request: CompletionRequest) -> bool:
@@ -8508,7 +8941,14 @@ class AttentionMemoryPolicy(MemoryPolicy):
         match_length = request.match_length
         reuse_len = self.reuse_len_for_request(request, match_length)
         claimable = match_seq_id in self.scheduler.free_sequences
-        if claimable:
+        if request.sequence_cache_match is not None:
+            base_seq_id = self.scheduler.unused_sequences.pop()
+            self.scheduler.claimed_sequences.add(base_seq_id)
+            reuse_len, request.prompt_logits = self.scheduler.hydrate_sequence_cache_match(
+                request,
+                base_seq_id,
+            )
+        elif claimable:
             base_seq_id = match_seq_id
             del self.scheduler.free_sequences[base_seq_id]
             self.scheduler.claimed_sequences.add(base_seq_id)
@@ -8533,7 +8973,12 @@ class AttentionMemoryPolicy(MemoryPolicy):
         self.scheduler.active_request_ids.add(request.id)
         if request.prompt_cursor == len(request.prompt_tokens):
             request.prompt_done = True
-            self.scheduler.start_completions(request, prompt_row_index=None)
+            self.scheduler.maybe_save_sequence_cache(request)
+            self.scheduler.start_completions(
+                request,
+                prompt_row_index=None,
+                prompt_logits=request.prompt_logits,
+            )
 
 
 class UnifiedAttentionMemoryPolicy(AttentionMemoryPolicy):
@@ -8546,10 +8991,22 @@ class UnifiedAttentionMemoryPolicy(AttentionMemoryPolicy):
         prompt_length = len(request.prompt_tokens)
         reuse_len = self.reuse_len_for_request(request, match_length)
         prefix_credit = match_length if claimable else reuse_len
-        required_kv = (
-            prompt_length
-            - prefix_credit
-            + request.internal_completion_count * (request.effective_max_len - prompt_length)
+        generation_kv = self.generation_kv_for_request(request, prompt_length)
+        if self.try_set_sequence_cache_match(
+            request,
+            resident_reuse_len=reuse_len,
+            required_sequence_ids=request.internal_completion_count,
+            required_attn_kv=self.attention_kv_required(
+                prompt_length,
+                reused_tokens=0,
+                generation_kv=generation_kv,
+            ),
+        ):
+            return True
+        required_kv = self.attention_kv_required(
+            prompt_length,
+            reused_tokens=prefix_credit,
+            generation_kv=generation_kv,
         )
         if (
             len(self.scheduler.unused_sequences) >= required_sequence_ids
@@ -8612,6 +9069,13 @@ class PartitionedAttentionMemoryPolicy(AttentionMemoryPolicy):
         request.match_length = match_length
         claimable = match_seq_id in self.scheduler.free_sequences
         required_sequence_ids = request.internal_completion_count - int(claimable)
+        reuse_len = self.reuse_len_for_request(request, match_length)
+        if self.try_set_sequence_cache_match(
+            request,
+            resident_reuse_len=reuse_len,
+            required_sequence_ids=request.internal_completion_count,
+        ):
+            return True
         if len(self.scheduler.unused_sequences) >= required_sequence_ids:
             return True
         best_free = match_seq_id if claimable else None
@@ -8664,10 +9128,24 @@ class CheckpointMemoryPolicy(MemoryPolicy):
         request.match_length = match_length
         claimable = match_seq_id in self.scheduler.free_sequences
         required_sequence_ids = request.internal_completion_count - int(claimable)
-        required_attn_kv = (
-            len(request.prompt_tokens) - match_length
-            + request.internal_completion_count
-            * (request.effective_max_len - len(request.prompt_tokens))
+        prompt_length = len(request.prompt_tokens)
+        generation_kv = self.generation_kv_for_request(request, prompt_length)
+        if self.try_set_sequence_cache_match(
+            request,
+            resident_reuse_len=match_length,
+            required_sequence_ids=request.internal_completion_count,
+            required_attn_kv=self.attention_kv_required(
+                prompt_length,
+                reused_tokens=0,
+                generation_kv=generation_kv,
+            ),
+            skip_attention_budget_when_unbounded=True,
+        ):
+            return True
+        required_attn_kv = self.attention_kv_required(
+            prompt_length,
+            reused_tokens=match_length,
+            generation_kv=generation_kv,
         )
         if len(self.scheduler.unused_sequences) >= required_sequence_ids and (
             not self.scheduler.model.has_attention_budget
@@ -8691,7 +9169,14 @@ class CheckpointMemoryPolicy(MemoryPolicy):
         match_seq_id = request.match_sequence_id
         match_length = request.match_length
         claimable = match_seq_id in self.scheduler.free_sequences
-        if claimable:
+        if request.sequence_cache_match is not None:
+            base_seq_id = self.scheduler.unused_sequences.pop()
+            self.scheduler.claimed_sequences.add(base_seq_id)
+            match_length, request.prompt_logits = self.scheduler.hydrate_sequence_cache_match(
+                request,
+                base_seq_id,
+            )
+        elif claimable:
             base_seq_id = match_seq_id
             del self.scheduler.free_sequences[base_seq_id]
             self.scheduler.claimed_sequences.add(base_seq_id)
@@ -8716,6 +9201,7 @@ class CheckpointMemoryPolicy(MemoryPolicy):
         if request.prompt_cursor == len(request.prompt_tokens):
             request.prompt_done = True
             self.scheduler.maybe_save_prompt_checkpoint(request)
+            self.scheduler.maybe_save_sequence_cache(request)
             self.scheduler.start_completions(
                 request,
                 prompt_row_index=None,
@@ -8764,8 +9250,13 @@ class CompletionScheduler:
         completion_index: Optional[int] = None
         pending_count: int = 0
 
-    def __init__(self, model: Model) -> None:
+    def __init__(
+        self,
+        model: Model,
+        sequence_cache: Optional[SequenceCache] = None,
+    ) -> None:
         self.model = model
+        self.sequence_cache = sequence_cache
         self.formatter = OpenAIFormatter(model)
         self.radix_trie = RadixTrie()
         self.sequence_history = SequenceHistory()
@@ -8793,6 +9284,138 @@ class CompletionScheduler:
         if self.model.attention_partitioned:
             return PartitionedAttentionMemoryPolicy(self)
         return UnifiedAttentionMemoryPolicy(self)
+
+    @staticmethod
+    def request_needs_prompt_logits(request: CompletionRequest) -> bool:
+        return request.payload.max_tokens != 0 and request.effective_max_len > len(
+            request.prompt_tokens
+        )
+
+    @staticmethod
+    def request_needs_uncached_prompt_logprobs(request: CompletionRequest) -> bool:
+        return request.payload.echo and request.payload.logprobs is not None
+
+    @staticmethod
+    def clear_sequence_cache_match(request: CompletionRequest) -> None:
+        request.sequence_cache_match = None
+        request.sequence_cache_match_length = 0
+
+    def can_lookup_sequence_cache(self, request: CompletionRequest) -> bool:
+        return (
+            self.sequence_cache is not None
+            and bool(request.prompt_tokens)
+            and not self.request_needs_uncached_prompt_logprobs(request)
+        )
+
+    def is_sequence_cache_match_usable(
+        self,
+        request: CompletionRequest,
+        match: SequenceCache.Match,
+        resident_reuse_len: int,
+    ) -> bool:
+        match_length = match.length
+        if (
+            match_length <= resident_reuse_len
+            or match_length > len(request.prompt_tokens)
+            or tuple(request.prompt_tokens[:match_length]) != match.tokens
+        ):
+            return False
+        return not (
+            self.request_needs_prompt_logits(request)
+            and match_length == len(request.prompt_tokens)
+            and not match.has_prompt_logits
+        )
+
+    def find_sequence_cache_match(
+        self,
+        request: CompletionRequest,
+        resident_reuse_len: int,
+    ) -> int:
+        self.clear_sequence_cache_match(request)
+        if not self.can_lookup_sequence_cache(request):
+            return 0
+        assert self.sequence_cache is not None
+        try:
+            match = self.sequence_cache.lookup(request.prompt_tokens)
+        except Exception:  # noqa: BLE001
+            self.metrics.sequence_cache_lookup_failures_total += 1
+            return 0
+        if match is None:
+            return 0
+        if not self.is_sequence_cache_match_usable(
+            request,
+            match,
+            resident_reuse_len,
+        ):
+            return 0
+        request.sequence_cache_match = match
+        request.sequence_cache_match_length = match.length
+        return match.length
+
+    def fail_sequence_cache_load(
+        self,
+        request: CompletionRequest,
+        seq_id: int,
+    ) -> Tuple[int, Optional[np.ndarray]]:
+        llama_cpp.llama_memory_seq_rm(self.model.mem, seq_id, 0, -1)
+        self.clear_sequence_cache_match(request)
+        self.metrics.sequence_cache_load_failures_total += 1
+        return 0, None
+
+    def hydrate_sequence_cache_match(
+        self,
+        request: CompletionRequest,
+        seq_id: int,
+    ) -> Tuple[int, Optional[np.ndarray]]:
+        match = request.sequence_cache_match
+        if self.sequence_cache is None or match is None:
+            return 0, None
+        try:
+            loaded = self.sequence_cache.load(match, self.model, seq_id)
+        except Exception:  # noqa: BLE001
+            return self.fail_sequence_cache_load(request, seq_id)
+        if loaded is None:
+            return self.fail_sequence_cache_load(request, seq_id)
+        tokens = list(loaded.tokens)
+        expected_length = request.sequence_cache_match_length
+        if (
+            len(tokens) != expected_length
+            or tokens != request.prompt_tokens[:expected_length]
+        ):
+            return self.fail_sequence_cache_load(request, seq_id)
+        if (
+            len(tokens) == len(request.prompt_tokens)
+            and self.request_needs_prompt_logits(request)
+            and loaded.prompt_logits is None
+        ):
+            return self.fail_sequence_cache_load(request, seq_id)
+        self.radix_trie.extend(seq_id, tokens)
+        self.sequence_history.extend(seq_id, tokens)
+        self.metrics.sequence_cache_hits_total += 1
+        self.metrics.sequence_cache_tokens_loaded_total += len(tokens)
+        if len(tokens) == len(request.prompt_tokens):
+            return len(tokens), loaded.prompt_logits
+        return len(tokens), None
+
+    def maybe_save_sequence_cache(self, request: CompletionRequest) -> None:
+        if (
+            self.sequence_cache is None
+            or request.base_seq_id is None
+            or not request.prompt_tokens
+            or request.sequence_cache_match_length == len(request.prompt_tokens)
+        ):
+            return
+        try:
+            self.sequence_cache.save(
+                self.model,
+                request.base_seq_id,
+                request.prompt_tokens,
+                request.prompt_logits,
+            )
+        except Exception:  # noqa: BLE001
+            self.metrics.sequence_cache_save_failures_total += 1
+            return
+        self.metrics.sequence_cache_save_requests_total += 1
 
     def close(self) -> None:
         self.closed = True
@@ -9092,6 +9715,7 @@ class CompletionScheduler:
                     request.prompt_done = True
                     request.prompt_logits = prompt_logits
                     self.maybe_save_prompt_checkpoint(request)
+                    self.maybe_save_sequence_cache(request)
                     self.start_completions(
                         request,
                         prompt_row_index=prompt_row_index,
@@ -9590,6 +10214,48 @@ class CompletionScheduler:
             raise ValueError(f"invalid Prometheus metric value: {value}")
         return format(value, ".16g")
 
+    def sequence_cache_metric_definitions(
+        self,
+    ) -> List[Tuple[str, str, str, Union[int, float]]]:
+        return [
+            (
+                "counter",
+                "batch_server:sequence_cache_hits_total",
+                "Number of external sequence cache entries hydrated.",
+                self.metrics.sequence_cache_hits_total,
+            ),
+            (
+                "counter",
+                "batch_server:sequence_cache_save_requests_total",
+                "Number of external sequence cache save requests.",
+                self.metrics.sequence_cache_save_requests_total,
+            ),
+            (
+                "counter",
+                "batch_server:sequence_cache_load_failures_total",
+                "Number of external sequence cache load failures.",
+                self.metrics.sequence_cache_load_failures_total,
+            ),
+            (
+                "counter",
+                "batch_server:sequence_cache_lookup_failures_total",
+                "Number of external sequence cache lookup failures.",
+                self.metrics.sequence_cache_lookup_failures_total,
+            ),
+            (
+                "counter",
+                "batch_server:sequence_cache_save_failures_total",
+                "Number of external sequence cache save failures.",
+                self.metrics.sequence_cache_save_failures_total,
+            ),
+            (
+                "counter",
+                "batch_server:sequence_cache_tokens_loaded_total",
+                "Number of prompt tokens hydrated from external sequence cache.",
+                self.metrics.sequence_cache_tokens_loaded_total,
+            ),
+        ]
+
     def render_prometheus_metrics(self) -> str:
         active_completions = sum(
             1
@@ -9761,6 +10427,7 @@ class CompletionScheduler:
                 "Number of free checkpoints evicted.",
                 self.metrics.checkpoint_evictions_total,
             ),
+            *self.sequence_cache_metric_definitions(),
             (
                 "gauge",
                 "batch_server:radix_trie_sequences",
@@ -10631,7 +11298,15 @@ def main() -> None:
         response_schema=config.model.response_schema,
         store_logits=config.model.store_logits,
     )
-    scheduler = CompletionScheduler(model)
+    sequence_cache: Optional[SequenceCache] = None
+    if config.disk_cache is not None:
+        sequence_cache = SequenceDiskCache(
+            path=config.disk_cache.path,
+            max_bytes=config.disk_cache.max_bytes,
+            min_tokens=config.disk_cache.min_tokens,
+            model=model,
+        )
+    scheduler = CompletionScheduler(model, sequence_cache=sequence_cache)
     APP.state.service = CompletionService(scheduler)
     try:
         uvicorn.run(
