@@ -32,6 +32,7 @@ import threading
 import multiprocessing
 import copy
 import shutil
+import inspect
 
 from pathlib import Path
 from datetime import datetime
@@ -1578,14 +1579,15 @@ class ConfigFile(BaseModel):
             filename = Path(repo_file).name
             subfolder = self._subfolder_for_repo_file(repo_file)
 
-            download_kwargs = dict(
+            download_kwargs: Dict[str, Any] = dict(
                 repo_id=self.repo_id,
                 filename=filename,
                 subfolder=subfolder,
                 local_dir=self.local_dir,
-                local_dir_use_symlinks=self.local_dir_use_symlinks,
                 cache_dir=self.cache_dir,
             )
+            if "local_dir_use_symlinks" in inspect.signature(hf_hub_download).parameters:
+                download_kwargs["local_dir_use_symlinks"] = self.local_dir_use_symlinks
 
             try:
                 resolved_path = hf_hub_download(**download_kwargs)
@@ -1633,7 +1635,7 @@ class ConfigFile(BaseModel):
         def resolve_model_path(self) -> str:
             try:
                 from huggingface_hub import HfFileSystem
-                from huggingface_hub.utils import validate_repo_id
+                from huggingface_hub.utils._validators import validate_repo_id
             except ImportError as exc:
                 raise ImportError(
                     "model.from_pretrained requires the huggingface-hub package. "
@@ -2431,7 +2433,7 @@ class ResponseParser:
             )
         self._stream_failed = False
         if self._generation_prompt and self._stream_plan is not None:
-            success, _ignored = self._advance_stream_state(self._generation_prompt)
+            success, _ = self._advance_stream_state(self._generation_prompt)
             if not success:
                 self._stream_failed = True
 
@@ -3194,8 +3196,10 @@ class ResponseParser:
         assert isinstance(tool_calls, list)
         while len(tool_calls) <= tool_call_index:
             tool_calls.append({"function": {"name": "", "arguments": ""}})
-        self._item.visible_tool_call = tool_calls[tool_call_index]
-        function = self._item.visible_tool_call.setdefault("function", {})
+        visible_tool_call = tool_calls[tool_call_index]
+        assert isinstance(visible_tool_call, dict)
+        self._item.visible_tool_call = visible_tool_call
+        function = visible_tool_call.setdefault("function", {})
         assert isinstance(function, dict)
         self._item.visible_function = function
         if tool_call_index == 0:
@@ -3672,7 +3676,7 @@ class ResponseParser:
                     continue
                 if mode == "seek-arguments":
                     arguments_capture = item_plan["arguments_capture"]
-                    _ignored, matched, remainder, pending = self._consume_until_literal(
+                    _, matched, remainder, pending = self._consume_until_literal(
                         buffer,
                         arguments_capture["start"],
                     )
@@ -4003,7 +4007,7 @@ class ResponseParser:
             state.pending = ""
             while True:
                 if state.mode == "segment-start":
-                    ignored, matched_start, remainder, pending = self._consume_until_any_literal(
+                    _, matched_start, remainder, pending = self._consume_until_any_literal(
                         buffer,
                         cast(Tuple[str, ...], self._stream_plan["segment_starts"]),
                     )
@@ -5484,7 +5488,7 @@ class OpenAIFormatter:
             return True, None, cast(Optional[OpenAICompletion], stop.value)
 
     @staticmethod
-    def collect_completion(stream: Iterator[OpenAICompletion]) -> OpenAICompletion:
+    def collect_completion(stream: Iterator[Any]) -> OpenAICompletion:
         iterator = iter(stream)
         while True:
             try:
@@ -5947,16 +5951,14 @@ class OpenAIFormatter:
             return None
         normalized_tools: List[Dict[str, Any]] = []
         for tool in tools:
-            tool_type = tool.type
-            if tool_type == "web_search":
+            if isinstance(tool, ResponsesWebSearchTool):
                 continue
-            name = tool.name
-            if tool_type == "function":
+            if isinstance(tool, ResponsesFunctionTool):
                 normalized_tools.append(
                     {
                         "type": "function",
                         "function": {
-                            "name": name,
+                            "name": tool.name,
                             "description": tool.description,
                             "parameters": tool.parameters,
                             "strict": tool.strict,
@@ -5964,7 +5966,7 @@ class OpenAIFormatter:
                     }
                 )
                 continue
-            if tool_type == "custom":
+            if isinstance(tool, ResponsesCustomTool):
                 tool_format = tool.format
                 syntax = tool_format.syntax if tool_format is not None else None
                 definition = tool_format.definition if tool_format is not None else None
@@ -5992,7 +5994,7 @@ class OpenAIFormatter:
                         "type": "function",
                         "original_type": "custom",
                         "function": {
-                            "name": name,
+                            "name": tool.name,
                             "description": description or None,
                             "parameters": {
                                 "type": "object",
@@ -6015,7 +6017,7 @@ class OpenAIFormatter:
                 )
                 continue
             raise CompletionRequestValidationError(
-                f"unsupported responses tool type: {tool_type!r}"
+                f"unsupported responses tool type: {tool.type!r}"
             )
         return normalized_tools
 
@@ -6032,7 +6034,9 @@ class OpenAIFormatter:
                     "name": tool_choice.name,
                 },
             }
-        return tool_choice
+        raise CompletionRequestValidationError(
+            f"unsupported responses tool_choice type: {tool_choice.type!r}"
+        )
 
     @staticmethod
     def _response_format_type(response_format: Optional[Dict[str, Any]]) -> Optional[str]:
@@ -6073,6 +6077,15 @@ class OpenAIFormatter:
         body: CreateResponseRequest,
     ) -> CreateChatCompletionRequest:
         chat_tools = self._responses_tools_to_chat_tools(body.tools)
+        response_format = (
+            None
+            if body.text is None or body.text.format is None
+            else body.text.format.model_dump(
+                mode="python",
+                exclude_none=True,
+                by_alias=True,
+            )
+        )
         return CreateChatCompletionRequest(
             messages=self.responses_input_to_chat_messages(body),
             max_tokens=body.max_output_tokens,
@@ -6083,18 +6096,13 @@ class OpenAIFormatter:
             top_logprobs=body.top_logprobs,
             model=body.model,
             user=body.user,
-            tools=chat_tools,
-            tool_choice=self._responses_tool_choice_to_chat_tool_choice(body.tool_choice),
-            response_format=(
-                None
-                if body.text is None or body.text.format is None
-                else body.text.format.model_dump(
-                    mode="python",
-                    exclude_none=True,
-                    by_alias=True,
-                )
+            tools=cast(Any, chat_tools),
+            tool_choice=cast(
+                Any,
+                self._responses_tool_choice_to_chat_tool_choice(body.tool_choice),
             ),
-            reasoning_effort=self._response_reasoning_effort(body),
+            response_format=cast(Any, response_format),
+            reasoning_effort=cast(Any, self._response_reasoning_effort(body)),
         )
 
     def _response_parser(
@@ -6336,10 +6344,13 @@ class OpenAIFormatter:
         if logprobs is None:
             return []
         response_logprobs: List[Dict[str, Any]] = []
+        tokens = logprobs.tokens or []
+        token_logprobs_list = logprobs.token_logprobs or []
+        top_logprobs_list = logprobs.top_logprobs or []
         for token, token_logprob, top_logprobs in zip(
-            logprobs.tokens,
-            logprobs.token_logprobs,
-            logprobs.top_logprobs,
+            tokens,
+            token_logprobs_list,
+            top_logprobs_list,
         ):
             if token_logprob is None:
                 continue
@@ -7274,6 +7285,9 @@ class OpenAIFormatter:
     ) -> Optional[ChatCompletionChoiceLogprobs]:
         if logprobs is None:
             return None
+        tokens = logprobs.tokens or []
+        token_logprobs_list = logprobs.token_logprobs or []
+        top_logprobs_list = logprobs.top_logprobs or []
         return ChatCompletionChoiceLogprobs(
             content=[
                 ChatCompletionTokenLogprob(
@@ -7294,9 +7308,9 @@ class OpenAIFormatter:
                     ),
                 )
                 for token, token_logprob, top_logprobs in zip(
-                    logprobs.tokens,
-                    logprobs.token_logprobs,
-                    logprobs.top_logprobs,
+                    tokens,
+                    token_logprobs_list,
+                    top_logprobs_list,
                 )
             ],
             refusal=None,
@@ -7434,9 +7448,9 @@ class OpenAIFormatter:
                         tool_name,
                     ),
                     logprobs=self._convert_completion_logprobs_to_chat_choice(choice.logprobs),
-                    finish_reason=(
+                    finish_reason=cast(Any, (
                         "tool_calls" if tool_name is not None else choice.finish_reason
-                    ),
+                    )),
                 )
                 for choice in completion.choices
             ],
@@ -7491,7 +7505,7 @@ class OpenAIFormatter:
                 )
                 if parser.started:
                     started_indices.add(index)
-            return parsed_chunks
+            return cast(List[ChatCompletionChunk | Dict[str, Any]], parsed_chunks)
         chat_chunks: List[ChatCompletionChunk] = []
         for choice in chunk["choices"]:
             index = choice["index"]
@@ -7596,12 +7610,12 @@ class OpenAIFormatter:
                                 if choice["logprobs"] is not None
                                 else None
                             ),
-                            finish_reason=choice["finish_reason"],
+                            finish_reason=cast(Any, choice["finish_reason"]),
                         )
                     ],
                 )
             )
-        return chat_chunks
+        return cast(List[ChatCompletionChunk | Dict[str, Any]], chat_chunks)
 
     def returned_output_end(
         self,
@@ -7804,15 +7818,15 @@ class OpenAIFormatter:
                 text_cursor += self.decode_text(token.text_bytes)
             logprobs = CompletionLogprobs(
                 text_offset=offsets,
-                token_logprobs=token_logprobs,
+                token_logprobs=cast(Any, token_logprobs),
                 tokens=token_texts,
-                top_logprobs=top_logprobs,
+                top_logprobs=cast(Any, top_logprobs),
             )
         return CompletionChoice(
             text=text,
             index=completion.index,
             logprobs=logprobs,
-            finish_reason=completion.finish_reason,
+            finish_reason=cast(Any, completion.finish_reason),
         )
 
     def build_completion_response(
@@ -7848,7 +7862,7 @@ class Sampler:
         self,
         *,
         seed: int,
-        vocab: ctypes.c_void_p,
+        vocab: llama_cpp.llama_vocab_p,
         n_vocab: int,
         top_p: float,
         temperature: float,
@@ -7916,7 +7930,7 @@ class Sampler:
             self._sampler, llama_cpp.llama_sampler_init_dist(seed)
         )
 
-    def sample(self, ctx: ctypes.c_void_p, row_index: int) -> int:
+    def sample(self, ctx: llama_cpp.llama_context_p, row_index: int) -> int:
         return int(llama_cpp.llama_sampler_sample(self._sampler, ctx, row_index))
 
     def _ensure_sample_logits_buffer(self, size: int) -> None:
@@ -7927,7 +7941,10 @@ class Sampler:
         recarray = np.recarray(
             shape=(size,),
             dtype=self.TOKEN_DATA_DTYPE,
-            buf=(llama_cpp.llama_token_data * size).from_address(token_data_address),
+            buf=cast(
+                Any,
+                (llama_cpp.llama_token_data * size).from_address(token_data_address),
+            ),
         )
         recarray.id[:] = np.arange(size, dtype=np.intc)
         token_array = llama_cpp.llama_token_data_array(
@@ -7949,7 +7966,10 @@ class Sampler:
         self._sample_logits_recarray.p.fill(0.0)
         self._sample_logits_token_array.selected = -1
         self._sample_logits_token_array.sorted = False
-        llama_cpp.llama_sampler_apply(self._sampler, ctypes.byref(self._sample_logits_token_array))
+        llama_cpp.llama_sampler_apply(
+            self._sampler,
+            cast(Any, ctypes.byref(self._sample_logits_token_array)),
+        )
         token = int(self._sample_logits_recarray.id[self._sample_logits_token_array.selected])
         llama_cpp.llama_sampler_accept(self._sampler, token)
         return token
@@ -8034,9 +8054,10 @@ class Model:
         if llama_model is None:
             raise RuntimeError(f"failed to load model: {model_path}")
         self.llama_model = llama_model
-        self.vocab = llama_cpp.llama_model_get_vocab(llama_model)
-        if self.vocab is None:
+        vocab = llama_cpp.llama_model_get_vocab(llama_model)
+        if vocab is None:
             raise RuntimeError("failed to access model vocabulary")
+        self.vocab = vocab
         if llama_cpp.llama_model_has_encoder(llama_model):
             raise RuntimeError("encoder models are not supported")
         if not llama_cpp.llama_model_has_decoder(llama_model):
@@ -8084,7 +8105,10 @@ class Model:
         if ctx is None:
             raise RuntimeError("failed to create context")
         self.ctx = ctx
-        self.mem = llama_cpp.llama_get_memory(ctx)
+        mem = llama_cpp.llama_get_memory(ctx)
+        if mem is None:
+            raise RuntimeError("failed to access model memory")
+        self.mem = mem
         self.n_ctx = int(llama_cpp.llama_n_ctx(ctx))
         self.n_ctx_seq = int(llama_cpp.llama_n_ctx_seq(ctx))
         self.n_seq_max = int(llama_cpp.llama_n_seq_max(ctx))
@@ -8198,7 +8222,10 @@ class Model:
                     address = cast(
                         int,
                         ctypes.addressof(kv_overrides_ref[index].value)
-                        + llama_cpp.llama_model_kv_override_value.val_str.offset,
+                        + cast(
+                            Any,
+                            llama_cpp.llama_model_kv_override_value.val_str,
+                        ).offset,
                     )
                     buffer_start = ctypes.cast(address, ctypes.POINTER(ctypes.c_char))
                     ctypes.memmove(buffer_start, encoded, 128)
@@ -8325,7 +8352,7 @@ class Model:
                 llama_cpp.llama_model_meta_val_str(
                     self.llama_model,
                     encoded,
-                    buffer,
+                    cast(Any, buffer),
                     capacity,
                 )
             )
@@ -8450,7 +8477,7 @@ class Model:
                     self.vocab,
                     array,
                     len(tokens),
-                    buffer,
+                    cast(Any, buffer),
                     capacity,
                     True,
                     True,
@@ -8511,7 +8538,7 @@ class Model:
         return np.ctypeslib.as_array(ptr, shape=(self.n_vocab,)).copy()
 
 
-class SequenceDiskCache:
+class SequenceDiskCache(SequenceCache):
     """Directory-backed cache for serialized llama.cpp sequence state."""
 
     @dataclass
@@ -8648,7 +8675,7 @@ class SequenceDiskCache:
             state_bytes = np.ascontiguousarray(
                 tensors.get_tensor(self.TENSOR_STATE),
                 dtype=np.uint8,
-            )
+            ).copy()
             prompt_logits = (
                 tensors.get_tensor(self.TENSOR_PROMPT_LOGITS)
                 if entry.has_prompt_logits
@@ -8766,7 +8793,7 @@ class SequenceDiskCache:
     def lookup(self, tokens: Sequence[int]) -> Optional[SequenceCache.Match]:
         if not tokens:
             return None
-        entry_id, _match_length = self._trie.longest_prefix(tokens)
+        entry_id, _ = self._trie.longest_prefix(tokens)
         entry = self._entries_by_id.get(entry_id)
         if entry is None:
             return None
@@ -8787,16 +8814,19 @@ class SequenceDiskCache:
             return None
 
         payload = self._read_entry_payload(entry)
-        ptr = payload.state_bytes.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
+        state_size = int(payload.state_bytes.size)
+        state_buffer = (ctypes.c_uint8 * state_size).from_buffer(
+            cast(Any, payload.state_bytes)
+        )
         loaded_bytes = int(
             llama_cpp.llama_state_seq_set_data(
                 model.ctx,
-                ptr,
-                int(payload.state_bytes.size),
-                seq_id,
+                state_buffer,
+                state_size,
+                cast(llama_cpp.llama_seq_id, seq_id),
             )
         )
-        if loaded_bytes != int(payload.state_bytes.size):
+        if loaded_bytes != state_size:
             return None
         self._touch(entry)
         return SequenceCache.Load(
@@ -8817,7 +8847,8 @@ class SequenceDiskCache:
     ) -> None:
         if len(tokens) < self.min_tokens or self.max_bytes <= 0:
             return
-        state_size = int(llama_cpp.llama_state_seq_get_size(model.ctx, seq_id))
+        c_seq_id = cast(llama_cpp.llama_seq_id, seq_id)
+        state_size = int(llama_cpp.llama_state_seq_get_size(model.ctx, c_seq_id))
         if state_size <= 0:
             return
         state_buffer = (ctypes.c_uint8 * state_size)()
@@ -8826,7 +8857,7 @@ class SequenceDiskCache:
                 model.ctx,
                 state_buffer,
                 state_size,
-                seq_id,
+                c_seq_id,
             )
         )
         if state_bytes <= 0:
@@ -10717,9 +10748,7 @@ def create_app() -> FastAPI:
         http_request: Request,
         stream: CompletionStream,
         cancel: Callable[[], None],
-        chunk_payloads: Callable[
-            [CompletionChunk], Iterable[BaseModel | Dict[str, Any]]
-        ],
+        chunk_payloads: Callable[[CompletionChunk], Iterable[Any]],
     ) -> AsyncIterator[bytes]:
         disconnect_task = asyncio.create_task(
             watch_http_disconnect(http_request, cancel)
@@ -10757,9 +10786,7 @@ def create_app() -> FastAPI:
         cancel: Callable[[], None],
         *,
         initial_payloads: Iterable[BaseModel | Dict[str, Any]],
-        chunk_payloads: Callable[
-            [CompletionChunk], Iterable[BaseModel | Dict[str, Any]]
-        ],
+        chunk_payloads: Callable[[CompletionChunk], Iterable[Any]],
         done_payloads: Callable[
             [Optional[OpenAICompletion]], Iterable[BaseModel | Dict[str, Any]]
         ],
@@ -10801,12 +10828,10 @@ def create_app() -> FastAPI:
         websocket: WebSocket,
         formatter: OpenAIFormatter,
         stream: CompletionStream,
-        cancel: Callable[[], None],
+        _: Callable[[], None],
         *,
         initial_payloads: Iterable[BaseModel | Dict[str, Any]],
-        chunk_payloads: Callable[
-            [CompletionChunk], Iterable[BaseModel | Dict[str, Any]]
-        ],
+        chunk_payloads: Callable[[CompletionChunk], Iterable[Any]],
         done_payloads: Callable[
             [Optional[OpenAICompletion]], Iterable[BaseModel | Dict[str, Any]]
         ],
@@ -10830,7 +10855,10 @@ def create_app() -> FastAPI:
             stream.close()
 
     @app.post("/v1/completions")
-    async def create_completion(http_request: Request, body: CreateCompletionRequest):
+    async def create_completion(  # pyright: ignore[reportUnusedFunction]
+        http_request: Request,
+        body: CreateCompletionRequest,
+    ):
         service: CompletionService = app.state.service
         formatter = service.formatter
         prompts = body.normalized_prompt()
@@ -10883,7 +10911,7 @@ def create_app() -> FastAPI:
         return JSONResponse(result.model_dump(mode="json", exclude_none=True))
 
     @app.post("/v1/chat/completions")
-    async def create_chat_completion(
+    async def create_chat_completion(  # pyright: ignore[reportUnusedFunction]
         http_request: Request, body: CreateChatCompletionRequest
     ):
         service: CompletionService = app.state.service
@@ -10969,7 +10997,10 @@ def create_app() -> FastAPI:
         return JSONResponse(chat_response)
 
     @app.post("/v1/responses")
-    async def create_response(http_request: Request, body: CreateResponseRequest):
+    async def create_response(  # pyright: ignore[reportUnusedFunction]
+        http_request: Request,
+        body: CreateResponseRequest,
+    ):
         service: CompletionService = app.state.service
         formatter = service.formatter
         try:
@@ -11061,7 +11092,9 @@ def create_app() -> FastAPI:
         )
 
     @app.websocket("/v1/responses")
-    async def responses_websocket(websocket: WebSocket):
+    async def responses_websocket(  # pyright: ignore[reportUnusedFunction]
+        websocket: WebSocket,
+    ):
         await websocket.accept()
         service: CompletionService = app.state.service
         formatter = service.formatter
@@ -11212,7 +11245,7 @@ def create_app() -> FastAPI:
             pass
 
     @app.get("/v1/models", response_model=ModelListResponse)
-    async def list_models() -> ModelListResponse:
+    async def list_models() -> ModelListResponse:  # pyright: ignore[reportUnusedFunction]
         service = app.state.service
         model = service.scheduler.model
         model_id = getattr(model, "model_alias", None) or model.model_path
@@ -11228,11 +11261,11 @@ def create_app() -> FastAPI:
         )
 
     @app.get("/healthz", response_model=HealthzResponse)
-    async def healthz() -> HealthzResponse:
+    async def healthz() -> HealthzResponse:  # pyright: ignore[reportUnusedFunction]
         return HealthzResponse()
 
     @app.get("/metrics")
-    async def metrics() -> Response:
+    async def metrics() -> Response:  # pyright: ignore[reportUnusedFunction]
         service = cast(Optional[CompletionService], getattr(app.state, "service", None))
         if service is None:
             raise HTTPException(status_code=503, detail="completion service unavailable")
