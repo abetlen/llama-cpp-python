@@ -56,6 +56,31 @@ jobs:
           uname -a
           lscpu
           python -c "import platform; print(platform.machine(), platform.architecture())"
+      - name: Instrument Linux get_rows_f32 assertion
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("vendor/llama.cpp/ggml/src/ggml-cpu/ops.cpp")
+          text = path.read_text()
+          old = """        GGML_ASSERT(i01 >= 0 && i01 < ne01);
+
+        ggml_vec_cpy_f32(nc,"""
+          new = """        if (!(i01 >= 0 && i01 < ne01)) {
+            fprintf(stderr,
+                    "%s: invalid row index in get_rows_f32: dst=%s src0=%s src1=%s i=%lld i10=%lld i11=%lld i12=%lld i01=%lld ne01=%lld src1_ne=[%lld,%lld,%lld,%lld]\\n",
+                    __func__, dst->name, src0->name, src1->name,
+                    (long long) i, (long long) i10, (long long) i11, (long long) i12,
+                    (long long) i01, (long long) ne01,
+                    (long long) ne10, (long long) ne11, (long long) ne12, (long long) ne13);
+        }
+        GGML_ASSERT(i01 >= 0 && i01 < ne01);
+
+        ggml_vec_cpy_f32(nc,"""
+          if old not in text:
+              raise SystemExit("get_rows_f32 assertion pattern not found")
+          path.write_text(text.replace(old, new, 1))
+          PY
       - name: Install dependencies (Linux/MacOS)
         run: |
           python -m pip install --upgrade pip
