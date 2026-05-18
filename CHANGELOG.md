@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- feat: Update llama.cpp to ggml-org/llama.cpp@dd7cad719 and sync Python bindings
+- feat: Update llama.cpp to ggml-org/llama.cpp@c3f95c1f0 and sync Python bindings
 - chore: Migrate llama.cpp submodule URL to ggml-org/llama.cpp by @shalinib-ibm in #2034
 - fix: Enable unified KV cache for embedding contexts to preserve full per-sequence context in batch embedding calls by @SanjanaB123 in #2217
 
