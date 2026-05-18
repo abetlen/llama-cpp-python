@@ -33,7 +33,6 @@ jobs:
     needs: download-model
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false
       matrix:
         python-version: ["3.9", "3.10", "3.11", "3.12"]
     steps:
@@ -51,28 +50,6 @@ jobs:
         with:
           path: ~/.cache/huggingface/hub
           key: ${{ runner.os }}-model-${{ env.REPO_ID }}-${{ env.MODEL_FILE }}
-      - name: System Info
-        run: |
-          uname -a
-          lscpu
-          python -c "import platform; print(platform.machine(), platform.architecture())"
-      - name: Patch Linux Qwen3.5 pre-norm flag initialization
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path("vendor/llama.cpp/src/llama-context.cpp")
-          text = path.read_text()
-          old = "    cparams.embeddings       = params.embeddings;\n    cparams.embeddings_pre_norm = false;\n"
-          new = (
-              "    cparams.embeddings       = params.embeddings;\n"
-              "    cparams.embeddings_pre_norm = false;\n"
-              "    cparams.embeddings_pre_norm_masked = false;\n"
-          )
-          if old not in text:
-              raise SystemExit("cparams pre-norm initialization pattern not found")
-          path.write_text(text.replace(old, new, 1))
-          PY
       - name: Install dependencies (Linux/MacOS)
         run: |
           python -m pip install --upgrade pip
@@ -81,7 +58,7 @@ jobs:
         shell: bash
       - name: Test with pytest
         run: |
-          python -m pytest -q -s tests/test_llama.py::test_real_model
+          python -m pytest
 
   build-windows:
     needs: download-model
