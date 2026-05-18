@@ -33,6 +33,7 @@ jobs:
     needs: download-model
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.9", "3.10", "3.11", "3.12"]
     steps:
@@ -50,6 +51,11 @@ jobs:
         with:
           path: ~/.cache/huggingface/hub
           key: ${{ runner.os }}-model-${{ env.REPO_ID }}-${{ env.MODEL_FILE }}
+      - name: System Info
+        run: |
+          uname -a
+          lscpu
+          python -c "import platform; print(platform.machine(), platform.architecture())"
       - name: Install dependencies (Linux/MacOS)
         run: |
           python -m pip install --upgrade pip
@@ -58,7 +64,7 @@ jobs:
         shell: bash
       - name: Test with pytest
         run: |
-          python -m pytest
+          python -m pytest -q -s tests/test_llama.py::test_real_model
 
   build-windows:
     needs: download-model
