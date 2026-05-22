@@ -104,6 +104,7 @@ from pydantic_core import from_json
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from llama_cpp import llama_cpp  # noqa: E402
+from llama_cpp import llama_cpp_ext  # noqa: E402
 
 
 JSON_GBNF = r"""
@@ -1112,8 +1113,42 @@ class SequenceHistory:
 
 class DraftProvider(abc.ABC):
     @abc.abstractmethod
-    def draft(self, input_ids: np.ndarray, /) -> np.ndarray:
+    def draft(
+        self,
+        input_ids: np.ndarray,
+        /,
+        *,
+        seq_id: int,
+        max_tokens: Optional[int],
+    ) -> np.ndarray:
         raise NotImplementedError()
+
+    def can_draft(self, input_length: int, /, *, seq_id: int) -> bool:
+        return True
+
+    def process(self, batch: Any, /) -> None:
+        pass
+
+    def accept(self, seq_id: int, accepted_draft_tokens: int) -> None:
+        pass
+
+    def truncate(self, seq_id: int, keep_len: int) -> None:
+        pass
+
+    def copy_sequence(
+        self,
+        source_seq_id: int,
+        dest_seq_id: int,
+        p0: int,
+        p1: int,
+    ) -> None:
+        pass
+
+    def set_target_processing_enabled(self, enabled: bool) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
 
 
 class PromptLookupDecoding(DraftProvider):
@@ -1121,9 +1156,21 @@ class PromptLookupDecoding(DraftProvider):
         self._max_ngram_size = max_ngram_size
         self._num_pred_tokens = num_pred_tokens
 
-    def draft(self, input_ids: np.ndarray, /) -> np.ndarray:
+    def draft(
+        self,
+        input_ids: np.ndarray,
+        /,
+        *,
+        seq_id: int,
+        max_tokens: Optional[int],
+    ) -> np.ndarray:
         input_length = input_ids.shape[0]
         if input_length < 2:
+            return np.array([], dtype=np.intc)
+        num_pred_tokens = self._num_pred_tokens
+        if max_tokens is not None:
+            num_pred_tokens = min(num_pred_tokens, max_tokens)
+        if num_pred_tokens <= 0:
             return np.array([], dtype=np.intc)
         max_ngram_size = min(self._max_ngram_size, input_length - 1)
         for ngram_size in range(max_ngram_size, 0, -1):
@@ -1135,10 +1182,799 @@ class PromptLookupDecoding(DraftProvider):
                 start = index + ngram_size
                 if start >= input_length:
                     continue
-                end = min(start + self._num_pred_tokens, input_length)
+                end = min(start + num_pred_tokens, input_length)
                 if start < end:
                     return input_ids[start:end].astype(np.intc, copy=False)
         return np.array([], dtype=np.intc)
+
+
+class MTPDraftProvider(DraftProvider):
+    batched_draft = True
+    sampled_batch_draft = True
+
+    def __init__(
+        self,
+        *,
+        model: "Model",
+        context_params: Any,
+        num_pred_tokens: int,
+        top_k: int,
+        p_min: float,
+    ) -> None:
+        self.target_ctx = model.ctx
+        self.model = model.llama_model
+        self.n_seq_max = model.n_seq_max
+        self.n_vocab = model.n_vocab
+        self.n_embd = int(llama_cpp.llama_model_n_embd(self.model))
+        self.num_pred_tokens = max(0, int(num_pred_tokens))
+        self.top_k = max(1, int(top_k))
+        self.p_min = max(0.0, min(1.0, float(p_min)))
+        self.ctx = llama_cpp.llama_init_from_model(self.model, context_params)
+        if self.ctx is None:
+            raise RuntimeError("failed to create MTP draft context")
+        self.n_batch = int(llama_cpp.llama_n_batch(self.ctx))
+        mem = llama_cpp.llama_get_memory(self.ctx)
+        if mem is None:
+            llama_cpp.llama_free(self.ctx)
+            raise RuntimeError("failed to access MTP draft memory")
+        self.mem = mem
+        self.batch = llama_cpp.llama_batch_init(self.n_batch, self.n_embd, 1)
+        self._batch_tokens = (llama_cpp.llama_token * self.n_batch)()
+        self.batch.token = self._batch_tokens
+        self.batch_embeddings = np.ctypeslib.as_array(
+            self.batch.embd,
+            shape=(self.n_batch * self.n_embd,),
+        )
+        self._samplers: List[Any] = []
+        self.pending_h = np.zeros((self.n_seq_max, self.n_embd), dtype=np.float32)
+        self.verify_h: List[np.ndarray] = [
+            np.empty((0, self.n_embd), dtype=np.float32)
+            for _ in range(self.n_seq_max)
+        ]
+        self.verify_h_pos: List[List[int]] = [[] for _ in range(self.n_seq_max)]
+        self.verify_h_rows = [0] * self.n_seq_max
+        self.ready = [False] * self.n_seq_max
+        self.ready_pos = [0] * self.n_seq_max
+        self.context_pos = [0] * self.n_seq_max
+        self.target_processing_enabled = False
+        self.set_target_processing_enabled(True)
+        llama_cpp_ext.llama_set_embeddings_pre_norm(
+            self.ctx,
+            True,
+            True,
+        )
+        self._init_samplers()
+
+    def _init_samplers(self) -> None:
+        for seq_id in range(self.n_seq_max):
+            params = llama_cpp.llama_sampler_chain_default_params()
+            params.no_perf = True
+            sampler = llama_cpp.llama_sampler_chain_init(params)
+            if self.top_k > 1:
+                llama_cpp.llama_sampler_chain_add(
+                    sampler,
+                    llama_cpp.llama_sampler_init_top_k(self.top_k),
+                )
+            llama_cpp.llama_sampler_chain_add(
+                sampler,
+                llama_cpp.llama_sampler_init_greedy(),
+            )
+            self._samplers.append(sampler)
+
+    def _passes_p_min(self, row_index: int) -> bool:
+        if self.p_min <= 0.0:
+            return True
+        logits_ptr = llama_cpp.llama_get_logits_ith(self.ctx, row_index)
+        if not logits_ptr:
+            return False
+        logits = np.ctypeslib.as_array(logits_ptr, shape=(self.n_vocab,))
+        n_values = min(self.top_k, self.n_vocab)
+        if n_values <= 0:
+            return False
+        if n_values == self.n_vocab:
+            values = logits
+        else:
+            top_indices = np.argpartition(logits, -n_values)[-n_values:]
+            values = logits[top_indices]
+        max_logit = float(np.max(values))
+        weights = np.exp(values.astype(np.float64, copy=False) - max_logit)
+        total = float(np.sum(weights))
+        if total <= 0.0 or not math.isfinite(total):
+            return False
+        return 1.0 / total >= self.p_min
+
+    def _sample_token(self, row_index: int = 0, *, seq_id: int = 0) -> Optional[int]:
+        if seq_id < 0 or seq_id >= len(self._samplers):
+            return None
+        if not self._passes_p_min(row_index):
+            return None
+        sampler = self._samplers[seq_id]
+        token = int(llama_cpp.llama_sampler_sample(sampler, self.ctx, row_index))
+        if token == llama_cpp.LLAMA_TOKEN_NULL:
+            return None
+        llama_cpp.llama_sampler_accept(sampler, token)
+        return token
+
+    def close(self) -> None:
+        self.set_target_processing_enabled(False)
+        self.batch.token = ctypes.POINTER(llama_cpp.llama_token)()
+        llama_cpp.llama_batch_free(self.batch)
+        llama_cpp.llama_free(self.ctx)
+        for sampler in self._samplers:
+            llama_cpp.llama_sampler_free(sampler)
+        self._samplers.clear()
+
+    def set_target_processing_enabled(self, enabled: bool) -> None:
+        if self.target_processing_enabled == enabled:
+            return
+        llama_cpp_ext.llama_set_embeddings_pre_norm(
+            self.target_ctx,
+            enabled,
+            False,
+        )
+        self.target_processing_enabled = enabled
+
+    def _clear_batch(self) -> None:
+        self.batch.n_tokens = 0
+
+    def _batch_embeddings(self) -> np.ndarray:
+        return self.batch_embeddings
+
+    def _set_batch_embedding_row(
+        self,
+        row: int,
+        embedding: Union[np.ndarray, ctypes.POINTER(ctypes.c_float)],
+    ) -> None:
+        row_start = row * self.n_embd
+        row_end = row_start + self.n_embd
+        if isinstance(embedding, np.ndarray):
+            self._batch_embeddings()[row_start:row_end] = embedding
+            return
+        self._batch_embeddings()[row_start:row_end] = np.ctypeslib.as_array(
+            embedding,
+            shape=(self.n_embd,),
+        )
+
+    def _add_batch_token(
+        self,
+        *,
+        token: int,
+        pos: int,
+        seq_id: int,
+        logits: bool,
+    ) -> None:
+        slot = int(self.batch.n_tokens)
+        if slot >= self.n_batch:
+            raise RuntimeError("MTP draft batch capacity exceeded")
+        self.batch.token[slot] = int(token)
+        self.batch.pos[slot] = int(pos)
+        self.batch.seq_id[slot][0] = int(seq_id)
+        self.batch.n_seq_id[slot] = 1
+        self.batch.logits[slot] = int(logits)
+        self.batch.n_tokens += 1
+
+    def _try_decode_batch(self) -> bool:
+        n_tokens = int(self.batch.n_tokens)
+        if n_tokens <= 0:
+            return True
+        result = int(llama_cpp.llama_decode(self.ctx, self.batch))
+        if result != 0:
+            return False
+        return True
+
+    def _decode_batch(self) -> None:
+        n_tokens = int(self.batch.n_tokens)
+        if n_tokens <= 0:
+            return
+        result = int(llama_cpp.llama_decode(self.ctx, self.batch))
+        if result != 0:
+            raise RuntimeError(f"MTP draft decode failed with code {result}")
+
+    def can_draft(self, input_length: int, /, *, seq_id: int) -> bool:
+        if (
+            input_length <= 0
+            or seq_id < 0
+            or seq_id >= self.n_seq_max
+            or not self.ready[seq_id]
+        ):
+            return False
+        return self.ready_pos[seq_id] == input_length - 1
+
+    def process(self, batch: Any, /) -> None:
+        n_tokens = int(batch.n_tokens)
+        if (
+            n_tokens <= 0
+            or not self.target_processing_enabled
+            or not bool(batch.token)
+            or bool(batch.embd)
+        ):
+            return
+
+        h_tgt = llama_cpp_ext.llama_get_embeddings_pre_norm(self.target_ctx)
+        if not h_tgt:
+            raise RuntimeError("missing target pre-norm embeddings for MTP")
+        h_tgt_rows = np.ctypeslib.as_array(
+            h_tgt,
+            shape=(n_tokens, self.n_embd),
+        )
+
+        previous_row_by_seq: Dict[int, int] = {}
+        first_pos_by_seq: Dict[int, int] = {}
+        target_rows_by_seq: Dict[int, List[int]] = {}
+        aligned_by_seq: Dict[int, bool] = {}
+
+        for start in range(0, n_tokens, self.n_batch):
+            self._process_rows(
+                batch,
+                h_tgt_rows,
+                start,
+                min(start + self.n_batch, n_tokens),
+                previous_row_by_seq,
+                first_pos_by_seq,
+                target_rows_by_seq,
+                aligned_by_seq,
+            )
+
+        for seq_id, rows in target_rows_by_seq.items():
+            if not aligned_by_seq.get(seq_id, False):
+                self.ready[seq_id] = False
+                continue
+            if rows[-1] - rows[0] + 1 == len(rows):
+                target_rows = h_tgt_rows[rows[0] : rows[-1] + 1]
+            else:
+                target_rows = h_tgt_rows[rows].copy()
+            target_positions = [int(batch.pos[source_index]) for source_index in rows]
+            self.verify_h[seq_id] = target_rows
+            self.verify_h_pos[seq_id] = target_positions
+            self.verify_h_rows[seq_id] = len(rows)
+            self.pending_h[seq_id] = target_rows[-1]
+            self.ready[seq_id] = True
+            self.ready_pos[seq_id] = target_positions[-1] + 1
+
+    def _process_rows(
+        self,
+        batch: Any,
+        h_tgt_rows: np.ndarray,
+        start: int,
+        end: int,
+        previous_row_by_seq: Dict[int, int],
+        first_pos_by_seq: Dict[int, int],
+        target_rows_by_seq: Dict[int, List[int]],
+        aligned_by_seq: Dict[int, bool],
+    ) -> None:
+        added_pos_by_seq: Dict[int, int] = {}
+        self._clear_batch()
+        for index in range(start, end):
+            if int(batch.n_seq_id[index]) != 1:
+                raise RuntimeError("MTP requires one sequence id per batch token")
+            seq_id = int(batch.seq_id[index][0])
+            if seq_id < 0 or seq_id >= self.n_seq_max:
+                raise RuntimeError(f"MTP sequence id out of range: {seq_id}")
+            pos = int(batch.pos[index])
+            first_pos = first_pos_by_seq.setdefault(seq_id, pos)
+            aligned = first_pos <= 0 or (
+                self.ready[seq_id] and self.ready_pos[seq_id] == first_pos
+            )
+            aligned_by_seq.setdefault(seq_id, aligned)
+            if aligned and pos >= self.context_pos[seq_id]:
+                previous_row = previous_row_by_seq.get(seq_id)
+                slot = int(self.batch.n_tokens)
+                self._add_batch_token(
+                    token=int(batch.token[index]),
+                    pos=pos,
+                    seq_id=seq_id,
+                    logits=False,
+                )
+                if previous_row is None:
+                    self._set_batch_embedding_row(slot, self.pending_h[seq_id])
+                else:
+                    self._set_batch_embedding_row(slot, h_tgt_rows[previous_row])
+                added_pos_by_seq[seq_id] = pos
+            previous_row_by_seq[seq_id] = index
+            target_rows_by_seq.setdefault(seq_id, []).append(index)
+
+        if int(self.batch.n_tokens) > 0:
+            self._decode_batch()
+            for seq_id, pos in added_pos_by_seq.items():
+                self.context_pos[seq_id] = max(self.context_pos[seq_id], pos + 1)
+
+    def draft(
+        self,
+        input_ids: np.ndarray,
+        /,
+        *,
+        seq_id: int,
+        max_tokens: Optional[int],
+    ) -> np.ndarray:
+        if (
+            self.num_pred_tokens <= 0
+            or input_ids.size == 0
+            or seq_id < 0
+            or seq_id >= self.n_seq_max
+            or not self.ready[seq_id]
+        ):
+            return np.array([], dtype=np.intc)
+        n_predict = self.num_pred_tokens
+        if max_tokens is not None:
+            n_predict = min(n_predict, max_tokens)
+        if n_predict <= 0:
+            return np.array([], dtype=np.intc)
+
+        n_past = int(input_ids.size) - 1
+        if self.ready_pos[seq_id] != n_past:
+            return np.array([], dtype=np.intc)
+
+        token = int(input_ids[-1])
+        drafted: List[int] = []
+        if self.context_pos[seq_id] > n_past:
+            self.truncate(seq_id, n_past)
+        if self.context_pos[seq_id] < n_past:
+            self.ready[seq_id] = False
+            return np.array([], dtype=np.intc)
+
+        self._clear_batch()
+        self._add_batch_token(
+            token=token,
+            pos=n_past,
+            seq_id=seq_id,
+            logits=True,
+        )
+        self._set_batch_embedding_row(0, self.pending_h[seq_id])
+        if not self._try_decode_batch():
+            self.truncate(seq_id, n_past)
+            return np.array([], dtype=np.intc)
+        self.context_pos[seq_id] = n_past + 1
+
+        while len(drafted) < n_predict:
+            sampled_token = self._sample_token(seq_id=seq_id)
+            if sampled_token is None:
+                break
+            token = sampled_token
+            drafted.append(token)
+            if len(drafted) >= n_predict:
+                break
+            h_row = llama_cpp_ext.llama_get_embeddings_pre_norm_ith(self.ctx, 0)
+            if not h_row:
+                break
+            self._clear_batch()
+            self._add_batch_token(
+                token=token,
+                pos=n_past + len(drafted),
+                seq_id=seq_id,
+                logits=True,
+            )
+            self._set_batch_embedding_row(0, h_row)
+            if not self._try_decode_batch():
+                break
+            self.context_pos[seq_id] = n_past + len(drafted) + 1
+
+        if not drafted:
+            self.truncate(seq_id, n_past)
+            return np.array([], dtype=np.intc)
+        self.truncate(seq_id, n_past)
+        return np.asarray(drafted, dtype=np.intc)
+
+    def draft_many(
+        self,
+        requests: Sequence[Tuple[np.ndarray, int, Optional[int]]],
+        /,
+    ) -> List[np.ndarray]:
+        results = [np.array([], dtype=np.intc) for _ in requests]
+        active: List[Dict[str, Any]] = []
+        for result_index, (input_ids, seq_id, max_tokens) in enumerate(requests):
+            if (
+                self.num_pred_tokens <= 0
+                or input_ids.size == 0
+                or seq_id < 0
+                or seq_id >= self.n_seq_max
+                or not self.ready[seq_id]
+            ):
+                continue
+            n_predict = self.num_pred_tokens
+            if max_tokens is not None:
+                n_predict = min(n_predict, max_tokens)
+            if n_predict <= 0:
+                continue
+
+            n_past = int(input_ids.size) - 1
+            if self.ready_pos[seq_id] != n_past:
+                continue
+            if self.context_pos[seq_id] > n_past:
+                self.truncate(seq_id, n_past)
+            if self.context_pos[seq_id] < n_past:
+                self.ready[seq_id] = False
+                continue
+            active.append(
+                {
+                    "result_index": result_index,
+                    "seq_id": seq_id,
+                    "n_past": n_past,
+                    "n_predict": n_predict,
+                    "token": int(input_ids[-1]),
+                    "drafted": [],
+                    "embedding": self.pending_h[seq_id],
+                    "cache_key": (
+                        tuple(int(token) for token in input_ids.tolist()),
+                        n_predict,
+                    ),
+                }
+            )
+
+        if not active:
+            return results
+
+        touched = list(active)
+        try:
+            if (
+                all(cast(int, state["n_predict"]) == 1 for state in active)
+            ):
+                grouped: Dict[Tuple[Tuple[int, ...], int], List[Dict[str, Any]]] = {}
+                for state in active:
+                    grouped.setdefault(cast(Any, state["cache_key"]), []).append(state)
+
+                representatives = [states[0] for states in grouped.values()]
+                self._clear_batch()
+                for row, state in enumerate(representatives):
+                    self._add_batch_token(
+                        token=cast(int, state["token"]),
+                        pos=cast(int, state["n_past"]),
+                        seq_id=cast(int, state["seq_id"]),
+                        logits=True,
+                    )
+                    self._set_batch_embedding_row(row, state["embedding"])
+
+                if self._try_decode_batch():
+                    sampled_tokens = [
+                        self._sample_token(row, seq_id=cast(int, state["seq_id"]))
+                        for row, state in enumerate(representatives)
+                    ]
+                    for representative, sampled_token in zip(
+                        representatives,
+                        sampled_tokens,
+                    ):
+                        if sampled_token is None:
+                            continue
+                        seq_id = cast(int, representative["seq_id"])
+                        n_past = cast(int, representative["n_past"])
+                        self.context_pos[seq_id] = max(
+                            self.context_pos[seq_id],
+                            n_past + 1,
+                        )
+                        for state in grouped[cast(Any, representative["cache_key"])]:
+                            cast(List[int], state["drafted"]).append(sampled_token)
+                    active = []
+
+            while active:
+                self._clear_batch()
+                for row, state in enumerate(active):
+                    drafted = cast(List[int], state["drafted"])
+                    self._add_batch_token(
+                        token=cast(int, state["token"]),
+                        pos=cast(int, state["n_past"]) + len(drafted),
+                        seq_id=cast(int, state["seq_id"]),
+                        logits=True,
+                    )
+                    self._set_batch_embedding_row(row, state["embedding"])
+
+                if not self._try_decode_batch():
+                    break
+
+                next_active: List[Dict[str, Any]] = []
+                sampled_tokens = [
+                    self._sample_token(row, seq_id=cast(int, state["seq_id"]))
+                    for row, state in enumerate(active)
+                ]
+                for row, (state, sampled_token) in enumerate(zip(active, sampled_tokens)):
+                    seq_id = cast(int, state["seq_id"])
+                    drafted = cast(List[int], state["drafted"])
+                    decoded_pos = cast(int, state["n_past"]) + len(drafted)
+                    self.context_pos[seq_id] = max(
+                        self.context_pos[seq_id],
+                        decoded_pos + 1,
+                    )
+                    if sampled_token is None:
+                        continue
+                    h_row = llama_cpp_ext.llama_get_embeddings_pre_norm_ith(
+                        self.ctx, row
+                    )
+                    drafted.append(sampled_token)
+                    if len(drafted) >= cast(int, state["n_predict"]):
+                        continue
+                    if not h_row:
+                        continue
+                    state["token"] = sampled_token
+                    state["embedding"] = h_row
+                    next_active.append(state)
+                active = next_active
+        finally:
+            for state in touched:
+                self.truncate(cast(int, state["seq_id"]), cast(int, state["n_past"]))
+
+        for state in touched:
+            drafted = cast(List[int], state["drafted"])
+            if drafted:
+                results[cast(int, state["result_index"])] = np.asarray(
+                    drafted,
+                    dtype=np.intc,
+                )
+        return results
+
+    def process_sampled_batch(
+        self,
+        updates: Sequence[Dict[str, Any]],
+        /,
+    ) -> List[np.ndarray]:
+        results = [np.array([], dtype=np.intc) for _ in updates]
+        if self.num_pred_tokens <= 0 or not updates:
+            return results
+        h_tgt = llama_cpp_ext.llama_get_embeddings_pre_norm(self.target_ctx)
+        if not h_tgt:
+            raise RuntimeError("missing target pre-norm embeddings for MTP")
+        n_target_rows = max(
+            (max(update["row_indices"]) + 1 for update in updates if update["row_indices"]),
+            default=0,
+        )
+        if n_target_rows <= 0:
+            return results
+        h_tgt_rows = np.ctypeslib.as_array(h_tgt, shape=(n_target_rows, self.n_embd))
+
+        pending_output_rows: List[Tuple[int, int, int]] = []
+        self._clear_batch()
+        added_positions: List[Tuple[int, int]] = []
+        pending_inputs: List[Tuple[int, int, int, np.ndarray]] = []
+
+        for update_index, update in enumerate(updates):
+            seq_id = cast(int, update["seq_id"])
+            if seq_id < 0 or seq_id >= self.n_seq_max:
+                continue
+            start_pos = cast(int, update["start_pos"])
+            tokens = cast(List[int], update["tokens"])
+            row_indices = cast(List[int], update["row_indices"])
+            target_count = cast(int, update["target_count"])
+            pending_token = cast(Optional[int], update["pending_token"])
+
+            last_target_row: Optional[int] = None
+            for token_index, token in enumerate(tokens[:target_count]):
+                pos = start_pos + token_index
+                last_target_row = row_indices[token_index]
+                if pos < self.context_pos[seq_id]:
+                    continue
+                slot = int(self.batch.n_tokens)
+                self._add_batch_token(
+                    token=token,
+                    pos=pos,
+                    seq_id=seq_id,
+                    logits=False,
+                )
+                if token_index == 0:
+                    self._set_batch_embedding_row(slot, self.pending_h[seq_id])
+                else:
+                    self._set_batch_embedding_row(
+                        slot,
+                        h_tgt_rows[row_indices[token_index - 1]],
+                )
+                added_positions.append((seq_id, pos))
+
+            if target_count > 0 and last_target_row is not None:
+                self.pending_h[seq_id] = h_tgt_rows[last_target_row]
+                self.ready[seq_id] = True
+                self.ready_pos[seq_id] = start_pos + target_count
+
+            if pending_token is None:
+                continue
+
+            pending_pos = start_pos + target_count
+            if last_target_row is None:
+                pending_embedding = self.pending_h[seq_id]
+            else:
+                pending_embedding = h_tgt_rows[last_target_row]
+
+            pending_inputs.append(
+                (update_index, seq_id, pending_pos, pending_embedding)
+            )
+
+        if int(self.batch.n_tokens) > 0:
+            self._decode_batch()
+
+            for seq_id, pos in added_positions:
+                self.context_pos[seq_id] = max(self.context_pos[seq_id], pos + 1)
+
+        self._clear_batch()
+        added_positions = []
+        for update_index, seq_id, pending_pos, pending_embedding in pending_inputs:
+            if pending_pos < self.context_pos[seq_id]:
+                continue
+            slot = int(self.batch.n_tokens)
+            update = updates[update_index]
+            self._add_batch_token(
+                token=cast(int, update["pending_token"]),
+                pos=pending_pos,
+                seq_id=seq_id,
+                logits=True,
+            )
+            self._set_batch_embedding_row(slot, pending_embedding)
+            added_positions.append((seq_id, pending_pos))
+            pending_output_rows.append((update_index, seq_id, slot))
+
+        if int(self.batch.n_tokens) > 0:
+            self._decode_batch()
+
+            for seq_id, pos in added_positions:
+                self.context_pos[seq_id] = max(self.context_pos[seq_id], pos + 1)
+
+        if not pending_output_rows:
+            return results
+
+        active: List[Dict[str, Any]] = []
+        for update_index, seq_id, row_index in pending_output_rows:
+            sampled_token = self._sample_token(row_index, seq_id=seq_id)
+            if sampled_token is None:
+                continue
+            update = updates[update_index]
+            seq_id = cast(int, update["seq_id"])
+            pending_pos = cast(int, update["start_pos"]) + cast(int, update["target_count"])
+            self.ready[seq_id] = True
+            self.ready_pos[seq_id] = pending_pos
+            n_predict = self.num_pred_tokens
+            max_tokens = cast(Optional[int], update.get("max_tokens"))
+            if max_tokens is not None:
+                n_predict = min(n_predict, max_tokens)
+            if n_predict <= 0:
+                continue
+            state = {
+                "update_index": update_index,
+                "seq_id": seq_id,
+                "keep_len": pending_pos + 1,
+                "pos": pending_pos + 1,
+                "token": sampled_token,
+                "drafted": [sampled_token],
+                "n_predict": n_predict,
+                "embedding": None,
+            }
+            if n_predict > 1:
+                h_row = llama_cpp_ext.llama_get_embeddings_pre_norm_ith(
+                    self.ctx, row_index
+                )
+                if h_row:
+                    state["embedding"] = h_row
+                    active.append(state)
+            results[update_index] = np.asarray([sampled_token], dtype=np.intc)
+
+        touched = list(active)
+        try:
+            while active:
+                self._clear_batch()
+                for row, state in enumerate(active):
+                    self._add_batch_token(
+                        token=cast(int, state["token"]),
+                        pos=cast(int, state["pos"]),
+                        seq_id=cast(int, state["seq_id"]),
+                        logits=True,
+                    )
+                    self._set_batch_embedding_row(row, state["embedding"])
+
+                if not self._try_decode_batch():
+                    break
+
+                next_active: List[Dict[str, Any]] = []
+                sampled_tokens = [
+                    self._sample_token(row, seq_id=cast(int, state["seq_id"]))
+                    for row, state in enumerate(active)
+                ]
+                for row, (state, sampled_token) in enumerate(zip(active, sampled_tokens)):
+                    seq_id = cast(int, state["seq_id"])
+                    pos = cast(int, state["pos"])
+                    self.context_pos[seq_id] = max(self.context_pos[seq_id], pos + 1)
+                    if sampled_token is None:
+                        continue
+                    drafted = cast(List[int], state["drafted"])
+                    drafted.append(sampled_token)
+                    if len(drafted) >= cast(int, state["n_predict"]):
+                        continue
+                    h_row = llama_cpp_ext.llama_get_embeddings_pre_norm_ith(
+                        self.ctx, row
+                    )
+                    if not h_row:
+                        continue
+                    state["token"] = sampled_token
+                    state["embedding"] = h_row
+                    state["pos"] = pos + 1
+                    next_active.append(state)
+                active = next_active
+        finally:
+            for state in touched:
+                seq_id = cast(int, state["seq_id"])
+                keep_len = cast(int, state["keep_len"])
+                llama_cpp.llama_memory_seq_rm(self.mem, seq_id, keep_len, -1)
+                self.context_pos[seq_id] = min(self.context_pos[seq_id], keep_len)
+
+        for state in touched:
+            drafted = cast(List[int], state["drafted"])
+            if drafted:
+                results[cast(int, state["update_index"])] = np.asarray(
+                    drafted,
+                    dtype=np.intc,
+                )
+
+        return results
+
+    def accept(self, seq_id: int, accepted_draft_tokens: int) -> None:
+        if seq_id < 0 or seq_id >= self.n_seq_max:
+            return
+        n_rows = self.verify_h_rows[seq_id]
+        if n_rows <= 0:
+            return
+        row = min(max(accepted_draft_tokens, 0), n_rows - 1)
+        self.pending_h[seq_id] = self.verify_h[seq_id][row]
+        self.ready[seq_id] = True
+        self.ready_pos[seq_id] = self.verify_h_pos[seq_id][row] + 1
+
+    def truncate(self, seq_id: int, keep_len: int) -> None:
+        if seq_id < 0 or seq_id >= self.n_seq_max:
+            return
+        llama_cpp.llama_memory_seq_rm(
+            self.mem,
+            seq_id,
+            keep_len,
+            -1,
+        )
+        if keep_len <= 0:
+            self.pending_h[seq_id].fill(0.0)
+            self.verify_h[seq_id] = np.empty((0, self.n_embd), dtype=np.float32)
+            self.verify_h_pos[seq_id] = []
+            self.verify_h_rows[seq_id] = 0
+            self.ready[seq_id] = False
+            self.ready_pos[seq_id] = 0
+            self.context_pos[seq_id] = 0
+            return
+
+        self.context_pos[seq_id] = min(self.context_pos[seq_id], keep_len)
+        if self.ready_pos[seq_id] != keep_len:
+            self.ready[seq_id] = False
+
+    def copy_sequence(
+        self,
+        source_seq_id: int,
+        dest_seq_id: int,
+        p0: int,
+        p1: int,
+    ) -> None:
+        if (
+            source_seq_id < 0
+            or source_seq_id >= self.n_seq_max
+            or dest_seq_id < 0
+            or dest_seq_id >= self.n_seq_max
+        ):
+            return
+        llama_cpp.llama_memory_seq_cp(
+            self.mem,
+            source_seq_id,
+            dest_seq_id,
+            p0,
+            p1,
+        )
+        source_ready_pos = self.ready_pos[source_seq_id]
+        copied_full_ready_state = p1 < 0 or p1 == source_ready_pos
+        if self.ready[source_seq_id] and copied_full_ready_state:
+            self.pending_h[dest_seq_id] = self.pending_h[source_seq_id]
+            self.verify_h[dest_seq_id] = self.verify_h[source_seq_id].copy()
+            self.verify_h_pos[dest_seq_id] = list(self.verify_h_pos[source_seq_id])
+            self.verify_h_rows[dest_seq_id] = self.verify_h_rows[source_seq_id]
+            self.ready[dest_seq_id] = True
+            self.ready_pos[dest_seq_id] = source_ready_pos
+            self.context_pos[dest_seq_id] = min(
+                self.context_pos[source_seq_id],
+                source_ready_pos,
+            )
+            return
+
+        self.pending_h[dest_seq_id].fill(0.0)
+        self.verify_h[dest_seq_id] = np.empty((0, self.n_embd), dtype=np.float32)
+        self.verify_h_pos[dest_seq_id] = []
+        self.verify_h_rows[dest_seq_id] = 0
+        self.ready[dest_seq_id] = False
+        self.ready_pos[dest_seq_id] = 0
+        self.context_pos[dest_seq_id] = 0
 
 
 class CompletionRequestCancelledError(RuntimeError):
@@ -1151,6 +1987,10 @@ class CompletionRequestValidationError(ValueError):
 
 class CompletionResponseParsingError(RuntimeError):
     pass
+
+
+def omit_additional_properties(schema: Dict[str, Any]) -> None:
+    schema.pop("additionalProperties", None)
 
 
 class CompletionChunkLogprobs(TypedDict):
@@ -1243,10 +2083,16 @@ class CreateCompletionRequest(BaseModel):
 
 
 class ChatCompletionFunctionCall(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(
+        extra="allow",
+        json_schema_extra=omit_additional_properties,
+    )
 
     name: str
     arguments: Optional[str] = None
+
+    def __getitem__(self, key: str) -> Any:
+        return getattr(self, key)
 
 
 class ChatCompletionToolCall(BaseModel):
@@ -1256,9 +2102,15 @@ class ChatCompletionToolCall(BaseModel):
     type: Literal["function"] = "function"
     function: ChatCompletionFunctionCall
 
+    def __getitem__(self, key: str) -> Any:
+        return getattr(self, key)
+
 
 class ChatCompletionRequestMessage(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(
+        extra="allow",
+        json_schema_extra=omit_additional_properties,
+    )
 
     role: Literal["system", "developer", "user", "assistant", "tool", "function"] = Field(
         default="user"
@@ -1586,7 +2438,15 @@ class ConfigFile(BaseModel):
                 local_dir=self.local_dir,
                 cache_dir=self.cache_dir,
             )
-            if "local_dir_use_symlinks" in inspect.signature(hf_hub_download).parameters:
+            hf_hub_download_signature = inspect.signature(hf_hub_download)
+            supports_local_dir_use_symlinks = (
+                "local_dir_use_symlinks" in hf_hub_download_signature.parameters
+                or any(
+                    parameter.kind is inspect.Parameter.VAR_KEYWORD
+                    for parameter in hf_hub_download_signature.parameters.values()
+                )
+            )
+            if supports_local_dir_use_symlinks:
                 download_kwargs["local_dir_use_symlinks"] = self.local_dir_use_symlinks
 
             try:
@@ -1635,12 +2495,16 @@ class ConfigFile(BaseModel):
         def resolve_model_path(self) -> str:
             try:
                 from huggingface_hub import HfFileSystem
-                from huggingface_hub.utils._validators import validate_repo_id
+                from huggingface_hub.utils import validate_repo_id
             except ImportError as exc:
-                raise ImportError(
-                    "model.from_pretrained requires the huggingface-hub package. "
-                    "You can install it with `pip install huggingface-hub`."
-                ) from exc
+                try:
+                    from huggingface_hub import HfFileSystem
+                    from huggingface_hub.utils._validators import validate_repo_id
+                except ImportError:
+                    raise ImportError(
+                        "model.from_pretrained requires the huggingface-hub package. "
+                        "You can install it with `pip install huggingface-hub`."
+                    ) from exc
 
             validate_repo_id(self.repo_id)
             requested_patterns = [self.filename, *(self.additional_files or [])]
@@ -1718,9 +2582,14 @@ class ConfigFile(BaseModel):
         max_seq_len: Optional[int] = None
         max_output_tokens: Optional[int] = Field(default=None, ge=0)
         kv_unified: bool = True
-        draft_model: Optional[Literal["prompt-lookup-decoding"]] = None
-        draft_model_num_pred_tokens: int = 10
+        draft_model: Optional[Literal["prompt-lookup-decoding", "draft-mtp"]] = None
+        draft_model_num_pred_tokens: int = 16
         draft_model_max_ngram_size: int = 2
+        draft_model_top_k: int = Field(default=1, ge=1)
+        draft_model_p_min: float = Field(default=0.0, ge=0.0, le=1.0)
+        draft_model_max_batch_size: Optional[int] = Field(default=None, ge=1)
+        draft_model_threads: Optional[int] = Field(default=None, gt=0)
+        draft_model_threads_batch: Optional[int] = Field(default=None, gt=0)
         response_schema: Optional[Dict[str, Any]] = None
         store_logits: bool = True
 
@@ -1985,7 +2854,24 @@ class SchedulerMetrics:
     prompt_seconds_total: float = 0.0
     tokens_predicted_total: int = 0
     tokens_predicted_seconds_total: float = 0.0
+    scheduler_step_seconds_total: float = 0.0
+    process_batch_seconds_total: float = 0.0
+    sample_seconds_total: float = 0.0
+    draft_seconds_total: float = 0.0
+    draft_state_checkpoint_seconds_total: float = 0.0
+    draft_state_restore_seconds_total: float = 0.0
+    draft_process_seconds_total: float = 0.0
+    draft_generate_seconds_total: float = 0.0
+    draft_sampled_batch_seconds_total: float = 0.0
+    draft_state_checkpoint_calls_total: int = 0
+    draft_state_restore_calls_total: int = 0
+    draft_process_calls_total: int = 0
+    draft_generate_calls_total: int = 0
+    draft_sampled_batch_calls_total: int = 0
     n_decode_total: int = 0
+    scheduler_step_calls_total: int = 0
+    process_batch_calls_total: int = 0
+    sample_calls_total: int = 0
     n_tokens_max: int = 0
     n_busy_slots_total: int = 0
     checkpoint_hits_total: int = 0
@@ -5738,45 +6624,8 @@ class OpenAIFormatter:
                 "responses input must be a string, object, or list"
             )
 
-        leading_preamble: List[str] = []
-        item_start_index = 0
-        while item_start_index < len(items):
-            item = items[item_start_index]
-            if not isinstance(item, dict):
-                break
-            item_type = item.get("type")
-            if item_type is None and "role" in item:
-                item_type = "message"
-            if item_type != "message":
-                break
-            role = item.get("role", "user")
-            if role not in {"developer", "system"}:
-                break
-            leading_preamble.append(
-                self._response_text_from_content(item.get("content", ""))
-            )
-            item_start_index += 1
-
-        if leading_preamble:
-            preamble_parts: List[str] = []
-            if messages:
-                first_content = messages[0].content
-                if isinstance(first_content, str) and first_content:
-                    preamble_parts.append(first_content)
-                messages = []
-            preamble_parts.extend(text for text in leading_preamble if text)
-            if preamble_parts:
-                messages.append(
-                    self._chat_message(
-                        {
-                            "role": self._instructions_role(),
-                            "content": "\n\n".join(preamble_parts),
-                        }
-                    )
-                )
-
         function_names_by_call_id: Dict[str, str] = {}
-        for item in items[item_start_index:]:
+        for item in items:
             if not isinstance(item, dict):
                 raise CompletionRequestValidationError(
                     "responses input items must be objects"
@@ -6086,7 +6935,7 @@ class OpenAIFormatter:
                 by_alias=True,
             )
         )
-        return CreateChatCompletionRequest(
+        return CreateChatCompletionRequest.model_construct(
             messages=self.responses_input_to_chat_messages(body),
             max_tokens=body.max_output_tokens,
             temperature=0.8 if body.temperature is None else body.temperature,
@@ -6096,13 +6945,10 @@ class OpenAIFormatter:
             top_logprobs=body.top_logprobs,
             model=body.model,
             user=body.user,
-            tools=cast(Any, chat_tools),
-            tool_choice=cast(
-                Any,
-                self._responses_tool_choice_to_chat_tool_choice(body.tool_choice),
-            ),
-            response_format=cast(Any, response_format),
-            reasoning_effort=cast(Any, self._response_reasoning_effort(body)),
+            tools=chat_tools,
+            tool_choice=self._responses_tool_choice_to_chat_tool_choice(body.tool_choice),
+            response_format=response_format,
+            reasoning_effort=self._response_reasoning_effort(body),
         )
 
     def _response_parser(
@@ -7816,11 +8662,11 @@ class OpenAIFormatter:
                 token_logprobs.append(token.token_logprob)
                 top_logprobs.append(token.top_logprobs)
                 text_cursor += self.decode_text(token.text_bytes)
-            logprobs = CompletionLogprobs(
+            logprobs = CompletionLogprobs.model_construct(
                 text_offset=offsets,
-                token_logprobs=cast(Any, token_logprobs),
+                token_logprobs=token_logprobs,
                 tokens=token_texts,
-                top_logprobs=cast(Any, top_logprobs),
+                top_logprobs=top_logprobs,
             )
         return CompletionChoice(
             text=text,
@@ -7891,15 +8737,16 @@ class Sampler:
                 ),
             )
             self.bias_array = bias_array
-        llama_cpp.llama_sampler_chain_add(
-            self._sampler,
-            llama_cpp.llama_sampler_init_penalties(
-                64,
-                1.0,
-                frequency_penalty,
-                presence_penalty,
-            ),
-        )
+        if frequency_penalty != 0.0 or presence_penalty != 0.0:
+            llama_cpp.llama_sampler_chain_add(
+                self._sampler,
+                llama_cpp.llama_sampler_init_penalties(
+                    64,
+                    1.0,
+                    frequency_penalty,
+                    presence_penalty,
+                ),
+            )
         if grammar_text is not None:
             grammar_sampler = llama_cpp.llama_sampler_init_grammar(
                 vocab,
@@ -7981,6 +8828,11 @@ class Sampler:
 
 
 class Model:
+    @dataclass
+    class SequenceStateSnapshot:
+        data: Any
+        size: int
+
     def __init__(
         self,
         *,
@@ -8022,8 +8874,13 @@ class Model:
         max_seq_len: Optional[int] = None,
         max_output_tokens: Optional[int] = None,
         draft_model: Optional[str] = None,
-        draft_model_num_pred_tokens: int = 10,
+        draft_model_num_pred_tokens: int = 16,
         draft_model_max_ngram_size: int = 2,
+        draft_model_top_k: int = 1,
+        draft_model_p_min: float = 0.0,
+        draft_model_max_batch_size: Optional[int] = None,
+        draft_model_threads: Optional[int] = None,
+        draft_model_threads_batch: Optional[int] = None,
         response_schema: Optional[Dict[str, Any]] = None,
         store_logits: bool = True,
     ) -> None:
@@ -8035,6 +8892,7 @@ class Model:
         self.response_schema = response_schema
         self.store_logits = store_logits
         self.max_output_tokens = max_output_tokens
+        self.draft_model_max_batch_size = draft_model_max_batch_size
         model_params, self._c_tensor_split, self._kv_overrides_array = (
             self.build_model_params(
                 n_gpu_layers=n_gpu_layers,
@@ -8069,8 +8927,31 @@ class Model:
         else:
             self.memory_model = (
                 "attention-unified" if kv_unified else "attention-partitioned"
-            )
-        if draft_model is not None and not self.memory_model.startswith("attention"):
+        )
+        normalized_draft_model = draft_model
+        if normalized_draft_model == "draft-mtp":
+            min_mtp_ubatch = max(1, draft_model_num_pred_tokens + 1)
+            if n_batch is not None and n_batch < min_mtp_ubatch:
+                raise RuntimeError(
+                    "MTP requires n_batch to fit the pending token plus draft tokens "
+                    f"(required {min_mtp_ubatch}, got {n_batch})"
+                )
+        required_mtp_rs_seq = (
+            max(0, draft_model_num_pred_tokens)
+            if normalized_draft_model == "draft-mtp"
+            else 0
+        )
+        self.draft_target_batching = normalized_draft_model is not None
+        if normalized_draft_model != "draft-mtp" or not self.draft_target_batching:
+            target_n_rs_seq: Optional[int] = None
+        else:
+            target_n_rs_seq = required_mtp_rs_seq
+        self.draft_uses_state_checkpoints = False
+        if (
+            normalized_draft_model is not None
+            and normalized_draft_model != "draft-mtp"
+            and not self.memory_model.startswith("attention")
+        ):
             raise RuntimeError(
                 "speculative decoding is only supported for attention models"
             )
@@ -8100,6 +8981,8 @@ class Model:
             type_k=type_k,
             type_v=type_v,
             kv_unified=kv_unified,
+            n_rs_seq=target_n_rs_seq,
+            ctx_type=None,
         )
         ctx = llama_cpp.llama_init_from_model(llama_model, context_params)
         if ctx is None:
@@ -8112,7 +8995,9 @@ class Model:
         self.n_ctx = int(llama_cpp.llama_n_ctx(ctx))
         self.n_ctx_seq = int(llama_cpp.llama_n_ctx_seq(ctx))
         self.n_seq_max = int(llama_cpp.llama_n_seq_max(ctx))
+        self.n_rs_seq = int(llama_cpp.llama_n_rs_seq(ctx))
         self.n_batch = int(llama_cpp.llama_n_batch(ctx))
+        self.n_ubatch = int(llama_cpp.llama_n_ubatch(ctx))
         self.n_ctx_train = n_ctx_train
         self.n_vocab = int(llama_cpp.llama_vocab_n_tokens(self.vocab))
         self.kv_unified = kv_unified
@@ -8150,13 +9035,93 @@ class Model:
         self.add_space_prefix = (
             self._meta_value("tokenizer.ggml.add_space_prefix") != "false"
         )
-        if draft_model is None:
+        if (
+            normalized_draft_model == "draft-mtp"
+            and self.draft_target_batching
+            and self.exact_checkpoints_only
+            and required_mtp_rs_seq > 0
+            and self.n_rs_seq < required_mtp_rs_seq
+        ):
+            # Hybrid/recurrent target-batched MTP needs rollback slots to reject drafts.
+            self.draft_target_batching = False
+        self.draft_uses_state_checkpoints = (
+            normalized_draft_model == "draft-mtp"
+            and self.draft_target_batching
+            and self.exact_checkpoints_only
+            and required_mtp_rs_seq > 0
+            and self.n_rs_seq < required_mtp_rs_seq
+        )
+        if normalized_draft_model is None:
             self.draft_provider: Optional[DraftProvider] = None
-        elif draft_model == "prompt-lookup-decoding":
+        elif normalized_draft_model == "prompt-lookup-decoding":
             self.draft_provider = PromptLookupDecoding(
                 max_ngram_size=draft_model_max_ngram_size,
                 num_pred_tokens=draft_model_num_pred_tokens,
             )
+        elif normalized_draft_model == "draft-mtp":
+            if self.n_ubatch < self.n_seq_max:
+                mtp_n_batch = self.n_batch
+            else:
+                mtp_n_batch = min(
+                    self.n_batch,
+                    max(self.n_ubatch, self.n_seq_max),
+                )
+            mtp_context_params = self.build_context_params(
+                n_ctx=self.n_ctx,
+                n_batch=mtp_n_batch,
+                n_ubatch=min(self.n_ubatch, mtp_n_batch),
+                n_seq_max=self.n_seq_max,
+                n_threads=(
+                    draft_model_threads
+                    if draft_model_threads is not None
+                    else n_threads
+                ),
+                n_threads_batch=(
+                    draft_model_threads_batch
+                    if draft_model_threads_batch is not None
+                    else (
+                        draft_model_threads
+                        if draft_model_threads is not None
+                        else n_threads_batch
+                    )
+                ),
+                rope_scaling_type=rope_scaling_type,
+                pooling_type=pooling_type,
+                attention_type=attention_type,
+                rope_freq_base=rope_freq_base,
+                rope_freq_scale=rope_freq_scale,
+                yarn_ext_factor=yarn_ext_factor,
+                yarn_attn_factor=yarn_attn_factor,
+                yarn_beta_fast=yarn_beta_fast,
+                yarn_beta_slow=yarn_beta_slow,
+                yarn_orig_ctx=yarn_orig_ctx,
+                offload_kqv=offload_kqv,
+                flash_attn=flash_attn,
+                op_offload=op_offload,
+                swa_full=swa_full,
+                no_perf=no_perf,
+                type_k=type_k,
+                type_v=type_v,
+                kv_unified=kv_unified,
+                n_rs_seq=0,
+                ctx_type=llama_cpp.LLAMA_CONTEXT_TYPE_MTP,
+            )
+            try:
+                self.draft_provider = MTPDraftProvider(
+                    model=self,
+                    context_params=mtp_context_params,
+                    num_pred_tokens=draft_model_num_pred_tokens,
+                    top_k=draft_model_top_k,
+                    p_min=draft_model_p_min,
+                )
+            except BaseException:
+                llama_cpp.llama_batch_free(self.batch)
+                llama_cpp.llama_free(self.ctx)
+                llama_cpp.llama_model_free(self.llama_model)
+                if self.backend_initialized:
+                    llama_cpp.llama_backend_free()
+                    self.backend_initialized = False
+                raise
         else:
             raise RuntimeError(f"unsupported draft model: {draft_model}")
         self.chat_formatter = self._build_chat_formatter()
@@ -8262,6 +9227,8 @@ class Model:
         type_k: Optional[int],
         type_v: Optional[int],
         kv_unified: bool,
+        n_rs_seq: Optional[int] = None,
+        ctx_type: Optional[int] = None,
     ) -> Any:
         context_params = llama_cpp.llama_context_default_params()
         if n_ctx is not None:
@@ -8272,10 +9239,14 @@ class Model:
             context_params.n_ubatch = min(int(context_params.n_batch), n_ubatch)
         if n_seq_max is not None:
             context_params.n_seq_max = n_seq_max
+        if n_rs_seq is not None:
+            context_params.n_rs_seq = n_rs_seq
         if n_threads is not None:
             context_params.n_threads = n_threads
         if n_threads_batch is not None:
             context_params.n_threads_batch = n_threads_batch
+        if ctx_type is not None:
+            context_params.ctx_type = ctx_type
         if rope_scaling_type is not None:
             context_params.rope_scaling_type = rope_scaling_type
         if pooling_type is not None:
@@ -8336,6 +9307,8 @@ class Model:
         return self.n_ctx
 
     def close(self) -> None:
+        if self.draft_provider is not None:
+            self.draft_provider.close()
         llama_cpp.llama_batch_free(self.batch)
         llama_cpp.llama_free(self.ctx)
         llama_cpp.llama_model_free(self.llama_model)
@@ -8530,6 +9503,97 @@ class Model:
         result = int(llama_cpp.llama_decode(self.ctx, self.batch))
         if result != 0:
             raise RuntimeError(f"llama_decode failed with code {result}")
+
+    def process_draft_batch(self) -> None:
+        if self.draft_provider is not None:
+            self.draft_provider.process(self.batch)
+
+    def set_draft_processing_enabled(self, enabled: bool) -> None:
+        if self.draft_provider is not None:
+            self.draft_provider.set_target_processing_enabled(enabled)
+
+    def save_sequence_state(self, seq_id: int) -> "Model.SequenceStateSnapshot":
+        flags = (
+            llama_cpp.LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY
+            | llama_cpp.LLAMA_STATE_SEQ_FLAGS_ON_DEVICE
+        )
+        size = int(llama_cpp.llama_state_seq_get_size_ext(self.ctx, seq_id, flags))
+        data = (ctypes.c_uint8 * size)()
+        written = int(
+            llama_cpp.llama_state_seq_get_data_ext(
+                self.ctx,
+                data,
+                size,
+                seq_id,
+                flags,
+            )
+        )
+        if written != size:
+            raise RuntimeError(
+                f"failed to save sequence state for seq_id={seq_id}: "
+                f"expected {size} bytes, wrote {written}"
+            )
+        return Model.SequenceStateSnapshot(data=data, size=size)
+
+    def restore_sequence_state(
+        self,
+        seq_id: int,
+        snapshot: "Model.SequenceStateSnapshot",
+    ) -> None:
+        read = int(
+            llama_cpp.llama_state_seq_set_data_ext(
+                self.ctx,
+                snapshot.data,
+                snapshot.size,
+                seq_id,
+                llama_cpp.LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY
+                | llama_cpp.LLAMA_STATE_SEQ_FLAGS_ON_DEVICE,
+            )
+        )
+        if read != snapshot.size:
+            raise RuntimeError(
+                f"failed to restore sequence state for seq_id={seq_id}: "
+                f"expected {snapshot.size} bytes, read {read}"
+            )
+
+    def replay_sequence_tokens(
+        self,
+        *,
+        seq_id: int,
+        start_pos: int,
+        tokens: Sequence[int],
+        process_draft: bool = True,
+    ) -> None:
+        if not tokens:
+            return
+        self.clear_batch()
+        self.add_batch_tokens(
+            seq_id=seq_id,
+            start_pos=start_pos,
+            tokens=tokens,
+            output_indices=[None] * len(tokens),
+        )
+        self.decode()
+        if process_draft:
+            self.process_draft_batch()
+
+    def accept_draft_tokens(self, seq_id: int, accepted_draft_tokens: int) -> None:
+        if self.draft_provider is not None:
+            self.draft_provider.accept(seq_id, accepted_draft_tokens)
+
+    def truncate_draft_sequence(self, seq_id: int, keep_len: int) -> None:
+        if self.draft_provider is not None:
+            self.draft_provider.truncate(seq_id, keep_len)
+
+    def copy_draft_sequence(
+        self,
+        source_seq_id: int,
+        dest_seq_id: int,
+        p0: int,
+        p1: int,
+    ) -> None:
+        if self.draft_provider is not None:
+            self.draft_provider.copy_sequence(source_seq_id, dest_seq_id, p0, p1)
 
     def logits(self, row_index: int) -> np.ndarray:
         ptr = llama_cpp.llama_get_logits_ith(self.ctx, row_index)
@@ -9084,6 +10148,12 @@ class UnifiedAttentionMemoryPolicy(AttentionMemoryPolicy):
             copy_p0,
             copy_p1,
         )
+        self.scheduler.model.copy_draft_sequence(
+            source_sequence_id,
+            dest_sequence_id,
+            copy_p0,
+            copy_p1,
+        )
         self.scheduler.radix_trie.copy(source_sequence_id, dest_sequence_id, keep_len)
         self.scheduler.sequence_history.copy(
             source_sequence_id,
@@ -9135,8 +10205,15 @@ class PartitionedAttentionMemoryPolicy(AttentionMemoryPolicy):
             -1,
             -1,
         )
+        self.scheduler.model.copy_draft_sequence(
+            source_sequence_id,
+            dest_sequence_id,
+            -1,
+            -1,
+        )
         if source_length > keep_len:
             llama_cpp.llama_memory_seq_rm(self.scheduler.model.mem, dest_sequence_id, keep_len, -1)
+            self.scheduler.model.truncate_draft_sequence(dest_sequence_id, keep_len)
         prefix_tokens = self.scheduler.radix_trie.tokens(source_sequence_id, keep_len)
         self.scheduler.radix_trie.copy(source_sequence_id, dest_sequence_id, keep_len)
         self.scheduler.sequence_history.extend(dest_sequence_id, prefix_tokens)
@@ -9260,6 +10337,12 @@ class CheckpointMemoryPolicy(MemoryPolicy):
             copy_p0,
             copy_p1,
         )
+        self.scheduler.model.copy_draft_sequence(
+            source_sequence_id,
+            dest_sequence_id,
+            copy_p0,
+            copy_p1,
+        )
         self.scheduler.radix_trie.copy(source_sequence_id, dest_sequence_id, keep_len)
         self.scheduler.sequence_history.copy(
             source_sequence_id,
@@ -9280,6 +10363,9 @@ class CompletionScheduler:
         output_indices: List[Optional[int]]
         completion_index: Optional[int] = None
         pending_count: int = 0
+        state_snapshot: Optional[Model.SequenceStateSnapshot] = None
+        accepted_draft_count: int = 0
+        sampled_pending_token: Optional[int] = None
 
     def __init__(
         self,
@@ -9307,6 +10393,7 @@ class CompletionScheduler:
             "draft_tokens_accepted": 0,
             "draft_tokens_rejected": 0,
         }
+        self.defer_sampled_draft_processing = False
         self.memory_policy = self.build_memory_policy()
 
     def build_memory_policy(self) -> MemoryPolicy:
@@ -9389,6 +10476,7 @@ class CompletionScheduler:
         seq_id: int,
     ) -> Tuple[int, Optional[np.ndarray]]:
         llama_cpp.llama_memory_seq_rm(self.model.mem, seq_id, 0, -1)
+        self.model.truncate_draft_sequence(seq_id, 0)
         self.clear_sequence_cache_match(request)
         self.metrics.sequence_cache_load_failures_total += 1
         return 0, None
@@ -9422,6 +10510,7 @@ class CompletionScheduler:
             return self.fail_sequence_cache_load(request, seq_id)
         self.radix_trie.extend(seq_id, tokens)
         self.sequence_history.extend(seq_id, tokens)
+        self.model.truncate_draft_sequence(seq_id, 0)
         self.metrics.sequence_cache_hits_total += 1
         self.metrics.sequence_cache_tokens_loaded_total += len(tokens)
         if len(tokens) == len(request.prompt_tokens):
@@ -9476,37 +10565,139 @@ class CompletionScheduler:
         return shifted - math.log(float(np.sum(np.exp(shifted, dtype=np.float64))))
 
     def step(self) -> bool:
+        step_started_at = time.perf_counter()
         if self.closed:
             return False
-        self.admit_waiting()
-        batch_items = self.build_batch()
-        if not batch_items:
-            return self.finalize_cancelled()
-        self.model.clear_batch()
-        for item in batch_items:
-            self.model.add_batch_tokens(
-                seq_id=item.seq_id,
-                start_pos=item.start_pos,
-                tokens=item.tokens,
-                output_indices=item.output_indices,
-            )
-        decode_started_at = time.perf_counter()
         try:
-            self.model.decode()
-        except BaseException as exc:  # noqa: BLE001
-            for request_id in list(self.active_request_ids):
-                self.fail_request(self.requests[request_id], exc)
-            for request in list(self.pending_requests):
-                self.pending_requests.remove(request)
-                self.fail_request(request, exc)
+            self.admit_waiting()
+            batch_items = self.build_batch()
+            if not batch_items:
+                if self.maybe_fill_batched_draft_tokens():
+                    self.finalize_cancelled()
+                    return True
+                return self.finalize_cancelled()
+            draft_processing_enabled = self.batch_needs_draft_processing(batch_items)
+            self.defer_sampled_draft_processing = (
+                draft_processing_enabled
+                and self.supports_sampled_draft_processing
+                and not self.model.draft_uses_state_checkpoints
+                and all(item.kind == "token" for item in batch_items)
+            )
+            if draft_processing_enabled and not self.defer_sampled_draft_processing:
+                draft_checkpoint_started_at = time.perf_counter()
+                self.prepare_draft_state_snapshots(batch_items)
+                draft_checkpoint_elapsed = time.perf_counter() - draft_checkpoint_started_at
+                self.metrics.draft_state_checkpoint_seconds_total += draft_checkpoint_elapsed
+                self.metrics.draft_state_checkpoint_calls_total += 1
+                self.observe_draft_process(batch_items, draft_checkpoint_elapsed)
+            self.model.set_draft_processing_enabled(draft_processing_enabled)
+            self.model.clear_batch()
+            for item in batch_items:
+                self.model.add_batch_tokens(
+                    seq_id=item.seq_id,
+                    start_pos=item.start_pos,
+                    tokens=item.tokens,
+                    output_indices=item.output_indices,
+                )
+            decode_started_at = time.perf_counter()
+            try:
+                self.model.decode()
+                decode_elapsed = time.perf_counter() - decode_started_at
+                if draft_processing_enabled and not self.defer_sampled_draft_processing:
+                    draft_process_started_at = time.perf_counter()
+                    self.model.process_draft_batch()
+                    draft_process_elapsed = time.perf_counter() - draft_process_started_at
+                    self.metrics.draft_process_seconds_total += draft_process_elapsed
+                    self.metrics.draft_process_calls_total += 1
+                    self.observe_draft_process(batch_items, draft_process_elapsed)
+            except BaseException as exc:  # noqa: BLE001
+                for request_id in list(self.active_request_ids):
+                    self.fail_request(self.requests[request_id], exc)
+                for request in list(self.pending_requests):
+                    self.pending_requests.remove(request)
+                    self.fail_request(request, exc)
+                return True
+            self.metrics.observe_decode(
+                batch_items,
+                decode_elapsed,
+            )
+            process_batch_started_at = time.perf_counter()
+            self.process_batch(batch_items)
+            self.metrics.process_batch_seconds_total += (
+                time.perf_counter() - process_batch_started_at
+            )
+            self.metrics.process_batch_calls_total += 1
+            if self.defer_sampled_draft_processing:
+                self.process_sampled_draft_batch(batch_items)
+                self.defer_sampled_draft_processing = False
+            self.finalize_cancelled()
             return True
-        self.metrics.observe_decode(
-            batch_items,
-            time.perf_counter() - decode_started_at,
+        finally:
+            self.metrics.scheduler_step_seconds_total += (
+                time.perf_counter() - step_started_at
+            )
+            self.metrics.scheduler_step_calls_total += 1
+
+    def observe_draft_process(
+        self,
+        items: Sequence["CompletionScheduler.BatchItem"],
+        elapsed_seconds: float,
+    ) -> None:
+        if self.model.draft_provider is None or elapsed_seconds <= 0.0:
+            return
+        self.metrics.draft_seconds_total += elapsed_seconds
+
+    def prepare_draft_state_snapshots(
+        self,
+        items: List["CompletionScheduler.BatchItem"],
+    ) -> None:
+        if not self.model.draft_uses_state_checkpoints:
+            return
+        for item in items:
+            if item.kind != "token" or item.pending_count >= len(item.tokens):
+                continue
+            item.state_snapshot = self.model.save_sequence_state(item.seq_id)
+
+    def batch_needs_draft_processing(
+        self,
+        batch_items: Sequence["CompletionScheduler.BatchItem"],
+    ) -> bool:
+        if self.model.draft_provider is None:
+            return False
+        if not self.draft_batch_size_allowed(batch_items):
+            return False
+        for item in batch_items:
+            request = self.requests.get(item.request_id)
+            if request is None:
+                continue
+            if item.kind == "prompt":
+                if self.request_needs_prompt_logits(request):
+                    return True
+                continue
+            if item.completion_index is None:
+                continue
+            completion = request.completions[item.completion_index]
+            if not completion.finished:
+                return True
+        return False
+
+    def draft_batch_size_allowed(
+        self,
+        batch_items: Sequence["CompletionScheduler.BatchItem"],
+    ) -> bool:
+        max_batch_size = getattr(self.model, "draft_model_max_batch_size", None)
+        if max_batch_size is None:
+            return True
+        draft_batch_size = sum(
+            1
+            for item in batch_items
+            if item.kind == "token" and item.completion_index is not None
         )
-        self.process_batch(batch_items)
-        self.finalize_cancelled()
-        return True
+        return draft_batch_size <= max_batch_size
+
+    def active_draft_batch_size_allowed(self, draft_batch_size: int) -> bool:
+        max_batch_size = getattr(self.model, "draft_model_max_batch_size", None)
+        return max_batch_size is None or draft_batch_size <= max_batch_size
 
     def admit_waiting(self) -> None:
         while self.pending_requests:
@@ -9547,10 +10738,7 @@ class CompletionScheduler:
             return []
 
         ordered_sequences = self._ordered_pending_sequences(prompt_requests, completions)
-        allocations = self._allocate_pending_tokens(
-            ordered_sequences,
-            self.model.n_batch,
-        )
+        allocations = self._allocate_pending_tokens_for_model(ordered_sequences)
         if ordered_sequences:
             self.sequence_round_robin += 1
 
@@ -9567,6 +10755,107 @@ class CompletionScheduler:
             )
             items.append(item)
         return items
+
+    def _allocate_pending_tokens_for_model(
+        self,
+        ordered_sequences: Sequence[Union[CompletionRequest, Completion]],
+    ) -> Dict[int, int]:
+        if not self._needs_homogeneous_recurrent_draft_batching():
+            return self._allocate_pending_tokens(ordered_sequences, self.model.n_batch)
+
+        active = [
+            source
+            for source in ordered_sequences
+            if self._pending_tokens_length(source) > 0
+        ]
+        if not active:
+            return {}
+
+        first_draft_count = self._recurrent_draft_batch_token_count(active[0])
+        if first_draft_count > 0:
+            return self._allocate_homogeneous_recurrent_draft_tokens(
+                active,
+                first_draft_count,
+            )
+
+        non_draft_sources = [
+            source
+            for source in active
+            if self._recurrent_draft_batch_token_count(source) == 0
+        ]
+        return self._allocate_pending_tokens(non_draft_sources, self.model.n_batch)
+
+    def _needs_homogeneous_recurrent_draft_batching(self) -> bool:
+        return bool(
+            self.model.draft_provider is not None
+            and getattr(self.model, "draft_target_batching", False)
+            and self.model.exact_checkpoints_only
+            and self.model.n_rs_seq > 0
+        )
+
+    def _recurrent_draft_batch_token_count(
+        self,
+        source: Union[CompletionRequest, Completion],
+    ) -> int:
+        if isinstance(source, CompletionRequest):
+            return 0
+        if (
+            source.finished
+            or source.pending_finish_reason is not None
+            or not source.pending_input_tokens
+            or not source.draft_tokens
+        ):
+            return 0
+        token_count = min(
+            len(source.pending_input_tokens) + len(source.draft_tokens),
+            len(source.pending_input_tokens) + self.model.n_rs_seq,
+        )
+        return token_count if token_count > len(source.pending_input_tokens) else 0
+
+    def _allocate_homogeneous_recurrent_draft_tokens(
+        self,
+        sources: Sequence[Union[CompletionRequest, Completion]],
+        token_count: int,
+    ) -> Dict[int, int]:
+        n_ubatch = getattr(self.model, "n_ubatch", self.model.n_batch)
+        # Recurrent rollback snapshots are only valid if the whole per-sequence
+        # pending+draft group fits in a single llama.cpp ubatch.
+        safe_capacity = min(self.model.n_batch, n_ubatch or self.model.n_batch)
+        if token_count > safe_capacity:
+            return self._allocate_recurrent_pending_only_tokens(sources, safe_capacity)
+
+        allocations: Dict[int, int] = {}
+        remaining_capacity = safe_capacity
+        for source in sources:
+            if remaining_capacity < token_count:
+                break
+            if self._recurrent_draft_batch_token_count(source) != token_count:
+                continue
+            seq_id = self._pending_sequence_id(source)
+            allocations[seq_id] = token_count
+            remaining_capacity -= token_count
+        return allocations
+
+    def _allocate_recurrent_pending_only_tokens(
+        self,
+        sources: Sequence[Union[CompletionRequest, Completion]],
+        capacity: int,
+    ) -> Dict[int, int]:
+        allocations: Dict[int, int] = {}
+        remaining_capacity = capacity
+        for source in sources:
+            if remaining_capacity <= 0:
+                break
+            if self._recurrent_draft_batch_token_count(source) == 0:
+                continue
+            if isinstance(source, CompletionRequest):
+                continue
+            pending_count = min(len(source.pending_input_tokens), remaining_capacity)
+            if pending_count <= 0:
+                continue
+            allocations[source.seq_id] = pending_count
+            remaining_capacity -= pending_count
+        return allocations
 
     def _ordered_pending_sequences(
         self,
@@ -9608,7 +10897,12 @@ class CompletionScheduler:
     ) -> int:
         if isinstance(source, CompletionRequest):
             return len(source.prompt_tokens) - source.prompt_cursor
-        draft_count = len(source.draft_tokens) if source.pending_finish_reason is None else 0
+        draft_count = (
+            len(source.draft_tokens)
+            if source.pending_finish_reason is None
+            and getattr(self.model, "draft_target_batching", True)
+            else 0
+        )
         return len(source.pending_input_tokens) + draft_count
 
     def _allocate_pending_tokens(
@@ -9687,7 +10981,11 @@ class CompletionScheduler:
 
         request = self.requests[source.request_id]
         pending_count = min(token_count, len(source.pending_input_tokens))
-        draft_count = max(0, token_count - pending_count)
+        draft_count = (
+            max(0, token_count - pending_count)
+            if getattr(self.model, "draft_target_batching", True)
+            else 0
+        )
         scheduled_tokens = [
             *source.pending_input_tokens[:pending_count],
             *(
@@ -9755,8 +11053,28 @@ class CompletionScheduler:
             else:
                 assert item.completion_index is not None
                 completion = request.completions[item.completion_index]
-                self.process_generation_item(completion, item, output_count)
+                self.process_generation_item(
+                    completion,
+                    item,
+                    output_count,
+                )
                 self.finalize_request_if_ready(request)
+        if not self.defer_sampled_draft_processing:
+            self.maybe_fill_batched_draft_tokens()
+
+    @property
+    def should_defer_draft_fill(self) -> bool:
+        return bool(
+            self.model.draft_provider is not None
+            and getattr(self.model.draft_provider, "batched_draft", False)
+        )
+
+    @property
+    def supports_sampled_draft_processing(self) -> bool:
+        return bool(
+            self.model.draft_provider is not None
+            and getattr(self.model.draft_provider, "sampled_batch_draft", False)
+        )
 
     def maybe_fill_draft_tokens(self, completion: Completion) -> None:
         if (
@@ -9767,13 +11085,32 @@ class CompletionScheduler:
         ):
             return
         remaining_tokens = completion.max_total_tokens - completion.total_tokens
+        if not getattr(self.model, "draft_target_batching", True):
+            remaining_tokens = min(remaining_tokens, 1)
         if remaining_tokens <= 0:
             return
         input_ids = np.array(
             [*completion.prompt_tokens, *completion.completion_tokens],
             dtype=np.intc,
         )
-        proposed = self.model.draft_provider.draft(input_ids)
+        can_draft = getattr(self.model.draft_provider, "can_draft", None)
+        if can_draft is not None and not can_draft(
+            int(input_ids.shape[0]),
+            seq_id=completion.seq_id,
+        ):
+            return
+        draft_started_at = time.perf_counter()
+        try:
+            proposed = self.model.draft_provider.draft(
+                input_ids,
+                seq_id=completion.seq_id,
+                max_tokens=remaining_tokens,
+            )
+        finally:
+            draft_elapsed = time.perf_counter() - draft_started_at
+            self.metrics.draft_seconds_total += draft_elapsed
+            self.metrics.draft_generate_seconds_total += draft_elapsed
+            self.metrics.draft_generate_calls_total += 1
         if proposed.size == 0:
             return
         limited = [int(token) for token in proposed[:remaining_tokens]]
@@ -9782,6 +11119,172 @@ class CompletionScheduler:
         completion.draft_tokens = limited
         self.speculative_stats["draft_proposals"] += 1
         self.speculative_stats["draft_tokens_proposed"] += len(limited)
+
+    def maybe_fill_batched_draft_tokens(self) -> bool:
+        if not self.should_defer_draft_fill or self.model.draft_provider is None:
+            return False
+        draft_many = getattr(self.model.draft_provider, "draft_many", None)
+        if draft_many is None:
+            return False
+
+        completions: List[Completion] = []
+        draft_requests: List[Tuple[np.ndarray, int, Optional[int]]] = []
+        remaining_by_completion: List[int] = []
+        for request_id in self.active_request_ids:
+            request = self.requests.get(request_id)
+            if request is None or not request.admitted:
+                continue
+            for completion in request.completions:
+                if (
+                    completion.finished
+                    or completion.pending_finish_reason is not None
+                    or completion.draft_tokens
+                ):
+                    continue
+                remaining_tokens = completion.max_total_tokens - completion.total_tokens
+                if not getattr(self.model, "draft_target_batching", True):
+                    remaining_tokens = min(remaining_tokens, 1)
+                if remaining_tokens <= 0:
+                    continue
+                input_ids = np.array(
+                    [*completion.prompt_tokens, *completion.completion_tokens],
+                    dtype=np.intc,
+                )
+                can_draft = getattr(self.model.draft_provider, "can_draft", None)
+                if can_draft is not None and not can_draft(
+                    int(input_ids.shape[0]),
+                    seq_id=completion.seq_id,
+                ):
+                    continue
+                completions.append(completion)
+                draft_requests.append((input_ids, completion.seq_id, remaining_tokens))
+                remaining_by_completion.append(remaining_tokens)
+
+        if not draft_requests:
+            return False
+        if not self.active_draft_batch_size_allowed(len(draft_requests)):
+            return False
+
+        draft_started_at = time.perf_counter()
+        proposed_many = draft_many(draft_requests)
+        draft_elapsed = time.perf_counter() - draft_started_at
+        self.metrics.draft_seconds_total += draft_elapsed
+        self.metrics.draft_generate_seconds_total += draft_elapsed
+        self.metrics.draft_generate_calls_total += 1
+        made_progress = False
+
+        for completion, proposed, remaining_tokens in zip(
+            completions,
+            proposed_many,
+            remaining_by_completion,
+        ):
+            if proposed.size == 0:
+                continue
+            limited = [int(token) for token in proposed[:remaining_tokens]]
+            if not limited:
+                continue
+            self.speculative_stats["draft_proposals"] += 1
+            self.speculative_stats["draft_tokens_proposed"] += len(limited)
+            completion.draft_tokens = limited
+            made_progress = True
+        return made_progress
+
+    def process_sampled_draft_batch(
+        self,
+        items: Sequence["CompletionScheduler.BatchItem"],
+    ) -> None:
+        if self.model.draft_provider is None:
+            return
+        process_sampled_batch = getattr(
+            self.model.draft_provider,
+            "process_sampled_batch",
+            None,
+        )
+        if process_sampled_batch is None:
+            return
+        if not self.draft_batch_size_allowed(items):
+            return
+
+        output_count = sum(
+            output_index is not None
+            for item in items
+            for output_index in item.output_indices
+        )
+        completions: List[Completion] = []
+        updates: List[Dict[str, Any]] = []
+        remaining_by_completion: List[int] = []
+        batch_row_offset = 0
+        for item in items:
+            item_batch_rows = list(
+                range(batch_row_offset, batch_row_offset + len(item.tokens))
+            )
+            batch_row_offset += len(item.tokens)
+            if item.kind != "token" or item.completion_index is None:
+                continue
+            request = self.requests.get(item.request_id)
+            if request is None:
+                continue
+            completion = request.completions[item.completion_index]
+            if completion.finished or completion.pending_finish_reason is not None:
+                continue
+            remaining_tokens = completion.max_total_tokens - completion.total_tokens
+            if remaining_tokens <= 0:
+                continue
+            raw_row_indices = [
+                self.output_arg(output_index, output_count)
+                for output_index in item.output_indices
+            ]
+            if any(row_index is None for row_index in raw_row_indices):
+                continue
+            target_count = item.pending_count + item.accepted_draft_count
+            if target_count <= 0 or target_count > len(item.tokens):
+                continue
+            if item.sampled_pending_token is None:
+                continue
+            completions.append(completion)
+            updates.append(
+                {
+                    "seq_id": item.seq_id,
+                    "start_pos": item.start_pos,
+                    "tokens": item.tokens,
+                    "row_indices": item_batch_rows,
+                    "target_count": target_count,
+                    "pending_token": item.sampled_pending_token,
+                    "max_tokens": remaining_tokens,
+                }
+            )
+            remaining_by_completion.append(remaining_tokens)
+
+        if not updates:
+            return
+
+        draft_started_at = time.perf_counter()
+        proposed_many = process_sampled_batch(updates)
+        draft_elapsed = time.perf_counter() - draft_started_at
+        self.metrics.draft_seconds_total += draft_elapsed
+        self.metrics.draft_sampled_batch_seconds_total += draft_elapsed
+        self.metrics.draft_sampled_batch_calls_total += 1
+        for completion, proposed, remaining_tokens in zip(
+            completions,
+            proposed_many,
+            remaining_by_completion,
+        ):
+            if proposed.size == 0:
+                continue
+            limited = [int(token) for token in proposed[:remaining_tokens]]
+            if not limited:
+                continue
+            completion.draft_tokens = limited
+            self.speculative_stats["draft_proposals"] += 1
+            self.speculative_stats["draft_tokens_proposed"] += len(limited)
+
+    def sample_completion_token(self, completion: Completion, row_index: int) -> int:
+        sample_started_at = time.perf_counter()
+        try:
+            return completion.sampler.sample(self.model.ctx, row_index)
+        finally:
+            self.metrics.sample_seconds_total += time.perf_counter() - sample_started_at
+            self.metrics.sample_calls_total += 1
 
     def process_generation_item(
         self,
@@ -9802,7 +11305,8 @@ class CompletionScheduler:
             assert row_index is not None
             row_indices.append(int(row_index))
         if completion.pending_finish_reason is not None:
-            self.checkpoint_logits[completion.seq_id] = self.model.logits(row_indices[-1])
+            if self.model.store_logits:
+                self.checkpoint_logits[completion.seq_id] = self.model.logits(row_indices[-1])
             completion.pending_input_tokens = completion.pending_input_tokens[item.pending_count :]
             finish_reason: str = completion.pending_finish_reason
             completion.pending_finish_reason = None
@@ -9814,29 +11318,50 @@ class CompletionScheduler:
 
         decoded_draft_tokens = item.tokens[item.pending_count :]
         accepted_draft_count = 0
+        defer_draft_state = self.defer_sampled_draft_processing
 
         for draft_index, draft_token in enumerate(decoded_draft_tokens):
             row_index = row_indices[draft_index]
-            logits = self.model.logits(row_index)
-            self.checkpoint_logits[completion.seq_id] = logits
-            sampled_token = completion.sampler.sample(self.model.ctx, row_index)
+            sampled_token = self.sample_completion_token(completion, row_index)
+            need_logits = self.model.store_logits or completion.needs_token_logprob
+            logits = self.model.logits(row_index) if need_logits else None
+            if self.model.store_logits and logits is not None:
+                self.checkpoint_logits[completion.seq_id] = logits
             if sampled_token != draft_token:
-                rejected = len(completion.draft_tokens)
+                rejected = max(0, len(completion.draft_tokens) - accepted_draft_count)
                 if rejected > 0:
                     self.speculative_stats["draft_tokens_rejected"] += rejected
                 keep_len = item.start_pos + item.pending_count + accepted_draft_count
-                self.truncate_sequence(completion.seq_id, keep_len)
+                if item.state_snapshot is not None:
+                    self.restore_draft_state_snapshot(item, keep_len)
+                else:
+                    if not defer_draft_state:
+                        self.model.accept_draft_tokens(completion.seq_id, accepted_draft_count)
+                    self.truncate_sequence(
+                        completion.seq_id,
+                        keep_len,
+                        truncate_draft=not defer_draft_state,
+                    )
                 completion.draft_tokens.clear()
-                record = Token.from_logits(
-                    model=self.model,
-                    formatter=self.formatter,
-                    prev_tokens=[*completion.prompt_tokens, *completion.completion_tokens],
-                    prev_text_bytes=completion.detokenized_prefix_bytes,
-                    token=sampled_token,
-                    logits=logits,
-                    logprobs_count=completion.logprobs,
-                    need_token_logprob=completion.needs_token_logprob,
-                )
+                prev_tokens = [*completion.prompt_tokens, *completion.completion_tokens]
+                if logits is not None:
+                    record = Token.from_logits(
+                        model=self.model,
+                        formatter=self.formatter,
+                        prev_tokens=prev_tokens,
+                        prev_text_bytes=completion.detokenized_prefix_bytes,
+                        token=sampled_token,
+                        logits=logits,
+                        logprobs_count=completion.logprobs,
+                        need_token_logprob=completion.needs_token_logprob,
+                    )
+                else:
+                    record = Token.from_token(
+                        model=self.model,
+                        prev_tokens=prev_tokens,
+                        prev_text_bytes=completion.detokenized_prefix_bytes,
+                        token=sampled_token,
+                    )
                 mismatch_finish_reason: Optional[str] = self.handle_completion_token(
                     completion,
                     sampled_token,
@@ -9845,17 +11370,29 @@ class CompletionScheduler:
                 )
                 if mismatch_finish_reason is not None:
                     completion.pending_finish_reason = mismatch_finish_reason
+                else:
+                    item.sampled_pending_token = sampled_token
+                item.accepted_draft_count = accepted_draft_count
                 return
-            record = Token.from_logits(
-                model=self.model,
-                formatter=self.formatter,
-                prev_tokens=[*completion.prompt_tokens, *completion.completion_tokens],
-                prev_text_bytes=completion.detokenized_prefix_bytes,
-                token=draft_token,
-                logits=logits,
-                logprobs_count=completion.logprobs,
-                need_token_logprob=completion.needs_token_logprob,
-            )
+            prev_tokens = [*completion.prompt_tokens, *completion.completion_tokens]
+            if logits is not None:
+                record = Token.from_logits(
+                    model=self.model,
+                    formatter=self.formatter,
+                    prev_tokens=prev_tokens,
+                    prev_text_bytes=completion.detokenized_prefix_bytes,
+                    token=draft_token,
+                    logits=logits,
+                    logprobs_count=completion.logprobs,
+                    need_token_logprob=completion.needs_token_logprob,
+                )
+            else:
+                record = Token.from_token(
+                    model=self.model,
+                    prev_tokens=prev_tokens,
+                    prev_text_bytes=completion.detokenized_prefix_bytes,
+                    token=draft_token,
+                )
             accepted_finish_reason: Optional[str] = self.handle_completion_token(
                 completion,
                 draft_token,
@@ -9869,35 +11406,67 @@ class CompletionScheduler:
                 if rejected > 0:
                     self.speculative_stats["draft_tokens_rejected"] += rejected
                 keep_len = item.start_pos + item.pending_count + accepted_draft_count
-                self.truncate_sequence(completion.seq_id, keep_len)
+                if item.state_snapshot is not None:
+                    self.restore_draft_state_snapshot(item, keep_len)
+                else:
+                    if not defer_draft_state:
+                        self.model.accept_draft_tokens(completion.seq_id, accepted_draft_count)
+                    self.truncate_sequence(
+                        completion.seq_id,
+                        keep_len,
+                        truncate_draft=not defer_draft_state,
+                    )
                 completion.draft_tokens.clear()
+                item.accepted_draft_count = accepted_draft_count
                 self.finish_completion(completion, accepted_finish_reason)
                 return
 
+        item.accepted_draft_count = accepted_draft_count
+        if item.state_snapshot is None and not defer_draft_state:
+            self.model.accept_draft_tokens(completion.seq_id, accepted_draft_count)
         if accepted_draft_count:
             completion.draft_tokens = completion.draft_tokens[accepted_draft_count:]
 
         final_row_index = row_indices[-1]
-        final_logits = self.model.logits(final_row_index)
-        self.checkpoint_logits[completion.seq_id] = final_logits
-        next_token = completion.sampler.sample(self.model.ctx, final_row_index)
+        next_token = self.sample_completion_token(completion, final_row_index)
+        need_final_logits = self.model.store_logits or completion.needs_token_logprob
+        final_logits = self.model.logits(final_row_index) if need_final_logits else None
+        if self.model.store_logits and final_logits is not None:
+            self.checkpoint_logits[completion.seq_id] = final_logits
         if completion.draft_tokens and next_token != completion.draft_tokens[0]:
             self.speculative_stats["draft_tokens_rejected"] += len(completion.draft_tokens)
+            if not defer_draft_state:
+                self.model.truncate_draft_sequence(
+                    completion.seq_id,
+                    item.start_pos + len(item.tokens),
+                )
             completion.draft_tokens.clear()
         elif completion.draft_tokens and next_token == completion.draft_tokens[0]:
-            completion.draft_tokens = completion.draft_tokens[1:]
+            if getattr(self.model, "draft_target_batching", True):
+                completion.draft_tokens = completion.draft_tokens[1:]
+            else:
+                completion.draft_tokens.clear()
             self.speculative_stats["draft_tokens_accepted"] += 1
 
-        record = Token.from_logits(
-            model=self.model,
-            formatter=self.formatter,
-            prev_tokens=[*completion.prompt_tokens, *completion.completion_tokens],
-            prev_text_bytes=completion.detokenized_prefix_bytes,
-            token=next_token,
-            logits=final_logits,
-            logprobs_count=completion.logprobs,
-            need_token_logprob=completion.needs_token_logprob,
-        )
+        prev_tokens = [*completion.prompt_tokens, *completion.completion_tokens]
+        if final_logits is not None:
+            record = Token.from_logits(
+                model=self.model,
+                formatter=self.formatter,
+                prev_tokens=prev_tokens,
+                prev_text_bytes=completion.detokenized_prefix_bytes,
+                token=next_token,
+                logits=final_logits,
+                logprobs_count=completion.logprobs,
+                need_token_logprob=completion.needs_token_logprob,
+            )
+        else:
+            record = Token.from_token(
+                model=self.model,
+                prev_tokens=prev_tokens,
+                prev_text_bytes=completion.detokenized_prefix_bytes,
+                token=next_token,
+            )
         final_finish_reason: Optional[str] = self.handle_completion_token(
             completion,
             next_token,
@@ -9906,6 +11475,8 @@ class CompletionScheduler:
         )
         if final_finish_reason is not None:
             completion.pending_finish_reason = final_finish_reason
+        else:
+            item.sampled_pending_token = next_token
 
     def maybe_save_prompt_checkpoint(self, request: CompletionRequest) -> None:
         if (
@@ -9925,6 +11496,12 @@ class CompletionScheduler:
             copy_p1 = -1
         llama_cpp.llama_memory_seq_cp(
             self.model.mem,
+            request.base_seq_id,
+            checkpoint_seq_id,
+            copy_p0,
+            copy_p1,
+        )
+        self.model.copy_draft_sequence(
             request.base_seq_id,
             checkpoint_seq_id,
             copy_p0,
@@ -10036,7 +11613,7 @@ class CompletionScheduler:
             return
         if row_index is None:
             raise RuntimeError("missing logits row")
-        token = completion.sampler.sample(self.model.ctx, row_index)
+        token = self.sample_completion_token(completion, row_index)
         prev_tokens = [*completion.prompt_tokens, *completion.completion_tokens]
         if self.model.store_logits or completion.needs_token_logprob:
             logits = self.model.logits(row_index)
@@ -10143,7 +11720,7 @@ class CompletionScheduler:
             and finish_reason is None
         ):
             self.flush_stream_updates(completion, finish_reason=None)
-        if not decoded and finish_reason is None:
+        if not decoded and finish_reason is None and not self.should_defer_draft_fill:
             self.maybe_fill_draft_tokens(completion)
         return finish_reason
 
@@ -10190,14 +11767,64 @@ class CompletionScheduler:
         if request.on_done is not None:
             request.on_done(result)
 
-    def truncate_sequence(self, seq_id: int, keep_len: int) -> None:
+    def truncate_sequence(
+        self,
+        seq_id: int,
+        keep_len: int,
+        *,
+        truncate_draft: bool = True,
+    ) -> None:
         current_len = self.radix_trie.length(seq_id)
         if current_len <= keep_len:
             return
-        llama_cpp.llama_memory_seq_rm(self.model.mem, seq_id, keep_len, -1)
+        if not llama_cpp.llama_memory_seq_rm(self.model.mem, seq_id, keep_len, -1):
+            raise RuntimeError(
+                f"failed to truncate model sequence {seq_id} at position {keep_len}"
+            )
+        if truncate_draft:
+            self.model.truncate_draft_sequence(seq_id, keep_len)
+        self.truncate_sequence_metadata(seq_id, current_len, keep_len)
+
+    def truncate_sequence_metadata(
+        self,
+        seq_id: int,
+        current_len: int,
+        keep_len: int,
+    ) -> None:
         self.radix_trie.truncate(seq_id, keep_len)
         self.sequence_history.truncate(seq_id, current_len, keep_len)
         self.checkpoint_logits.pop(seq_id, None)
+
+    def restore_draft_state_snapshot(
+        self,
+        item: "CompletionScheduler.BatchItem",
+        keep_len: int,
+    ) -> None:
+        restore_started_at = time.perf_counter()
+        if item.state_snapshot is None:
+            self.truncate_sequence(item.seq_id, keep_len)
+            return
+        try:
+            current_len = self.radix_trie.length(item.seq_id)
+            keep_count = max(0, keep_len - item.start_pos)
+            keep_tokens = item.tokens[:keep_count]
+            accepted_draft_tokens = max(0, keep_count - item.pending_count)
+            self.model.restore_sequence_state(item.seq_id, item.state_snapshot)
+            llama_cpp.llama_memory_seq_rm(self.model.mem, item.seq_id, item.start_pos, -1)
+            self.truncate_sequence_metadata(item.seq_id, current_len, keep_len)
+            self.model.replay_sequence_tokens(
+                seq_id=item.seq_id,
+                start_pos=item.start_pos,
+                tokens=keep_tokens,
+                process_draft=False,
+            )
+            self.model.accept_draft_tokens(item.seq_id, accepted_draft_tokens)
+            self.model.truncate_draft_sequence(item.seq_id, keep_len)
+        finally:
+            elapsed = time.perf_counter() - restore_started_at
+            self.metrics.draft_seconds_total += elapsed
+            self.metrics.draft_state_restore_seconds_total += elapsed
+            self.metrics.draft_state_restore_calls_total += 1
 
     def truncate_free_sequence(self, seq_id: int, keep_len: int) -> None:
         if seq_id not in self.free_sequences:
@@ -10287,6 +11914,45 @@ class CompletionScheduler:
             ),
         ]
 
+    def speculative_metric_definitions(
+        self,
+    ) -> List[Tuple[str, str, str, Union[int, float]]]:
+        proposed = self.speculative_stats["draft_tokens_proposed"]
+        accepted = self.speculative_stats["draft_tokens_accepted"]
+        acceptance_rate = accepted / proposed if proposed > 0 else 0.0
+        return [
+            (
+                "counter",
+                "batch_server:draft_proposals_total",
+                "Number of speculative draft proposal batches generated.",
+                self.speculative_stats["draft_proposals"],
+            ),
+            (
+                "counter",
+                "batch_server:draft_tokens_proposed_total",
+                "Number of speculative draft tokens proposed.",
+                proposed,
+            ),
+            (
+                "counter",
+                "batch_server:draft_tokens_accepted_total",
+                "Number of speculative draft tokens accepted.",
+                accepted,
+            ),
+            (
+                "counter",
+                "batch_server:draft_tokens_rejected_total",
+                "Number of speculative draft tokens rejected.",
+                self.speculative_stats["draft_tokens_rejected"],
+            ),
+            (
+                "gauge",
+                "batch_server:draft_acceptance_rate",
+                "Fraction of proposed speculative draft tokens accepted.",
+                acceptance_rate,
+            ),
+        ]
+
     def render_prometheus_metrics(self) -> str:
         active_completions = sum(
             1
@@ -10340,9 +12006,111 @@ class CompletionScheduler:
             ),
             (
                 "counter",
+                "batch_server:scheduler_step_seconds_total",
+                "Total scheduler step wall time.",
+                self.metrics.scheduler_step_seconds_total,
+            ),
+            (
+                "counter",
+                "batch_server:process_batch_seconds_total",
+                "Time spent processing decoded batches after llama_decode().",
+                self.metrics.process_batch_seconds_total,
+            ),
+            (
+                "counter",
+                "batch_server:sample_seconds_total",
+                "Time spent sampling target logits.",
+                self.metrics.sample_seconds_total,
+            ),
+            (
+                "counter",
+                "batch_server:draft_seconds_total",
+                "Speculative draft processing time in seconds.",
+                self.metrics.draft_seconds_total,
+            ),
+            (
+                "counter",
+                "batch_server:draft_state_checkpoint_seconds_total",
+                "Time spent saving draft verification state snapshots.",
+                self.metrics.draft_state_checkpoint_seconds_total,
+            ),
+            (
+                "counter",
+                "batch_server:draft_state_restore_seconds_total",
+                "Time spent restoring draft verification state snapshots.",
+                self.metrics.draft_state_restore_seconds_total,
+            ),
+            (
+                "counter",
+                "batch_server:draft_process_seconds_total",
+                "Time spent feeding target batches into the draft context.",
+                self.metrics.draft_process_seconds_total,
+            ),
+            (
+                "counter",
+                "batch_server:draft_generate_seconds_total",
+                "Time spent generating speculative draft tokens.",
+                self.metrics.draft_generate_seconds_total,
+            ),
+            (
+                "counter",
+                "batch_server:draft_sampled_batch_seconds_total",
+                "Time spent generating speculative tokens from sampled target batches.",
+                self.metrics.draft_sampled_batch_seconds_total,
+            ),
+            (
+                "counter",
+                "batch_server:draft_state_checkpoint_calls_total",
+                "Number of draft verification state snapshot phases.",
+                self.metrics.draft_state_checkpoint_calls_total,
+            ),
+            (
+                "counter",
+                "batch_server:draft_state_restore_calls_total",
+                "Number of draft verification state snapshot restore phases.",
+                self.metrics.draft_state_restore_calls_total,
+            ),
+            (
+                "counter",
+                "batch_server:draft_process_calls_total",
+                "Number of target-to-draft context processing phases.",
+                self.metrics.draft_process_calls_total,
+            ),
+            (
+                "counter",
+                "batch_server:draft_generate_calls_total",
+                "Number of speculative draft generation phases.",
+                self.metrics.draft_generate_calls_total,
+            ),
+            (
+                "counter",
+                "batch_server:draft_sampled_batch_calls_total",
+                "Number of sampled target batch draft phases.",
+                self.metrics.draft_sampled_batch_calls_total,
+            ),
+            (
+                "counter",
                 "llamacpp:n_decode_total",
                 "Total number of llama_decode() calls.",
                 self.metrics.n_decode_total,
+            ),
+            (
+                "counter",
+                "batch_server:scheduler_step_calls_total",
+                "Number of scheduler steps.",
+                self.metrics.scheduler_step_calls_total,
+            ),
+            (
+                "counter",
+                "batch_server:process_batch_calls_total",
+                "Number of decoded batch processing phases.",
+                self.metrics.process_batch_calls_total,
+            ),
+            (
+                "counter",
+                "batch_server:sample_calls_total",
+                "Number of target logit sampling calls.",
+                self.metrics.sample_calls_total,
             ),
             (
                 "counter",
@@ -10459,6 +12227,7 @@ class CompletionScheduler:
                 self.metrics.checkpoint_evictions_total,
             ),
             *self.sequence_cache_metric_definitions(),
+            *self.speculative_metric_definitions(),
             (
                 "gauge",
                 "batch_server:radix_trie_sequences",
@@ -10638,6 +12407,27 @@ class CompletionService:
             payload=payload,
         )
         return self.submit_request(request)
+
+
+def unpack_completion_request_parts(
+    parts: Tuple[Any, ...],
+) -> Tuple[CreateCompletionRequest, str, str, List[int], Optional[str], Optional[str]]:
+    if len(parts) == 6:
+        return cast(
+            Tuple[CreateCompletionRequest, str, str, List[int], Optional[str], Optional[str]],
+            parts,
+        )
+    if len(parts) == 5:
+        payload, prompt_text, prompt_tokens, grammar_text, tool_name = parts
+        return (
+            cast(CreateCompletionRequest, payload),
+            cast(str, prompt_text),
+            "",
+            cast(List[int], prompt_tokens),
+            cast(Optional[str], grammar_text),
+            cast(Optional[str], tool_name),
+        )
+    raise CompletionRequestValidationError("unexpected chat completion formatter result")
 
 
 def create_app() -> FastAPI:
@@ -10917,7 +12707,7 @@ def create_app() -> FastAPI:
         service: CompletionService = app.state.service
         formatter = service.formatter
         try:
-            payload, prompt_text, generation_prompt, prompt_tokens, grammar_text, tool_name = (
+            payload, prompt_text, generation_prompt, prompt_tokens, grammar_text, tool_name = unpack_completion_request_parts(
                 formatter.completion_request_from_chat_request(
                     body,
                 )
@@ -11005,7 +12795,7 @@ def create_app() -> FastAPI:
         formatter = service.formatter
         try:
             chat_body = formatter.chat_request_from_responses_request(body)
-            payload, prompt_text, generation_prompt, prompt_tokens, grammar_text, tool_name = (
+            payload, prompt_text, generation_prompt, prompt_tokens, grammar_text, tool_name = unpack_completion_request_parts(
                 formatter.completion_request_from_chat_request(
                     chat_body,
                 )
@@ -11164,7 +12954,9 @@ def create_app() -> FastAPI:
                         prompt_tokens,
                         grammar_text,
                         tool_name,
-                    ) = formatter.completion_request_from_chat_request(chat_body)
+                    ) = unpack_completion_request_parts(
+                        formatter.completion_request_from_chat_request(chat_body)
+                    )
                     normalized_response_tools = cast(
                         Optional[List[Dict[str, Any]]],
                         formatter._normalized_tools(tools=chat_body.tools),
@@ -11328,6 +13120,11 @@ def main() -> None:
         draft_model=config.model.draft_model,
         draft_model_num_pred_tokens=config.model.draft_model_num_pred_tokens,
         draft_model_max_ngram_size=config.model.draft_model_max_ngram_size,
+        draft_model_top_k=config.model.draft_model_top_k,
+        draft_model_p_min=config.model.draft_model_p_min,
+        draft_model_max_batch_size=config.model.draft_model_max_batch_size,
+        draft_model_threads=config.model.draft_model_threads,
+        draft_model_threads_batch=config.model.draft_model_threads_batch,
         response_schema=config.model.response_schema,
         store_logits=config.model.store_logits,
     )
