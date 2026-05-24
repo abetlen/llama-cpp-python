@@ -743,6 +743,7 @@ If you find any issues with the documentation, please open an issue or submit a 
 ## Development
 
 This package is under active development and I welcome any contributions.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution workflow, PR title, changelog, testing, and style guidelines.
 
 To get started, clone the repository and install the package in editable / development mode:
 
