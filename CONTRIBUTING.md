@@ -1,5 +1,7 @@
 # Contributing
 
+Hello human and AI contributors, this document exists to help you understand the project and set some rules for contributions.
+
 ## Contribution Workflow
 
 Before opening a pull request, search existing issues and PRs to avoid duplicate work.
@@ -66,6 +68,7 @@ Follow existing patterns when touching ctypes bindings or server APIs, and avoid
 
 Write Markdown with one sentence or core idea per physical line to keep diffs focused and easier to review.
 Do not manually wrap lines at a fixed column width.
+Keep `README.md` focused on user-facing setup and usage; link to this guide for contribution workflow details rather than duplicating them.
 
 ## Project Layout
 
