@@ -18,11 +18,11 @@ BREAKING CHANGES WILL ALMOST CERTAINLY BE REJECTED OR REFACTORED.
 Use PR titles in the form `<tag>: <title>`, with an optional scope when it adds clarity: `feat: add X`, `fix(server): handle Y`, `fix(ci): repair Z`, or `chore: bump version to N`.
 Prefer tags already used in the project history, such as `feat`, `fix`, `chore`, `ci`, `docs`, and `refactor`.
 
-Add changelog entries under `## [Unreleased]` using the same prefix style as well as the contributor and PR number
+Add changelog entries under `## [Unreleased]` using the PR title followed by `by @contributor in #1234`.
 
 ```md
-- feat(server): Add support for X by @contributor in #1234
-- fix(ci): Repair Y wheel builds by @contributor in #1234
+- feat(server): add support for X by @contributor in #1234
+- fix(ci): repair Y wheel builds by @contributor in #1234
 ```
 
 ## Local Development
