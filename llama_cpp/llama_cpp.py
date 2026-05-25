@@ -516,6 +516,14 @@ LLAMA_SPLIT_MODE_ROW = 2
 LLAMA_SPLIT_MODE_TENSOR = 3
 
 
+# enum llama_context_type {
+#     LLAMA_CONTEXT_TYPE_DEFAULT = 0,
+#     LLAMA_CONTEXT_TYPE_MTP     = 1,
+# };
+LLAMA_CONTEXT_TYPE_DEFAULT = 0
+LLAMA_CONTEXT_TYPE_MTP = 1
+
+
 # typedef struct llama_token_data {
 #     llama_token id; // token id
 #     float logit;    // log-odds of the token
@@ -894,9 +902,11 @@ class llama_sampler_seq_config(ctypes.Structure):
 #     uint32_t n_batch;           // logical maximum batch size that can be submitted to llama_decode
 #     uint32_t n_ubatch;          // physical maximum batch size
 #     uint32_t n_seq_max;         // max number of sequences (i.e. distinct states for recurrent models)
+#     uint32_t n_rs_seq;          // number of recurrent-state snapshots per seq for rollback (0 = no rollback) [EXPERIMENTAL]
 #     int32_t  n_threads;         // number of threads to use for generation
 #     int32_t  n_threads_batch;   // number of threads to use for batch processing
 
+#     enum llama_context_type      ctx_type;          // set the context type (e.g. MTP)
 #     enum llama_rope_scaling_type rope_scaling_type; // RoPE scaling type, from `enum llama_rope_scaling_type`
 #     enum llama_pooling_type      pooling_type;      // whether to pool (sum) embedding results by sequence id
 #     enum llama_attention_type    attention_type;    // attention type to use for embeddings
@@ -947,8 +957,10 @@ class llama_context_params(ctypes.Structure):
         n_batch (int): logical maximum batch size that can be submitted to llama_decode
         n_ubatch (int): physical maximum batch size
         n_seq_max (int): max number of sequences (i.e. distinct states for recurrent models)
+        n_rs_seq (int): number of recurrent-state snapshots per sequence for rollback
         n_threads (int): number of threads to use for generation
         n_threads_batch (int): number of threads to use for batch processing
+        ctx_type (int): context type, from `enum llama_context_type`
         rope_scaling_type (int): RoPE scaling type, from `enum llama_rope_scaling_type`
         pooling_type (int): whether to pool (sum) embedding results by sequence id (ignored if no pooling layer)
         attention_type (int): attention type to use for embeddings
@@ -982,8 +994,10 @@ class llama_context_params(ctypes.Structure):
         n_batch: int
         n_ubatch: int
         n_seq_max: int
+        n_rs_seq: int
         n_threads: int
         n_threads_batch: int
+        ctx_type: int
         rope_scaling_type: int
         pooling_type: int
         attention_type: int
@@ -1016,8 +1030,10 @@ class llama_context_params(ctypes.Structure):
         ("n_batch", ctypes.c_uint32),
         ("n_ubatch", ctypes.c_uint32),
         ("n_seq_max", ctypes.c_uint32),
+        ("n_rs_seq", ctypes.c_uint32),
         ("n_threads", ctypes.c_int32),
         ("n_threads_batch", ctypes.c_int32),
+        ("ctx_type", ctypes.c_int),
         ("rope_scaling_type", ctypes.c_int),
         ("pooling_type", ctypes.c_int),
         ("attention_type", ctypes.c_int),
@@ -1589,6 +1605,11 @@ def llama_n_ubatch(ctx: llama_context_p, /) -> int: ...
 # LLAMA_API uint32_t llama_n_seq_max  (const struct llama_context * ctx);
 @ctypes_function("llama_n_seq_max", [llama_context_p_ctypes], ctypes.c_uint32)
 def llama_n_seq_max(ctx: llama_context_p, /) -> int: ...
+
+
+# LLAMA_API uint32_t llama_n_rs_seq   (const struct llama_context * ctx);
+@ctypes_function("llama_n_rs_seq", [llama_context_p_ctypes], ctypes.c_uint32)
+def llama_n_rs_seq(ctx: llama_context_p, /) -> int: ...
 
 
 # DEPRECATED(LLAMA_API int32_t llama_n_ctx_train(const struct llama_model * model), "use llama_model_n_ctx_train instead");
