@@ -92,16 +92,6 @@ def test_hf_tokenizer_config_str_to_chat_formatter():
     )
 
     assert chat_formatter_respoonse.prompt == ("<s>[INST] Hello, world! [/INST]</s>")
-"""Append-only test module for Gemma 4 native tool-call parsing.
-
-These tests intentionally exercise only the pure-Python parser
-(`_parse_gemma4_native_tool_calls`) so they run without a real GGUF
-model and without llama.cpp linkage.
-"""
-
-import json
-
-import llama_cpp.llama_chat_format as llama_chat_format
 
 
 def _parse(text):
