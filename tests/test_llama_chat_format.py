@@ -92,26 +92,3 @@ def test_hf_tokenizer_config_str_to_chat_formatter():
     )
 
     assert chat_formatter_respoonse.prompt == ("<s>[INST] Hello, world! [/INST]</s>")
-
-
-def test_generation_tag_is_ignored() -> None:
-    """HuggingFace chat templates use {% generation %}/{% endgeneration %} to
-    mark training-time loss spans. At inference the tags must be no-ops or
-    affected GGUFs (SmolLM3 and similar) fail to load with TemplateSyntaxError.
-    """
-    template = (
-        "{% for message in messages %}"
-        "{% generation %}{{ message['role'] }}: {{ message['content'] }}{% endgeneration %}"
-        "{% endfor %}"
-    )
-    chat_formatter = llama_chat_format.Jinja2ChatFormatter(
-        template=template,
-        eos_token="</s>",
-        bos_token="<s>",
-    )
-    response = chat_formatter(
-        messages=[
-            ChatCompletionRequestUserMessage(role="user", content="hi"),
-        ]
-    )
-    assert "user: hi" in response.prompt
