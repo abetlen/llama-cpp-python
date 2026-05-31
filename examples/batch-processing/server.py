@@ -33,6 +33,8 @@ import multiprocessing
 import copy
 import shutil
 import inspect
+import importlib.util
+import sys
 
 from pathlib import Path
 from datetime import datetime
@@ -1192,6 +1194,52 @@ class MTPDraftProvider(DraftProvider):
     batched_draft = True
     sampled_batch_draft = True
 
+    @dataclass(frozen=True)
+    class SampledContextRow:
+        seq_id: int
+        draft_pos: int
+        token: int
+        source_row: Optional[int]
+
+    @dataclass(frozen=True)
+    class SampledPendingRow:
+        update_index: int
+        seq_id: int
+        draft_pos: int
+        token: int
+        source_row: int
+
+    @dataclass(frozen=True)
+    class SampledOutputRow:
+        update_index: int
+        seq_id: int
+        row_index: int
+        keep_len: int
+        ready_pos: int
+
+    @dataclass
+    class DraftManyState:
+        result_index: int
+        seq_id: int
+        first_pos: int
+        keep_len: int
+        n_predict: int
+        token: int
+        drafted: List[int]
+        embedding: np.ndarray
+        cache_key: Tuple[Tuple[int, ...], int]
+
+    @dataclass
+    class SampledDraftState:
+        update_index: int
+        seq_id: int
+        keep_len: int
+        pos: int
+        token: int
+        drafted: List[int]
+        n_predict: int
+        embedding: np.ndarray
+
     def __init__(
         self,
         *,
@@ -1209,6 +1257,11 @@ class MTPDraftProvider(DraftProvider):
         self.num_pred_tokens = max(0, int(num_pred_tokens))
         self.top_k = max(1, int(top_k))
         self.p_min = max(0.0, min(1.0, float(p_min)))
+        (
+            self.target_hidden_norm_weight,
+            self.draft_hidden_norm_weight,
+            self.hidden_norm_epsilon,
+        ) = self._load_hidden_norm_weights(model.model_path)
         self.ctx = llama_cpp.llama_init_from_model(self.model, context_params)
         if self.ctx is None:
             raise RuntimeError("failed to create MTP draft context")
@@ -1236,6 +1289,10 @@ class MTPDraftProvider(DraftProvider):
         self.ready = [False] * self.n_seq_max
         self.ready_pos = [0] * self.n_seq_max
         self.context_pos = [0] * self.n_seq_max
+        self.decode_seconds_total = 0.0
+        self.decode_calls_total = 0
+        self.decode_tokens_total = 0
+        self.decode_failures_total = 0
         self.target_processing_enabled = False
         self.set_target_processing_enabled(True)
         llama_cpp_ext.llama_set_embeddings_pre_norm(
@@ -1244,6 +1301,128 @@ class MTPDraftProvider(DraftProvider):
             True,
         )
         self._init_samplers()
+
+    @staticmethod
+    def _load_gguf_reader() -> Any:
+        try:
+            from gguf import GGUFReader  # type: ignore[import-not-found]
+            return GGUFReader
+        except ImportError:
+            pass
+
+        gguf_init = (
+            Path(__file__).resolve().parents[2]
+            / "vendor/llama.cpp/gguf-py/gguf/__init__.py"
+        )
+        spec = importlib.util.spec_from_file_location(
+            "gguf",
+            gguf_init,
+            submodule_search_locations=[str(gguf_init.parent)],
+        )
+        if spec is None or spec.loader is None:
+            raise RuntimeError("MTP requires the gguf Python reader from llama.cpp")
+        module = importlib.util.module_from_spec(spec)
+        previous = sys.modules.get("gguf")
+        # Package-relative imports in gguf-py expect the package to be registered.
+        sys.modules["gguf"] = module
+        try:
+            spec.loader.exec_module(module)
+        except Exception:
+            if previous is None:
+                sys.modules.pop("gguf", None)
+            else:
+                sys.modules["gguf"] = previous
+            raise
+        return module.GGUFReader
+
+    @staticmethod
+    def _gguf_field_contents(reader: Any, name: str) -> Any:
+        field = reader.fields.get(name)
+        if field is None:
+            return None
+        return field.contents()
+
+    def _load_hidden_norm_weights(
+        self,
+        model_path: str,
+    ) -> Tuple[np.ndarray, np.ndarray, float]:
+        GGUFReader = self._load_gguf_reader()
+
+        target_weight: Optional[np.ndarray] = None
+        draft_weights: List[np.ndarray] = []
+        reader = GGUFReader(model_path)
+        arch = self._gguf_field_contents(reader, "general.architecture")
+        if arch not in {"qwen35", "qwen35moe"}:
+            raise RuntimeError(
+                "draft-mtp currently supports qwen35/qwen35moe GGUF models, "
+                f"got {arch!r}"
+            )
+        nextn_layers = self._gguf_field_contents(
+            reader,
+            f"{arch}.nextn_predict_layers",
+        )
+        # The current MTP path follows llama.cpp's Qwen3.5 one-nextn-layer graph.
+        if int(nextn_layers or 0) != 1:
+            raise RuntimeError(
+                "draft-mtp currently supports exactly one Qwen3.5 nextn prediction layer"
+            )
+        epsilon = self._gguf_field_contents(
+            reader,
+            f"{arch}.attention.layer_norm_rms_epsilon",
+        )
+        if epsilon is None:
+            raise RuntimeError(
+                f"MTP requires {arch}.attention.layer_norm_rms_epsilon"
+            )
+        for tensor in reader.tensors:
+            if tensor.name == "output_norm.weight":
+                target_weight = np.asarray(tensor.data, dtype=np.float32).copy()
+            elif tensor.name.endswith(".nextn.shared_head_norm.weight"):
+                draft_weights.append(np.asarray(tensor.data, dtype=np.float32).copy())
+        if target_weight is None:
+            raise RuntimeError("MTP requires output_norm.weight in GGUF model")
+        if len(draft_weights) > 1:
+            raise RuntimeError(
+                "MTP requires at most one blk.*.nextn.shared_head_norm.weight in GGUF model"
+            )
+        draft_weight = draft_weights[0] if draft_weights else target_weight
+        if target_weight.shape != (self.n_embd,):
+            raise RuntimeError(
+                "MTP target norm weight shape does not match model embedding size "
+                f"({target_weight.shape} != ({self.n_embd},))"
+            )
+        if draft_weight.shape != (self.n_embd,):
+            raise RuntimeError(
+                "MTP draft norm weight shape does not match model embedding size "
+                f"({draft_weight.shape} != ({self.n_embd},))"
+            )
+        return target_weight, draft_weight, float(epsilon)
+
+    def _normalize_hidden_rows(self, rows: np.ndarray, weight: np.ndarray) -> np.ndarray:
+        rows = np.asarray(rows, dtype=np.float32)
+        scale = np.reciprocal(
+            np.sqrt(
+                np.mean(np.square(rows), axis=-1, keepdims=True)
+                + self.hidden_norm_epsilon
+            )
+        )
+        return rows * scale * weight.reshape(1, -1)
+
+    def _normalize_target_hidden_rows(self, rows: np.ndarray) -> np.ndarray:
+        return self._normalize_hidden_rows(rows, self.target_hidden_norm_weight)
+
+    def _normalize_draft_hidden_row(
+        self,
+        row: Union[np.ndarray, ctypes.POINTER(ctypes.c_float)],
+    ) -> np.ndarray:
+        if isinstance(row, np.ndarray):
+            row_array = row.reshape(1, -1)
+        else:
+            row_array = np.ctypeslib.as_array(row, shape=(self.n_embd,)).reshape(1, -1)
+        return self._normalize_hidden_rows(
+            row_array,
+            self.draft_hidden_norm_weight,
+        )[0]
 
     def _init_samplers(self) -> None:
         for seq_id in range(self.n_seq_max):
@@ -1292,8 +1471,11 @@ class MTPDraftProvider(DraftProvider):
         token = int(llama_cpp.llama_sampler_sample(sampler, self.ctx, row_index))
         if token == llama_cpp.LLAMA_TOKEN_NULL:
             return None
-        llama_cpp.llama_sampler_accept(sampler, token)
         return token
+
+    def _reset_sampler(self, seq_id: int) -> None:
+        if 0 <= seq_id < len(self._samplers):
+            llama_cpp.llama_sampler_reset(self._samplers[seq_id])
 
     def close(self) -> None:
         self.set_target_processing_enabled(False)
@@ -1357,8 +1539,13 @@ class MTPDraftProvider(DraftProvider):
         n_tokens = int(self.batch.n_tokens)
         if n_tokens <= 0:
             return True
+        started_at = time.perf_counter()
         result = int(llama_cpp.llama_decode(self.ctx, self.batch))
+        self.decode_seconds_total += time.perf_counter() - started_at
+        self.decode_calls_total += 1
+        self.decode_tokens_total += n_tokens
         if result != 0:
+            self.decode_failures_total += 1
             return False
         return True
 
@@ -1366,9 +1553,55 @@ class MTPDraftProvider(DraftProvider):
         n_tokens = int(self.batch.n_tokens)
         if n_tokens <= 0:
             return
+        started_at = time.perf_counter()
         result = int(llama_cpp.llama_decode(self.ctx, self.batch))
+        self.decode_seconds_total += time.perf_counter() - started_at
+        self.decode_calls_total += 1
+        self.decode_tokens_total += n_tokens
         if result != 0:
+            self.decode_failures_total += 1
             raise RuntimeError(f"MTP draft decode failed with code {result}")
+
+    def metric_definitions(
+        self,
+    ) -> List[Tuple[str, str, str, Union[int, float]]]:
+        decode_tokens_seconds = (
+            self.decode_tokens_total / self.decode_seconds_total
+            if self.decode_seconds_total > 0.0
+            else 0.0
+        )
+        return [
+            (
+                "counter",
+                "batch_server:mtp_decode_seconds_total",
+                "Time spent inside llama_decode() for the MTP draft context.",
+                self.decode_seconds_total,
+            ),
+            (
+                "counter",
+                "batch_server:mtp_decode_calls_total",
+                "Number of llama_decode() calls made by the MTP draft context.",
+                self.decode_calls_total,
+            ),
+            (
+                "counter",
+                "batch_server:mtp_decode_tokens_total",
+                "Number of batch rows decoded by the MTP draft context.",
+                self.decode_tokens_total,
+            ),
+            (
+                "counter",
+                "batch_server:mtp_decode_failures_total",
+                "Number of failed MTP draft context decode calls.",
+                self.decode_failures_total,
+            ),
+            (
+                "gauge",
+                "batch_server:mtp_decode_tokens_seconds",
+                "Average MTP draft context decode throughput in batch rows/s.",
+                decode_tokens_seconds,
+            ),
+        ]
 
     def can_draft(self, input_length: int, /, *, seq_id: int) -> bool:
         if (
@@ -1397,6 +1630,7 @@ class MTPDraftProvider(DraftProvider):
             h_tgt,
             shape=(n_tokens, self.n_embd),
         )
+        h_tgt_rows = self._normalize_target_hidden_rows(h_tgt_rows)
 
         previous_row_by_seq: Dict[int, int] = {}
         first_pos_by_seq: Dict[int, int] = {}
@@ -1456,12 +1690,17 @@ class MTPDraftProvider(DraftProvider):
                 self.ready[seq_id] and self.ready_pos[seq_id] == first_pos
             )
             aligned_by_seq.setdefault(seq_id, aligned)
-            if aligned and pos >= self.context_pos[seq_id]:
+            mtp_pos = (
+                pos - 1
+                if previous_row_by_seq.get(seq_id) is None
+                else int(batch.pos[previous_row_by_seq[seq_id]])
+            )
+            if aligned and mtp_pos >= 0 and mtp_pos >= self.context_pos[seq_id]:
                 previous_row = previous_row_by_seq.get(seq_id)
                 slot = int(self.batch.n_tokens)
                 self._add_batch_token(
                     token=int(batch.token[index]),
-                    pos=pos,
+                    pos=mtp_pos,
                     seq_id=seq_id,
                     logits=False,
                 )
@@ -1469,7 +1708,7 @@ class MTPDraftProvider(DraftProvider):
                     self._set_batch_embedding_row(slot, self.pending_h[seq_id])
                 else:
                     self._set_batch_embedding_row(slot, h_tgt_rows[previous_row])
-                added_pos_by_seq[seq_id] = pos
+                added_pos_by_seq[seq_id] = mtp_pos
             previous_row_by_seq[seq_id] = index
             target_rows_by_seq.setdefault(seq_id, []).append(index)
 
@@ -1503,27 +1742,31 @@ class MTPDraftProvider(DraftProvider):
         n_past = int(input_ids.size) - 1
         if self.ready_pos[seq_id] != n_past:
             return np.array([], dtype=np.intc)
+        first_pos = n_past - 1
+        if first_pos < 0:
+            return np.array([], dtype=np.intc)
 
         token = int(input_ids[-1])
         drafted: List[int] = []
-        if self.context_pos[seq_id] > n_past:
-            self.truncate(seq_id, n_past)
-        if self.context_pos[seq_id] < n_past:
+        if self.context_pos[seq_id] > first_pos:
+            self.truncate(seq_id, first_pos)
+        if self.context_pos[seq_id] < first_pos:
             self.ready[seq_id] = False
             return np.array([], dtype=np.intc)
 
+        self._reset_sampler(seq_id)
         self._clear_batch()
         self._add_batch_token(
             token=token,
-            pos=n_past,
+            pos=first_pos,
             seq_id=seq_id,
             logits=True,
         )
         self._set_batch_embedding_row(0, self.pending_h[seq_id])
         if not self._try_decode_batch():
-            self.truncate(seq_id, n_past)
+            self.truncate(seq_id, first_pos)
             return np.array([], dtype=np.intc)
-        self.context_pos[seq_id] = n_past + 1
+        self.context_pos[seq_id] = n_past
 
         while len(drafted) < n_predict:
             sampled_token = self._sample_token(seq_id=seq_id)
@@ -1536,17 +1779,18 @@ class MTPDraftProvider(DraftProvider):
             h_row = llama_cpp_ext.llama_get_embeddings_pre_norm_ith(self.ctx, 0)
             if not h_row:
                 break
+            h_row = self._normalize_draft_hidden_row(h_row)
             self._clear_batch()
             self._add_batch_token(
                 token=token,
-                pos=n_past + len(drafted),
+                pos=first_pos + len(drafted),
                 seq_id=seq_id,
                 logits=True,
             )
             self._set_batch_embedding_row(0, h_row)
             if not self._try_decode_batch():
                 break
-            self.context_pos[seq_id] = n_past + len(drafted) + 1
+            self.context_pos[seq_id] = first_pos + len(drafted) + 1
 
         if not drafted:
             self.truncate(seq_id, n_past)
@@ -1560,7 +1804,7 @@ class MTPDraftProvider(DraftProvider):
         /,
     ) -> List[np.ndarray]:
         results = [np.array([], dtype=np.intc) for _ in requests]
-        active: List[Dict[str, Any]] = []
+        active: List["MTPDraftProvider.DraftManyState"] = []
         for result_index, (input_ids, seq_id, max_tokens) in enumerate(requests):
             if (
                 self.num_pred_tokens <= 0
@@ -1575,29 +1819,36 @@ class MTPDraftProvider(DraftProvider):
                 n_predict = min(n_predict, max_tokens)
             if n_predict <= 0:
                 continue
+            if len(active) >= self.n_batch:
+                break
 
             n_past = int(input_ids.size) - 1
             if self.ready_pos[seq_id] != n_past:
                 continue
-            if self.context_pos[seq_id] > n_past:
-                self.truncate(seq_id, n_past)
-            if self.context_pos[seq_id] < n_past:
+            first_pos = n_past - 1
+            if first_pos < 0:
+                continue
+            if self.context_pos[seq_id] > first_pos:
+                self.truncate(seq_id, first_pos)
+            if self.context_pos[seq_id] < first_pos:
                 self.ready[seq_id] = False
                 continue
+            self._reset_sampler(seq_id)
             active.append(
-                {
-                    "result_index": result_index,
-                    "seq_id": seq_id,
-                    "n_past": n_past,
-                    "n_predict": n_predict,
-                    "token": int(input_ids[-1]),
-                    "drafted": [],
-                    "embedding": self.pending_h[seq_id],
-                    "cache_key": (
+                self.DraftManyState(
+                    result_index=result_index,
+                    seq_id=seq_id,
+                    first_pos=first_pos,
+                    keep_len=n_past,
+                    n_predict=n_predict,
+                    token=int(input_ids[-1]),
+                    drafted=[],
+                    embedding=self.pending_h[seq_id],
+                    cache_key=(
                         tuple(int(token) for token in input_ids.tolist()),
                         n_predict,
                     ),
-                }
+                )
             )
 
         if not active:
@@ -1605,27 +1856,28 @@ class MTPDraftProvider(DraftProvider):
 
         touched = list(active)
         try:
-            if (
-                all(cast(int, state["n_predict"]) == 1 for state in active)
-            ):
-                grouped: Dict[Tuple[Tuple[int, ...], int], List[Dict[str, Any]]] = {}
+            if all(state.n_predict == 1 for state in active):
+                grouped: Dict[
+                    Tuple[Tuple[int, ...], int],
+                    List["MTPDraftProvider.DraftManyState"],
+                ] = {}
                 for state in active:
-                    grouped.setdefault(cast(Any, state["cache_key"]), []).append(state)
+                    grouped.setdefault(state.cache_key, []).append(state)
 
                 representatives = [states[0] for states in grouped.values()]
                 self._clear_batch()
                 for row, state in enumerate(representatives):
                     self._add_batch_token(
-                        token=cast(int, state["token"]),
-                        pos=cast(int, state["n_past"]),
-                        seq_id=cast(int, state["seq_id"]),
+                        token=state.token,
+                        pos=state.first_pos,
+                        seq_id=state.seq_id,
                         logits=True,
                     )
-                    self._set_batch_embedding_row(row, state["embedding"])
+                    self._set_batch_embedding_row(row, state.embedding)
 
                 if self._try_decode_batch():
                     sampled_tokens = [
-                        self._sample_token(row, seq_id=cast(int, state["seq_id"]))
+                        self._sample_token(row, seq_id=state.seq_id)
                         for row, state in enumerate(representatives)
                     ]
                     for representative, sampled_token in zip(
@@ -1634,67 +1886,62 @@ class MTPDraftProvider(DraftProvider):
                     ):
                         if sampled_token is None:
                             continue
-                        seq_id = cast(int, representative["seq_id"])
-                        n_past = cast(int, representative["n_past"])
-                        self.context_pos[seq_id] = max(
-                            self.context_pos[seq_id],
-                            n_past + 1,
+                        self.context_pos[representative.seq_id] = max(
+                            self.context_pos[representative.seq_id],
+                            representative.keep_len,
                         )
-                        for state in grouped[cast(Any, representative["cache_key"])]:
-                            cast(List[int], state["drafted"]).append(sampled_token)
+                        for state in grouped[representative.cache_key]:
+                            state.drafted.append(sampled_token)
                     active = []
 
             while active:
                 self._clear_batch()
                 for row, state in enumerate(active):
-                    drafted = cast(List[int], state["drafted"])
                     self._add_batch_token(
-                        token=cast(int, state["token"]),
-                        pos=cast(int, state["n_past"]) + len(drafted),
-                        seq_id=cast(int, state["seq_id"]),
+                        token=state.token,
+                        pos=state.first_pos + len(state.drafted),
+                        seq_id=state.seq_id,
                         logits=True,
                     )
-                    self._set_batch_embedding_row(row, state["embedding"])
+                    self._set_batch_embedding_row(row, state.embedding)
 
                 if not self._try_decode_batch():
                     break
 
-                next_active: List[Dict[str, Any]] = []
+                next_active: List["MTPDraftProvider.DraftManyState"] = []
                 sampled_tokens = [
-                    self._sample_token(row, seq_id=cast(int, state["seq_id"]))
+                    self._sample_token(row, seq_id=state.seq_id)
                     for row, state in enumerate(active)
                 ]
                 for row, (state, sampled_token) in enumerate(zip(active, sampled_tokens)):
-                    seq_id = cast(int, state["seq_id"])
-                    drafted = cast(List[int], state["drafted"])
-                    decoded_pos = cast(int, state["n_past"]) + len(drafted)
-                    self.context_pos[seq_id] = max(
-                        self.context_pos[seq_id],
+                    decoded_pos = state.first_pos + len(state.drafted)
+                    self.context_pos[state.seq_id] = max(
+                        self.context_pos[state.seq_id],
                         decoded_pos + 1,
                     )
                     if sampled_token is None:
                         continue
-                    h_row = llama_cpp_ext.llama_get_embeddings_pre_norm_ith(
+                    h_row_ptr = llama_cpp_ext.llama_get_embeddings_pre_norm_ith(
                         self.ctx, row
                     )
-                    drafted.append(sampled_token)
-                    if len(drafted) >= cast(int, state["n_predict"]):
+                    state.drafted.append(sampled_token)
+                    if len(state.drafted) >= state.n_predict:
                         continue
-                    if not h_row:
+                    if not h_row_ptr:
                         continue
-                    state["token"] = sampled_token
-                    state["embedding"] = h_row
+                    h_row = self._normalize_draft_hidden_row(h_row_ptr)
+                    state.token = sampled_token
+                    state.embedding = h_row
                     next_active.append(state)
                 active = next_active
         finally:
             for state in touched:
-                self.truncate(cast(int, state["seq_id"]), cast(int, state["n_past"]))
+                self.truncate(state.seq_id, state.keep_len)
 
         for state in touched:
-            drafted = cast(List[int], state["drafted"])
-            if drafted:
-                results[cast(int, state["result_index"])] = np.asarray(
-                    drafted,
+            if state.drafted:
+                results[state.result_index] = np.asarray(
+                    state.drafted,
                     dtype=np.intc,
                 )
         return results
@@ -1717,11 +1964,12 @@ class MTPDraftProvider(DraftProvider):
         if n_target_rows <= 0:
             return results
         h_tgt_rows = np.ctypeslib.as_array(h_tgt, shape=(n_target_rows, self.n_embd))
+        h_tgt_rows = self._normalize_target_hidden_rows(h_tgt_rows)
 
-        pending_output_rows: List[Tuple[int, int, int]] = []
-        self._clear_batch()
-        added_positions: List[Tuple[int, int]] = []
-        pending_inputs: List[Tuple[int, int, int, np.ndarray]] = []
+        pending_output_rows: List["MTPDraftProvider.SampledOutputRow"] = []
+        context_rows: List["MTPDraftProvider.SampledContextRow"] = []
+        pending_rows: List["MTPDraftProvider.SampledPendingRow"] = []
+        sample_rows: Dict[int, int] = {}
 
         for update_index, update in enumerate(updates):
             seq_id = cast(int, update["seq_id"])
@@ -1731,168 +1979,215 @@ class MTPDraftProvider(DraftProvider):
             tokens = cast(List[int], update["tokens"])
             row_indices = cast(List[int], update["row_indices"])
             target_count = cast(int, update["target_count"])
+            sample_index = cast(int, update["sample_index"])
             pending_token = cast(Optional[int], update["pending_token"])
-
-            last_target_row: Optional[int] = None
-            for token_index, token in enumerate(tokens[:target_count]):
-                pos = start_pos + token_index
-                last_target_row = row_indices[token_index]
-                if pos < self.context_pos[seq_id]:
-                    continue
-                slot = int(self.batch.n_tokens)
-                self._add_batch_token(
-                    token=token,
-                    pos=pos,
-                    seq_id=seq_id,
-                    logits=False,
-                )
-                if token_index == 0:
-                    self._set_batch_embedding_row(slot, self.pending_h[seq_id])
-                else:
-                    self._set_batch_embedding_row(
-                        slot,
-                        h_tgt_rows[row_indices[token_index - 1]],
-                )
-                added_positions.append((seq_id, pos))
-
-            if target_count > 0 and last_target_row is not None:
-                self.pending_h[seq_id] = h_tgt_rows[last_target_row]
-                self.ready[seq_id] = True
-                self.ready_pos[seq_id] = start_pos + target_count
-
-            if pending_token is None:
+            if (
+                pending_token is None
+                or start_pos <= 0
+                or target_count <= 0
+                or target_count > len(tokens)
+                or target_count > len(row_indices)
+                or sample_index < 0
+                or sample_index >= target_count
+            ):
                 continue
 
-            pending_pos = start_pos + target_count
-            if last_target_row is None:
-                pending_embedding = self.pending_h[seq_id]
-            else:
-                pending_embedding = h_tgt_rows[last_target_row]
+            for target_index in range(sample_index + 1):
+                mtp_pos = start_pos + target_index - 1
+                if mtp_pos < 0:
+                    continue
+                source_row = (
+                    None
+                    if target_index == 0
+                    else row_indices[target_index - 1]
+                )
+                context_rows.append(
+                    self.SampledContextRow(
+                        seq_id=seq_id,
+                        draft_pos=mtp_pos,
+                        token=tokens[target_index],
+                        source_row=source_row,
+                    )
+                )
 
-            pending_inputs.append(
-                (update_index, seq_id, pending_pos, pending_embedding)
+            actual_pos = start_pos + sample_index
+            pending_rows.append(
+                self.SampledPendingRow(
+                    update_index=update_index,
+                    seq_id=seq_id,
+                    draft_pos=actual_pos,
+                    token=pending_token,
+                    source_row=row_indices[sample_index],
+                )
             )
+            sample_rows[update_index] = len(pending_rows) - 1
 
-        if int(self.batch.n_tokens) > 0:
-            self._decode_batch()
-
-            for seq_id, pos in added_positions:
-                self.context_pos[seq_id] = max(self.context_pos[seq_id], pos + 1)
+        if not context_rows and not pending_rows:
+            return results
+        if len(context_rows) > self.n_batch or len(pending_rows) > self.n_batch:
+            raise RuntimeError("MTP draft batch capacity exceeded")
 
         self._clear_batch()
-        added_positions = []
-        for update_index, seq_id, pending_pos, pending_embedding in pending_inputs:
-            if pending_pos < self.context_pos[seq_id]:
+        decoded_context_rows: List[Tuple[int, int]] = []
+        for row in context_rows:
+            if row.draft_pos < self.context_pos[row.seq_id]:
                 continue
-            slot = int(self.batch.n_tokens)
-            update = updates[update_index]
+            if row.source_row is None:
+                embedding = self.pending_h[row.seq_id]
+            else:
+                embedding = h_tgt_rows[row.source_row]
             self._add_batch_token(
-                token=cast(int, update["pending_token"]),
-                pos=pending_pos,
-                seq_id=seq_id,
-                logits=True,
+                token=row.token,
+                pos=row.draft_pos,
+                seq_id=row.seq_id,
+                logits=False,
             )
-            self._set_batch_embedding_row(slot, pending_embedding)
-            added_positions.append((seq_id, pending_pos))
-            pending_output_rows.append((update_index, seq_id, slot))
+            self._set_batch_embedding_row(int(self.batch.n_tokens) - 1, embedding)
+            decoded_context_rows.append((row.seq_id, row.draft_pos))
 
         if int(self.batch.n_tokens) > 0:
             self._decode_batch()
+            for seq_id, draft_pos in decoded_context_rows:
+                self.context_pos[seq_id] = max(
+                    self.context_pos[seq_id],
+                    draft_pos + 1,
+                )
 
-            for seq_id, pos in added_positions:
-                self.context_pos[seq_id] = max(self.context_pos[seq_id], pos + 1)
+        self._clear_batch()
+        for pending_row_index, row in enumerate(pending_rows):
+            if row.draft_pos < self.context_pos[row.seq_id]:
+                continue
+            is_sample_row = pending_row_index == sample_rows.get(row.update_index)
+            slot = int(self.batch.n_tokens)
+            self._add_batch_token(
+                token=row.token,
+                pos=row.draft_pos,
+                seq_id=row.seq_id,
+                logits=is_sample_row,
+            )
+            self._set_batch_embedding_row(slot, h_tgt_rows[row.source_row])
+            if is_sample_row:
+                pending_output_rows.append(
+                    self.SampledOutputRow(
+                        update_index=row.update_index,
+                        seq_id=row.seq_id,
+                        row_index=slot,
+                        keep_len=row.draft_pos + 1,
+                        ready_pos=row.draft_pos + 1,
+                    )
+                )
+
+        self._decode_batch()
+        for row in pending_rows:
+            self.context_pos[row.seq_id] = max(
+                self.context_pos[row.seq_id],
+                row.draft_pos + 1,
+            )
+
+        cleanup_keep_len_by_seq: Dict[int, int] = {}
+        for row in pending_output_rows:
+            update = updates[row.update_index]
+            sample_index = cast(int, update["sample_index"])
+            sample_source_row = cast(List[int], update["row_indices"])[sample_index]
+            self.pending_h[row.seq_id] = h_tgt_rows[sample_source_row]
+            self.ready[row.seq_id] = True
+            self.ready_pos[row.seq_id] = row.ready_pos
+            cleanup_keep_len_by_seq[row.seq_id] = row.keep_len
+
+        for seq_id, keep_len in cleanup_keep_len_by_seq.items():
+            self._truncate_memory(seq_id, keep_len)
 
         if not pending_output_rows:
             return results
 
-        active: List[Dict[str, Any]] = []
-        for update_index, seq_id, row_index in pending_output_rows:
-            sampled_token = self._sample_token(row_index, seq_id=seq_id)
+        active: List["MTPDraftProvider.SampledDraftState"] = []
+        for row in pending_output_rows:
+            self._reset_sampler(row.seq_id)
+            sampled_token = self._sample_token(row.row_index, seq_id=row.seq_id)
             if sampled_token is None:
                 continue
-            update = updates[update_index]
+            update = updates[row.update_index]
             seq_id = cast(int, update["seq_id"])
-            pending_pos = cast(int, update["start_pos"]) + cast(int, update["target_count"])
             self.ready[seq_id] = True
-            self.ready_pos[seq_id] = pending_pos
             n_predict = self.num_pred_tokens
             max_tokens = cast(Optional[int], update.get("max_tokens"))
             if max_tokens is not None:
                 n_predict = min(n_predict, max_tokens)
             if n_predict <= 0:
                 continue
-            state = {
-                "update_index": update_index,
-                "seq_id": seq_id,
-                "keep_len": pending_pos + 1,
-                "pos": pending_pos + 1,
-                "token": sampled_token,
-                "drafted": [sampled_token],
-                "n_predict": n_predict,
-                "embedding": None,
-            }
             if n_predict > 1:
                 h_row = llama_cpp_ext.llama_get_embeddings_pre_norm_ith(
-                    self.ctx, row_index
+                    self.ctx, row.row_index
                 )
                 if h_row:
-                    state["embedding"] = h_row
-                    active.append(state)
-            results[update_index] = np.asarray([sampled_token], dtype=np.intc)
+                    active.append(
+                        self.SampledDraftState(
+                            update_index=row.update_index,
+                            seq_id=seq_id,
+                            keep_len=row.keep_len,
+                            pos=row.keep_len,
+                            token=sampled_token,
+                            drafted=[sampled_token],
+                            n_predict=n_predict,
+                            embedding=self._normalize_draft_hidden_row(h_row),
+                        )
+                    )
+            results[row.update_index] = np.asarray([sampled_token], dtype=np.intc)
 
         touched = list(active)
         try:
             while active:
                 self._clear_batch()
-                for row, state in enumerate(active):
+                for batch_row, state in enumerate(active):
                     self._add_batch_token(
-                        token=cast(int, state["token"]),
-                        pos=cast(int, state["pos"]),
-                        seq_id=cast(int, state["seq_id"]),
+                        token=state.token,
+                        pos=state.pos,
+                        seq_id=state.seq_id,
                         logits=True,
                     )
-                    self._set_batch_embedding_row(row, state["embedding"])
+                    self._set_batch_embedding_row(batch_row, state.embedding)
 
                 if not self._try_decode_batch():
                     break
 
-                next_active: List[Dict[str, Any]] = []
+                next_active: List["MTPDraftProvider.SampledDraftState"] = []
                 sampled_tokens = [
-                    self._sample_token(row, seq_id=cast(int, state["seq_id"]))
-                    for row, state in enumerate(active)
+                    self._sample_token(batch_row, seq_id=state.seq_id)
+                    for batch_row, state in enumerate(active)
                 ]
-                for row, (state, sampled_token) in enumerate(zip(active, sampled_tokens)):
-                    seq_id = cast(int, state["seq_id"])
-                    pos = cast(int, state["pos"])
-                    self.context_pos[seq_id] = max(self.context_pos[seq_id], pos + 1)
+                for batch_row, (state, sampled_token) in enumerate(
+                    zip(active, sampled_tokens)
+                ):
+                    self.context_pos[state.seq_id] = max(
+                        self.context_pos[state.seq_id],
+                        state.pos + 1,
+                    )
                     if sampled_token is None:
                         continue
-                    drafted = cast(List[int], state["drafted"])
-                    drafted.append(sampled_token)
-                    if len(drafted) >= cast(int, state["n_predict"]):
+                    state.drafted.append(sampled_token)
+                    if len(state.drafted) >= state.n_predict:
                         continue
                     h_row = llama_cpp_ext.llama_get_embeddings_pre_norm_ith(
-                        self.ctx, row
+                        self.ctx, batch_row
                     )
                     if not h_row:
                         continue
-                    state["token"] = sampled_token
-                    state["embedding"] = h_row
-                    state["pos"] = pos + 1
+                    h_row = self._normalize_draft_hidden_row(h_row)
+                    state.token = sampled_token
+                    state.embedding = h_row
+                    state.pos += 1
                     next_active.append(state)
                 active = next_active
         finally:
             for state in touched:
-                seq_id = cast(int, state["seq_id"])
-                keep_len = cast(int, state["keep_len"])
-                llama_cpp.llama_memory_seq_rm(self.mem, seq_id, keep_len, -1)
-                self.context_pos[seq_id] = min(self.context_pos[seq_id], keep_len)
+                cleanup_keep_len_by_seq[state.seq_id] = state.keep_len
+            for seq_id, keep_len in cleanup_keep_len_by_seq.items():
+                self._truncate_memory(seq_id, keep_len)
 
         for state in touched:
-            drafted = cast(List[int], state["drafted"])
-            if drafted:
-                results[cast(int, state["update_index"])] = np.asarray(
-                    drafted,
+            if state.drafted:
+                results[state.update_index] = np.asarray(
+                    state.drafted,
                     dtype=np.intc,
                 )
 
@@ -1909,15 +2204,24 @@ class MTPDraftProvider(DraftProvider):
         self.ready[seq_id] = True
         self.ready_pos[seq_id] = self.verify_h_pos[seq_id][row] + 1
 
-    def truncate(self, seq_id: int, keep_len: int) -> None:
+    def _truncate_memory(self, seq_id: int, keep_len: int) -> None:
         if seq_id < 0 or seq_id >= self.n_seq_max:
             return
-        llama_cpp.llama_memory_seq_rm(
+        if not llama_cpp.llama_memory_seq_rm(
             self.mem,
             seq_id,
             keep_len,
             -1,
-        )
+        ):
+            raise RuntimeError(
+                f"failed to truncate MTP draft sequence {seq_id} at position {keep_len}"
+            )
+        self.context_pos[seq_id] = min(self.context_pos[seq_id], keep_len)
+
+    def truncate(self, seq_id: int, keep_len: int) -> None:
+        if seq_id < 0 or seq_id >= self.n_seq_max:
+            return
+        self._truncate_memory(seq_id, keep_len)
         if keep_len <= 0:
             self.pending_h[seq_id].fill(0.0)
             self.verify_h[seq_id] = np.empty((0, self.n_embd), dtype=np.float32)
@@ -1928,7 +2232,6 @@ class MTPDraftProvider(DraftProvider):
             self.context_pos[seq_id] = 0
             return
 
-        self.context_pos[seq_id] = min(self.context_pos[seq_id], keep_len)
         if self.ready_pos[seq_id] != keep_len:
             self.ready[seq_id] = False
 
@@ -2858,16 +3161,16 @@ class SchedulerMetrics:
     process_batch_seconds_total: float = 0.0
     sample_seconds_total: float = 0.0
     draft_seconds_total: float = 0.0
-    draft_state_checkpoint_seconds_total: float = 0.0
-    draft_state_restore_seconds_total: float = 0.0
     draft_process_seconds_total: float = 0.0
     draft_generate_seconds_total: float = 0.0
     draft_sampled_batch_seconds_total: float = 0.0
-    draft_state_checkpoint_calls_total: int = 0
-    draft_state_restore_calls_total: int = 0
     draft_process_calls_total: int = 0
     draft_generate_calls_total: int = 0
     draft_sampled_batch_calls_total: int = 0
+    draft_batches_verified_total: int = 0
+    draft_target_tokens_verified_total: int = 0
+    draft_target_tokens_wasted_total: int = 0
+    draft_tokens_reused_as_pending_total: int = 0
     n_decode_total: int = 0
     scheduler_step_calls_total: int = 0
     process_batch_calls_total: int = 0
@@ -8828,11 +9131,6 @@ class Sampler:
 
 
 class Model:
-    @dataclass
-    class SequenceStateSnapshot:
-        data: Any
-        size: int
-
     def __init__(
         self,
         *,
@@ -8929,24 +9227,14 @@ class Model:
                 "attention-unified" if kv_unified else "attention-partitioned"
         )
         normalized_draft_model = draft_model
+        required_mtp_batch = max(1, draft_model_num_pred_tokens + 1)
         if normalized_draft_model == "draft-mtp":
-            min_mtp_ubatch = max(1, draft_model_num_pred_tokens + 1)
-            if n_batch is not None and n_batch < min_mtp_ubatch:
+            if n_batch is not None and n_batch < required_mtp_batch:
                 raise RuntimeError(
                     "MTP requires n_batch to fit the pending token plus draft tokens "
-                    f"(required {min_mtp_ubatch}, got {n_batch})"
+                    f"(required {required_mtp_batch}, got {n_batch})"
                 )
-        required_mtp_rs_seq = (
-            max(0, draft_model_num_pred_tokens)
-            if normalized_draft_model == "draft-mtp"
-            else 0
-        )
         self.draft_target_batching = normalized_draft_model is not None
-        if normalized_draft_model != "draft-mtp" or not self.draft_target_batching:
-            target_n_rs_seq: Optional[int] = None
-        else:
-            target_n_rs_seq = required_mtp_rs_seq
-        self.draft_uses_state_checkpoints = False
         if (
             normalized_draft_model is not None
             and normalized_draft_model != "draft-mtp"
@@ -8956,6 +9244,12 @@ class Model:
                 "speculative decoding is only supported for attention models"
             )
         n_ctx_train = int(llama_cpp.llama_model_n_ctx_train(llama_model))
+        target_n_rs_seq = (
+            max(1, draft_model_num_pred_tokens)
+            if normalized_draft_model == "draft-mtp"
+            else None
+        )
+
         context_params = self.build_context_params(
             n_ctx=n_ctx if n_ctx is not None else n_ctx_train,
             n_batch=n_batch,
@@ -8998,6 +9292,16 @@ class Model:
         self.n_rs_seq = int(llama_cpp.llama_n_rs_seq(ctx))
         self.n_batch = int(llama_cpp.llama_n_batch(ctx))
         self.n_ubatch = int(llama_cpp.llama_n_ubatch(ctx))
+        if normalized_draft_model == "draft-mtp" and self.n_batch < required_mtp_batch:
+            raise RuntimeError(
+                "MTP requires runtime n_batch to fit the pending token plus draft tokens "
+                f"(required {required_mtp_batch}, got {self.n_batch})"
+            )
+        if target_n_rs_seq is not None and self.n_rs_seq < target_n_rs_seq:
+            raise RuntimeError(
+                "MTP requires retained recurrent-state slots for rollback "
+                f"(required {target_n_rs_seq}, got {self.n_rs_seq})"
+            )
         self.n_ctx_train = n_ctx_train
         self.n_vocab = int(llama_cpp.llama_vocab_n_tokens(self.vocab))
         self.kv_unified = kv_unified
@@ -9035,22 +9339,6 @@ class Model:
         self.add_space_prefix = (
             self._meta_value("tokenizer.ggml.add_space_prefix") != "false"
         )
-        if (
-            normalized_draft_model == "draft-mtp"
-            and self.draft_target_batching
-            and self.exact_checkpoints_only
-            and required_mtp_rs_seq > 0
-            and self.n_rs_seq < required_mtp_rs_seq
-        ):
-            # Hybrid/recurrent target-batched MTP needs rollback slots to reject drafts.
-            self.draft_target_batching = False
-        self.draft_uses_state_checkpoints = (
-            normalized_draft_model == "draft-mtp"
-            and self.draft_target_batching
-            and self.exact_checkpoints_only
-            and required_mtp_rs_seq > 0
-            and self.n_rs_seq < required_mtp_rs_seq
-        )
         if normalized_draft_model is None:
             self.draft_provider: Optional[DraftProvider] = None
         elif normalized_draft_model == "prompt-lookup-decoding":
@@ -9064,7 +9352,7 @@ class Model:
             else:
                 mtp_n_batch = min(
                     self.n_batch,
-                    max(self.n_ubatch, self.n_seq_max),
+                    max(self.n_ubatch, self.n_seq_max, required_mtp_batch),
                 )
             mtp_context_params = self.build_context_params(
                 n_ctx=self.n_ctx,
@@ -9103,7 +9391,7 @@ class Model:
                 type_k=type_k,
                 type_v=type_v,
                 kv_unified=kv_unified,
-                n_rs_seq=0,
+                n_rs_seq=target_n_rs_seq,
                 ctx_type=llama_cpp.LLAMA_CONTEXT_TYPE_MTP,
             )
             try:
@@ -9511,71 +9799,6 @@ class Model:
     def set_draft_processing_enabled(self, enabled: bool) -> None:
         if self.draft_provider is not None:
             self.draft_provider.set_target_processing_enabled(enabled)
-
-    def save_sequence_state(self, seq_id: int) -> "Model.SequenceStateSnapshot":
-        flags = (
-            llama_cpp.LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY
-            | llama_cpp.LLAMA_STATE_SEQ_FLAGS_ON_DEVICE
-        )
-        size = int(llama_cpp.llama_state_seq_get_size_ext(self.ctx, seq_id, flags))
-        data = (ctypes.c_uint8 * size)()
-        written = int(
-            llama_cpp.llama_state_seq_get_data_ext(
-                self.ctx,
-                data,
-                size,
-                seq_id,
-                flags,
-            )
-        )
-        if written != size:
-            raise RuntimeError(
-                f"failed to save sequence state for seq_id={seq_id}: "
-                f"expected {size} bytes, wrote {written}"
-            )
-        return Model.SequenceStateSnapshot(data=data, size=size)
-
-    def restore_sequence_state(
-        self,
-        seq_id: int,
-        snapshot: "Model.SequenceStateSnapshot",
-    ) -> None:
-        read = int(
-            llama_cpp.llama_state_seq_set_data_ext(
-                self.ctx,
-                snapshot.data,
-                snapshot.size,
-                seq_id,
-                llama_cpp.LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY
-                | llama_cpp.LLAMA_STATE_SEQ_FLAGS_ON_DEVICE,
-            )
-        )
-        if read != snapshot.size:
-            raise RuntimeError(
-                f"failed to restore sequence state for seq_id={seq_id}: "
-                f"expected {snapshot.size} bytes, read {read}"
-            )
-
-    def replay_sequence_tokens(
-        self,
-        *,
-        seq_id: int,
-        start_pos: int,
-        tokens: Sequence[int],
-        process_draft: bool = True,
-    ) -> None:
-        if not tokens:
-            return
-        self.clear_batch()
-        self.add_batch_tokens(
-            seq_id=seq_id,
-            start_pos=start_pos,
-            tokens=tokens,
-            output_indices=[None] * len(tokens),
-        )
-        self.decode()
-        if process_draft:
-            self.process_draft_batch()
 
     def accept_draft_tokens(self, seq_id: int, accepted_draft_tokens: int) -> None:
         if self.draft_provider is not None:
@@ -10363,9 +10586,13 @@ class CompletionScheduler:
         output_indices: List[Optional[int]]
         completion_index: Optional[int] = None
         pending_count: int = 0
-        state_snapshot: Optional[Model.SequenceStateSnapshot] = None
         accepted_draft_count: int = 0
         sampled_pending_token: Optional[int] = None
+        rollback_keep_len: Optional[int] = None
+        rollback_accepted_draft_count: int = 0
+        rollback_draft_processed: bool = False
+        deferred_accept_draft_count: Optional[int] = None
+        deferred_truncate_draft_len: Optional[int] = None
 
     def __init__(
         self,
@@ -10393,6 +10620,7 @@ class CompletionScheduler:
             "draft_tokens_accepted": 0,
             "draft_tokens_rejected": 0,
         }
+        self.draft_acceptance_length_counts: Dict[int, int] = {}
         self.defer_sampled_draft_processing = False
         self.memory_policy = self.build_memory_policy()
 
@@ -10580,16 +10808,8 @@ class CompletionScheduler:
             self.defer_sampled_draft_processing = (
                 draft_processing_enabled
                 and self.supports_sampled_draft_processing
-                and not self.model.draft_uses_state_checkpoints
                 and all(item.kind == "token" for item in batch_items)
             )
-            if draft_processing_enabled and not self.defer_sampled_draft_processing:
-                draft_checkpoint_started_at = time.perf_counter()
-                self.prepare_draft_state_snapshots(batch_items)
-                draft_checkpoint_elapsed = time.perf_counter() - draft_checkpoint_started_at
-                self.metrics.draft_state_checkpoint_seconds_total += draft_checkpoint_elapsed
-                self.metrics.draft_state_checkpoint_calls_total += 1
-                self.observe_draft_process(batch_items, draft_checkpoint_elapsed)
             self.model.set_draft_processing_enabled(draft_processing_enabled)
             self.model.clear_batch()
             for item in batch_items:
@@ -10628,8 +10848,11 @@ class CompletionScheduler:
             )
             self.metrics.process_batch_calls_total += 1
             if self.defer_sampled_draft_processing:
-                self.process_sampled_draft_batch(batch_items)
-                self.defer_sampled_draft_processing = False
+                try:
+                    self.process_sampled_draft_batch(batch_items)
+                finally:
+                    self.apply_deferred_draft_rollbacks(batch_items)
+                    self.defer_sampled_draft_processing = False
             self.finalize_cancelled()
             return True
         finally:
@@ -10646,17 +10869,6 @@ class CompletionScheduler:
         if self.model.draft_provider is None or elapsed_seconds <= 0.0:
             return
         self.metrics.draft_seconds_total += elapsed_seconds
-
-    def prepare_draft_state_snapshots(
-        self,
-        items: List["CompletionScheduler.BatchItem"],
-    ) -> None:
-        if not self.model.draft_uses_state_checkpoints:
-            return
-        for item in items:
-            if item.kind != "token" or item.pending_count >= len(item.tokens):
-                continue
-            item.state_snapshot = self.model.save_sequence_state(item.seq_id)
 
     def batch_needs_draft_processing(
         self,
@@ -11211,6 +11423,7 @@ class CompletionScheduler:
             for output_index in item.output_indices
         )
         completions: List[Completion] = []
+        update_items: List["CompletionScheduler.BatchItem"] = []
         updates: List[Dict[str, Any]] = []
         remaining_by_completion: List[int] = []
         batch_row_offset = 0
@@ -11236,12 +11449,14 @@ class CompletionScheduler:
             ]
             if any(row_index is None for row_index in raw_row_indices):
                 continue
-            target_count = item.pending_count + item.accepted_draft_count
-            if target_count <= 0 or target_count > len(item.tokens):
+            sample_index = item.pending_count + item.accepted_draft_count - 1
+            target_count = len(item.tokens)
+            if sample_index < 0 or sample_index >= target_count:
                 continue
             if item.sampled_pending_token is None:
                 continue
             completions.append(completion)
+            update_items.append(item)
             updates.append(
                 {
                     "seq_id": item.seq_id,
@@ -11249,6 +11464,7 @@ class CompletionScheduler:
                     "tokens": item.tokens,
                     "row_indices": item_batch_rows,
                     "target_count": target_count,
+                    "sample_index": sample_index,
                     "pending_token": item.sampled_pending_token,
                     "max_tokens": remaining_tokens,
                 }
@@ -11260,6 +11476,8 @@ class CompletionScheduler:
 
         draft_started_at = time.perf_counter()
         proposed_many = process_sampled_batch(updates)
+        for item in update_items:
+            item.rollback_draft_processed = True
         draft_elapsed = time.perf_counter() - draft_started_at
         self.metrics.draft_seconds_total += draft_elapsed
         self.metrics.draft_sampled_batch_seconds_total += draft_elapsed
@@ -11277,6 +11495,63 @@ class CompletionScheduler:
             completion.draft_tokens = limited
             self.speculative_stats["draft_proposals"] += 1
             self.speculative_stats["draft_tokens_proposed"] += len(limited)
+
+    def rollback_draft_verification(
+        self,
+        item: "CompletionScheduler.BatchItem",
+        keep_len: int,
+        accepted_draft_count: int,
+        *,
+        defer_draft_state: bool,
+    ) -> None:
+        if defer_draft_state:
+            item.rollback_keep_len = keep_len
+            item.rollback_accepted_draft_count = accepted_draft_count
+            item.rollback_draft_processed = False
+            return
+        self.model.accept_draft_tokens(item.seq_id, accepted_draft_count)
+        self.truncate_sequence(item.seq_id, keep_len)
+
+    def apply_deferred_draft_rollbacks(
+        self,
+        items: Sequence["CompletionScheduler.BatchItem"],
+    ) -> None:
+        for item in items:
+            if item.rollback_keep_len is None:
+                if (
+                    not item.rollback_draft_processed
+                    and item.deferred_accept_draft_count is not None
+                ):
+                    self.model.accept_draft_tokens(
+                        item.seq_id,
+                        item.deferred_accept_draft_count,
+                    )
+                    if item.deferred_truncate_draft_len is not None:
+                        self.model.truncate_draft_sequence(
+                            item.seq_id,
+                            item.deferred_truncate_draft_len,
+                        )
+                item.deferred_accept_draft_count = None
+                item.deferred_truncate_draft_len = None
+                item.rollback_draft_processed = False
+                continue
+
+            draft_state_needs_fallback = not item.rollback_draft_processed
+            if draft_state_needs_fallback:
+                self.model.accept_draft_tokens(
+                    item.seq_id,
+                    item.rollback_accepted_draft_count,
+                )
+            self.truncate_sequence(
+                item.seq_id,
+                item.rollback_keep_len,
+                truncate_draft=draft_state_needs_fallback,
+            )
+            item.rollback_keep_len = None
+            item.rollback_accepted_draft_count = 0
+            item.rollback_draft_processed = False
+            item.deferred_accept_draft_count = None
+            item.deferred_truncate_draft_len = None
 
     def sample_completion_token(self, completion: Completion, row_index: int) -> int:
         sample_started_at = time.perf_counter()
@@ -11319,29 +11594,37 @@ class CompletionScheduler:
         decoded_draft_tokens = item.tokens[item.pending_count :]
         accepted_draft_count = 0
         defer_draft_state = self.defer_sampled_draft_processing
+        if decoded_draft_tokens and item.pending_count <= 0:
+            raise RuntimeError("draft verification requires at least one pending token")
+        if decoded_draft_tokens:
+            self.metrics.draft_batches_verified_total += 1
+            self.metrics.draft_target_tokens_verified_total += len(decoded_draft_tokens)
 
         for draft_index, draft_token in enumerate(decoded_draft_tokens):
-            row_index = row_indices[draft_index]
+            verify_row_index = item.pending_count + draft_index - 1
+            if verify_row_index >= len(row_indices):
+                raise RuntimeError("missing target row for draft verification")
+            row_index = row_indices[verify_row_index]
             sampled_token = self.sample_completion_token(completion, row_index)
             need_logits = self.model.store_logits or completion.needs_token_logprob
             logits = self.model.logits(row_index) if need_logits else None
             if self.model.store_logits and logits is not None:
                 self.checkpoint_logits[completion.seq_id] = logits
             if sampled_token != draft_token:
+                self.record_draft_acceptance_length(accepted_draft_count)
                 rejected = max(0, len(completion.draft_tokens) - accepted_draft_count)
                 if rejected > 0:
                     self.speculative_stats["draft_tokens_rejected"] += rejected
+                self.metrics.draft_target_tokens_wasted_total += (
+                    max(0, len(decoded_draft_tokens) - accepted_draft_count - 1)
+                )
                 keep_len = item.start_pos + item.pending_count + accepted_draft_count
-                if item.state_snapshot is not None:
-                    self.restore_draft_state_snapshot(item, keep_len)
-                else:
-                    if not defer_draft_state:
-                        self.model.accept_draft_tokens(completion.seq_id, accepted_draft_count)
-                    self.truncate_sequence(
-                        completion.seq_id,
-                        keep_len,
-                        truncate_draft=not defer_draft_state,
-                    )
+                self.rollback_draft_verification(
+                    item,
+                    keep_len,
+                    accepted_draft_count,
+                    defer_draft_state=defer_draft_state,
+                )
                 completion.draft_tokens.clear()
                 prev_tokens = [*completion.prompt_tokens, *completion.completion_tokens]
                 if logits is not None:
@@ -11402,28 +11685,32 @@ class CompletionScheduler:
             accepted_draft_count += 1
             self.speculative_stats["draft_tokens_accepted"] += 1
             if accepted_finish_reason is not None:
+                self.record_draft_acceptance_length(accepted_draft_count)
                 rejected = max(0, len(completion.draft_tokens) - accepted_draft_count)
                 if rejected > 0:
                     self.speculative_stats["draft_tokens_rejected"] += rejected
+                self.metrics.draft_target_tokens_wasted_total += (
+                    len(decoded_draft_tokens) - accepted_draft_count
+                )
                 keep_len = item.start_pos + item.pending_count + accepted_draft_count
-                if item.state_snapshot is not None:
-                    self.restore_draft_state_snapshot(item, keep_len)
-                else:
-                    if not defer_draft_state:
-                        self.model.accept_draft_tokens(completion.seq_id, accepted_draft_count)
-                    self.truncate_sequence(
-                        completion.seq_id,
-                        keep_len,
-                        truncate_draft=not defer_draft_state,
-                    )
+                self.rollback_draft_verification(
+                    item,
+                    keep_len,
+                    accepted_draft_count,
+                    defer_draft_state=defer_draft_state,
+                )
                 completion.draft_tokens.clear()
                 item.accepted_draft_count = accepted_draft_count
                 self.finish_completion(completion, accepted_finish_reason)
                 return
 
         item.accepted_draft_count = accepted_draft_count
-        if item.state_snapshot is None and not defer_draft_state:
+        if decoded_draft_tokens:
+            self.record_draft_acceptance_length(accepted_draft_count)
+        if not defer_draft_state:
             self.model.accept_draft_tokens(completion.seq_id, accepted_draft_count)
+        elif decoded_draft_tokens:
+            item.deferred_accept_draft_count = accepted_draft_count
         if accepted_draft_count:
             completion.draft_tokens = completion.draft_tokens[accepted_draft_count:]
 
@@ -11440,6 +11727,8 @@ class CompletionScheduler:
                     completion.seq_id,
                     item.start_pos + len(item.tokens),
                 )
+            else:
+                item.deferred_truncate_draft_len = item.start_pos + len(item.tokens)
             completion.draft_tokens.clear()
         elif completion.draft_tokens and next_token == completion.draft_tokens[0]:
             if getattr(self.model, "draft_target_batching", True):
@@ -11447,6 +11736,7 @@ class CompletionScheduler:
             else:
                 completion.draft_tokens.clear()
             self.speculative_stats["draft_tokens_accepted"] += 1
+            self.metrics.draft_tokens_reused_as_pending_total += 1
 
         prev_tokens = [*completion.prompt_tokens, *completion.completion_tokens]
         if final_logits is not None:
@@ -11795,37 +12085,6 @@ class CompletionScheduler:
         self.sequence_history.truncate(seq_id, current_len, keep_len)
         self.checkpoint_logits.pop(seq_id, None)
 
-    def restore_draft_state_snapshot(
-        self,
-        item: "CompletionScheduler.BatchItem",
-        keep_len: int,
-    ) -> None:
-        restore_started_at = time.perf_counter()
-        if item.state_snapshot is None:
-            self.truncate_sequence(item.seq_id, keep_len)
-            return
-        try:
-            current_len = self.radix_trie.length(item.seq_id)
-            keep_count = max(0, keep_len - item.start_pos)
-            keep_tokens = item.tokens[:keep_count]
-            accepted_draft_tokens = max(0, keep_count - item.pending_count)
-            self.model.restore_sequence_state(item.seq_id, item.state_snapshot)
-            llama_cpp.llama_memory_seq_rm(self.model.mem, item.seq_id, item.start_pos, -1)
-            self.truncate_sequence_metadata(item.seq_id, current_len, keep_len)
-            self.model.replay_sequence_tokens(
-                seq_id=item.seq_id,
-                start_pos=item.start_pos,
-                tokens=keep_tokens,
-                process_draft=False,
-            )
-            self.model.accept_draft_tokens(item.seq_id, accepted_draft_tokens)
-            self.model.truncate_draft_sequence(item.seq_id, keep_len)
-        finally:
-            elapsed = time.perf_counter() - restore_started_at
-            self.metrics.draft_seconds_total += elapsed
-            self.metrics.draft_state_restore_seconds_total += elapsed
-            self.metrics.draft_state_restore_calls_total += 1
-
     def truncate_free_sequence(self, seq_id: int, keep_len: int) -> None:
         if seq_id not in self.free_sequences:
             return
@@ -11919,13 +12178,23 @@ class CompletionScheduler:
     ) -> List[Tuple[str, str, str, Union[int, float]]]:
         proposed = self.speculative_stats["draft_tokens_proposed"]
         accepted = self.speculative_stats["draft_tokens_accepted"]
+        proposals = self.speculative_stats["draft_proposals"]
+        verified_proposals = sum(self.draft_acceptance_length_counts.values())
+        verified_accepted = sum(
+            accepted_tokens * count
+            for accepted_tokens, count in self.draft_acceptance_length_counts.items()
+        )
         acceptance_rate = accepted / proposed if proposed > 0 else 0.0
+        average_proposed_tokens = proposed / proposals if proposals > 0 else 0.0
+        average_verified_acceptance_length = (
+            verified_accepted / verified_proposals if verified_proposals > 0 else 0.0
+        )
         return [
             (
                 "counter",
                 "batch_server:draft_proposals_total",
                 "Number of speculative draft proposal batches generated.",
-                self.speculative_stats["draft_proposals"],
+                proposals,
             ),
             (
                 "counter",
@@ -11946,12 +12215,65 @@ class CompletionScheduler:
                 self.speculative_stats["draft_tokens_rejected"],
             ),
             (
+                "counter",
+                "batch_server:draft_batches_verified_total",
+                "Number of completion items that target-verified draft tokens.",
+                self.metrics.draft_batches_verified_total,
+            ),
+            (
+                "counter",
+                "batch_server:draft_target_tokens_verified_total",
+                "Number of draft tokens decoded by the target for verification.",
+                self.metrics.draft_target_tokens_verified_total,
+            ),
+            (
+                "counter",
+                "batch_server:draft_target_tokens_wasted_total",
+                "Number of target-verified draft tokens rejected before emission.",
+                self.metrics.draft_target_tokens_wasted_total,
+            ),
+            (
+                "counter",
+                "batch_server:draft_tokens_reused_as_pending_total",
+                "Number of draft tokens accepted by the next pending-token sample.",
+                self.metrics.draft_tokens_reused_as_pending_total,
+            ),
+            (
                 "gauge",
                 "batch_server:draft_acceptance_rate",
-                "Fraction of proposed speculative draft tokens accepted.",
+                "Fraction of proposed draft tokens accepted, including reused pending matches.",
                 acceptance_rate,
             ),
+            (
+                "gauge",
+                "batch_server:draft_average_proposed_tokens",
+                "Average number of tokens in generated draft proposals.",
+                average_proposed_tokens,
+            ),
+            (
+                "gauge",
+                "batch_server:draft_average_verified_acceptance_length",
+                "Average accepted draft-token prefix length for target-verified proposals only.",
+                average_verified_acceptance_length,
+            ),
         ]
+
+    def record_draft_acceptance_length(self, accepted_tokens: int) -> None:
+        accepted_tokens = max(0, int(accepted_tokens))
+        self.draft_acceptance_length_counts[accepted_tokens] = (
+            self.draft_acceptance_length_counts.get(accepted_tokens, 0) + 1
+        )
+
+    def draft_acceptance_length_metric_lines(self) -> List[str]:
+        lines = [
+            "# HELP batch_server:draft_acceptance_length_total Number of verified draft proposals by accepted-token prefix length.",
+            "# TYPE batch_server:draft_acceptance_length_total counter",
+        ]
+        for accepted_tokens, count in sorted(self.draft_acceptance_length_counts.items()):
+            lines.append(
+                f'batch_server:draft_acceptance_length_total{{accepted_tokens="{accepted_tokens}"}} {count}'
+            )
+        return lines
 
     def render_prometheus_metrics(self) -> str:
         active_completions = sum(
@@ -11979,6 +12301,18 @@ class CompletionScheduler:
             if self.metrics.n_decode_total > 0
             else 0.0
         )
+        draft_provider_metrics: List[Tuple[str, str, str, Union[int, float]]] = []
+        if self.model.draft_provider is not None:
+            draft_metric_definitions = getattr(
+                self.model.draft_provider,
+                "metric_definitions",
+                None,
+            )
+            if draft_metric_definitions is not None:
+                draft_provider_metrics = cast(
+                    List[Tuple[str, str, str, Union[int, float]]],
+                    draft_metric_definitions(),
+                )
         metrics_def: List[Tuple[str, str, str, Union[int, float]]] = [
             (
                 "counter",
@@ -12030,18 +12364,6 @@ class CompletionScheduler:
             ),
             (
                 "counter",
-                "batch_server:draft_state_checkpoint_seconds_total",
-                "Time spent saving draft verification state snapshots.",
-                self.metrics.draft_state_checkpoint_seconds_total,
-            ),
-            (
-                "counter",
-                "batch_server:draft_state_restore_seconds_total",
-                "Time spent restoring draft verification state snapshots.",
-                self.metrics.draft_state_restore_seconds_total,
-            ),
-            (
-                "counter",
                 "batch_server:draft_process_seconds_total",
                 "Time spent feeding target batches into the draft context.",
                 self.metrics.draft_process_seconds_total,
@@ -12057,18 +12379,6 @@ class CompletionScheduler:
                 "batch_server:draft_sampled_batch_seconds_total",
                 "Time spent generating speculative tokens from sampled target batches.",
                 self.metrics.draft_sampled_batch_seconds_total,
-            ),
-            (
-                "counter",
-                "batch_server:draft_state_checkpoint_calls_total",
-                "Number of draft verification state snapshot phases.",
-                self.metrics.draft_state_checkpoint_calls_total,
-            ),
-            (
-                "counter",
-                "batch_server:draft_state_restore_calls_total",
-                "Number of draft verification state snapshot restore phases.",
-                self.metrics.draft_state_restore_calls_total,
             ),
             (
                 "counter",
@@ -12228,6 +12538,7 @@ class CompletionScheduler:
             ),
             *self.sequence_cache_metric_definitions(),
             *self.speculative_metric_definitions(),
+            *draft_provider_metrics,
             (
                 "gauge",
                 "batch_server:radix_trie_sequences",
@@ -12246,6 +12557,7 @@ class CompletionScheduler:
             lines.append(f"# HELP {name} {help_text}")
             lines.append(f"# TYPE {name} {metric_type}")
             lines.append(f"{name} {self._format_prometheus_value(value)}")
+        lines.extend(self.draft_acceptance_length_metric_lines())
         lines.append("")
         return "\n".join(lines)
 
