@@ -1,214 +1,93 @@
-name: Build Release
+name: Test arm64 musllinux wheel repair
 
 on: workflow_dispatch
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  build_wheels:
-    name: Build wheels on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-22.04, windows-2022, macos-14, macos-15]
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: "recursive"
-
-      # Used to host cibuildwheel
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.9"
-
-      - name: Install dependencies (Linux/MacOS)
-        if: runner.os != 'Windows'
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install uv
-          RUST_LOG=trace python -m uv pip install -e .[all] --verbose
-        shell: bash
-
-      - name: Install dependencies (Windows)
-        if: runner.os == 'Windows'
-        env:
-          RUST_LOG: trace        
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install uv
-          python -m uv pip install -e .[all] --verbose
-        shell: cmd
-
-      - name: Build wheels
-        uses: pypa/cibuildwheel@v2.22.0
-        env:
-          # Keep repair disabled by default for non-Linux platforms in this job.
-          CIBW_REPAIR_WHEEL_COMMAND: ""
-          # Linux needs auditwheel repair so manylinux and musllinux wheels are
-          # published with distinct platform tags instead of generic linux tags.
-          CIBW_REPAIR_WHEEL_COMMAND_LINUX: "LD_LIBRARY_PATH={project}/llama_cpp/lib auditwheel repair -w {dest_dir} {wheel}"
-          # The release wheel is tagged py3-none, so one build per platform
-          # covers all supported Python versions and avoids duplicate names.
-          CIBW_BUILD_LINUX: "cp38-*"
-          CIBW_BUILD_MACOS: "cp39-*"
-          CIBW_BUILD_WINDOWS: "cp39-*"
-          # Skip cibuildwheel's default i686 sidecar and keep Linux release
-          # wheels on a portable x86_64 CPU baseline.
-          CIBW_ARCHS_LINUX: "auto64"
-          CIBW_ARCHS_WINDOWS: "AMD64"
-          CIBW_ENVIRONMENT_LINUX: CMAKE_ARGS="-DGGML_NATIVE=off"
-          # Keep macOS release wheels on a portable CPU baseline instead of
-          # inheriting the hosted runner's native flags.
-          CIBW_ENVIRONMENT_MACOS: CMAKE_ARGS="-DGGML_NATIVE=off"
-        with:
-          package-dir: .
-          output-dir: wheelhouse
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: wheels-${{ matrix.os }}
-          path: ./wheelhouse/*.whl
-
-  build_wheels_arm64:
-    name: Build arm64 wheels
+  build_and_test_arm64_wheels:
+    name: Build and test arm64 wheels
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: "recursive"
 
-      - name: Build wheels
+      - name: Build and test wheels
         uses: pypa/cibuildwheel@v2.22.0
         env:
           CIBW_SKIP: "pp*"
           CIBW_REPAIR_WHEEL_COMMAND: "LD_LIBRARY_PATH={project}/llama_cpp/lib auditwheel repair -w {dest_dir} {wheel}"
           CIBW_ARCHS: "aarch64"
-          # Keep native arm64 builds on a portable CPU baseline instead of
-          # tuning wheels to the hosted runner.
           CIBW_ENVIRONMENT: CMAKE_ARGS="-DGGML_NATIVE=off"
-          # The release wheel is tagged py3-none, so one build covers all
-          # supported Python versions and avoids duplicate wheel names.
           CIBW_BUILD: "cp38-*"
+          CIBW_TEST_REQUIRES: "pytest"
+          CIBW_TEST_COMMAND: |
+            mkdir -p /tmp/llama-cpp-python-wheel-test
+            cd /tmp/llama-cpp-python-wheel-test
+            cat > test_wheel.py <<'PY'
+            import json
+            import os
+            from pathlib import Path
+
+            import llama_cpp
+            from llama_cpp import ChatCompletionRequestUserMessage
+            from llama_cpp.llama_chat_format import Jinja2ChatFormatter
+
+
+            def test_native_library_loads():
+                assert llama_cpp.__version__
+                llama_cpp.llama_backend_init()
+                llama_cpp.llama_backend_free()
+
+
+            def test_vocab_tokenization():
+                project = Path(os.environ["LLAMA_CPP_TEST_PROJECT"])
+                model_path = project / "vendor/llama.cpp/models/ggml-vocab-llama-spm.gguf"
+                model = llama_cpp.Llama(
+                    model_path=str(model_path),
+                    vocab_only=True,
+                    verbose=False,
+                )
+                assert model.tokenize(b"Hello World") == [1, 15043, 2787]
+
+
+            def test_grammar_helpers():
+                grammar = llama_cpp.LlamaGrammar.from_string('root ::= "true" | "false"')
+                assert grammar is not None
+                schema = {
+                    "type": "object",
+                    "properties": {"answer": {"type": "string"}},
+                    "required": ["answer"],
+                }
+                assert llama_cpp.LlamaGrammar.from_json_schema(json.dumps(schema)) is not None
+
+
+            def test_generation_tags_are_ignored():
+                formatter = Jinja2ChatFormatter(
+                    template="{% for message in messages %}{% generation %}{{ message['role'] }}: {{ message['content'] }}{% endgeneration %}{% endfor %}",
+                    eos_token="</s>",
+                    bos_token="<s>",
+                )
+                response = formatter(
+                    messages=[
+                        ChatCompletionRequestUserMessage(role="user", content="hi"),
+                    ]
+                )
+                assert response.prompt == "user: hi"
+            PY
+            LLAMA_CPP_TEST_PROJECT={project} python -m pytest -q test_wheel.py
         with:
           output-dir: wheelhouse
 
-      - name: Upload wheels as artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: wheels_arm64
-          path: ./wheelhouse/*.whl
-
-  build_wheels_riscv64:
-    name: Build riscv64 wheels (${{ matrix.shard.name }})
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        shard:
-          - name: cp310
-            build: "cp310-*"
-            artifact: wheels_riscv64_cp310
-          - name: cp311
-            build: "cp311-*"
-            artifact: wheels_riscv64_cp311
-          - name: cp312
-            build: "cp312-*"
-            artifact: wheels_riscv64_cp312
-          - name: cp313
-            build: "cp313-*"
-            artifact: wheels_riscv64_cp313
-          - name: cp314
-            build: "cp314-*"
-            artifact: wheels_riscv64_cp314
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: "recursive"
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: linux/riscv64
-
-      - name: Build wheels
-        uses: pypa/cibuildwheel@v3.1.2
-        env:
-          CIBW_SKIP: "*musllinux* pp*"
-          CIBW_REPAIR_WHEEL_COMMAND: ""
-          CIBW_ARCHS: "riscv64"
-          # Build riscv64 wheels against a conservative baseline instead of
-          # enabling RVV-related extensions from the build container.
-          CIBW_ENVIRONMENT: CMAKE_ARGS="-DGGML_NATIVE=off -DGGML_RVV=off -DGGML_RV_ZFH=off -DGGML_RV_ZVFH=off -DGGML_RV_ZICBOP=off -DGGML_RV_ZIHINTPAUSE=off"
-          # Split the emulated riscv64 build into one Python version per job
-          # to minimize wall-clock time without changing the release artifacts.
-          CIBW_BUILD: ${{ matrix.shard.build }}
-        with:
-          output-dir: wheelhouse
-
-      - name: Upload wheels as artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.shard.artifact }}
-          path: ./wheelhouse/*.whl
-
-  build_sdist:
-    name: Build source distribution
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: "recursive"
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.9"
-
-      - name: Install dependencies (Linux/MacOS)
-        if: runner.os != 'Windows'
+      - name: Check wheel tags
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install uv
-          RUST_LOG=trace python -m uv pip install -e .[all] --verbose
-          python -m uv pip install build
-        shell: bash
-
-      - name: Install dependencies (Windows)
-        if: runner.os == 'Windows'
-        env:
-          RUST_LOG: trace        
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install uv
-          python -m uv pip install -e .[all] --verbose
-          python -m uv pip install build
-        shell: cmd
-
-      - name: Build source distribution
-        run: |
-          python -m build --sdist
+          ls -la wheelhouse
+          test -n "$(find wheelhouse -name '*manylinux*aarch64*.whl' -print -quit)"
+          test -n "$(find wheelhouse -name '*musllinux*aarch64*.whl' -print -quit)"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: sdist
-          path: ./dist/*.tar.gz
-
-  release:
-    name: Release
-    needs: [build_wheels, build_wheels_arm64, build_wheels_riscv64, build_sdist]
-    if: startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          merge-multiple: true
-          path: dist
-
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: arm64-wheel-repair-test
+          path: ./wheelhouse/*.whl
