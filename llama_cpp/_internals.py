@@ -44,6 +44,9 @@ class LlamaModel:
         self.params = params
         self.verbose = verbose
         self._exit_stack = ExitStack()
+        # LlamaModel does not use samplers, but close() can run after partial init.
+        self.sampler = None
+        self.custom_samplers = []
 
         model = None
 
@@ -65,7 +68,6 @@ class LlamaModel:
 
         self.model = model
         self.vocab = vocab
-        self.sampler = None  # LlamaModel doesn't use samplers, but some cleanup code expects this attribute
 
         def free_model():
             if self.model is None:
@@ -76,7 +78,7 @@ class LlamaModel:
         self._exit_stack.callback(free_model)
 
     def close(self):
-        if hasattr(self, "sampler") and self.sampler is not None:
+        if self.sampler is not None:
             # NOTE: Must remove custom samplers before free or llama.cpp will try to free them
             for i, _ in reversed(self.custom_samplers):
                 llama_cpp.llama_sampler_chain_remove(self.sampler, i)
