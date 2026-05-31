@@ -48,7 +48,7 @@ jobs:
           CIBW_REPAIR_WHEEL_COMMAND: ""
           # Linux needs auditwheel repair so manylinux and musllinux wheels are
           # published with distinct platform tags instead of generic linux tags.
-          CIBW_REPAIR_WHEEL_COMMAND_LINUX: "LD_LIBRARY_PATH=/project/llama_cpp/lib auditwheel repair -w {dest_dir} {wheel}"
+          CIBW_REPAIR_WHEEL_COMMAND_LINUX: "LD_LIBRARY_PATH={project}/llama_cpp/lib auditwheel repair -w {dest_dir} {wheel}"
           # The release wheel is tagged py3-none, so one build per platform
           # covers all supported Python versions and avoids duplicate names.
           CIBW_BUILD_LINUX: "cp38-*"
@@ -83,7 +83,7 @@ jobs:
         uses: pypa/cibuildwheel@v2.22.0
         env:
           CIBW_SKIP: "pp*"
-          CIBW_REPAIR_WHEEL_COMMAND: "LD_LIBRARY_PATH=/project/llama_cpp/lib auditwheel repair -w {dest_dir} {wheel}"
+          CIBW_REPAIR_WHEEL_COMMAND: "LD_LIBRARY_PATH={project}/llama_cpp/lib auditwheel repair -w {dest_dir} {wheel}"
           CIBW_ARCHS: "aarch64"
           # Keep native arm64 builds on a portable CPU baseline instead of
           # tuning wheels to the hosted runner.
