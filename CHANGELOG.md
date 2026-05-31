@@ -7,8 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- feat: Update llama.cpp to ggml-org/llama.cpp@c0c7e147e
 - feat: enable arm64 musl builds by @acon96 in #2221
+- feat: Update llama.cpp to ggml-org/llama.cpp@d749821db
+- fix: model fails to load when chat template uses HuggingFace generation tags by @tobocop2 in #2226
 - docs: add contributing guide by @abetlen in #2229
 - chore: Migrate llama.cpp submodule URL to ggml-org/llama.cpp by @shalinib-ibm in #2034
 - fix: Enable unified KV cache for embedding contexts to preserve full per-sequence context in batch embedding calls by @SanjanaB123 in #2217
