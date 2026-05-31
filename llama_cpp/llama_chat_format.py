@@ -193,7 +193,7 @@ class ChatFormatter(Protocol):
 
 
 class Jinja2ChatFormatter(ChatFormatter):
-    class _GenerationTagIgnore(Extension):
+    class IgnoreGenerationTags(Extension):
         """Pass-through for HuggingFace's ``{% generation %}`` chat-template tag."""
 
         tags = {"generation"}
@@ -223,7 +223,7 @@ class Jinja2ChatFormatter(ChatFormatter):
             loader=jinja2.BaseLoader(),
             trim_blocks=True,
             lstrip_blocks=True,
-            extensions=[Jinja2ChatFormatter._GenerationTagIgnore],
+            extensions=[Jinja2ChatFormatter.IgnoreGenerationTags],
         ).from_string(self.template)
 
     @staticmethod
