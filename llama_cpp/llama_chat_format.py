@@ -24,6 +24,7 @@ from typing import (
 )
 
 import jinja2
+from jinja2.ext import Extension
 from jinja2.sandbox import ImmutableSandboxedEnvironment
 
 import numpy as np
@@ -192,6 +193,15 @@ class ChatFormatter(Protocol):
 
 
 class Jinja2ChatFormatter(ChatFormatter):
+    class IgnoreGenerationTags(Extension):
+        """Pass-through for HuggingFace's ``{% generation %}`` chat-template tag."""
+
+        tags = {"generation"}
+
+        def parse(self, parser: jinja2.parser.Parser):
+            parser.stream.skip(1)
+            return parser.parse_statements(("name:endgeneration",), drop_needle=True)
+
     def __init__(
         self,
         template: str,
@@ -213,6 +223,7 @@ class Jinja2ChatFormatter(ChatFormatter):
             loader=jinja2.BaseLoader(),
             trim_blocks=True,
             lstrip_blocks=True,
+            extensions=[Jinja2ChatFormatter.IgnoreGenerationTags],
         ).from_string(self.template)
 
     @staticmethod
