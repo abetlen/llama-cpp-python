@@ -522,7 +522,7 @@ class LlamaBatch:
             self.batch.seq_id[j][0] = seq_id
             self.batch.n_seq_id[j] = 1
             self.batch.logits[j] = logits_all
-        self.batch.logits[n_tokens - 1] = True
+        self.batch.logits[n_tokens0 + n_tokens - 1] = True
 
 
 class LlamaTokenDataArray:
