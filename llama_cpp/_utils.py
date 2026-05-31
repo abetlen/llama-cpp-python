@@ -38,6 +38,7 @@ class suppress_stdout_stderr(object):
         # OutStream objects that hold their own copy of the original fd in
         # _original_stdstream_copy. This bypasses our dup2 redirect, so we
         # need to point that copy at the real fd temporarily.
+        # https://github.com/ipython/ipykernel/blob/912923542d55e6c80c0e7c1f94c648b52a225011/ipykernel/iostream.py#L618-L622
         self._saved_stdout_copy = getattr(
             self.sys.stdout, "_original_stdstream_copy", None
         )
