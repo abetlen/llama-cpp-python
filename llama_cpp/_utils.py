@@ -1,5 +1,6 @@
 import os
 import sys
+import ctypes
 
 from typing import Any, Dict
 
@@ -16,6 +17,14 @@ class suppress_stdout_stderr(object):
     #       this context manager inside of a __del__ method
     sys = sys
     os = os
+    libc = ctypes.CDLL(None)
+    try:
+        c_stdout = ctypes.c_void_p.in_dll(libc, "stdout")
+        c_stderr = ctypes.c_void_p.in_dll(libc, "stderr")
+    except:
+        # macOS
+        c_stdout = ctypes.c_void_p.in_dll(libc, "__stdoutp")
+        c_stderr = ctypes.c_void_p.in_dll(libc, "__stderrp")
 
     def __init__(self, disable: bool = True):
         self.disable = disable
@@ -24,6 +33,9 @@ class suppress_stdout_stderr(object):
     def __enter__(self):
         if self.disable:
             return self
+
+        self.libc.fflush(self.c_stdout)
+        self.libc.fflush(self.c_stderr)
 
         self.old_stdout_fileno_undup = STDOUT_FILENO
         self.old_stderr_fileno_undup = STDERR_FILENO
@@ -44,6 +56,9 @@ class suppress_stdout_stderr(object):
     def __exit__(self, *_):
         if self.disable:
             return
+
+        self.libc.fflush(self.c_stdout)
+        self.libc.fflush(self.c_stderr)
 
         # Check if sys.stdout and sys.stderr have fileno method
         self.sys.stdout = self.old_stdout
