@@ -18,7 +18,7 @@ jobs:
         uses: pypa/cibuildwheel@v2.22.0
         env:
           CIBW_SKIP: "pp*"
-          CIBW_REPAIR_WHEEL_COMMAND: "LD_LIBRARY_PATH={project}/llama_cpp/lib auditwheel repair -w {dest_dir} {wheel}"
+          CIBW_REPAIR_WHEEL_COMMAND: "LD_LIBRARY_PATH=$PWD/llama_cpp/lib auditwheel repair -w {dest_dir} {wheel}"
           CIBW_ARCHS: "aarch64"
           CIBW_ENVIRONMENT: CMAKE_ARGS="-DGGML_NATIVE=off"
           CIBW_BUILD: "cp38-*"
