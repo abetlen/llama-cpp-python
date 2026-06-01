@@ -1,0 +1,29 @@
+name: Lint
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  ruff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Ruff
+        run: python -m pip install "ruff>=0.15.7"
+
+      - name: Lint with Ruff
+        run: python -m ruff check llama_cpp tests
+
+      - name: Check formatting with Ruff
+        run: python -m ruff format --check llama_cpp tests
