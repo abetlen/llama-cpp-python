@@ -39,7 +39,7 @@ _libllava_override_path = os.environ.get("LLAVA_CPP_LIB")
 _libllava_base_path = (
     pathlib.Path(os.path.abspath(os.path.dirname(__file__))) / "lib"
     if _libllava_override_path is None
-    else pathlib.Path()
+    else pathlib.Path(_libllava_override_path)
 )
 
 # Load the library

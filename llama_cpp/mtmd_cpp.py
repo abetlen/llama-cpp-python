@@ -43,7 +43,7 @@ _libmtmd_override_path = os.environ.get("MTMD_CPP_LIB")
 _libmtmd_base_path = (
     pathlib.Path(os.path.abspath(os.path.dirname(__file__))) / "lib"
     if _libmtmd_override_path is None
-    else pathlib.Path()
+    else pathlib.Path(_libmtmd_override_path)
 )
 
 # Load the library
