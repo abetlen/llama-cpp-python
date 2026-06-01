@@ -153,6 +153,26 @@ if (LLAMA_BUILD)
             add_compile_definitions(GGML_USE_METAL)
         endif()
 
+        # Upstream mtmd expects LLAMA_INSTALL_VERSION to be set by llama.cpp's
+        # top-level CMakeLists.txt. When we include tools/mtmd directly from the
+        # Python package build, that directory scope is skipped.
+        if (NOT DEFINED LLAMA_INSTALL_VERSION OR "${LLAMA_INSTALL_VERSION}" STREQUAL "")
+            set(LLAMA_INSTALL_VERSION 0.0.0)
+            find_package(Git QUIET)
+            if (Git_FOUND)
+                execute_process(
+                    COMMAND ${GIT_EXECUTABLE} rev-list --count HEAD
+                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/vendor/llama.cpp
+                    OUTPUT_VARIABLE LLAMA_MTMD_BUILD_NUMBER
+                    OUTPUT_STRIP_TRAILING_WHITESPACE
+                    RESULT_VARIABLE LLAMA_MTMD_BUILD_NUMBER_RESULT
+                )
+                if (LLAMA_MTMD_BUILD_NUMBER_RESULT EQUAL 0)
+                    set(LLAMA_INSTALL_VERSION 0.0.${LLAMA_MTMD_BUILD_NUMBER})
+                endif()
+            endif()
+        endif()
+
         # Building llava
         add_subdirectory(vendor/llama.cpp/tools/mtmd)
 
