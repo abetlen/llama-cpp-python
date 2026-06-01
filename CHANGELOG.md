@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.24]
+
 - docs: update ROCm install instructions by @agronholm in #1867
 - fix: clear prompt for recurrent / hybrid models when only a partial prefix matches by @avion23 in #2108
 - fix: match Transformers `tojson` in chat template rendering by @CISC in #1486
