@@ -20,16 +20,22 @@ jobs:
         id: set-matrix
         run: |
           $matrix = @{
-              'os' = @('ubuntu-22.04', 'windows-2022')
+              'os' = @('ubuntu-22.04', 'windows-2022', 'windows-2019')
               # wheel.py-api = "py3" makes the CUDA wheel interpreter-agnostic,
               # so one builder per toolkit version is sufficient.
               'pyver' = @("3.9")
               'cuda' = @("11.8.0", "12.1.1", "12.2.2", "12.3.2", "12.4.1", "12.5.1")
               'releasetag' = @("basic")
               'exclude' = @(
+                @{ 'os' = 'windows-2022'; 'cuda' = '11.8.0' },
                 @{ 'os' = 'windows-2022'; 'cuda' = '12.1.1' },
                 @{ 'os' = 'windows-2022'; 'cuda' = '12.2.2' },
-                @{ 'os' = 'windows-2022'; 'cuda' = '12.3.2' }
+                @{ 'os' = 'windows-2022'; 'cuda' = '12.3.2' },
+                @{ 'os' = 'windows-2019'; 'cuda' = '12.1.1' },
+                @{ 'os' = 'windows-2019'; 'cuda' = '12.2.2' },
+                @{ 'os' = 'windows-2019'; 'cuda' = '12.3.2' },
+                @{ 'os' = 'windows-2019'; 'cuda' = '12.4.1' },
+                @{ 'os' = 'windows-2019'; 'cuda' = '12.5.1' }
               )
           }
 
@@ -81,7 +87,31 @@ jobs:
         run: |
           $cudaVersion = $env:CUDAVER
           $cudaChannel = "nvidia/label/cuda-$cudaVersion"
-          if ($IsLinux) {
+          if ($cudaVersion -eq '11.8.0') {
+            if ($IsLinux) {
+              $cudaPackages = @(
+                "${cudaChannel}::cuda-nvcc_linux-64=11.8.0",
+                "${cudaChannel}::cuda-cccl=11.8.89",
+                "${cudaChannel}::cuda-cudart=11.8.89",
+                "${cudaChannel}::cuda-cudart-dev=11.8.89",
+                "${cudaChannel}::cuda-driver-dev=11.8.89",
+                "${cudaChannel}::libcublas=11.11.3.6",
+                "${cudaChannel}::libcublas-dev=11.11.3.6"
+              )
+            } elseif ($IsWindows) {
+              $cudaPackages = @(
+                "${cudaChannel}::cuda-nvcc_win-64=11.8.0",
+                "${cudaChannel}::cuda-cccl=11.8.89",
+                "${cudaChannel}::cuda-cudart=11.8.89",
+                "${cudaChannel}::cuda-cudart-dev=11.8.89",
+                "${cudaChannel}::libcublas=11.11.3.6",
+                "${cudaChannel}::libcublas-dev=11.11.3.6"
+              )
+            } else {
+              throw 'Unsupported CUDA wheel build platform'
+            }
+            mamba install -y --channel-priority strict --override-channels -c $cudaChannel $cudaPackages
+          } elseif ($IsLinux) {
             mamba install -y --channel-priority flexible --override-channels -c $cudaChannel "${cudaChannel}::cuda-toolkit=$cudaVersion" "${cudaChannel}::cuda-nvcc_linux-64" "${cudaChannel}::cuda-cccl" "${cudaChannel}::cuda-cudart" "${cudaChannel}::cuda-cudart-dev"
           } elseif ($IsWindows) {
             if ($cudaVersion -like '12.5.*') {
