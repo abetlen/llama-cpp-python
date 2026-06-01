@@ -223,7 +223,12 @@ class Jinja2ChatFormatter(ChatFormatter):
             loader=jinja2.BaseLoader(),
             trim_blocks=True,
             lstrip_blocks=True,
-            extensions=[Jinja2ChatFormatter.IgnoreGenerationTags],
+            # Keep this aligned with Transformers' chat-template Jinja extensions.
+            # https://github.com/huggingface/transformers/blob/39603d0e5cdb6f00e8d473d7fcbb01032d709181/src/transformers/utils/chat_template_utils.py#L489-L490
+            extensions=[
+                Jinja2ChatFormatter.IgnoreGenerationTags,
+                jinja2.ext.loopcontrols,
+            ],
         ).from_string(self.template)
 
     @staticmethod
