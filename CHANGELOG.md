@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - fix: use env var configured multimodal library override paths when loading shared libraries by @navratil-matej in #1782
+- feat: add Jinja2 loop controls to chat templates by @handshape in #2018
 - fix: avoid cleanup errors for partially initialized `LlamaModel` objects by @usernames122 in #2173
 - fix: suppress stdout and stderr in Jupyter notebooks by @Anai-Guo in #2181
 - feat: enable arm64 musl builds by @acon96 in #2221
