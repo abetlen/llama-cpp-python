@@ -63,7 +63,7 @@ jobs:
           if ($IsLinux) {
             mamba install -y --channel-priority flexible --override-channels -c $cudaChannel "${cudaChannel}::cuda-toolkit=$cudaVersion" "${cudaChannel}::cuda-nvcc_linux-64" "${cudaChannel}::cuda-cccl" "${cudaChannel}::cuda-cudart" "${cudaChannel}::cuda-cudart-dev"
           } elseif ($IsWindows) {
-            mamba install -y --channel-priority flexible --override-channels -c $cudaChannel "${cudaChannel}::cuda-toolkit=$cudaVersion" "${cudaChannel}::cuda-nvcc_win-64" "${cudaChannel}::cuda-cccl" "${cudaChannel}::cuda-cudart" "${cudaChannel}::cuda-cudart-dev"
+            mamba install -y --channel-priority flexible --override-channels -c $cudaChannel "${cudaChannel}::cuda-nvcc_win-64" "${cudaChannel}::cuda-cccl" "${cudaChannel}::cuda-libraries-dev=$cudaVersion" "${cudaChannel}::cuda-cudart" "${cudaChannel}::cuda-cudart-dev"
           } else {
             throw 'Unsupported CUDA wheel build platform'
           }
