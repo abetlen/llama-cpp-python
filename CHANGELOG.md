@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- feat(ci): add CUDA 13.0 and 13.2 wheel builds by @abetlen in #2239
 - fix(ci): add Pascal compute capability targets to CUDA wheel builds by @abetlen in #2237
 
 ## [0.3.24]
