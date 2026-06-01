@@ -18,7 +18,7 @@ jobs:
       matrix:
         os:
           - ubuntu-22.04
-          - windows-2022
+          - windows-2019
     defaults:
       run:
         shell: pwsh
@@ -58,10 +58,27 @@ jobs:
           $cudaVersion = $env:CUDAVER
           $cudaChannel = "nvidia/label/cuda-$cudaVersion"
           if ($IsLinux) {
-            mamba install -y --channel-priority flexible --override-channels -c $cudaChannel "${cudaChannel}::cuda-toolkit=$cudaVersion" "${cudaChannel}::cuda-nvcc_linux-64" "${cudaChannel}::cuda-cccl" "${cudaChannel}::cuda-cudart" "${cudaChannel}::cuda-cudart-dev"
+            $cudaPackages = @(
+              "${cudaChannel}::cuda-nvcc_linux-64=11.8.0",
+              "${cudaChannel}::cuda-cccl=11.8.89",
+              "${cudaChannel}::cuda-cudart=11.8.89",
+              "${cudaChannel}::cuda-cudart-dev=11.8.89",
+              "${cudaChannel}::cuda-driver-dev=11.8.89",
+              "${cudaChannel}::libcublas=11.11.3.6",
+              "${cudaChannel}::libcublas-dev=11.11.3.6"
+            )
+            mamba install -y --channel-priority strict --override-channels -c $cudaChannel $cudaPackages
             python -m pip install build wheel
           } elseif ($IsWindows) {
-            mamba install -y --channel-priority flexible --override-channels -c $cudaChannel "${cudaChannel}::cuda-toolkit=$cudaVersion" "${cudaChannel}::cuda-nvcc_win-64" "${cudaChannel}::cuda-cccl" "${cudaChannel}::cuda-cudart" "${cudaChannel}::cuda-cudart-dev"
+            $cudaPackages = @(
+              "${cudaChannel}::cuda-nvcc_win-64=11.8.0",
+              "${cudaChannel}::cuda-cccl=11.8.89",
+              "${cudaChannel}::cuda-cudart=11.8.89",
+              "${cudaChannel}::cuda-cudart-dev=11.8.89",
+              "${cudaChannel}::libcublas=11.11.3.6",
+              "${cudaChannel}::libcublas-dev=11.11.3.6"
+            )
+            mamba install -y --channel-priority strict --override-channels -c $cudaChannel $cudaPackages
             python -m pip install build wheel ninja
           } else {
             throw 'Unsupported CUDA wheel build platform'
