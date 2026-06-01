@@ -109,10 +109,10 @@ jobs:
           $env:CMAKE_ARGS = "-DCUDAToolkit_ROOT=$cudaRootCmake -DCUDA_TOOLKIT_ROOT_DIR=$cudaRootCmake"
 
           if ($IsLinux) {
-            if (Test-Path '/usr/bin/g++-12') {
-              $env:CC = '/usr/bin/gcc-12'
-              $env:CXX = '/usr/bin/g++-12'
-              $env:CUDAHOSTCXX = '/usr/bin/g++-12'
+            if (Test-Path '/usr/bin/g++-11') {
+              $env:CC = '/usr/bin/gcc-11'
+              $env:CXX = '/usr/bin/g++-11'
+              $env:CUDAHOSTCXX = '/usr/bin/g++-11'
               $env:CMAKE_ARGS = "$env:CMAKE_ARGS -DCMAKE_CUDA_HOST_COMPILER=$env:CUDAHOSTCXX"
             }
             $env:CPATH = "$cudaRoot/include$pathSeparator$env:CPATH"
