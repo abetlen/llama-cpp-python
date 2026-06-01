@@ -79,19 +79,22 @@ specified) expect poor results""",
         self.lparams.use_mlock = self.params.use_mlock
         self.lparams.use_mmap = self.params.use_mmap
 
-        self.model = llama_cpp.llama_load_model_from_file(
+        self.model = llama_cpp.llama_model_load_from_file(
             self.params.model.encode("utf8"), self.lparams
         )
+        self.vocab = llama_cpp.llama_model_get_vocab(self.model)
 
         # Context Params.
         self.cparams = llama_cpp.llama_context_default_params()
 
-        self.ctx = llama_cpp.llama_new_context_with_model(self.model, self.cparams)
+        self.ctx = llama_cpp.llama_init_from_model(self.model, self.cparams)
         if not self.ctx:
             raise RuntimeError(f"error: failed to load model '{self.params.model}'")
 
         if self.params.ignore_eos:
-            self.params.logit_bias[llama_cpp.llama_token_eos()] = -float("inf")
+            self.params.logit_bias[llama_cpp.llama_vocab_eos(self.vocab)] = -float(
+                "inf"
+            )
 
         if len(self.params.lora_adapter) > 0:
             if (
@@ -153,7 +156,7 @@ specified) expect poor results""",
                 _session_tokens = (llama_cpp.llama_token * (self.params.n_ctx))()
                 _n_token_count_out = llama_cpp.c_size_t()
                 if (
-                    llama_cpp.llama_load_session_file(
+                    llama_cpp.llama_state_load_file(
                         self.ctx,
                         self.params.path_session.encode("utf8"),
                         _session_tokens,
@@ -314,7 +317,7 @@ n_keep = {self.params.n_keep}
     def _tokenize(self, prompt, bos=True):
         _arr = (llama_cpp.llama_token * ((len(prompt) + 1) * 4))()
         _n = llama_cpp.llama_tokenize(
-            self.model,
+            self.vocab,
             prompt.encode("utf8", errors="ignore"),
             len(prompt),
             _arr,
@@ -406,7 +409,7 @@ n_keep = {self.params.n_keep}
             if len(self.embd_inp) <= self.input_consumed:  # && !is_interacting
                 # out of user input, sample next token
                 top_k = (
-                    llama_cpp.llama_n_vocab(self.ctx)
+                    llama_cpp.llama_vocab_n_tokens(self.vocab)
                     if self.params.top_k <= 0
                     else self.params.top_k
                 )
@@ -419,7 +422,7 @@ n_keep = {self.params.n_keep}
                 # optionally save the session on first sample (for faster prompt loading next time)
                 if len(self.params.path_session) > 0 and self.need_to_save_session:
                     self.need_to_save_session = False
-                    llama_cpp.llama_save_session_file(
+                    llama_cpp.llama_state_save_file(
                         self.ctx,
                         self.params.path_session.encode("utf8"),
                         (llama_cpp.llama_token * len(self.session_tokens))(
@@ -431,7 +434,7 @@ n_keep = {self.params.n_keep}
                 id = 0
 
                 logits = llama_cpp.llama_get_logits(self.ctx)
-                n_vocab = llama_cpp.llama_n_vocab(self.model)
+                n_vocab = llama_cpp.llama_vocab_n_tokens(self.vocab)
 
                 # Apply params.logit_bias map
                 for key, value in self.params.logit_bias.items():
@@ -448,7 +451,7 @@ n_keep = {self.params.n_keep}
                 )
 
                 # Apply penalties
-                nl_logit = logits[llama_cpp.llama_token_nl(self.ctx)]
+                nl_logit = logits[llama_cpp.llama_vocab_nl(self.vocab)]
                 last_n_repeat = min(len(self.last_n_tokens), repeat_last_n, self.n_ctx)
 
                 _arr = (llama_cpp.llama_token * last_n_repeat)(
@@ -470,7 +473,7 @@ n_keep = {self.params.n_keep}
                 # 	last_n_repeat, llama_cpp.c_float(self.params.frequency_penalty), llama_cpp.c_float(self.params.presence_penalty))
 
                 if not self.params.penalize_nl:
-                    logits[llama_cpp.llama_token_nl()] = nl_logit
+                    logits[llama_cpp.llama_vocab_nl(self.vocab)] = nl_logit
 
                 if self.params.temp <= 0:
                     # Greedy sampling
@@ -539,7 +542,7 @@ n_keep = {self.params.n_keep}
 
                 # replace end of text token with newline token when in interactive mode
                 if (
-                    id == llama_cpp.llama_token_eos(self.ctx)
+                    id == llama_cpp.llama_vocab_eos(self.vocab)
                     and self.params.interactive
                     and not self.params.instruct
                 ):
@@ -599,8 +602,8 @@ n_keep = {self.params.n_keep}
                     break
 
             # end of text token
-            if len(self.embd) > 0 and self.embd[-1] == llama_cpp.llama_token_eos(
-                self.ctx
+            if len(self.embd) > 0 and self.embd[-1] == llama_cpp.llama_vocab_eos(
+                self.vocab
             ):
                 if not self.params.instruct:
                     for i in self.llama_token_eot:
@@ -636,7 +639,7 @@ n_keep = {self.params.n_keep}
         size = 32
         buffer = (ctypes.c_char * size)()
         n = llama_cpp.llama_token_to_piece(
-            self.model, llama_cpp.llama_token(token_id), buffer, size
+            self.vocab, llama_cpp.llama_token(token_id), buffer, size, 0, False
         )
         assert n <= size
         return bytes(buffer[:n])

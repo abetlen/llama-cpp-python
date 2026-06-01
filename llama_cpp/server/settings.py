@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import multiprocessing
 
-from typing import Optional, List, Literal, Union, Dict, cast
+from typing import Any, Optional, List, Literal, Union, Dict, cast
 from typing_extensions import Self
 
 from pydantic import Field, model_validator
@@ -70,6 +70,9 @@ class ModelSettings(BaseSettings):
     n_batch: int = Field(
         default=512, ge=1, description="The batch size to use per eval."
     )
+    n_ubatch: int = Field(
+        default=512, ge=1, description="The physical batch size used by llama.cpp"
+    )
     n_threads: int = Field(
         default=max(multiprocessing.cpu_count() // 2, 1),
         ge=1,
@@ -127,6 +130,10 @@ class ModelSettings(BaseSettings):
     chat_format: Optional[str] = Field(
         default=None,
         description="Chat format to use.",
+    )
+    chat_template_kwargs: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Extra keyword arguments forwarded to chat templates at model load time. Matches llama.cpp server `chat_template_kwargs`.",
     )
     clip_model_path: Optional[str] = Field(
         default=None,

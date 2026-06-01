@@ -7,6 +7,175 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- fix: match Transformers `tojson` in chat template rendering by @CISC in #1486
+- fix: use env var configured multimodal library override paths when loading shared libraries by @navratil-matej in #1782
+- feat: add Jinja2 loop controls to chat templates by @handshape in #2018
+- fix: avoid cleanup errors for partially initialized `LlamaModel` objects by @usernames122 in #2173
+- fix: suppress stdout and stderr in Jupyter notebooks by @Anai-Guo in #2181
+- feat: enable arm64 musl builds by @acon96 in #2221
+- feat: Update llama.cpp to ggml-org/llama.cpp@d749821db
+- fix: model fails to load when chat template uses HuggingFace generation tags by @tobocop2 in #2226
+- docs: add contributing guide by @abetlen in #2229
+- chore: Migrate llama.cpp submodule URL to ggml-org/llama.cpp by @shalinib-ibm in #2034
+- fix: Enable unified KV cache for embedding contexts to preserve full per-sequence context in batch embedding calls by @SanjanaB123 in #2217
+
+## [0.3.23]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@7d442abf
+- fix: Correct batched embedding outputs for multi-sequence `embed()` calls by @Anai-Guo in #2205
+- fix: Configure embedding contexts with enough sequence slots for batched `embed()` calls
+- fix: Mark all embedding input tokens as outputs to avoid llama.cpp override warnings by @Anai-Guo in #2212
+
+## [0.3.22]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@63d93d173
+- feat(ci): Re-enable Windows CUDA wheels and add CUDA 12.5.1 wheel builds
+
+## [0.3.21]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@f53577432 and sync Python bindings
+- fix(ci): Build one arm64 release wheel for `py3-none` wheel publishing
+
+## [0.3.20]
+
+- refactor: Replace deprecated llama.cpp references in library, docs, and examples by @abetlen in #2170
+- feat: Update llama.cpp to ggerganov/llama.cpp@f49e9178767d557a522618b16ce8694f9ddac628 by @abetlen in #2169
+- feat(server): Add model-load `chat_template_kwargs` support and document the CLI/config usage by @abetlen in #2168
+- ci: Publish release wheels as `py3-none` by @Bing-su in #2166
+- fix(ci): Publish distinct manylinux and musllinux CPU wheels by @abetlen in #2165
+
+## [0.3.19]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@c0159f9c1f874da15e94f371d136f5920b4b5335 by @abetlen in #2161
+- fix: Handle embedding models without KV memory and test embeddings with a real GGUF embedding model by @abetlen in #2160
+- fix(ci): Shrink CUDA wheel fatbins so CUDA releases stay under GitHub's asset size limit by @abetlen in #2158
+
+## [0.3.18]
+
+- feat: Expose `attention_type` in `Llama.__init__` for non-causal embedding models by @jamesbiederbeck in #2143
+- fix(ci): Build Docker images from the checked-out source and sanitize branch tags by @abetlen in #2156
+- fix(ci): Fix the CUDA wheel workflow and keep release tags aligned with the built toolkit by @abetlen in #2155
+- fix(ci): Speed up release wheel builds by moving arm64 off QEMU and parallelizing riscv64 by @abetlen in #2154
+
+## [0.3.17]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@49bfddeca18e62fa3d39114a23e9fcbdf8a22388 and sync Python bindings by @abetlen in #2151
+- fix: Handle Qwen 3.5 hybrid prefix reuse by @codavidgarcia and @r-dh in #2152
+- chore(dev): Add Ruff-based formatting and a safe lint baseline, and run it in CI for pull requests and pushes to `main`
+- fix(ci): Run macOS CI on supported Apple Silicon and Intel runners by @abetlen in #2150
+- fix(ci): Use the `hf` CLI instead of the deprecated `huggingface-cli` name in GitHub Actions and docs by @abetlen in #2149
+- ci: add riscv64 wheel builds to release workflow by @gounthar in #2139
+
+## [0.3.16]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@4227c9be4268ac844921b90f31595f81236bd317
+
+## [0.3.15]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@9a96389544a08fd829fccda28142ce2066017fde
+- feat: Add gpt-oss chat format support through strftime_now in chat format by @iamlemec in af637928db7351e030011085f818b034c6efc047
+- fix: rename op_offloat to op_offload in llama.py by @sergey21000 in #2046
+
+## [0.3.14]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@79e0b68c178656bb0632cb8602d2940b755077f8
+
+## [0.3.13]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@bdca38376f7e8dd928defe01ce6a16218a64b040
+- fix: Better chat format for Qwen2.5-VL by @alcoftTAO in #2040
+
+## [0.3.12]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@a0374a67e2924f2e845cdc59dd67d9a44065a89c
+
+## [0.3.11]
+
+- fix: Update reference to `llama_kv_cache_clear` in Llama.embed. Closes #2037 by @abetlen in 9e5a4eaa84156084ed7bbb91e6efcc91dc6217bc
+
+## [0.3.10]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@8846aace4934ad29651ea61b8c7e3f6b0556e3d2
+- feat: Add support for llama.cpp multimodal, add Qwen2.5-VL chat handler by @abetlen in cd548bd0f14210627798237d5c2ea78acfb88ccb
+
+## [0.3.9]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@8733e0cf6eefc7c7752297cc22d0836706f4222c
+
+## [0.3.8]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@7841fc723e059d1fd9640e5c0ef19050fcc7c698
+
+## [0.3.7]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@794fe23f29fb40104975c91fe19f23798f7c726e
+- fix(ci): Fix the CUDA workflow by @oobabooga in #1894
+- fix: error showing time spent in llama perf context print, adds `no_perf` flag to `Llama` class by @shakalaca in #1898
+
+## [0.3.6]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@f7cd13301c2a88f97073fd119072b4cc92c08df1
+- fix(server): streaming resource lock by @gjpower in #1879
+
+## [0.3.5]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@26a8406ba9198eb6fdd8329fa717555b4f77f05f
+- fix(ci): Fix release by updating macos runner image to non-deprecated version by @abetlen in afedfc888462f9a6e809dc9455eb3b663764cc3f
+- fix(server): add missing await statements for async exit_stack handling by @gjpower in #1858
+
+## [0.3.4]
+
+- fix(ci): Build wheels for macos 13-15, cuda 12.1-12.4 by @abetlen in ca808028bd16b8327bd84128d48015a4b1304690
+
+## [0.3.3]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@ce8784bdb153ff7794dde5a50b0ebfa51baa6171
+- fix: chat API logprobs format by @domdomegg in #1788
+- feat: Add support for CUDA 12.6, fix CUDA 12.5 by @Smartappli in #1775
+- fix: Make content not required in ChatCompletionRequestAssistantMessage by @feloy in #1807
+- fix: Fix pickling of Llama class by setting seed from _seed member by @abetlen in 2523472c3eccb9ab9277117cc4ff705212b6888a
+- fix: Fix logit-bias type hint by @ddh0 in #1802
+- fix(server): Avoid thread starvation on many concurrent requests by making use of asyncio to lock llama_proxy context by @gjpower in #1798
+- fix(server): Added missing exit_stack.close() to /v1/chat/completions by @Ian321 in #1796
+- fix(examples): Refactor Batching notebook to use new sampler chain API by @lukestanley in #1793
+- fix(docs): Update development instructions by @Florents-Tselai in #1833
+- fix(docs): Remove ref to llama_eval in llama_cpp.py docs by @richdougherty in #1819
+
+## [0.3.2]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@74d73dc85cc2057446bf63cc37ff649ae7cebd80
+
+## [0.3.1]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@c919d5db39c8a7fcb64737f008e4b105ee0acd20
+- feat: Expose libggml in internal APIs by @abetlen in #1761
+- fix: Fix speculative decoding by @abetlen in 9992c5084a3df2f533e265d10f81d4269b97a1e6 and e975dabf74b3ad85689c9a07719cbb181313139b
+- misc: Rename all_text to remaining_text by @xu-song in #1658
+
+## [0.3.0]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@ea9c32be71b91b42ecc538bd902e93cbb5fb36cb
+- feat: Enable detokenizing special tokens with special=True by @benniekiss in #1596
+- feat(ci): Speed up CI workflows using uv, add support for CUDA 12.5 wheels by @Smartappli in e529940f45d42ed8aa31334123b8d66bc67b0e78
+- feat: Add loading sharded GGUF files from HuggingFace with Llama.from_pretrained(additional_files=[...]) by @Gnurro in 84c092063e8f222758dd3d60bdb2d1d342ac292e
+- feat: Add option to configure n_ubatch by @abetlen in 6c44a3f36b089239cb6396bb408116aad262c702
+- feat: Update sampling API for llama.cpp. Sampling now uses sampler chain by @abetlen in f8fcb3ea3424bcfba3a5437626a994771a02324b
+- fix: Don't store scores internally unless logits_all=True. Reduces memory requirements for large context by @abetlen in 29afcfdff5e75d7df4c13bad0122c98661d251ab
+- fix: Fix memory allocation of ndarray in by @xu-song in #1704
+- fix: Use system message in og qwen format by @abetlen in 98eb092d3c6e7c142c4ba2faaca6c091718abbb3
+
+
+## [0.2.90]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@1d1ccce67613674c75c9c7e3fa4c1e24e428ba48
+- feat: Add support for `MiniCPMv26ChatHandler` and `minicpm-v-26` in server by @abetlen in f70df824985d875226793b94dacc0c302a4256b2
+
+## [0.2.89]
+
+- feat: Update llama.cpp to ggerganov/llama.cpp@cfac111e2b3953cdb6b0126e67a2487687646971
+- fix: Llama.close didn't free lora adapter by @jkawamoto in #1679
+- fix: missing dependencies for test by @jkawamoto in #1680
+
 ## [0.2.88]
 
 - feat: Update llama.cpp to ggerganov/llama.cpp@fc4ca27b25464a11b3b86c9dbb5b6ed6065965c2

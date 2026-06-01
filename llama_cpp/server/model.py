@@ -157,19 +157,47 @@ class LlamaProxy:
                 chat_handler = llama_cpp.llama_chat_format.Llama3VisionAlpha(
                     clip_model_path=settings.clip_model_path, verbose=settings.verbose
                 )
+        elif settings.chat_format == "minicpm-v-2.6":
+            assert settings.clip_model_path is not None, "clip model not found"
+            if settings.hf_model_repo_id is not None:
+                chat_handler = (
+                    llama_cpp.llama_chat_format.MiniCPMv26ChatHandler.from_pretrained(
+                        repo_id=settings.hf_model_repo_id,
+                        filename=settings.clip_model_path,
+                        verbose=settings.verbose,
+                    )
+                )
+            else:
+                chat_handler = llama_cpp.llama_chat_format.MiniCPMv26ChatHandler(
+                    clip_model_path=settings.clip_model_path, verbose=settings.verbose
+                )
+        elif settings.chat_format == "qwen2.5-vl":
+            assert settings.clip_model_path is not None, "clip model not found"
+            if settings.hf_model_repo_id is not None:
+                chat_handler = (
+                    llama_cpp.llama_chat_format.Qwen25VLChatHandler.from_pretrained(
+                        repo_id=settings.hf_model_repo_id,
+                        filename=settings.clip_model_path,
+                        verbose=settings.verbose,
+                    )
+                )
+            else:
+                chat_handler = llama_cpp.llama_chat_format.Qwen25VLChatHandler(
+                    clip_model_path=settings.clip_model_path, verbose=settings.verbose
+                )
         elif settings.chat_format == "hf-autotokenizer":
-            assert (
-                settings.hf_pretrained_model_name_or_path is not None
-            ), "hf_pretrained_model_name_or_path must be set for hf-autotokenizer"
+            assert settings.hf_pretrained_model_name_or_path is not None, (
+                "hf_pretrained_model_name_or_path must be set for hf-autotokenizer"
+            )
             chat_handler = (
                 llama_cpp.llama_chat_format.hf_autotokenizer_to_chat_completion_handler(
                     settings.hf_pretrained_model_name_or_path
                 )
             )
         elif settings.chat_format == "hf-tokenizer-config":
-            assert (
-                settings.hf_tokenizer_config_path is not None
-            ), "hf_tokenizer_config_path must be set for hf-tokenizer-config"
+            assert settings.hf_tokenizer_config_path is not None, (
+                "hf_tokenizer_config_path must be set for hf-tokenizer-config"
+            )
             chat_handler = llama_cpp.llama_chat_format.hf_tokenizer_config_to_chat_completion_handler(
                 json.load(open(settings.hf_tokenizer_config_path))
             )
@@ -235,6 +263,7 @@ class LlamaProxy:
             seed=settings.seed,
             n_ctx=settings.n_ctx,
             n_batch=settings.n_batch,
+            n_ubatch=settings.n_ubatch,
             n_threads=settings.n_threads,
             n_threads_batch=settings.n_threads_batch,
             rope_scaling_type=settings.rope_scaling_type,
@@ -270,6 +299,21 @@ class LlamaProxy:
             # Misc
             verbose=settings.verbose,
         )
+        if settings.chat_template_kwargs:
+            base_chat_handler = (
+                _model.chat_handler
+                or _model._chat_handlers.get(_model.chat_format)
+                or llama_cpp.llama_chat_format.get_chat_completion_handler(
+                    _model.chat_format
+                )
+            )
+
+            def chat_handler_with_kwargs(*args, **kwargs):
+                return base_chat_handler(
+                    *args, **{**settings.chat_template_kwargs, **kwargs}
+                )
+
+            _model.chat_handler = chat_handler_with_kwargs
         if settings.cache:
             if settings.cache_type == "disk":
                 if settings.verbose:
