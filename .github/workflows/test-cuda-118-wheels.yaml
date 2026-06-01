@@ -18,7 +18,7 @@ jobs:
       matrix:
         os:
           - ubuntu-22.04
-          - windows-2019
+          - windows-2022
     defaults:
       run:
         shell: pwsh
@@ -31,6 +31,7 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
+          toolset: 14.29
 
       - uses: actions/checkout@v4
         with:
