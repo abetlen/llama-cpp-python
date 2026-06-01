@@ -67,8 +67,7 @@ jobs:
               "${cudaChannel}::libcublas=11.11.3.6",
               "${cudaChannel}::libcublas-dev=11.11.3.6"
             )
-            mamba install -y --channel-priority strict --override-channels -c $cudaChannel $cudaPackages
-            python -m pip install build wheel
+            mamba install -y --channel-priority flexible --override-channels -c $cudaChannel $cudaPackages
           } elseif ($IsWindows) {
             $cudaPackages = @(
               "${cudaChannel}::cuda-nvcc_win-64=11.8.0",
@@ -78,10 +77,17 @@ jobs:
               "${cudaChannel}::libcublas=11.11.3.6",
               "${cudaChannel}::libcublas-dev=11.11.3.6"
             )
-            mamba install -y --channel-priority strict --override-channels -c $cudaChannel $cudaPackages
-            python -m pip install build wheel ninja
+            mamba install -y --channel-priority flexible --override-channels -c $cudaChannel $cudaPackages
           } else {
             throw 'Unsupported CUDA wheel build platform'
+          }
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+          if ($IsWindows) {
+            python -m pip install build wheel ninja
+          } else {
+            python -m pip install build wheel
           }
 
       - name: Build wheel
