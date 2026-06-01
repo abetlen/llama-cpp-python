@@ -20,22 +20,16 @@ jobs:
         id: set-matrix
         run: |
           $matrix = @{
-              'os' = @('ubuntu-22.04', 'windows-2022', 'windows-2019')
+              'os' = @('ubuntu-22.04', 'windows-2022')
               # wheel.py-api = "py3" makes the CUDA wheel interpreter-agnostic,
               # so one builder per toolkit version is sufficient.
               'pyver' = @("3.9")
               'cuda' = @("11.8.0", "12.1.1", "12.2.2", "12.3.2", "12.4.1", "12.5.1")
               'releasetag' = @("basic")
               'exclude' = @(
-                @{ 'os' = 'windows-2022'; 'cuda' = '11.8.0' },
                 @{ 'os' = 'windows-2022'; 'cuda' = '12.1.1' },
                 @{ 'os' = 'windows-2022'; 'cuda' = '12.2.2' },
-                @{ 'os' = 'windows-2022'; 'cuda' = '12.3.2' },
-                @{ 'os' = 'windows-2019'; 'cuda' = '12.1.1' },
-                @{ 'os' = 'windows-2019'; 'cuda' = '12.2.2' },
-                @{ 'os' = 'windows-2019'; 'cuda' = '12.3.2' },
-                @{ 'os' = 'windows-2019'; 'cuda' = '12.4.1' },
-                @{ 'os' = 'windows-2019'; 'cuda' = '12.5.1' }
+                @{ 'os' = 'windows-2022'; 'cuda' = '12.3.2' }
               )
           }
 
@@ -56,8 +50,15 @@ jobs:
       AVXVER: ${{ matrix.releasetag }}
 
     steps:
+      - name: Set up MSVC for CUDA 11.8
+        if: runner.os == 'Windows' && matrix.cuda == '11.8.0'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+          toolset: 14.29
+
       - name: Set up MSVC
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && matrix.cuda != '11.8.0'
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
