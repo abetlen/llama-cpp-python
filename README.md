@@ -9,7 +9,7 @@
 [![PyPI](https://img.shields.io/pypi/v/llama-cpp-python)](https://pypi.org/project/llama-cpp-python/)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/llama-cpp-python)](https://pypi.org/project/llama-cpp-python/)
 [![PyPI - License](https://img.shields.io/pypi/l/llama-cpp-python)](https://pypi.org/project/llama-cpp-python/)
-[![PyPI - Downloads](https://img.shields.io/pypi/dm/llama-cpp-python)](https://pypi.org/project/llama-cpp-python/)
+[![PyPI - Downloads](https://static.pepy.tech/badge/llama-cpp-python/month)](https://pepy.tech/projects/llama-cpp-python)
 [![Github All Releases](https://img.shields.io/github/downloads/abetlen/llama-cpp-python/total.svg?label=Github%20Downloads)]()
 
 Simple Python bindings for **@ggerganov's** [`llama.cpp`](https://github.com/ggerganov/llama.cpp) library.
@@ -322,13 +322,13 @@ You'll need to install the `huggingface-hub` package to use this feature (`pip i
 
 ```python
 llm = Llama.from_pretrained(
-    repo_id="Qwen/Qwen2-0.5B-Instruct-GGUF",
-    filename="*q8_0.gguf",
+    repo_id="lmstudio-community/Qwen3.5-0.8B-GGUF",
+    filename="*Q8_0.gguf",
     verbose=False
 )
 ```
 
-By default [`from_pretrained`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.from_pretrained) will download the model to the huggingface cache directory, you can then manage installed model files with the [`huggingface-cli`](https://huggingface.co/docs/huggingface_hub/en/guides/cli) tool.
+By default [`from_pretrained`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.from_pretrained) will download the model to the huggingface cache directory, you can then manage installed model files with the [`hf`](https://huggingface.co/docs/huggingface_hub/en/guides/cli) tool.
 
 ### Chat Completion
 
@@ -505,6 +505,7 @@ Below are the supported multi-modal models and their respective chat handlers (P
 | [nanollava](https://huggingface.co/abetlen/nanollava-gguf) | `NanollavaChatHandler` | `nanollava` |
 | [llama-3-vision-alpha](https://huggingface.co/abetlen/llama-3-vision-alpha-gguf) | `Llama3VisionAlphaChatHandler` | `llama-3-vision-alpha` |
 | [minicpm-v-2.6](https://huggingface.co/openbmb/MiniCPM-V-2_6-gguf) | `MiniCPMv26ChatHandler` | `minicpm-v-2.6` |
+| [qwen2.5-vl](https://huggingface.co/unsloth/Qwen2.5-VL-3B-Instruct-GGUF) | `Qwen25VLChatHandler` | `qwen2.5-vl` |
 
 Then you'll need to use a custom chat handler to load the clip model and process the chat messages and images.
 
@@ -684,7 +685,7 @@ For possible options, see [llama_cpp/llama_chat_format.py](llama_cpp/llama_chat_
 If you have `huggingface-hub` installed, you can also use the `--hf_model_repo_id` flag to load a model from the Hugging Face Hub.
 
 ```bash
-python3 -m llama_cpp.server --hf_model_repo_id Qwen/Qwen2-0.5B-Instruct-GGUF --model '*q8_0.gguf'
+python3 -m llama_cpp.server --hf_model_repo_id lmstudio-community/Qwen3.5-0.8B-GGUF --model '*Q8_0.gguf'
 ```
 
 ### Web Server Features
@@ -716,16 +717,20 @@ Below is a short example demonstrating how to use the low-level API to tokenize 
 ```python
 import llama_cpp
 import ctypes
-llama_cpp.llama_backend_init(False) # Must be called once at the start of each program
-params = llama_cpp.llama_context_default_params()
+llama_cpp.llama_backend_init()  # Must be called once at the start of each program
+model_params = llama_cpp.llama_model_default_params()
+ctx_params = llama_cpp.llama_context_default_params()
+prompt = b"Q: Name the planets in the solar system? A: "
 # use bytes for char * params
-model = llama_cpp.llama_load_model_from_file(b"./models/7b/llama-model.gguf", params)
-ctx = llama_cpp.llama_new_context_with_model(model, params)
-max_tokens = params.n_ctx
+model = llama_cpp.llama_model_load_from_file(b"./models/7b/llama-model.gguf", model_params)
+ctx = llama_cpp.llama_init_from_model(model, ctx_params)
+vocab = llama_cpp.llama_model_get_vocab(model)
+max_tokens = ctx_params.n_ctx
 # use ctypes arrays for array params
 tokens = (llama_cpp.llama_token * int(max_tokens))()
-n_tokens = llama_cpp.llama_tokenize(ctx, b"Q: Name the planets in the solar system? A: ", tokens, max_tokens, llama_cpp.c_bool(True))
+n_tokens = llama_cpp.llama_tokenize(vocab, prompt, len(prompt), tokens, max_tokens, True, False)
 llama_cpp.llama_free(ctx)
+llama_cpp.llama_model_free(model)
 ```
 
 Check out the [examples folder](examples/low_level_api) for more examples of using the low-level API.
@@ -738,6 +743,7 @@ If you find any issues with the documentation, please open an issue or submit a 
 ## Development
 
 This package is under active development and I welcome any contributions.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution workflow, PR title, changelog, testing, and style guidelines.
 
 To get started, clone the repository and install the package in editable / development mode:
 
@@ -751,14 +757,42 @@ pip install --upgrade pip
 # Install with pip
 pip install -e .
 
+# install development tooling (tests, docs, ruff)
+pip install -e '.[dev]'
+
 # if you want to use the fastapi / openapi server
-pip install -e .[server]
+pip install -e '.[server]'
 
 # to install all optional dependencies
-pip install -e .[all]
+pip install -e '.[all]'
 
 # to clear the local build cache
 make clean
+```
+
+Now try running the tests
+
+```bash
+pytest
+```
+
+And check formatting / linting before opening a PR:
+
+```bash
+python -m ruff check llama_cpp tests
+python -m ruff format --check llama_cpp tests
+
+# or use the Makefile targets
+make lint
+make format
+```
+
+There's a `Makefile` available with useful targets.
+A typical workflow would look like this:
+
+```bash
+make build
+make test
 ```
 
 You can also test out specific commits of `llama.cpp` by checking out the desired commit in the `vendor/llama.cpp` submodule and then running `make clean` and `pip install -e .` again. Any changes in the `llama.h` API will require
