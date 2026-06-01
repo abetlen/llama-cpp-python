@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- fix(ci): add Pascal compute capability targets to CUDA wheel builds by @abetlen in #2237
+
 ## [0.3.24]
 
 - docs: update ROCm install instructions by @agronholm in #1867
