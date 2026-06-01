@@ -24,7 +24,7 @@ jobs:
               # wheel.py-api = "py3" makes the CUDA wheel interpreter-agnostic,
               # so one builder per toolkit version is sufficient.
               'pyver' = @("3.9")
-              'cuda' = @("12.1.1", "12.2.2", "12.3.2", "12.4.1", "12.5.1")
+              'cuda' = @("11.8.0", "12.1.1", "12.2.2", "12.3.2", "12.4.1", "12.5.1")
               'releasetag' = @("basic")
               'exclude' = @(
                 @{ 'os' = 'windows-2022'; 'cuda' = '12.1.1' },
