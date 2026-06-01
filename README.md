@@ -125,8 +125,8 @@ CMAKE_ARGS="-DGGML_CUDA=on" pip install llama-cpp-python
 
 It is also possible to install a pre-built wheel with CUDA support. As long as your system meets some requirements:
 
-- CUDA Version is 11.8, 12.1, 12.2, 12.3, 12.4 or 12.5
-- NVIDIA GPU compute capability is 6.0 through 8.9 for CUDA 11.8 wheels, or 6.0 or newer for CUDA 12 wheels
+- CUDA Version is 11.8, 12.1, 12.2, 12.3, 12.4, 12.5, 13.0 or 13.2
+- NVIDIA GPU compute capability is 6.0 through 8.9 for CUDA 11.8 wheels, 6.0 or newer for CUDA 12 wheels, or 7.5 or newer for CUDA 13 wheels
 - Python Version is 3.10, 3.11 or 3.12
 
 ```bash
@@ -141,6 +141,8 @@ Where `<cuda-version>` is one of the following:
 - `cu123`: CUDA 12.3
 - `cu124`: CUDA 12.4
 - `cu125`: CUDA 12.5
+- `cu130`: CUDA 13.0
+- `cu132`: CUDA 13.2
 
 For example, to install the CUDA 12.1 wheel:
 

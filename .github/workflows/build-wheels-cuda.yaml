@@ -24,7 +24,7 @@ jobs:
               # wheel.py-api = "py3" makes the CUDA wheel interpreter-agnostic,
               # so one builder per toolkit version is sufficient.
               'pyver' = @("3.9")
-              'cuda' = @("11.8.0", "12.1.1", "12.2.2", "12.3.2", "12.4.1", "12.5.1")
+              'cuda' = @("11.8.0", "12.1.1", "12.2.2", "12.3.2", "12.4.1", "12.5.1", "13.0.2", "13.2.1")
               'releasetag' = @("basic")
               'exclude' = @(
                 @{ 'os' = 'windows-2022'; 'cuda' = '12.1.1' },
@@ -115,8 +115,8 @@ jobs:
           } elseif ($IsLinux) {
             mamba install -y --channel-priority flexible --override-channels -c $cudaChannel "${cudaChannel}::cuda-toolkit=$cudaVersion" "${cudaChannel}::cuda-nvcc_linux-64" "${cudaChannel}::cuda-cccl" "${cudaChannel}::cuda-cudart" "${cudaChannel}::cuda-cudart-dev"
           } elseif ($IsWindows) {
-            if ($cudaVersion -like '12.5.*') {
-              # The Windows 12.5 toolkit meta-package pulls compiler activation
+            if ($cudaVersion -like '12.5.*' -or [version]$cudaVersion -ge [version]"13.0") {
+              # The Windows 12.5+ toolkit meta-package pulls compiler activation
               # scripts that overflow cmd.exe after MSVC is already initialized.
               mamba install -y --channel-priority flexible --override-channels -c $cudaChannel "${cudaChannel}::cuda-nvcc_win-64" "${cudaChannel}::cuda-cccl" "${cudaChannel}::cuda-libraries-dev=$cudaVersion" "${cudaChannel}::cuda-cudart" "${cudaChannel}::cuda-cudart-dev"
             } else {
@@ -209,8 +209,11 @@ jobs:
           if ([version]$nvccVersion -lt [version]"12.0") {
             # CUDA 11.8 cannot compile llama.cpp's Hopper PDL device calls.
             $cudaArchs = "60-real;61-real;70-real;75-real;80-real;86-real;89-real"
+          } elseif ([version]$nvccVersion -ge [version]"13.0") {
+            # CUDA 13 dropped offline compilation support for pre-Turing targets.
+            $cudaArchs = "75-real;80-real;86-real;89-real;90-real;90-virtual"
           }
-          # Build real cubins for the supported GPUs, including Pascal, and keep
+          # Build real cubins for the supported GPUs and keep
           # one forward-compatible PTX target instead of embedding PTX for every
           # SM. This keeps the wheel under GitHub's 2 GiB release-asset limit.
           $env:CMAKE_ARGS = "-DGGML_CUDA_FORCE_MMQ=ON -DGGML_CUDA=on -DCMAKE_CUDA_ARCHITECTURES=$cudaArchs -DCMAKE_CUDA_FLAGS=-allow-unsupported-compiler -DCMAKE_CUDA_FLAGS_INIT=-allow-unsupported-compiler $env:CMAKE_ARGS"
