@@ -152,7 +152,7 @@ jobs:
           }
 
           $env:VERBOSE = '1'
-          $env:CMAKE_ARGS = "-DGGML_CUDA_FORCE_MMQ=ON -DGGML_CUDA=on -DCMAKE_CUDA_ARCHITECTURES=60-real;61-real;70-real;75-real;80-real;86-real;89-real;90-real;90-virtual -DCMAKE_CUDA_FLAGS=-allow-unsupported-compiler -DCMAKE_CUDA_FLAGS_INIT=-allow-unsupported-compiler $env:CMAKE_ARGS"
+          $env:CMAKE_ARGS = "-DGGML_CUDA_FORCE_MMQ=ON -DGGML_CUDA=on -DCMAKE_CUDA_ARCHITECTURES=60-real;61-real;70-real;75-real;80-real;86-real;89-real -DCMAKE_CUDA_FLAGS=-allow-unsupported-compiler -DCMAKE_CUDA_FLAGS_INIT=-allow-unsupported-compiler $env:CMAKE_ARGS"
           $env:CMAKE_ARGS = "$env:CMAKE_ARGS -DGGML_AVX2=off -DGGML_FMA=off -DGGML_F16C=off"
           & $nvccPath --version
           python -m build --wheel
