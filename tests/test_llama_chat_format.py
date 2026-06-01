@@ -1,6 +1,7 @@
 import json
 
 import jinja2
+from jinja2.sandbox import ImmutableSandboxedEnvironment
 
 from llama_cpp import (
     ChatCompletionRequestUserMessage,
@@ -92,3 +93,33 @@ def test_hf_tokenizer_config_str_to_chat_formatter():
     )
 
     assert chat_formatter_respoonse.prompt == ("<s>[INST] Hello, world! [/INST]</s>")
+
+
+def test_gemma4_multimodal_chat_handler_formats_image_url():
+    template = ImmutableSandboxedEnvironment(
+        trim_blocks=True,
+        lstrip_blocks=True,
+    ).from_string(llama_chat_format.Gemma4ChatHandler.CHAT_FORMAT)
+    prompt = template.render(
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Describe this image."},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "https://example.com/cat.png"},
+                    },
+                ],
+            }
+        ],
+        add_generation_prompt=True,
+    )
+
+    assert prompt == (
+        "<start_of_turn>user\n"
+        "Describe this image.\n\n"
+        "https://example.com/cat.png\n\n"
+        "<end_of_turn>\n"
+        "<start_of_turn>model\n"
+    )
