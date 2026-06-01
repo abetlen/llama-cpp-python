@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- fix: match Transformers `tojson` in chat template rendering by @CISC in #1486
 - fix: use env var configured multimodal library override paths when loading shared libraries by @navratil-matej in #1782
 - feat: add Jinja2 loop controls to chat templates by @handshape in #2018
 - fix: avoid cleanup errors for partially initialized `LlamaModel` objects by @usernames122 in #2173

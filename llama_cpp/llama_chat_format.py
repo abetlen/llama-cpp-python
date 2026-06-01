@@ -219,7 +219,7 @@ class Jinja2ChatFormatter(ChatFormatter):
             set(stop_token_ids) if stop_token_ids is not None else None
         )
 
-        self._environment = ImmutableSandboxedEnvironment(
+        environment = ImmutableSandboxedEnvironment(
             loader=jinja2.BaseLoader(),
             trim_blocks=True,
             lstrip_blocks=True,
@@ -229,11 +229,31 @@ class Jinja2ChatFormatter(ChatFormatter):
                 Jinja2ChatFormatter.IgnoreGenerationTags,
                 jinja2.ext.loopcontrols,
             ],
-        ).from_string(self.template)
+        )
+        # Match Transformers' chat-template JSON rendering behavior.
+        # https://github.com/huggingface/transformers/blob/39603d0e5cdb6f00e8d473d7fcbb01032d709181/src/transformers/utils/chat_template_utils.py#L481-L484
+        environment.filters["tojson"] = self.tojson
+        self._environment = environment.from_string(self.template)
 
     @staticmethod
     def strftime_now(f: str) -> str:
         return datetime.now().strftime(f)
+
+    @staticmethod
+    def tojson(
+        x: Any,
+        ensure_ascii: bool = False,
+        indent: Optional[int] = None,
+        separators: Optional[Tuple[str, str]] = None,
+        sort_keys: bool = False,
+    ) -> str:
+        return json.dumps(
+            x,
+            ensure_ascii=ensure_ascii,
+            indent=indent,
+            separators=separators,
+            sort_keys=sort_keys,
+        )
 
     def __call__(
         self,
