@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - fix: avoid cleanup errors for partially initialized `LlamaModel` objects by @usernames122 in #2173
 - fix: suppress stdout and stderr in Jupyter notebooks by @Anai-Guo in #2181
 - feat: enable arm64 musl builds by @acon96 in #2221
-- feat: Update llama.cpp to ggml-org/llama.cpp@d749821db
+- feat: Update llama.cpp to ggml-org/llama.cpp@af6528e6d
 - fix: model fails to load when chat template uses HuggingFace generation tags by @tobocop2 in #2226
 - docs: add contributing guide by @abetlen in #2229
 - chore: Migrate llama.cpp submodule URL to ggml-org/llama.cpp by @shalinib-ibm in #2034
