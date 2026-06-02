@@ -16,6 +16,15 @@ jobs:
         with:
           submodules: "recursive"
 
+      - name: Set image tag
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            image_tag="${GITHUB_REF_NAME}"
+          else
+            image_tag="${GITHUB_REF_NAME//\//-}"
+          fi
+          echo "IMAGE_TAG=$image_tag" >> "$GITHUB_ENV"
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -40,7 +49,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           tags: |
             ghcr.io/abetlen/llama-cpp-python:latest
-            ghcr.io/abetlen/llama-cpp-python:${{ github.ref_name }}
+            ghcr.io/abetlen/llama-cpp-python:${{ env.IMAGE_TAG }}
           build-args: |
             BUILDKIT_INLINE_CACHE=1
 

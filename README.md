@@ -59,7 +59,7 @@ pip install llama-cpp-python \
 
 ### Installation Configuration
 
-`llama.cpp` supports a number of hardware acceleration backends to speed up inference as well as backend specific options. See the [llama.cpp README](https://github.com/ggerganov/llama.cpp#build) for a full list.
+`llama.cpp` supports a number of hardware acceleration backends to speed up inference as well as backend specific options. See the [llama.cpp README](https://github.com/ggml-org/llama.cpp/blob/master/docs/build.md) for a full list.
 
 All `llama.cpp` cmake build options can be set via the `CMAKE_ARGS` environment variable or via the `--config-settings / -C` cli flag during installation.
 
@@ -125,7 +125,8 @@ CMAKE_ARGS="-DGGML_CUDA=on" pip install llama-cpp-python
 
 It is also possible to install a pre-built wheel with CUDA support. As long as your system meets some requirements:
 
-- CUDA Version is 12.1, 12.2, 12.3, 12.4 or 12.5
+- CUDA Version is 11.8, 12.1, 12.2, 12.3, 12.4, 12.5, 13.0 or 13.2
+- NVIDIA GPU compute capability is 6.0 through 8.9 for CUDA 11.8 wheels, 6.0 or newer for CUDA 12 wheels, or 7.5 or newer for CUDA 13 wheels
 - Python Version is 3.10, 3.11 or 3.12
 
 ```bash
@@ -134,11 +135,14 @@ pip install llama-cpp-python \
 ```
 
 Where `<cuda-version>` is one of the following:
+- `cu118`: CUDA 11.8
 - `cu121`: CUDA 12.1
 - `cu122`: CUDA 12.2
 - `cu123`: CUDA 12.3
 - `cu124`: CUDA 12.4
 - `cu125`: CUDA 12.5
+- `cu130`: CUDA 13.0
+- `cu132`: CUDA 13.2
 
 For example, to install the CUDA 12.1 wheel:
 
@@ -173,12 +177,12 @@ pip install llama-cpp-python \
 </details>
 
 <details>
-<summary>hipBLAS (ROCm)</summary>
+<summary>HIP (ROCm)</summary>
 
-To install with hipBLAS / ROCm support for AMD cards, set the `GGML_HIPBLAS=on` environment variable before installing:
+To install with HIP / ROCm support for AMD cards, set the `GGML_HIP=on` environment variable before installing:
 
 ```bash
-CMAKE_ARGS="-DGGML_HIPBLAS=on" pip install llama-cpp-python
+CMAKE_ARGS="-DGGML_HIP=on" pip install llama-cpp-python
 ```
 
 </details>
@@ -269,7 +273,7 @@ To upgrade and rebuild `llama-cpp-python` add `--upgrade --force-reinstall --no-
 
 The high-level API provides a simple managed interface through the [`Llama`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama) class.
 
-Below is a short example demonstrating how to use the high-level API to for basic text completion:
+Below is a short example demonstrating how to use the high-level API for basic text completion:
 
 ```python
 from llama_cpp import Llama
@@ -322,13 +326,13 @@ You'll need to install the `huggingface-hub` package to use this feature (`pip i
 
 ```python
 llm = Llama.from_pretrained(
-    repo_id="Qwen/Qwen2-0.5B-Instruct-GGUF",
-    filename="*q8_0.gguf",
+    repo_id="lmstudio-community/Qwen3.5-0.8B-GGUF",
+    filename="*Q8_0.gguf",
     verbose=False
 )
 ```
 
-By default [`from_pretrained`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.from_pretrained) will download the model to the huggingface cache directory, you can then manage installed model files with the [`huggingface-cli`](https://huggingface.co/docs/huggingface_hub/en/guides/cli) tool.
+By default [`from_pretrained`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.from_pretrained) will download the model to the huggingface cache directory, you can then manage installed model files with the [`hf`](https://huggingface.co/docs/huggingface_hub/en/guides/cli) tool.
 
 ### Chat Completion
 
@@ -337,7 +341,7 @@ The high-level API also provides a simple interface for chat completion.
 Chat completion requires that the model knows how to format the messages into a single prompt.
 The `Llama` class does this using pre-registered chat formats (ie. `chatml`, `llama-2`, `gemma`, etc) or by providing a custom chat handler object.
 
-The model will will format the messages into a single prompt using the following order of precedence:
+The model will format the messages into a single prompt using the following order of precedence:
   - Use the `chat_handler` if provided
   - Use the `chat_format` if provided
   - Use the `tokenizer.chat_template` from the `gguf` model's metadata (should work for most new models, older models may not have this)
@@ -502,10 +506,11 @@ Below are the supported multi-modal models and their respective chat handlers (P
 | [llava-v1.5-13b](https://huggingface.co/mys/ggml_llava-v1.5-13b) | `Llava15ChatHandler` | `llava-1-5` |
 | [llava-v1.6-34b](https://huggingface.co/cjpais/llava-v1.6-34B-gguf) | `Llava16ChatHandler` | `llava-1-6` |
 | [moondream2](https://huggingface.co/vikhyatk/moondream2) | `MoondreamChatHandler` | `moondream2` |
-| [nanollava](https://huggingface.co/abetlen/nanollava-gguf) | `NanollavaChatHandler` | `nanollava` |
+| [nanollava](https://huggingface.co/abetlen/nanollava-gguf) | `NanoLlavaChatHandler` | `nanollava` |
 | [llama-3-vision-alpha](https://huggingface.co/abetlen/llama-3-vision-alpha-gguf) | `Llama3VisionAlphaChatHandler` | `llama-3-vision-alpha` |
 | [minicpm-v-2.6](https://huggingface.co/openbmb/MiniCPM-V-2_6-gguf) | `MiniCPMv26ChatHandler` | `minicpm-v-2.6` |
 | [qwen2.5-vl](https://huggingface.co/unsloth/Qwen2.5-VL-3B-Instruct-GGUF) | `Qwen25VLChatHandler` | `qwen2.5-vl` |
+| [gemma-4](https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF) | `Gemma4ChatHandler` | `gemma4` |
 
 Then you'll need to use a custom chat handler to load the clip model and process the chat messages and images.
 
@@ -685,7 +690,7 @@ For possible options, see [llama_cpp/llama_chat_format.py](llama_cpp/llama_chat_
 If you have `huggingface-hub` installed, you can also use the `--hf_model_repo_id` flag to load a model from the Hugging Face Hub.
 
 ```bash
-python3 -m llama_cpp.server --hf_model_repo_id Qwen/Qwen2-0.5B-Instruct-GGUF --model '*q8_0.gguf'
+python3 -m llama_cpp.server --hf_model_repo_id lmstudio-community/Qwen3.5-0.8B-GGUF --model '*Q8_0.gguf'
 ```
 
 ### Web Server Features
@@ -717,16 +722,20 @@ Below is a short example demonstrating how to use the low-level API to tokenize 
 ```python
 import llama_cpp
 import ctypes
-llama_cpp.llama_backend_init(False) # Must be called once at the start of each program
-params = llama_cpp.llama_context_default_params()
+llama_cpp.llama_backend_init()  # Must be called once at the start of each program
+model_params = llama_cpp.llama_model_default_params()
+ctx_params = llama_cpp.llama_context_default_params()
+prompt = b"Q: Name the planets in the solar system? A: "
 # use bytes for char * params
-model = llama_cpp.llama_load_model_from_file(b"./models/7b/llama-model.gguf", params)
-ctx = llama_cpp.llama_new_context_with_model(model, params)
-max_tokens = params.n_ctx
+model = llama_cpp.llama_model_load_from_file(b"./models/7b/llama-model.gguf", model_params)
+ctx = llama_cpp.llama_init_from_model(model, ctx_params)
+vocab = llama_cpp.llama_model_get_vocab(model)
+max_tokens = ctx_params.n_ctx
 # use ctypes arrays for array params
 tokens = (llama_cpp.llama_token * int(max_tokens))()
-n_tokens = llama_cpp.llama_tokenize(ctx, b"Q: Name the planets in the solar system? A: ", tokens, max_tokens, llama_cpp.c_bool(True))
+n_tokens = llama_cpp.llama_tokenize(vocab, prompt, len(prompt), tokens, max_tokens, True, False)
 llama_cpp.llama_free(ctx)
+llama_cpp.llama_model_free(model)
 ```
 
 Check out the [examples folder](examples/low_level_api) for more examples of using the low-level API.
@@ -739,6 +748,7 @@ If you find any issues with the documentation, please open an issue or submit a 
 ## Development
 
 This package is under active development and I welcome any contributions.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution workflow, PR title, changelog, testing, and style guidelines.
 
 To get started, clone the repository and install the package in editable / development mode:
 
@@ -751,6 +761,9 @@ pip install --upgrade pip
 
 # Install with pip
 pip install -e .
+
+# install development tooling (tests, docs, ruff)
+pip install -e '.[dev]'
 
 # if you want to use the fastapi / openapi server
 pip install -e '.[server]'
@@ -766,6 +779,17 @@ Now try running the tests
 
 ```bash
 pytest
+```
+
+And check formatting / linting before opening a PR:
+
+```bash
+python -m ruff check llama_cpp tests
+python -m ruff format --check llama_cpp tests
+
+# or use the Makefile targets
+make lint
+make format
 ```
 
 There's a `Makefile` available with useful targets.
