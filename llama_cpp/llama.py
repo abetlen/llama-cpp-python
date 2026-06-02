@@ -2396,12 +2396,15 @@ class Llama:
                     )
 
                 (matching_additional_file,) = matching_additional_files
+                additional_subfolder = str(Path(matching_additional_file).parent)
+                additional_file_name = Path(matching_additional_file).name
 
-                # download the additional file
+                # Split additional file paths independently to avoid duplicating
+                # the main model subfolder in Hugging Face download URLs.
                 hf_hub_download(
                     repo_id=repo_id,
-                    filename=matching_additional_file,
-                    subfolder=subfolder,
+                    filename=additional_file_name,
+                    subfolder=additional_subfolder,
                     local_dir=local_dir,
                     local_dir_use_symlinks=local_dir_use_symlinks,
                     cache_dir=cache_dir,
