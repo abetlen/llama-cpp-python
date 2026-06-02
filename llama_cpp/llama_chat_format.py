@@ -3265,6 +3265,50 @@ class Llava15ChatHandler:
         )
 
 
+class Gemma4ChatHandler(Llava15ChatHandler):
+    DEFAULT_SYSTEM_MESSAGE = None
+
+    CHAT_FORMAT = (
+        "{% if messages and messages[0]['role'] == 'system' %}"
+        "{% if messages[0]['content'] is string %}"
+        "{% set first_user_prefix = messages[0]['content'] + '\n\n' %}"
+        "{% else %}"
+        "{% set first_user_prefix = messages[0]['content'][0]['text'] + '\n\n' %}"
+        "{% endif %}"
+        "{% set loop_messages = messages[1:] %}"
+        "{% else %}"
+        "{% set first_user_prefix = '' %}"
+        "{% set loop_messages = messages %}"
+        "{% endif %}"
+        "{% for message in loop_messages %}"
+        "{% if (message['role'] == 'user') != (loop.index0 % 2 == 0) %}"
+        "{{ raise_exception('Conversation roles must alternate user/assistant/user/assistant/...') }}"
+        "{% endif %}"
+        "{% set role = 'model' if message['role'] == 'assistant' else message['role'] %}"
+        "{{ '<start_of_turn>' + role + '\n' + (first_user_prefix if loop.first else '') }}"
+        "{% if message['content'] is string %}"
+        "{{ message['content'] | trim }}"
+        "{% elif message['content'] is iterable %}"
+        "{% for item in message['content'] %}"
+        "{% if item['type'] == 'image_url' and item['image_url'] is string %}"
+        "{{ '\n\n' + item['image_url'] + '\n\n' }}"
+        "{% elif item['type'] == 'image_url' and item['image_url'] is mapping %}"
+        "{{ '\n\n' + item['image_url']['url'] + '\n\n' }}"
+        "{% elif item['type'] == 'text' %}"
+        "{{ item['text'] | trim }}"
+        "{% endif %}"
+        "{% endfor %}"
+        "{% else %}"
+        "{{ raise_exception('Invalid content type') }}"
+        "{% endif %}"
+        "{{ '<end_of_turn>\n' }}"
+        "{% endfor %}"
+        "{% if add_generation_prompt %}"
+        "{{ '<start_of_turn>model\n' }}"
+        "{% endif %}"
+    )
+
+
 class ObsidianChatHandler(Llava15ChatHandler):
     # Prompt Format
     # The model followed ChatML format. However, with ### as the separator
