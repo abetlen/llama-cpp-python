@@ -9393,6 +9393,7 @@ class Model:
                 kv_unified=kv_unified,
                 n_rs_seq=target_n_rs_seq,
                 ctx_type=llama_cpp.LLAMA_CONTEXT_TYPE_MTP,
+                n_outputs_max=min(mtp_n_batch, self.n_seq_max),
             )
             try:
                 self.draft_provider = MTPDraftProvider(
@@ -9517,6 +9518,7 @@ class Model:
         kv_unified: bool,
         n_rs_seq: Optional[int] = None,
         ctx_type: Optional[int] = None,
+        n_outputs_max: Optional[int] = None,
     ) -> Any:
         context_params = llama_cpp.llama_context_default_params()
         if n_ctx is not None:
@@ -9535,6 +9537,8 @@ class Model:
             context_params.n_threads_batch = n_threads_batch
         if ctx_type is not None:
             context_params.ctx_type = ctx_type
+        if n_outputs_max is not None:
+            context_params.n_outputs_max = n_outputs_max
         if rope_scaling_type is not None:
             context_params.rope_scaling_type = rope_scaling_type
         if pooling_type is not None:
