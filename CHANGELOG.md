@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- feat: Update llama.cpp to ggml-org/llama.cpp@210a6570c and sync Python bindings
 - feat: add Gemma 4 multimodal chat support by @abetlen in #2241
 - feat(ci): add CUDA 13.0 and 13.2 wheel builds by @abetlen in #2239
 - feat(ci): add CUDA 11.8 wheel builds by @abetlen in #2238
