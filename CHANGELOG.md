@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- fix: handle additional `from_pretrained` files in subfolders by @TNing in #2085
+
 ## [0.3.25]
 
 - feat: Update llama.cpp to ggml-org/llama.cpp@210a6570c by @abetlen in #2242
