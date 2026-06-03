@@ -3266,8 +3266,6 @@ class Llava15ChatHandler:
 
 
 class MTMDChatHandler:
-    DEFAULT_SYSTEM_MESSAGE = None
-
     def __init__(self, clip_model_path: str, verbose: bool = True):
         import llama_cpp.mtmd_cpp as mtmd_cpp
 
@@ -3436,14 +3434,6 @@ class MTMDChatHandler:
     ]:
         self._init_mtmd_context(llama)
         assert self.mtmd_ctx is not None
-
-        system_prompt = _get_system_message(messages)
-        if system_prompt == "" and self.DEFAULT_SYSTEM_MESSAGE is not None:
-            messages = [
-                llama_types.ChatCompletionRequestSystemMessage(
-                    role="system", content=self.DEFAULT_SYSTEM_MESSAGE
-                )
-            ] + messages
 
         image_urls = self.get_image_urls(messages)
         media_marker = self._mtmd_cpp.mtmd_default_marker().decode("utf-8")
