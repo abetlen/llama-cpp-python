@@ -2842,11 +2842,29 @@ class ConfigFile(BaseModel):
 
             return model_path
 
+    class LoraOptions(BaseModel):
+        path: Optional[str] = None
+        from_pretrained: Optional["ConfigFile.FromPretrainedOptions"] = None
+        scale: float = 1.0
+
+        @model_validator(mode="after")
+        def validate_source(self) -> "ConfigFile.LoraOptions":
+            if (self.path is None) == (self.from_pretrained is None):
+                raise ValueError("exactly one of lora.path or lora.from_pretrained is required")
+            return self
+
+        def resolve_path(self) -> str:
+            if self.from_pretrained is not None:
+                return self.from_pretrained.resolve_model_path()
+            assert self.path is not None
+            return self.path
+
     class ModelOptions(BaseModel):
         path: Optional[str] = None
         alias: Optional[str] = None
         chat_template: Optional[str] = None
         from_pretrained: Optional["ConfigFile.FromPretrainedOptions"] = None
+        loras: List["ConfigFile.LoraOptions"] = Field(default_factory=list)
         n_gpu_layers: Optional[int] = None
         split_mode: Optional[int] = None
         main_gpu: Optional[int] = None
@@ -9133,12 +9151,18 @@ class Sampler:
 
 
 class Model:
+    @dataclass(frozen=True)
+    class LoraAdapter:
+        path: str
+        scale: float = 1.0
+
     def __init__(
         self,
         *,
         model_path: str,
         model_alias: Optional[str] = None,
         chat_template: Optional[str] = None,
+        loras: Optional[List["Model.LoraAdapter"]] = None,
         n_gpu_layers: Optional[int] = None,
         split_mode: Optional[int] = None,
         main_gpu: Optional[int] = None,
@@ -9193,6 +9217,10 @@ class Model:
         self.store_logits = store_logits
         self.max_output_tokens = max_output_tokens
         self.draft_model_max_batch_size = draft_model_max_batch_size
+        self.draft_provider: Optional[DraftProvider] = None
+        self._lora_adapters: List[Any] = []
+        self._lora_adapter_array: Optional[Any] = None
+        self._lora_scales_array: Optional[Any] = None
         model_params, self._c_tensor_split, self._kv_overrides_array = (
             self.build_model_params(
                 n_gpu_layers=n_gpu_layers,
@@ -9342,7 +9370,7 @@ class Model:
             self._meta_value("tokenizer.ggml.add_space_prefix") != "false"
         )
         if normalized_draft_model is None:
-            self.draft_provider: Optional[DraftProvider] = None
+            self.draft_provider = None
         elif normalized_draft_model == "prompt-lookup-decoding":
             self.draft_provider = PromptLookupDecoding(
                 max_ngram_size=draft_model_max_ngram_size,
@@ -9408,6 +9436,7 @@ class Model:
             except BaseException:
                 llama_cpp.llama_batch_free(self.batch)
                 llama_cpp.llama_free(self.ctx)
+                self._free_lora_adapters()
                 llama_cpp.llama_model_free(self.llama_model)
                 if self.backend_initialized:
                     llama_cpp.llama_backend_free()
@@ -9415,6 +9444,22 @@ class Model:
                 raise
         else:
             raise RuntimeError(f"unsupported draft model: {draft_model}")
+        try:
+            self._load_lora_adapters(loras or [])
+            self._apply_lora_adapters(self.ctx, "target")
+            if isinstance(self.draft_provider, MTPDraftProvider):
+                self._apply_lora_adapters(self.draft_provider.ctx, "MTP draft")
+        except BaseException:
+            if self.draft_provider is not None:
+                self.draft_provider.close()
+            llama_cpp.llama_batch_free(self.batch)
+            llama_cpp.llama_free(self.ctx)
+            self._free_lora_adapters()
+            llama_cpp.llama_model_free(self.llama_model)
+            if self.backend_initialized:
+                llama_cpp.llama_backend_free()
+                self.backend_initialized = False
+            raise
         self.chat_formatter = self._build_chat_formatter()
 
     @staticmethod
@@ -9600,11 +9645,55 @@ class Model:
             return self.n_ctx_seq
         return self.n_ctx
 
+    def _load_lora_adapters(self, loras: List["Model.LoraAdapter"]) -> None:
+        for lora in loras:
+            adapter = llama_cpp.llama_adapter_lora_init(
+                self.llama_model,
+                lora.path.encode("utf-8"),
+            )
+            if adapter is None:
+                raise RuntimeError(f"failed to load LoRA adapter: {lora.path}")
+            self._lora_adapters.append(adapter)
+
+        if not self._lora_adapters:
+            return
+
+        adapter_array_type = llama_cpp.llama_adapter_lora_p_ctypes * len(
+            self._lora_adapters
+        )
+        scale_array_type = ctypes.c_float * len(self._lora_adapters)
+        self._lora_adapter_array = adapter_array_type(*self._lora_adapters)
+        self._lora_scales_array = scale_array_type(
+            *(float(lora.scale) for lora in loras)
+        )
+
+    def _apply_lora_adapters(self, ctx: Any, context_name: str) -> None:
+        if not self._lora_adapters:
+            return
+        if self._lora_adapter_array is None or self._lora_scales_array is None:
+            raise RuntimeError("LoRA adapter arrays are not initialized")
+        result = llama_cpp.llama_set_adapters_lora(
+            ctx,
+            self._lora_adapter_array,
+            len(self._lora_adapters),
+            self._lora_scales_array,
+        )
+        if result:
+            raise RuntimeError(f"failed to apply LoRA adapters to {context_name} context")
+
+    def _free_lora_adapters(self) -> None:
+        while self._lora_adapters:
+            adapter = self._lora_adapters.pop()
+            llama_cpp.llama_adapter_lora_free(adapter)
+        self._lora_adapter_array = None
+        self._lora_scales_array = None
+
     def close(self) -> None:
         if self.draft_provider is not None:
             self.draft_provider.close()
         llama_cpp.llama_batch_free(self.batch)
         llama_cpp.llama_free(self.ctx)
+        self._free_lora_adapters()
         llama_cpp.llama_model_free(self.llama_model)
         if self.backend_initialized:
             llama_cpp.llama_backend_free()
@@ -13397,10 +13486,15 @@ def main() -> None:
     args = parser.parse_args()
     config = ConfigFile.load(args.config_file)
     model_path = config.model.resolve_model_path()
+    loras = [
+        Model.LoraAdapter(path=lora.resolve_path(), scale=lora.scale)
+        for lora in config.model.loras
+    ]
     model = Model(
         model_path=model_path,
         model_alias=config.model.alias,
         chat_template=config.model.chat_template,
+        loras=loras,
         n_gpu_layers=config.model.n_gpu_layers,
         split_mode=config.model.split_mode,
         main_gpu=config.model.main_gpu,
