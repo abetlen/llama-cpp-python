@@ -8808,6 +8808,8 @@ class OpenAIFormatter:
             token_end = token_start + len(record.text_bytes)
             text_bytes = record.text_bytes
             if token_end > returned_end:
+                if finish_reason is None:
+                    break
                 text_bytes = text_bytes[: returned_end - token_start]
             if index >= start_index:
                 returned_tokens.append(
