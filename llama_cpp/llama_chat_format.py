@@ -3265,8 +3265,77 @@ class Llava15ChatHandler:
         )
 
 
-class MTMDChatHandler(Llava15ChatHandler):
+class MTMDChatHandler:
     DEFAULT_SYSTEM_MESSAGE = None
+
+    def __init__(self, clip_model_path: str, verbose: bool = True):
+        import llama_cpp.mtmd_cpp as mtmd_cpp
+
+        self.clip_model_path = clip_model_path
+        self.verbose = verbose
+        self._mtmd_cpp = mtmd_cpp
+        self._exit_stack = ExitStack()
+        self.mtmd_ctx: Optional[mtmd_cpp.mtmd_context_p] = None
+
+        if not os.path.exists(clip_model_path):
+            raise ValueError(f"Clip model path does not exist: {clip_model_path}")
+
+    def _init_mtmd_context(self, llama_model: llama.Llama):
+        if self.mtmd_ctx is not None:
+            return
+
+        with suppress_stdout_stderr(disable=self.verbose):
+            ctx_params = self._mtmd_cpp.mtmd_context_params_default()
+            ctx_params.use_gpu = True  # TODO: Make this configurable
+            ctx_params.print_timings = self.verbose
+            ctx_params.n_threads = llama_model.n_threads
+            ctx_params.flash_attn_type = (
+                llama_cpp.LLAMA_FLASH_ATTN_TYPE_ENABLED
+                if (
+                    llama_model.context_params.flash_attn_type
+                    == llama_cpp.LLAMA_FLASH_ATTN_TYPE_ENABLED
+                )
+                else llama_cpp.LLAMA_FLASH_ATTN_TYPE_DISABLED
+            )
+
+            self.mtmd_ctx = self._mtmd_cpp.mtmd_init_from_file(
+                self.clip_model_path.encode(), llama_model.model, ctx_params
+            )
+
+            if self.mtmd_ctx is None:
+                raise ValueError(
+                    f"Failed to load mtmd context from: {self.clip_model_path}"
+                )
+
+            if not self._mtmd_cpp.mtmd_support_vision(self.mtmd_ctx):
+                raise ValueError("Vision is not supported by this model")
+
+            def mtmd_free():
+                with suppress_stdout_stderr(disable=self.verbose):
+                    if self.mtmd_ctx is not None:
+                        self._mtmd_cpp.mtmd_free(self.mtmd_ctx)
+                        self.mtmd_ctx = None
+
+            self._exit_stack.callback(mtmd_free)
+
+    def load_image(self, image_url: str) -> bytes:
+        return self._load_image(image_url)
+
+    def _create_bitmap_from_bytes(self, image_bytes: bytes):
+        if self.mtmd_ctx is None:
+            raise ValueError("mtmd context not initialized")
+
+        with suppress_stdout_stderr(disable=self.verbose):
+            bitmap = self._mtmd_cpp.mtmd_helper_bitmap_init_from_buf(
+                self.mtmd_ctx,
+                (ctypes.c_uint8 * len(image_bytes)).from_buffer(bytearray(image_bytes)),
+                len(image_bytes),
+            )
+
+            if bitmap is None:
+                raise ValueError("Failed to create bitmap from image bytes")
+
+            return bitmap
 
     def _get_chat_template(self, llama_model: llama.Llama) -> str:
         chat_template = llama_model.metadata.get("tokenizer.chat_template")
@@ -3589,6 +3658,121 @@ class MTMDChatHandler(Llava15ChatHandler):
                 tool_name, completion_or_chunks, stream
             )
         return _convert_completion_to_chat(completion_or_chunks, stream=stream)
+
+    @staticmethod
+    def _load_image(image_url: str) -> bytes:
+        if image_url.startswith("data:"):
+            import base64
+
+            image_bytes = base64.b64decode(image_url.split(",")[1])
+            return image_bytes
+        else:
+            import urllib.request
+
+            with urllib.request.urlopen(image_url) as f:
+                image_bytes = f.read()
+                return image_bytes
+
+    @staticmethod
+    def get_image_urls(messages: List[llama_types.ChatCompletionRequestMessage]):
+        image_urls: List[str] = []
+        for message in messages:
+            if message["role"] == "user":
+                if message["content"] is None:
+                    continue
+                for content in message["content"]:
+                    if isinstance(content, dict) and "type" in content:
+                        if content["type"] == "image_url":
+                            if (
+                                isinstance(content["image_url"], dict)
+                                and "url" in content["image_url"]
+                            ):
+                                image_urls.append(content["image_url"]["url"])
+                            else:
+                                image_urls.append(content["image_url"])
+        return image_urls
+
+    @classmethod
+    def from_pretrained(
+        cls,
+        repo_id: str,
+        filename: Optional[str],
+        local_dir: Optional[Union[str, os.PathLike[str]]] = None,
+        local_dir_use_symlinks: Union[bool, Literal["auto"]] = "auto",
+        cache_dir: Optional[Union[str, os.PathLike[str]]] = None,
+        **kwargs: Any,
+    ) -> "MTMDChatHandler":
+        import fnmatch
+        from pathlib import Path
+
+        try:
+            from huggingface_hub import hf_hub_download, HfFileSystem  # type: ignore
+            from huggingface_hub.utils import validate_repo_id  # type: ignore
+        except ImportError:
+            raise ImportError(
+                "Llama.from_pretrained requires the huggingface-hub package. "
+                "You can install it with `pip install huggingface-hub`."
+            )
+
+        validate_repo_id(repo_id)
+
+        hffs = HfFileSystem()
+
+        files = [
+            file["name"] if isinstance(file, dict) else file
+            for file in hffs.ls(repo_id)  # type: ignore
+        ]
+
+        file_list: List[str] = []
+        for file in files:
+            rel_path = Path(file).relative_to(repo_id)
+            file_list.append(str(rel_path))
+
+        matching_files = [file for file in file_list if fnmatch.fnmatch(file, filename)]  # type: ignore
+
+        if len(matching_files) == 0:
+            raise ValueError(
+                f"No file found in {repo_id} that match {filename}\n\n"
+                f"Available Files:\n{json.dumps(file_list)}"
+            )
+
+        if len(matching_files) > 1:
+            raise ValueError(
+                f"Multiple files found in {repo_id} matching {filename}\n\n"
+                f"Available Files:\n{json.dumps(files)}"
+            )
+
+        (matching_file,) = matching_files
+
+        subfolder = str(Path(matching_file).parent)
+        filename = Path(matching_file).name
+
+        hf_hub_download(
+            repo_id=repo_id,
+            filename=filename,
+            subfolder=subfolder,
+            local_dir=cast(Union[str, Path, None], local_dir),
+            local_dir_use_symlinks=local_dir_use_symlinks,
+            cache_dir=cast(Union[str, Path, None], cache_dir),
+        )
+
+        if local_dir is None:
+            model_path = hf_hub_download(
+                repo_id=repo_id,
+                filename=filename,
+                subfolder=subfolder,
+                local_dir=local_dir,
+                local_dir_use_symlinks=local_dir_use_symlinks,
+                cache_dir=cast(Union[str, Path, None], cache_dir),
+                local_files_only=True,
+            )
+        else:
+            model_path = os.path.join(local_dir, filename)
+
+        return cls(
+            clip_model_path=model_path,
+            **kwargs,
+        )
 
 
 class Gemma4ChatHandler(MTMDChatHandler):
