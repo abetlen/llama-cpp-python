@@ -2830,32 +2830,6 @@ class Llava15ChatHandler:
     def load_image(self, image_url: str) -> bytes:
         return self._load_image(image_url)
 
-    def _get_chat_template(self, llama_model: llama.Llama) -> str:
-        return self.CHAT_FORMAT
-
-    def _get_template_messages(
-        self,
-        messages: List[llama_types.ChatCompletionRequestMessage],
-        media_marker: str,
-    ) -> List[Any]:
-        return messages
-
-    @staticmethod
-    def _decode_token_piece(piece: Any) -> str:
-        if isinstance(piece, bytes):
-            return piece.decode("utf-8", errors="ignore")
-        return str(piece)
-
-    def _postprocess_template_text(
-        self,
-        text: str,
-        image_urls: List[str],
-        media_marker: str,
-    ) -> str:
-        for image_url in image_urls:
-            text = text.replace(image_url, media_marker)
-        return text
-
     def _create_bitmap_from_bytes(self, image_bytes: bytes):
         """Create mtmd_bitmap from image bytes."""
         if self.mtmd_ctx is None:
@@ -2926,30 +2900,25 @@ class Llava15ChatHandler:
             ] + messages
 
         image_urls = self.get_image_urls(messages)
-        media_marker = self._mtmd_cpp.mtmd_default_marker().decode("utf-8")
         template = ImmutableSandboxedEnvironment(
             trim_blocks=True,
             lstrip_blocks=True,
-        ).from_string(self._get_chat_template(llama))
+        ).from_string(self.CHAT_FORMAT)
 
-        def raise_exception(message: str):
-            raise ValueError(message)
+        # Get the default media marker
+        media_marker = self._mtmd_cpp.mtmd_default_marker().decode("utf-8")
 
-        template_messages = self._get_template_messages(messages, media_marker)
+        # Replace image URLs with media markers in the template
         text = template.render(
-            messages=template_messages,
+            messages=messages,
             add_generation_prompt=True,
-            eos_token=self._decode_token_piece(llama.detokenize([llama.token_eos()])),
-            bos_token=self._decode_token_piece(llama.detokenize([llama.token_bos()])),
-            raise_exception=raise_exception,
-            functions=functions,
-            function_call=function_call,
-            tools=tools,
-            tool_choice=tool_choice,
-            **kwargs,
+            eos_token=llama.detokenize([llama.token_eos()]),
+            bos_token=llama.detokenize([llama.token_bos()]),
         )
 
-        text = self._postprocess_template_text(text, image_urls, media_marker)
+        # Replace image URLs in text with media markers
+        for image_url in image_urls:
+            text = text.replace(image_url, media_marker)
 
         if self.verbose:
             print(text, file=sys.stderr)
@@ -3296,7 +3265,299 @@ class Llava15ChatHandler:
         )
 
 
-class Gemma4ChatHandler(Llava15ChatHandler):
+class MTMDChatHandler(Llava15ChatHandler):
+    def _get_chat_template(self, llama_model: llama.Llama) -> str:
+        return self.CHAT_FORMAT
+
+    def _get_template_messages(
+        self,
+        messages: List[llama_types.ChatCompletionRequestMessage],
+        media_marker: str,
+    ) -> List[Any]:
+        return messages
+
+    @staticmethod
+    def _decode_token_piece(piece: Any) -> str:
+        if isinstance(piece, bytes):
+            return piece.decode("utf-8", errors="ignore")
+        return str(piece)
+
+    def _postprocess_template_text(
+        self,
+        text: str,
+        image_urls: List[str],
+        media_marker: str,
+    ) -> str:
+        for image_url in image_urls:
+            text = text.replace(image_url, media_marker)
+        return text
+
+    def __call__(
+        self,
+        *,
+        llama: llama.Llama,
+        messages: List[llama_types.ChatCompletionRequestMessage],
+        functions: Optional[List[llama_types.ChatCompletionFunction]] = None,
+        function_call: Optional[llama_types.ChatCompletionRequestFunctionCall] = None,
+        tools: Optional[List[llama_types.ChatCompletionTool]] = None,
+        tool_choice: Optional[llama_types.ChatCompletionToolChoiceOption] = None,
+        temperature: float = 0.2,
+        top_p: float = 0.95,
+        top_k: int = 40,
+        min_p: float = 0.05,
+        typical_p: float = 1.0,
+        stream: bool = False,
+        stop: Optional[Union[str, List[str]]] = [],
+        seed: Optional[int] = None,
+        response_format: Optional[
+            llama_types.ChatCompletionRequestResponseFormat
+        ] = None,
+        max_tokens: Optional[int] = None,
+        presence_penalty: float = 0.0,
+        frequency_penalty: float = 0.0,
+        repeat_penalty: float = 1.1,
+        tfs_z: float = 1.0,
+        mirostat_mode: int = 0,
+        mirostat_tau: float = 5.0,
+        mirostat_eta: float = 0.1,
+        model: Optional[str] = None,
+        logits_processor: Optional[llama.LogitsProcessorList] = None,
+        grammar: Optional[llama.LlamaGrammar] = None,
+        logit_bias: Optional[Dict[str, float]] = None,
+        logprobs: Optional[bool] = None,
+        top_logprobs: Optional[int] = None,
+        **kwargs,  # type: ignore
+    ) -> Union[
+        llama_types.CreateChatCompletionResponse,
+        Iterator[llama_types.CreateChatCompletionStreamResponse],
+    ]:
+        self._init_mtmd_context(llama)
+        assert self.mtmd_ctx is not None
+
+        system_prompt = _get_system_message(messages)
+        if system_prompt == "" and self.DEFAULT_SYSTEM_MESSAGE is not None:
+            messages = [
+                llama_types.ChatCompletionRequestSystemMessage(
+                    role="system", content=self.DEFAULT_SYSTEM_MESSAGE
+                )
+            ] + messages
+
+        image_urls = self.get_image_urls(messages)
+        media_marker = self._mtmd_cpp.mtmd_default_marker().decode("utf-8")
+        template_env = ImmutableSandboxedEnvironment(
+            trim_blocks=True,
+            lstrip_blocks=True,
+            extensions=[
+                Jinja2ChatFormatter.IgnoreGenerationTags,
+                jinja2.ext.loopcontrols,
+            ],
+        )
+        template_env.filters["tojson"] = Jinja2ChatFormatter.tojson
+        template = template_env.from_string(self._get_chat_template(llama))
+
+        def raise_exception(message: str):
+            raise ValueError(message)
+
+        text = template.render(
+            messages=self._get_template_messages(messages, media_marker),
+            add_generation_prompt=True,
+            eos_token=self._decode_token_piece(llama.detokenize([llama.token_eos()])),
+            bos_token=self._decode_token_piece(llama.detokenize([llama.token_bos()])),
+            raise_exception=raise_exception,
+            functions=functions,
+            function_call=function_call,
+            tools=tools,
+            tool_choice=tool_choice,
+            strftime_now=Jinja2ChatFormatter.strftime_now,
+            **kwargs,
+        )
+        text = self._postprocess_template_text(text, image_urls, media_marker)
+
+        if self.verbose:
+            print(text, file=sys.stderr)
+
+        bitmaps = []
+        bitmap_cleanup = []
+        try:
+            for image_url in image_urls:
+                image_bytes = self.load_image(image_url)
+                bitmap = self._create_bitmap_from_bytes(image_bytes)
+                bitmaps.append(bitmap)
+                bitmap_cleanup.append(bitmap)
+
+            input_text = self._mtmd_cpp.mtmd_input_text()
+            input_text.text = text.encode("utf-8")
+            input_text.add_special = True
+            input_text.parse_special = True
+
+            chunks = self._mtmd_cpp.mtmd_input_chunks_init()
+            if chunks is None:
+                raise ValueError("Failed to create input chunks")
+
+            try:
+                bitmap_array = (self._mtmd_cpp.mtmd_bitmap_p_ctypes * len(bitmaps))(
+                    *bitmaps
+                )
+                result = self._mtmd_cpp.mtmd_tokenize(
+                    self.mtmd_ctx,
+                    chunks,
+                    ctypes.byref(input_text),
+                    bitmap_array,
+                    len(bitmaps),
+                )
+
+                if result != 0:
+                    raise ValueError(f"Failed to tokenize input: error code {result}")
+
+                llama.reset()
+                llama._ctx.kv_cache_clear()
+
+                n_chunks = self._mtmd_cpp.mtmd_input_chunks_size(chunks)
+
+                for i in range(n_chunks):
+                    chunk = self._mtmd_cpp.mtmd_input_chunks_get(chunks, i)
+                    if chunk is None:
+                        continue
+
+                    chunk_type = self._mtmd_cpp.mtmd_input_chunk_get_type(chunk)
+
+                    if chunk_type == self._mtmd_cpp.MTMD_INPUT_CHUNK_TYPE_TEXT:
+                        n_tokens_out = ctypes.c_size_t()
+                        tokens_ptr = self._mtmd_cpp.mtmd_input_chunk_get_tokens_text(
+                            chunk, ctypes.byref(n_tokens_out)
+                        )
+
+                        if tokens_ptr and n_tokens_out.value > 0:
+                            tokens = [tokens_ptr[j] for j in range(n_tokens_out.value)]
+
+                            if llama.n_tokens + len(tokens) > llama.n_ctx():
+                                raise ValueError(
+                                    f"Prompt exceeds n_ctx: {llama.n_tokens + len(tokens)} > {llama.n_ctx()}"
+                                )
+                            llama.eval(tokens)
+
+                    elif chunk_type in [
+                        self._mtmd_cpp.MTMD_INPUT_CHUNK_TYPE_IMAGE,
+                        self._mtmd_cpp.MTMD_INPUT_CHUNK_TYPE_AUDIO,
+                    ]:
+                        chunk_n_tokens = self._mtmd_cpp.mtmd_input_chunk_get_n_tokens(
+                            chunk
+                        )
+
+                        if llama.n_tokens + chunk_n_tokens > llama.n_ctx():
+                            raise ValueError(
+                                f"Prompt exceeds n_ctx: {llama.n_tokens + chunk_n_tokens} > {llama.n_ctx()}"
+                            )
+
+                        new_n_past = llama_cpp.llama_pos(0)
+                        result = self._mtmd_cpp.mtmd_helper_eval_chunk_single(
+                            self.mtmd_ctx,
+                            llama._ctx.ctx,
+                            chunk,
+                            llama_cpp.llama_pos(llama.n_tokens),
+                            llama_cpp.llama_seq_id(0),
+                            llama.n_batch,
+                            False,  # logits_last
+                            ctypes.byref(new_n_past),
+                        )
+
+                        if result != 0:
+                            raise ValueError(
+                                f"Failed to evaluate chunk: error code {result}"
+                            )
+
+                        llama.n_tokens = new_n_past.value
+
+                prompt = llama.input_ids[: llama.n_tokens].tolist()
+
+            finally:
+                self._mtmd_cpp.mtmd_input_chunks_free(chunks)
+
+        finally:
+            for bitmap in bitmap_cleanup:
+                self._mtmd_cpp.mtmd_bitmap_free(bitmap)
+
+        if response_format is not None and response_format["type"] == "json_object":
+            grammar = _grammar_for_response_format(response_format)
+
+        if functions is not None:
+            tools = [
+                {
+                    "type": "function",
+                    "function": function,
+                }
+                for function in functions
+            ]
+
+        if function_call is not None:
+            if isinstance(function_call, str) and (
+                function_call == "none" or function_call == "auto"
+            ):
+                tool_choice = function_call
+            if isinstance(function_call, dict) and "name" in function_call:
+                tool_choice = {
+                    "type": "function",
+                    "function": {
+                        "name": function_call["name"],
+                    },
+                }
+
+        tool = None
+        if (
+            tool_choice is not None
+            and isinstance(tool_choice, dict)
+            and tools is not None
+        ):
+            name = tool_choice["function"]["name"]
+            tool = next((t for t in tools if t["function"]["name"] == name), None)
+            if tool is None:
+                raise ValueError(f"Tool choice '{name}' not found in tools.")
+            schema = tool["function"]["parameters"]
+            try:
+                grammar = llama_grammar.LlamaGrammar.from_json_schema(
+                    json.dumps(schema), verbose=llama.verbose
+                )
+            except Exception as e:
+                if llama.verbose:
+                    print(str(e), file=sys.stderr)
+                grammar = llama_grammar.LlamaGrammar.from_string(
+                    llama_grammar.JSON_GBNF, verbose=llama.verbose
+                )
+
+        completion_or_chunks = llama.create_completion(
+            prompt=prompt,
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            min_p=min_p,
+            typical_p=typical_p,
+            logprobs=top_logprobs if logprobs else None,
+            stream=stream,
+            stop=stop,
+            seed=seed,
+            max_tokens=max_tokens,
+            presence_penalty=presence_penalty,
+            frequency_penalty=frequency_penalty,
+            repeat_penalty=repeat_penalty,
+            tfs_z=tfs_z,
+            mirostat_mode=mirostat_mode,
+            mirostat_tau=mirostat_tau,
+            mirostat_eta=mirostat_eta,
+            model=model,
+            logits_processor=logits_processor,
+            grammar=grammar,
+            logit_bias=logit_bias,
+        )
+
+        if tool is not None:
+            tool_name = tool["function"]["name"]
+            return _convert_completion_to_chat_function(
+                tool_name, completion_or_chunks, stream
+            )
+        return _convert_completion_to_chat(completion_or_chunks, stream=stream)
+
+
+class Gemma4ChatHandler(MTMDChatHandler):
     DEFAULT_SYSTEM_MESSAGE = None
 
     def _get_chat_template(self, llama_model: llama.Llama) -> str:
