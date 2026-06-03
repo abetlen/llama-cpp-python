@@ -3266,15 +3266,49 @@ class Llava15ChatHandler:
 
 
 class MTMDChatHandler(Llava15ChatHandler):
+    DEFAULT_SYSTEM_MESSAGE = None
+
     def _get_chat_template(self, llama_model: llama.Llama) -> str:
-        return self.CHAT_FORMAT
+        chat_template = llama_model.metadata.get("tokenizer.chat_template")
+        if not isinstance(chat_template, str) or chat_template == "":
+            raise ValueError(
+                f"{self.__class__.__name__} requires tokenizer.chat_template metadata"
+            )
+        return chat_template
 
     def _get_template_messages(
         self,
         messages: List[llama_types.ChatCompletionRequestMessage],
         media_marker: str,
     ) -> List[Any]:
-        return messages
+        return [
+            self._convert_message_for_template(message, media_marker)
+            for message in messages
+        ]
+
+    @classmethod
+    def _convert_message_for_template(
+        cls,
+        message: llama_types.ChatCompletionRequestMessage,
+        media_marker: str,
+    ) -> Dict[str, Any]:
+        message_dict = dict(message)
+        content = message_dict.get("content")
+        if isinstance(content, list):
+            message_dict["content"] = [
+                cls._convert_content_part_for_template(part, media_marker)
+                for part in content
+            ]
+        return message_dict
+
+    @staticmethod
+    def _convert_content_part_for_template(
+        part: Any,
+        media_marker: str,
+    ) -> Any:
+        if isinstance(part, dict) and part.get("type") == "image_url":
+            return {"type": "text", "text": media_marker}
+        return part
 
     @staticmethod
     def _decode_token_piece(piece: Any) -> str:
@@ -3558,47 +3592,7 @@ class MTMDChatHandler(Llava15ChatHandler):
 
 
 class Gemma4ChatHandler(MTMDChatHandler):
-    DEFAULT_SYSTEM_MESSAGE = None
-
-    def _get_chat_template(self, llama_model: llama.Llama) -> str:
-        chat_template = llama_model.metadata.get("tokenizer.chat_template")
-        if not isinstance(chat_template, str) or chat_template == "":
-            raise ValueError("Gemma4ChatHandler requires tokenizer.chat_template metadata")
-        return chat_template
-
-    def _get_template_messages(
-        self,
-        messages: List[llama_types.ChatCompletionRequestMessage],
-        media_marker: str,
-    ) -> List[Any]:
-        return [
-            self._convert_message_for_template(message, media_marker)
-            for message in messages
-        ]
-
-    @classmethod
-    def _convert_message_for_template(
-        cls,
-        message: llama_types.ChatCompletionRequestMessage,
-        media_marker: str,
-    ) -> Dict[str, Any]:
-        message_dict = dict(message)
-        content = message_dict.get("content")
-        if isinstance(content, list):
-            message_dict["content"] = [
-                cls._convert_content_part_for_template(part, media_marker)
-                for part in content
-            ]
-        return message_dict
-
-    @staticmethod
-    def _convert_content_part_for_template(
-        part: Any,
-        media_marker: str,
-    ) -> Any:
-        if isinstance(part, dict) and part.get("type") == "image_url":
-            return {"type": "text", "text": media_marker}
-        return part
+    pass
 
 
 class ObsidianChatHandler(Llava15ChatHandler):
