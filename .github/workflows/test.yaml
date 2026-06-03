@@ -14,7 +14,9 @@ env:
   RECURRENT_MODEL_FILE: mamba-130m-hf.Q2_K.gguf
   HYBRID_REPO_ID: tiiuae/Falcon-H1-Tiny-90M-Instruct-GGUF
   HYBRID_MODEL_FILE: Falcon-H1-Tiny-90M-Instruct-Q2_K.gguf
-  MODEL_CACHE_KEY: qwen35-q8-mamba130m-q2-falconh1tiny-q2
+  EMBEDDING_REPO_ID: CompendiumLabs/bge-small-en-v1.5-gguf
+  EMBEDDING_MODEL_FILE: bge-small-en-v1.5-q4_k_m.gguf
+  MODEL_CACHE_KEY: qwen35-q8-mamba130m-q2-falconh1tiny-q2-bge-small-q4
 
 jobs:
   download-model:
@@ -26,16 +28,19 @@ jobs:
           python-version: "3.9"
       - name: Install huggingface-hub
         run: pip install huggingface-hub
+      - name: Restore model cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/huggingface/hub
+          key: ${{ runner.os }}-model-${{ env.MODEL_CACHE_KEY }}
+          restore-keys: |
+            ${{ runner.os }}-model-qwen35-q8-mamba130m-q2-falconh1tiny-q2
       - name: Download model
         run: |
           hf download ${{ env.REPO_ID }} ${{ env.MODEL_FILE }}
           hf download ${{ env.RECURRENT_REPO_ID }} ${{ env.RECURRENT_MODEL_FILE }}
           hf download ${{ env.HYBRID_REPO_ID }} ${{ env.HYBRID_MODEL_FILE }}
-      - name: Cache model
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/huggingface/hub
-          key: ${{ runner.os }}-model-${{ env.MODEL_CACHE_KEY }}
+          hf download ${{ env.EMBEDDING_REPO_ID }} ${{ env.EMBEDDING_MODEL_FILE }}
 
   build-linux:
     needs: download-model
