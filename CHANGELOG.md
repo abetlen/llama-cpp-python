@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- feat: update llama.cpp to ggml-org/llama.cpp@3571fa543 by @abetlen in #2253
 - feat(ci): add ROCm wheel builds by @abetlen in #2252
 - feat(ci): add Vulkan wheel builds by @abetlen in #2251
 - fix: handle additional `from_pretrained` files in subfolders by @TNing in #2085
