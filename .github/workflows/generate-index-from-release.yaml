@@ -3,7 +3,7 @@ name: Wheels Index
 on:
   # Trigger on new release
   workflow_run:
-    workflows: ["Release", "Build Wheels (CUDA)", "Build Wheels (Metal)", "Build Wheels (Vulkan)"]
+    workflows: ["Release", "Build Wheels (CUDA)", "Build Wheels (Metal)", "Build Wheels (Vulkan)", "Build Wheels (ROCm)"]
     types:
       - completed
 
@@ -46,6 +46,8 @@ jobs:
           ./scripts/releases-to-pep-503.sh index/whl/cu124 '^[v]?[0-9]+\.[0-9]+\.[0-9]+-cu124$'
           # ./scripts/releases-to-pep-503.sh index/whl/cu125 '^[v]?[0-9]+\.[0-9]+\.[0-9]+-cu124$'
           # ./scripts/releases-to-pep-503.sh index/whl/cu126 '^[v]?[0-9]+\.[0-9]+\.[0-9]+-cu124$'
+          ./scripts/releases-to-pep-503.sh index/whl/rocm72 '^[v]?[0-9]+\.[0-9]+\.[0-9]+-rocm72$'
+          ./scripts/releases-to-pep-503.sh index/whl/hip-radeon '^[v]?[0-9]+\.[0-9]+\.[0-9]+-hip-radeon$'
           ./scripts/releases-to-pep-503.sh index/whl/vulkan '^[v]?[0-9]+\.[0-9]+\.[0-9]+-vulkan$'
           ./scripts/releases-to-pep-503.sh index/whl/metal '^[v]?[0-9]+\.[0-9]+\.[0-9]+-metal$'
       - name: Upload artifact
