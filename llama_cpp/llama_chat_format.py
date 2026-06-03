@@ -2830,6 +2830,32 @@ class Llava15ChatHandler:
     def load_image(self, image_url: str) -> bytes:
         return self._load_image(image_url)
 
+    def _get_chat_template(self, llama_model: llama.Llama) -> str:
+        return self.CHAT_FORMAT
+
+    def _get_template_messages(
+        self,
+        messages: List[llama_types.ChatCompletionRequestMessage],
+        media_marker: str,
+    ) -> List[Any]:
+        return messages
+
+    @staticmethod
+    def _decode_token_piece(piece: Any) -> str:
+        if isinstance(piece, bytes):
+            return piece.decode("utf-8", errors="ignore")
+        return str(piece)
+
+    def _postprocess_template_text(
+        self,
+        text: str,
+        image_urls: List[str],
+        media_marker: str,
+    ) -> str:
+        for image_url in image_urls:
+            text = text.replace(image_url, media_marker)
+        return text
+
     def _create_bitmap_from_bytes(self, image_bytes: bytes):
         """Create mtmd_bitmap from image bytes."""
         if self.mtmd_ctx is None:
@@ -2900,25 +2926,30 @@ class Llava15ChatHandler:
             ] + messages
 
         image_urls = self.get_image_urls(messages)
+        media_marker = self._mtmd_cpp.mtmd_default_marker().decode("utf-8")
         template = ImmutableSandboxedEnvironment(
             trim_blocks=True,
             lstrip_blocks=True,
-        ).from_string(self.CHAT_FORMAT)
+        ).from_string(self._get_chat_template(llama))
 
-        # Get the default media marker
-        media_marker = self._mtmd_cpp.mtmd_default_marker().decode("utf-8")
+        def raise_exception(message: str):
+            raise ValueError(message)
 
-        # Replace image URLs with media markers in the template
+        template_messages = self._get_template_messages(messages, media_marker)
         text = template.render(
-            messages=messages,
+            messages=template_messages,
             add_generation_prompt=True,
-            eos_token=llama.detokenize([llama.token_eos()]),
-            bos_token=llama.detokenize([llama.token_bos()]),
+            eos_token=self._decode_token_piece(llama.detokenize([llama.token_eos()])),
+            bos_token=self._decode_token_piece(llama.detokenize([llama.token_bos()])),
+            raise_exception=raise_exception,
+            functions=functions,
+            function_call=function_call,
+            tools=tools,
+            tool_choice=tool_choice,
+            **kwargs,
         )
 
-        # Replace image URLs in text with media markers
-        for image_url in image_urls:
-            text = text.replace(image_url, media_marker)
+        text = self._postprocess_template_text(text, image_urls, media_marker)
 
         if self.verbose:
             print(text, file=sys.stderr)
@@ -3268,45 +3299,45 @@ class Llava15ChatHandler:
 class Gemma4ChatHandler(Llava15ChatHandler):
     DEFAULT_SYSTEM_MESSAGE = None
 
-    CHAT_FORMAT = (
-        "{% if messages and messages[0]['role'] == 'system' %}"
-        "{% if messages[0]['content'] is string %}"
-        "{% set first_user_prefix = messages[0]['content'] + '\n\n' %}"
-        "{% else %}"
-        "{% set first_user_prefix = messages[0]['content'][0]['text'] + '\n\n' %}"
-        "{% endif %}"
-        "{% set loop_messages = messages[1:] %}"
-        "{% else %}"
-        "{% set first_user_prefix = '' %}"
-        "{% set loop_messages = messages %}"
-        "{% endif %}"
-        "{% for message in loop_messages %}"
-        "{% if (message['role'] == 'user') != (loop.index0 % 2 == 0) %}"
-        "{{ raise_exception('Conversation roles must alternate user/assistant/user/assistant/...') }}"
-        "{% endif %}"
-        "{% set role = 'model' if message['role'] == 'assistant' else message['role'] %}"
-        "{{ '<start_of_turn>' + role + '\n' + (first_user_prefix if loop.first else '') }}"
-        "{% if message['content'] is string %}"
-        "{{ message['content'] | trim }}"
-        "{% elif message['content'] is iterable %}"
-        "{% for item in message['content'] %}"
-        "{% if item['type'] == 'image_url' and item['image_url'] is string %}"
-        "{{ '\n\n' + item['image_url'] + '\n\n' }}"
-        "{% elif item['type'] == 'image_url' and item['image_url'] is mapping %}"
-        "{{ '\n\n' + item['image_url']['url'] + '\n\n' }}"
-        "{% elif item['type'] == 'text' %}"
-        "{{ item['text'] | trim }}"
-        "{% endif %}"
-        "{% endfor %}"
-        "{% else %}"
-        "{{ raise_exception('Invalid content type') }}"
-        "{% endif %}"
-        "{{ '<end_of_turn>\n' }}"
-        "{% endfor %}"
-        "{% if add_generation_prompt %}"
-        "{{ '<start_of_turn>model\n' }}"
-        "{% endif %}"
-    )
+    def _get_chat_template(self, llama_model: llama.Llama) -> str:
+        chat_template = llama_model.metadata.get("tokenizer.chat_template")
+        if not isinstance(chat_template, str) or chat_template == "":
+            raise ValueError("Gemma4ChatHandler requires tokenizer.chat_template metadata")
+        return chat_template
+
+    def _get_template_messages(
+        self,
+        messages: List[llama_types.ChatCompletionRequestMessage],
+        media_marker: str,
+    ) -> List[Any]:
+        return [
+            self._convert_message_for_template(message, media_marker)
+            for message in messages
+        ]
+
+    @classmethod
+    def _convert_message_for_template(
+        cls,
+        message: llama_types.ChatCompletionRequestMessage,
+        media_marker: str,
+    ) -> Dict[str, Any]:
+        message_dict = dict(message)
+        content = message_dict.get("content")
+        if isinstance(content, list):
+            message_dict["content"] = [
+                cls._convert_content_part_for_template(part, media_marker)
+                for part in content
+            ]
+        return message_dict
+
+    @staticmethod
+    def _convert_content_part_for_template(
+        part: Any,
+        media_marker: str,
+    ) -> Any:
+        if isinstance(part, dict) and part.get("type") == "image_url":
+            return {"type": "text", "text": media_marker}
+        return part
 
 
 class ObsidianChatHandler(Llava15ChatHandler):
