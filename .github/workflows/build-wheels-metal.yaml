@@ -43,7 +43,7 @@ jobs:
           package-dir: .
           output-dir: wheelhouse2
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wheels-mac_${{ matrix.os }}
           path: ./wheelhouse2/*.whl
