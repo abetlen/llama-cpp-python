@@ -2773,14 +2773,11 @@ class Llava15ChatHandler:
         "{% endif %}"
     )
 
-    def __init__(
-        self, clip_model_path: str, verbose: bool = True, use_gpu: bool = True
-    ):
+    def __init__(self, clip_model_path: str, verbose: bool = True):
         import llama_cpp.mtmd_cpp as mtmd_cpp
 
         self.clip_model_path = clip_model_path
         self.verbose = verbose
-        self.use_gpu = use_gpu
         self._mtmd_cpp = mtmd_cpp
         self._exit_stack = ExitStack()
         self.mtmd_ctx: Optional[mtmd_cpp.mtmd_context_p] = None
@@ -2796,7 +2793,7 @@ class Llava15ChatHandler:
         with suppress_stdout_stderr(disable=self.verbose):
             # Get default parameters
             ctx_params = self._mtmd_cpp.mtmd_context_params_default()
-            ctx_params.use_gpu = self.use_gpu
+            ctx_params.use_gpu = True  # TODO: Make this configurable
             ctx_params.print_timings = self.verbose
             ctx_params.n_threads = llama_model.n_threads
             ctx_params.flash_attn_type = (
@@ -3285,6 +3282,7 @@ class MTMDChatHandler:
             raise ValueError(f"Clip model path does not exist: {clip_model_path}")
 
     def _init_mtmd_context(self, llama_model: llama.Llama):
+        self.verbose = llama_model.verbose
         if self.mtmd_ctx is not None:
             return
 
