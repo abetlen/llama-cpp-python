@@ -212,6 +212,15 @@ To install with Vulkan support, set the `GGML_VULKAN=on` environment variable be
 CMAKE_ARGS="-DGGML_VULKAN=on" pip install llama-cpp-python
 ```
 
+**Pre-built Wheel (New)**
+
+It is also possible to install a pre-built wheel with Vulkan support for Linux or Windows:
+
+```bash
+pip install llama-cpp-python \
+  --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/vulkan
+```
+
 </details>
 
 <details>
