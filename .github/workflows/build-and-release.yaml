@@ -14,7 +14,7 @@ jobs:
         os: [ubuntu-22.04, windows-2022, macos-14, macos-15]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: "recursive"
 
@@ -75,7 +75,7 @@ jobs:
     name: Build arm64 wheels
     runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: "recursive"
 
@@ -123,7 +123,7 @@ jobs:
             build: "cp314-*"
             artifact: wheels_riscv64_cp314
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: "recursive"
 
@@ -158,7 +158,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: "recursive"
 
