@@ -185,6 +185,22 @@ To install with HIP / ROCm support for AMD cards, set the `GGML_HIP=on` environm
 CMAKE_ARGS="-DGGML_HIP=on" pip install llama-cpp-python
 ```
 
+**Pre-built Wheel (New)**
+
+It is also possible to install a pre-built wheel with ROCm support for Linux:
+
+```bash
+pip install llama-cpp-python \
+  --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/rocm72
+```
+
+Or a pre-built wheel with HIP Radeon support for Windows:
+
+```powershell
+pip install llama-cpp-python `
+  --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/hip-radeon
+```
+
 </details>
 
 <details>
@@ -194,6 +210,15 @@ To install with Vulkan support, set the `GGML_VULKAN=on` environment variable be
 
 ```bash
 CMAKE_ARGS="-DGGML_VULKAN=on" pip install llama-cpp-python
+```
+
+**Pre-built Wheel (New)**
+
+It is also possible to install a pre-built wheel with Vulkan support for Linux or Windows:
+
+```bash
+pip install llama-cpp-python \
+  --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/vulkan
 ```
 
 </details>
@@ -511,6 +536,7 @@ Below are the supported multi-modal models and their respective chat handlers (P
 | [minicpm-v-2.6](https://huggingface.co/openbmb/MiniCPM-V-2_6-gguf) | `MiniCPMv26ChatHandler` | `minicpm-v-2.6` |
 | [qwen2.5-vl](https://huggingface.co/unsloth/Qwen2.5-VL-3B-Instruct-GGUF) | `Qwen25VLChatHandler` | `qwen2.5-vl` |
 | [gemma-4](https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF) | `Gemma4ChatHandler` | `gemma4` |
+| GGUF models with an mtmd projector and embedded chat template | `MTMDChatHandler` | `mtmd` |
 
 Then you'll need to use a custom chat handler to load the clip model and process the chat messages and images.
 
