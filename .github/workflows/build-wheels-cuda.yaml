@@ -63,7 +63,7 @@ jobs:
         with:
           arch: x64
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: "recursive"
 
@@ -73,7 +73,7 @@ jobs:
           cache: 'pip'
 
       - name: Setup Mamba
-        uses: conda-incubator/setup-miniconda@v3.1.0
+        uses: conda-incubator/setup-miniconda@v4.0.1
         with:
           activate-environment: "llamacpp"
           python-version: ${{ matrix.pyver }}
