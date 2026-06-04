@@ -222,7 +222,7 @@ jobs:
           # Publish tags that reflect the actual installed toolkit version.
           Write-Output "CUDA_VERSION=$cudaTagVersion" >> $env:GITHUB_ENV
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: dist/*

@@ -208,7 +208,7 @@ jobs:
           merge-multiple: true
           path: dist
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: dist/*
           # Set release name to <tag>-rocm<rocm_version>.
@@ -228,7 +228,7 @@ jobs:
           merge-multiple: true
           path: dist
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: dist/*
           # Set release name to <tag>-hip-radeon.

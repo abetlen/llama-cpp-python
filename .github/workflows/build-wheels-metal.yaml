@@ -59,7 +59,7 @@ jobs:
           merge-multiple: true
           path: dist2
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: dist2/*
           # set release name to <tag>-metal
