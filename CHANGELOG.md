@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- feat: Generic Multimodal Chat Handler by @abetlen in #2256
 - feat: update llama.cpp to ggml-org/llama.cpp@e3ba22d6c
 - feat(ci): add ROCm wheel builds by @abetlen in #2252
 - feat(ci): add Vulkan wheel builds by @abetlen in #2251
