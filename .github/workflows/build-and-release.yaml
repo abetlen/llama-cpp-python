@@ -49,6 +49,9 @@ jobs:
           # Linux needs auditwheel repair so manylinux and musllinux wheels are
           # published with distinct platform tags instead of generic linux tags.
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: "LD_LIBRARY_PATH=/project/llama_cpp/lib auditwheel repair -w {dest_dir} {wheel}"
+          # cibuildwheel v3 defaults to manylinux_2_28 images whose current
+          # GCC toolchain emits symbols newer than the policy allows.
+          CIBW_MANYLINUX_X86_64_IMAGE: "manylinux2014"
           # The release wheel is tagged py3-none, so one build per platform
           # covers all supported Python versions and avoids duplicate names.
           CIBW_BUILD_LINUX: "cp38-*"
@@ -85,6 +88,8 @@ jobs:
           CIBW_SKIP: "pp*"
           CIBW_REPAIR_WHEEL_COMMAND: "LD_LIBRARY_PATH=$PWD/llama_cpp/lib auditwheel repair -w {dest_dir} {wheel}"
           CIBW_ARCHS: "aarch64"
+          # Keep this consistent with the x86_64 Linux release wheels.
+          CIBW_MANYLINUX_AARCH64_IMAGE: "manylinux2014"
           # Keep native arm64 builds on a portable CPU baseline instead of
           # tuning wheels to the hosted runner.
           CIBW_ENVIRONMENT: CMAKE_ARGS="-DGGML_NATIVE=off"
