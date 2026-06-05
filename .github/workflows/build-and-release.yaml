@@ -85,6 +85,9 @@ jobs:
           CIBW_SKIP: "pp*"
           CIBW_REPAIR_WHEEL_COMMAND: "LD_LIBRARY_PATH=$PWD/llama_cpp/lib auditwheel repair -w {dest_dir} {wheel}"
           CIBW_ARCHS: "aarch64"
+          # cibuildwheel v3 defaults aarch64 to manylinux_2_28 images whose
+          # current GCC toolchain emits symbols newer than the policy allows.
+          CIBW_MANYLINUX_AARCH64_IMAGE: "manylinux2014"
           # Keep native arm64 builds on a portable CPU baseline instead of
           # tuning wheels to the hosted runner.
           CIBW_ENVIRONMENT: CMAKE_ARGS="-DGGML_NATIVE=off"
