@@ -33,7 +33,6 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.pyver }}
-          cache: "pip"
 
       - name: Install build dependencies
         run: |
@@ -208,7 +207,7 @@ jobs:
           merge-multiple: true
           path: dist
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: dist/*
           # Set release name to <tag>-rocm<rocm_version>.
@@ -228,7 +227,7 @@ jobs:
           merge-multiple: true
           path: dist
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: dist/*
           # Set release name to <tag>-hip-radeon.

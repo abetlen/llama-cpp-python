@@ -33,25 +33,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
       - name: Setup Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
       - name: Build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ./scripts/get-releases.sh
           ./scripts/releases-to-pep-503.sh index/whl/cpu '^[v]?[0-9]+\.[0-9]+\.[0-9]+$'
+          ./scripts/releases-to-pep-503.sh index/whl/cu118 '^[v]?[0-9]+\.[0-9]+\.[0-9]+-cu118$'
           ./scripts/releases-to-pep-503.sh index/whl/cu121 '^[v]?[0-9]+\.[0-9]+\.[0-9]+-cu121$'
           ./scripts/releases-to-pep-503.sh index/whl/cu122 '^[v]?[0-9]+\.[0-9]+\.[0-9]+-cu122$'
           ./scripts/releases-to-pep-503.sh index/whl/cu123 '^[v]?[0-9]+\.[0-9]+\.[0-9]+-cu123$'
           ./scripts/releases-to-pep-503.sh index/whl/cu124 '^[v]?[0-9]+\.[0-9]+\.[0-9]+-cu124$'
-          # ./scripts/releases-to-pep-503.sh index/whl/cu125 '^[v]?[0-9]+\.[0-9]+\.[0-9]+-cu124$'
-          # ./scripts/releases-to-pep-503.sh index/whl/cu126 '^[v]?[0-9]+\.[0-9]+\.[0-9]+-cu124$'
+          ./scripts/releases-to-pep-503.sh index/whl/cu125 '^[v]?[0-9]+\.[0-9]+\.[0-9]+-cu125$'
+          ./scripts/releases-to-pep-503.sh index/whl/cu130 '^[v]?[0-9]+\.[0-9]+\.[0-9]+-cu130$'
+          ./scripts/releases-to-pep-503.sh index/whl/cu132 '^[v]?[0-9]+\.[0-9]+\.[0-9]+-cu132$'
           ./scripts/releases-to-pep-503.sh index/whl/rocm72 '^[v]?[0-9]+\.[0-9]+\.[0-9]+-rocm72$'
           ./scripts/releases-to-pep-503.sh index/whl/hip-radeon '^[v]?[0-9]+\.[0-9]+\.[0-9]+-hip-radeon$'
           ./scripts/releases-to-pep-503.sh index/whl/vulkan '^[v]?[0-9]+\.[0-9]+\.[0-9]+-vulkan$'
           ./scripts/releases-to-pep-503.sh index/whl/metal '^[v]?[0-9]+\.[0-9]+\.[0-9]+-metal$'
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           # Upload entire repository
           path: 'index'

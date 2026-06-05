@@ -538,6 +538,8 @@ Below are the supported multi-modal models and their respective chat handlers (P
 | [gemma-4](https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF) | `Gemma4ChatHandler` | `gemma4` |
 | GGUF models with an mtmd projector and embedded chat template | `MTMDChatHandler` | `mtmd` |
 
+Try Gemma 4 12B in Google Colab -> [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/abetlen/llama-cpp-python/blob/main/examples/colab/notebook.ipynb)
+
 Then you'll need to use a custom chat handler to load the clip model and process the chat messages and images.
 
 ```python
