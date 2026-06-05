@@ -26,6 +26,9 @@ import uuid
 import queue
 import ctypes
 import fnmatch
+import base64
+import hashlib
+import binascii
 import asyncio
 import argparse
 import threading
@@ -35,6 +38,8 @@ import shutil
 import inspect
 import importlib.util
 import sys
+import urllib.error
+import urllib.request
 
 from pathlib import Path
 from datetime import datetime
@@ -107,6 +112,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from llama_cpp import llama_cpp  # noqa: E402
 from llama_cpp import llama_cpp_ext  # noqa: E402
+from llama_cpp import mtmd_cpp  # noqa: E402
 
 
 JSON_GBNF = r"""
@@ -1027,24 +1033,38 @@ class SequenceHistory:
         parent: Optional["SequenceHistory.Node"] = None
         children: Dict[int, "SequenceHistory.Node"] = field(default_factory=dict)
         sequences: set[int] = field(default_factory=set)
+        weight: int = 1
 
     def __init__(self) -> None:
         self._root = SequenceHistory.Node()
         self._tails: Dict[int, SequenceHistory.Node] = {}
         self.size = 0
 
-    def extend(self, sequence_id: int, tokens: Sequence[int]) -> None:
+    def extend(
+        self,
+        sequence_id: int,
+        tokens: Sequence[int],
+        weights: Optional[Sequence[int]] = None,
+    ) -> None:
         assert sequence_id >= 0
+        if weights is None:
+            weights = [1] * len(tokens)
+        assert len(weights) == len(tokens)
         node = self._tails.get(sequence_id, self._root)
-        for token in tokens:
+        for token, weight in zip(tokens, weights):
             child = node.children.get(sequence_id)
             if child is None:
-                child = SequenceHistory.Node(token=token, parent=node)
+                child = SequenceHistory.Node(
+                    token=token,
+                    parent=node,
+                    weight=max(0, int(weight)),
+                )
                 node.children[sequence_id] = child
-                self.size += 1
+                self.size += child.weight
             else:
                 assert child.parent is node
                 assert child.token == token
+                assert child.weight == max(0, int(weight))
             child.sequences.add(sequence_id)
             node = child
         if node is self._root:
@@ -1104,7 +1124,7 @@ class SequenceHistory:
             if child is node:
                 del parent.children[sequence_id]
             if not node.sequences:
-                self.size -= 1
+                self.size -= node.weight
             node = parent
             drop -= 1
         if node is self._root:
@@ -2418,7 +2438,7 @@ class ChatCompletionRequestMessage(BaseModel):
     role: Literal["system", "developer", "user", "assistant", "tool", "function"] = Field(
         default="user"
     )
-    content: Optional[str] = Field(default="")
+    content: Optional[Union[str, List[Dict[str, Any]]]] = Field(default="")
     name: Optional[str] = Field(default=None)
     tool_call_id: Optional[str] = Field(default=None)
     function_call: Optional[ChatCompletionFunctionCall] = Field(default=None)
@@ -2859,12 +2879,40 @@ class ConfigFile(BaseModel):
             assert self.path is not None
             return self.path
 
+    class MTMDEmbeddingCacheOptions(BaseModel):
+        path: str
+        max_bytes: int = Field(ge=0)
+
+    class MTMDOptions(BaseModel):
+        mmproj_path: Optional[str] = None
+        mmproj_from_pretrained: Optional["ConfigFile.FromPretrainedOptions"] = None
+        embedding_cache: Optional["ConfigFile.MTMDEmbeddingCacheOptions"] = None
+        image_max_bytes: int = Field(default=20 * 1024 * 1024, ge=1)
+        audio_max_bytes: int = Field(default=100 * 1024 * 1024, ge=1)
+        image_timeout_seconds: float = Field(default=10.0, gt=0.0)
+
+        @model_validator(mode="after")
+        def validate_source(self) -> "ConfigFile.MTMDOptions":
+            if (self.mmproj_path is None) == (self.mmproj_from_pretrained is None):
+                raise ValueError(
+                    "exactly one of model.mtmd.mmproj_path or "
+                    "model.mtmd.mmproj_from_pretrained is required"
+                )
+            return self
+
+        def resolve_mmproj_path(self) -> str:
+            if self.mmproj_from_pretrained is not None:
+                return self.mmproj_from_pretrained.resolve_model_path()
+            assert self.mmproj_path is not None
+            return self.mmproj_path
+
     class ModelOptions(BaseModel):
         path: Optional[str] = None
         alias: Optional[str] = None
         chat_template: Optional[str] = None
         from_pretrained: Optional["ConfigFile.FromPretrainedOptions"] = None
         loras: List["ConfigFile.LoraOptions"] = Field(default_factory=list)
+        mtmd: Optional["ConfigFile.MTMDOptions"] = None
         n_gpu_layers: Optional[int] = None
         split_mode: Optional[int] = None
         main_gpu: Optional[int] = None
@@ -2947,6 +2995,14 @@ class ConfigFile(BaseModel):
 ConfigFile.model_rebuild()
 
 
+@dataclass(frozen=True)
+class MediaInput:
+    kind: Literal["image", "audio"]
+    url: Optional[str] = None
+    data: Optional[str] = None
+    format: Optional[str] = None
+
+
 class Jinja2ChatFormatter:
     def __init__(self, template: str, *, bos_token: str, eos_token: str) -> None:
         self._eos_token = eos_token
@@ -2966,10 +3022,119 @@ class Jinja2ChatFormatter:
             return json.loads(value)
         return value
 
+    @staticmethod
+    def media_inputs_from_messages(
+        messages: Sequence[ChatCompletionRequestMessage],
+    ) -> List[MediaInput]:
+        media_inputs: List[MediaInput] = []
+        for message in messages:
+            content = message.content
+            if not isinstance(content, list):
+                continue
+            for part in content:
+                if not isinstance(part, dict):
+                    continue
+                part_type = part.get("type")
+                if part_type in {"image_url", "input_image", "image"}:
+                    image_url = part.get("image_url") or part.get("url")
+                    if isinstance(image_url, str):
+                        media_inputs.append(MediaInput(kind="image", url=image_url))
+                    elif isinstance(image_url, dict) and isinstance(image_url.get("url"), str):
+                        media_inputs.append(MediaInput(kind="image", url=cast(str, image_url["url"])))
+                    else:
+                        raise ValueError("image_url content part requires a URL string")
+                    continue
+                if part_type == "audio_url":
+                    audio_url = part.get("audio_url")
+                    if isinstance(audio_url, str):
+                        media_inputs.append(MediaInput(kind="audio", url=audio_url))
+                    elif isinstance(audio_url, dict) and isinstance(audio_url.get("url"), str):
+                        media_inputs.append(MediaInput(kind="audio", url=cast(str, audio_url["url"])))
+                    else:
+                        raise ValueError("audio_url content part requires a URL string")
+                    continue
+                if part_type == "input_audio":
+                    input_audio = part.get("input_audio")
+                    if isinstance(input_audio, dict):
+                        data = input_audio.get("data")
+                        audio_format = input_audio.get("format")
+                    else:
+                        data = part.get("data")
+                        audio_format = part.get("format")
+                    if not isinstance(data, str):
+                        raise ValueError("input_audio content part requires base64 data")
+                    if audio_format is not None and not isinstance(audio_format, str):
+                        raise ValueError("input_audio format must be a string")
+                    media_inputs.append(
+                        MediaInput(
+                            kind="audio",
+                            data=data,
+                            format=cast(Optional[str], audio_format),
+                        )
+                    )
+                    continue
+        return media_inputs
+
+    @staticmethod
+    def _literal_content_for_template(
+        text: str,
+        media_marker: Optional[str],
+    ) -> str:
+        if media_marker is not None and media_marker in text:
+            raise ValueError("message content contains reserved multimodal marker text")
+        return text
+
+    @staticmethod
+    def _content_part_for_template(
+        part: Any,
+        media_marker: Optional[str],
+    ) -> str:
+        if isinstance(part, str):
+            return Jinja2ChatFormatter._literal_content_for_template(part, media_marker)
+        if not isinstance(part, dict):
+            raise ValueError("content parts must be strings or objects")
+        part_type = part.get("type")
+        if part_type in {"image_url", "input_image", "image", "audio_url", "input_audio"}:
+            if media_marker is None:
+                raise ValueError("multimodal content requires model.mtmd")
+            return media_marker
+        if part_type in {"text", "input_text"}:
+            text = part.get("text")
+            if not isinstance(text, str):
+                raise ValueError(f"content part {part_type!r} requires string text")
+            return Jinja2ChatFormatter._literal_content_for_template(text, media_marker)
+        raise ValueError(f"unsupported content part type: {part_type!r}")
+
+    @staticmethod
+    def _messages_for_template(
+        messages: Sequence[ChatCompletionRequestMessage],
+        media_marker: Optional[str],
+    ) -> List[Dict[str, Any]]:
+        converted: List[Dict[str, Any]] = []
+        for message in messages:
+            data = message.model_dump(exclude_none=True)
+            content = data.get("content")
+            if isinstance(content, list):
+                data["content"] = "".join(
+                    Jinja2ChatFormatter._content_part_for_template(
+                        part,
+                        media_marker,
+                    )
+                    for part in content
+                )
+            elif isinstance(content, str):
+                data["content"] = Jinja2ChatFormatter._literal_content_for_template(
+                    content,
+                    media_marker,
+                )
+            converted.append(data)
+        return converted
+
     def _render(
         self,
         *,
         messages: List[ChatCompletionRequestMessage],
+        media_marker: Optional[str] = None,
         functions: Optional[List[Dict[str, Any]]] = None,
         function_call: Optional[Union[str, Dict[str, Any]]] = None,
         tools: Optional[List[Dict[str, Any]]] = None,
@@ -2984,7 +3149,7 @@ class Jinja2ChatFormatter:
         return cast(
             str,
             self._template.render(
-                messages=[message.model_dump(exclude_none=True) for message in messages],
+                messages=self._messages_for_template(messages, media_marker),
                 eos_token=self._eos_token,
                 bos_token=self._bos_token,
                 raise_exception=raise_exception,
@@ -3002,6 +3167,7 @@ class Jinja2ChatFormatter:
         self,
         *,
         messages: List[ChatCompletionRequestMessage],
+        media_marker: Optional[str] = None,
         functions: Optional[List[Dict[str, Any]]] = None,
         function_call: Optional[Union[str, Dict[str, Any]]] = None,
         tools: Optional[List[Dict[str, Any]]] = None,
@@ -3015,6 +3181,7 @@ class Jinja2ChatFormatter:
 
         chat_template = self._render(
             messages=messages,
+            media_marker=media_marker,
             functions=functions,
             function_call=function_call,
             tools=tools,
@@ -3025,6 +3192,7 @@ class Jinja2ChatFormatter:
         )
         prompt = self._render(
             messages=messages,
+            media_marker=media_marker,
             functions=functions,
             function_call=function_call,
             tools=tools,
@@ -3129,7 +3297,9 @@ class Completion:
     seq_id: int
     sampler: "Sampler"
     prompt_tokens: List[int]
+    prompt_length: int
     prompt_text: str
+    multimodal_prompt: bool
     max_total_tokens: int
     stop_sequences: List[bytes]
     logprobs: Optional[int]
@@ -3148,7 +3318,7 @@ class Completion:
 
     @property
     def total_tokens(self) -> int:
-        return len(self.prompt_tokens) + len(self.completion_tokens)
+        return self.prompt_length + len(self.completion_tokens)
 
     @property
     def completion_token_count(self) -> int:
@@ -3161,6 +3331,165 @@ class Completion:
     @property
     def max_stop_sequence_length(self) -> int:
         return max((len(stop) for stop in self.stop_sequences), default=0)
+
+
+@dataclass
+class PromptSegment:
+    kind: Literal["text", "image", "audio"]
+    start_pos: int
+    n_pos: int
+    identity_tokens: List[int]
+    text_tokens: List[int] = field(default_factory=list)
+    embeddings: Optional[np.ndarray] = None
+    positions: Optional[np.ndarray] = None
+    row_weights: Optional[List[int]] = None
+    non_causal: bool = False
+
+    @property
+    def end_pos(self) -> int:
+        return self.start_pos + self.n_pos
+
+    @property
+    def batch_rows(self) -> int:
+        if self.kind != "text":
+            if self.embeddings is None:
+                return 0
+            return int(self.embeddings.shape[0])
+        return len(self.text_tokens)
+
+    @property
+    def history_weights(self) -> List[int]:
+        if not self.identity_tokens:
+            return []
+        if self.kind == "text":
+            return [1] * len(self.identity_tokens)
+        if self.row_weights is not None:
+            if len(self.row_weights) != len(self.identity_tokens):
+                raise RuntimeError("media row weight count does not match identity tokens")
+            return list(self.row_weights)
+        rows = self.batch_rows
+        count = len(self.identity_tokens)
+        if rows == count:
+            return [1] * count
+        raise RuntimeError("media segment requires explicit row weights")
+
+    def row_offset(self, logical_offset: int) -> int:
+        if self.kind == "text":
+            return logical_offset
+        return sum(self.history_weights[:logical_offset])
+
+    def media_slice(
+        self,
+        logical_offset: int,
+        logical_count: int,
+    ) -> Tuple[np.ndarray, np.ndarray, List[int]]:
+        if self.embeddings is None or self.positions is None:
+            raise RuntimeError("media segment is missing embeddings or positions")
+        row_start = self.row_offset(logical_offset)
+        row_end = self.row_offset(logical_offset + logical_count)
+        embeddings = self.embeddings[row_start:row_end]
+        if len(self.positions) == self.batch_rows:
+            positions = self.positions[row_start:row_end]
+        else:
+            positions = (
+                self.positions.reshape(4, self.batch_rows)[:, row_start:row_end]
+                .reshape(-1)
+            )
+        return (
+            embeddings,
+            positions,
+            self.history_weights[logical_offset : logical_offset + logical_count],
+        )
+
+
+@dataclass
+class PromptPlan:
+    text: str
+    generation_prompt: str
+    text_tokens: List[int]
+    identity_tokens: List[int]
+    segments: List[PromptSegment]
+    text_token_index_by_pos: Dict[int, int] = field(default_factory=dict)
+
+    @classmethod
+    def from_tokens(
+        cls,
+        text: str,
+        tokens: List[int],
+        *,
+        generation_prompt: str = "",
+    ) -> "PromptPlan":
+        segment = PromptSegment(
+            kind="text",
+            start_pos=0,
+            n_pos=len(tokens),
+            identity_tokens=list(tokens),
+            text_tokens=list(tokens),
+        )
+        return cls(
+            text=text,
+            generation_prompt=generation_prompt,
+            text_tokens=list(tokens),
+            identity_tokens=list(tokens),
+            segments=[segment] if tokens else [],
+            text_token_index_by_pos={pos: pos for pos in range(len(tokens))},
+        )
+
+    @property
+    def length(self) -> int:
+        return len(self.identity_tokens)
+
+    @property
+    def eval_token_count(self) -> int:
+        return self.rows_up_to(self.length)
+
+    def history_weights_up_to(self, pos: int) -> List[int]:
+        weights: List[int] = []
+        for segment in self.segments:
+            if pos <= segment.start_pos:
+                break
+            take = min(pos, segment.end_pos) - segment.start_pos
+            if take <= 0:
+                continue
+            weights.extend(segment.history_weights[:take])
+            if pos <= segment.end_pos:
+                break
+        return weights
+
+    def rows_up_to(self, pos: int) -> int:
+        return sum(self.history_weights_up_to(pos))
+
+    def is_boundary(self, pos: int) -> bool:
+        if pos <= 0 or pos >= self.length:
+            return True
+        return any(segment.start_pos == pos or segment.end_pos == pos for segment in self.segments)
+
+    def clamp_to_reusable_boundary(self, pos: int) -> int:
+        if pos <= 0:
+            return 0
+        if pos >= self.length:
+            return self.length
+        if self.is_boundary(pos):
+            return pos
+        segment = self.segment_at(pos)
+        if segment.kind != "text":
+            return segment.start_pos
+        return pos
+
+    def segment_at(self, pos: int) -> PromptSegment:
+        for segment in self.segments:
+            if segment.start_pos <= pos < segment.end_pos:
+                return segment
+        raise RuntimeError(f"missing prompt segment at position {pos}")
+
+    def has_text_token_at(self, pos: int) -> bool:
+        return pos in self.text_token_index_by_pos
+
+    def text_token_at(self, pos: int) -> int:
+        return self.text_tokens[self.text_token_index_by_pos[pos]]
+
+    def prev_text_tokens_at(self, pos: int) -> List[int]:
+        return self.text_tokens[: self.text_token_index_by_pos[pos]]
 
 
 @dataclass
@@ -3212,11 +3541,20 @@ class SchedulerMetrics:
     ) -> None:
         if not items:
             return
-        total_tokens = sum(len(item.tokens) for item in items)
+        total_tokens = sum(
+            int(item.embeddings.shape[0])
+            if getattr(item, "embeddings", None) is not None
+            else len(item.tokens)
+            for item in items
+        )
         if total_tokens <= 0:
             return
         prompt_tokens = sum(
-            len(item.tokens) for item in items if getattr(item, "kind", None) == "prompt"
+            int(item.embeddings.shape[0])
+            if getattr(item, "embeddings", None) is not None
+            else len(item.tokens)
+            for item in items
+            if getattr(item, "kind", None) == "prompt"
         )
         generation_tokens = total_tokens - prompt_tokens
         self.n_decode_total += 1
@@ -3277,6 +3615,7 @@ class CompletionRequest:
     payload: CreateCompletionRequest
     prompt_text: str
     prompt_tokens: List[int]
+    prompt_plan: PromptPlan
     effective_max_len: int
     internal_completion_count: int
     prompt_visible_start: int
@@ -3349,6 +3688,7 @@ class CompletionRequest:
         payload: CreateCompletionRequest,
         prompt_text: str,
         prompt_tokens: List[int],
+        prompt_plan: Optional[PromptPlan] = None,
         grammar_text: Optional[str] = None,
         chat_tool_name: Optional[str] = None,
         request_id: Optional[str] = None,
@@ -3356,25 +3696,32 @@ class CompletionRequest:
         on_done: Optional[Callable[[OpenAICompletion], None]] = None,
         on_error: Optional[Callable[[BaseException], None]] = None,
     ) -> "CompletionRequest":
-        ctx_limit = model.max_seq_len
+        if prompt_plan is None:
+            prompt_plan = PromptPlan.from_tokens(prompt_text, prompt_tokens)
+        prompt_tokens = list(prompt_plan.identity_tokens)
+        prompt_eval_tokens = prompt_plan.eval_token_count
+        if prompt_eval_tokens > model.max_seq_len:
+            raise CompletionRequestValidationError("prompt exceeds context window")
+        ctx_limit = prompt_plan.length + (model.max_seq_len - prompt_eval_tokens)
         if model.max_output_tokens is not None:
-            ctx_limit = min(ctx_limit, len(prompt_tokens) + model.max_output_tokens)
+            ctx_limit = min(ctx_limit, prompt_plan.length + model.max_output_tokens)
         if payload.max_tokens is None:
             effective_max_len = ctx_limit
         else:
-            effective_max_len = min(ctx_limit, len(prompt_tokens) + payload.max_tokens)
-        if effective_max_len < len(prompt_tokens):
+            effective_max_len = min(ctx_limit, prompt_plan.length + payload.max_tokens)
+        if effective_max_len < prompt_plan.length:
             raise CompletionRequestValidationError("prompt exceeds context window")
         internal_completion_count = payload.best_of if payload.best_of is not None else payload.n
         request = cls(
             payload=payload,
             prompt_text=prompt_text,
             prompt_tokens=prompt_tokens,
+            prompt_plan=prompt_plan,
             effective_max_len=effective_max_len,
             internal_completion_count=internal_completion_count,
             id=request_id or f"cmpl-{uuid.uuid4().hex}",
             prompt_visible_start=1
-            if prompt_tokens and prompt_tokens[0] == model.bos_token
+            if prompt_plan.text_tokens and prompt_plan.text_tokens[0] == model.bos_token
             else 0,
             grammar_text=grammar_text,
             chat_tool_name=chat_tool_name,
@@ -3387,15 +3734,15 @@ class CompletionRequest:
         return request
 
     def seed_prompt_records(self, model: Model) -> None:
-        if self.prompt_visible_start >= len(self.prompt_tokens):
+        if self.prompt_visible_start >= len(self.prompt_plan.text_tokens):
             return
         first_pos = self.prompt_visible_start
-        first_token = self.prompt_tokens[first_pos]
+        first_token = self.prompt_plan.text_tokens[first_pos]
         self.prompt_records.append(
             Token(
                 token=first_token,
                 text_bytes=model.token_bytes_with_prev(
-                    self.prompt_tokens[:first_pos],
+                    self.prompt_plan.text_tokens[:first_pos],
                     first_token,
                 ),
                 token_logprob=None,
@@ -3421,8 +3768,8 @@ class CompletionRequest:
         *,
         model: Model,
         formatter: OpenAIFormatter,
-        start_pos: int,
         output_indices: Sequence[Optional[int]],
+        output_positions: Sequence[int],
         output_count: int,
         output_arg: Callable[[Optional[int], int], Optional[int]],
     ) -> None:
@@ -3431,21 +3778,24 @@ class CompletionRequest:
         for token_offset, output_index in enumerate(output_indices):
             if output_index is None:
                 continue
-            next_pos = start_pos + token_offset + 1
-            if next_pos < self.prompt_visible_start or next_pos >= len(self.prompt_tokens):
+            next_pos = output_positions[token_offset] + 1
+            if not self.prompt_plan.has_text_token_at(next_pos):
+                continue
+            text_token_index = self.prompt_plan.text_token_index_by_pos[next_pos]
+            if text_token_index < self.prompt_visible_start:
                 continue
             row_index = output_arg(output_index, output_count)
             assert row_index is not None
-            next_token = self.prompt_tokens[next_pos]
+            next_token = self.prompt_plan.text_token_at(next_pos)
             record = Token.from_logits(
                 model=model,
                 formatter=formatter,
-                prev_tokens=self.prompt_tokens[:next_pos],
+                prev_tokens=self.prompt_plan.prev_text_tokens_at(next_pos),
                 token=next_token,
                 logits=model.logits(row_index),
                 logprobs_count=self.payload.logprobs,
             )
-            expected_index = next_pos - self.prompt_visible_start
+            expected_index = text_token_index - self.prompt_visible_start
             if expected_index == len(self.prompt_records):
                 self.prompt_records.append(record)
             elif expected_index < len(self.prompt_records):
@@ -6795,6 +7145,71 @@ class OpenAIFormatter:
         return "".join(parts)
 
     @staticmethod
+    def _response_chat_content_from_content(
+        content: Any,
+    ) -> Union[str, List[Dict[str, Any]]]:
+        if isinstance(content, str):
+            return content
+        if not isinstance(content, list):
+            raise CompletionRequestValidationError("responses input content must be a string or list")
+        parts: List[Dict[str, Any]] = []
+        for part in content:
+            if not isinstance(part, dict):
+                raise CompletionRequestValidationError("responses content parts must be objects")
+            part_type = part.get("type")
+            if part_type in {"input_text", "output_text", "reasoning_text", "summary_text", "text"}:
+                text = part.get("text")
+                if not isinstance(text, str):
+                    raise CompletionRequestValidationError(
+                        f"responses content part {part_type!r} requires string text"
+                    )
+                parts.append({"type": "text", "text": text})
+                continue
+            if part_type == "input_image":
+                image_url = part.get("image_url")
+                if not isinstance(image_url, str):
+                    raise CompletionRequestValidationError(
+                        "responses input_image content part requires image_url"
+                    )
+                parts.append({"type": "image_url", "image_url": {"url": image_url}})
+                continue
+            if part_type == "input_audio":
+                input_audio = part.get("input_audio")
+                if isinstance(input_audio, dict):
+                    data = input_audio.get("data")
+                    audio_format = input_audio.get("format")
+                else:
+                    data = part.get("data")
+                    audio_format = part.get("format")
+                if not isinstance(data, str):
+                    raise CompletionRequestValidationError(
+                        "responses input_audio content part requires base64 data"
+                    )
+                if audio_format is not None and not isinstance(audio_format, str):
+                    raise CompletionRequestValidationError(
+                        "responses input_audio format must be a string"
+                    )
+                audio_part: Dict[str, Any] = {"data": data}
+                if audio_format is not None:
+                    audio_part["format"] = audio_format
+                parts.append({"type": "input_audio", "input_audio": audio_part})
+                continue
+            if part_type == "audio_url":
+                audio_url = part.get("audio_url")
+                if not isinstance(audio_url, str):
+                    raise CompletionRequestValidationError(
+                        "responses audio_url content part requires audio_url"
+                    )
+                parts.append({"type": "audio_url", "audio_url": {"url": audio_url}})
+                continue
+            raise CompletionRequestValidationError(
+                f"unsupported responses content part type: {part_type!r}"
+            )
+        if all(part.get("type") == "text" for part in parts):
+            return "".join(cast(str, part.get("text", "")) for part in parts)
+        return parts
+
+    @staticmethod
     def _response_reasoning_text(item: Dict[str, Any]) -> str:
         content = item.get("content")
         if isinstance(content, list) and content:
@@ -6971,7 +7386,7 @@ class OpenAIFormatter:
                     role = "tool"
                 data: Dict[str, Any] = {
                     "role": role,
-                    "content": self._response_text_from_content(
+                    "content": self._response_chat_content_from_content(
                         item.get("content", "")
                     ),
                 }
@@ -7357,7 +7772,7 @@ class OpenAIFormatter:
         CreateCompletionRequest,
         str,
         str,
-        List[int],
+        PromptPlan,
         Optional[str],
         Optional[str],
     ]:
@@ -7385,7 +7800,7 @@ class OpenAIFormatter:
             self._modelish_to_python(body.tool_choice),
         )
         try:
-            prompt_text, generation_prompt, prompt_tokens, formatter_stop = self.model.build_chat_prompt(
+            prompt_text, generation_prompt, prompt_plan, formatter_stop = self.model.build_chat_prompt(
                 body.messages,
                 functions=functions,
                 function_call=normalized_function_call,
@@ -7429,7 +7844,7 @@ class OpenAIFormatter:
             n=body.n,
             user=body.user,
         )
-        return payload, prompt_text, generation_prompt, prompt_tokens, grammar_text, tool_name
+        return payload, prompt_text, generation_prompt, prompt_plan, grammar_text, tool_name
 
     @staticmethod
     def _response_phase_from_message(message: Dict[str, Any]) -> Optional[str]:
@@ -9004,6 +9419,7 @@ class OpenAIFormatter:
         completions: Sequence[Completion],
     ) -> OpenAICompletion:
         completion_tokens = sum(completion.completion_token_count for completion in completions)
+        prompt_tokens = request.prompt_plan.eval_token_count
         return OpenAICompletion(
             id=request.id,
             object="text_completion",
@@ -9014,9 +9430,9 @@ class OpenAIFormatter:
                 for completion in completions
             ],
             usage=CompletionUsage(
-                prompt_tokens=len(request.prompt_tokens),
+                prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
-                total_tokens=len(request.prompt_tokens) + completion_tokens,
+                total_tokens=prompt_tokens + completion_tokens,
             ),
         )
 
@@ -9148,6 +9564,545 @@ class Sampler:
         if not self._closed:
             llama_cpp.llama_sampler_free(self._sampler)
             self._closed = True
+
+
+@dataclass
+class MTMDEmbedding:
+    key: str
+    embeddings: np.ndarray
+
+
+class MTMDEmbeddingCache:
+    _metadata_version = "1"
+
+    def __init__(
+        self,
+        *,
+        path: str,
+        max_bytes: int,
+        model_fingerprint: str,
+        mmproj_fingerprint: str,
+    ) -> None:
+        self.path = Path(path)
+        self.max_bytes = max_bytes
+        self.model_fingerprint = model_fingerprint
+        self.mmproj_fingerprint = mmproj_fingerprint
+        self.path.mkdir(parents=True, exist_ok=True)
+
+    @staticmethod
+    def _safe_open(path: Path) -> Any:
+        try:
+            from safetensors import safe_open
+        except ImportError as exc:
+            raise RuntimeError(
+                "model.mtmd.embedding_cache requires safetensors. "
+                "Install it with `pip install safetensors`."
+            ) from exc
+        return safe_open(str(path), framework="numpy")
+
+    @staticmethod
+    def _save_file(
+        tensors: Dict[str, np.ndarray],
+        path: Path,
+        metadata: Dict[str, str],
+    ) -> None:
+        from safetensors.numpy import save_file
+
+        save_file(tensors, str(path), metadata=metadata)
+
+    @staticmethod
+    def fingerprint_file(path: str) -> str:
+        stat = os.stat(path)
+        payload = f"{Path(path).resolve()}:{stat.st_size}:{stat.st_mtime_ns}"
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    @classmethod
+    def key_for_media_parts(
+        cls,
+        *,
+        model_fingerprint: str,
+        mmproj_fingerprint: str,
+        kind: Literal["image", "audio"],
+        media_bytes: bytes,
+    ) -> str:
+        digest = hashlib.sha256(f"{kind}:".encode("utf-8") + media_bytes).hexdigest()
+        payload = ":".join(
+            [
+                cls._metadata_version,
+                model_fingerprint,
+                mmproj_fingerprint,
+                kind,
+                digest,
+            ]
+        )
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    def key_for_media(self, kind: Literal["image", "audio"], media_bytes: bytes) -> str:
+        return self.key_for_media_parts(
+            model_fingerprint=self.model_fingerprint,
+            mmproj_fingerprint=self.mmproj_fingerprint,
+            kind=kind,
+            media_bytes=media_bytes,
+        )
+
+    def _path_for_key(self, key: str) -> Path:
+        return self.path / f"{key}.safetensors"
+
+    def load(self, key: str) -> Optional[MTMDEmbedding]:
+        entry_path = self._path_for_key(key)
+        if not entry_path.exists():
+            return None
+        with self._safe_open(entry_path) as tensors:
+            metadata = tensors.metadata()
+            if metadata.get("version") != self._metadata_version:
+                return None
+            if metadata.get("model") != self.model_fingerprint:
+                return None
+            if metadata.get("mmproj") != self.mmproj_fingerprint:
+                return None
+            embeddings = np.array(tensors.get_tensor("embeddings"), copy=True)
+        return MTMDEmbedding(key=key, embeddings=embeddings.astype(np.float32, copy=False))
+
+    def save(self, key: str, embeddings: np.ndarray) -> None:
+        if self.max_bytes == 0:
+            return
+        tmp_path = self.path / f".{key}.{uuid.uuid4().hex}.tmp"
+        final_path = self._path_for_key(key)
+        metadata = {
+            "version": self._metadata_version,
+            "model": self.model_fingerprint,
+            "mmproj": self.mmproj_fingerprint,
+            "key": key,
+        }
+        self._save_file(
+            {"embeddings": np.ascontiguousarray(embeddings, dtype=np.float32)},
+            tmp_path,
+            metadata,
+        )
+        os.replace(tmp_path, final_path)
+        self.evict_if_needed()
+
+    def evict_if_needed(self) -> None:
+        if self.max_bytes <= 0:
+            return
+        entries = [path for path in self.path.glob("*.safetensors") if path.is_file()]
+        total = sum(path.stat().st_size for path in entries)
+        if total <= self.max_bytes:
+            return
+        for path in sorted(entries, key=lambda item: item.stat().st_mtime_ns):
+            if total <= self.max_bytes:
+                break
+            try:
+                size = path.stat().st_size
+                path.unlink()
+                total -= size
+            except OSError:
+                continue
+
+
+class MTMDProcessor:
+    def __init__(
+        self,
+        *,
+        model: "Model",
+        mmproj_path: str,
+        embedding_cache: Optional[MTMDEmbeddingCache],
+        image_max_bytes: int,
+        audio_max_bytes: int,
+        image_timeout_seconds: float,
+    ) -> None:
+        self.model = model
+        self.mmproj_path = mmproj_path
+        self.embedding_cache = embedding_cache
+        self.model_fingerprint = MTMDEmbeddingCache.fingerprint_file(model.model_path)
+        self.mmproj_fingerprint = MTMDEmbeddingCache.fingerprint_file(mmproj_path)
+        self.image_max_bytes = image_max_bytes
+        self.audio_max_bytes = audio_max_bytes
+        self.image_timeout_seconds = image_timeout_seconds
+        self.lock = threading.Lock()
+        params = mtmd_cpp.mtmd_context_params_default()
+        params.n_threads = max(1, model.n_threads_batch)
+        self.ctx = mtmd_cpp.mtmd_init_from_file(
+            mmproj_path.encode("utf-8"),
+            model.llama_model,
+            params,
+        )
+        if self.ctx is None:
+            raise RuntimeError(f"failed to load MTMD context: {mmproj_path}")
+        self.supports_vision = bool(mtmd_cpp.mtmd_support_vision(self.ctx))
+        self.supports_audio = bool(mtmd_cpp.mtmd_support_audio(self.ctx))
+        if not self.supports_vision and not self.supports_audio:
+            mtmd_cpp.mtmd_free(self.ctx)
+            self.ctx = None
+            raise RuntimeError(f"MTMD projector does not support image or audio input: {mmproj_path}")
+        self.n_embd_inp = int(llama_cpp.llama_model_n_embd_inp(model.llama_model))
+        self.media_marker = mtmd_cpp.mtmd_default_marker().decode("utf-8")
+
+    def close(self) -> None:
+        if self.ctx is not None:
+            mtmd_cpp.mtmd_free(self.ctx)
+            self.ctx = None
+
+    def _max_bytes_for_media(self, kind: Literal["image", "audio"]) -> int:
+        if kind == "image":
+            return self.image_max_bytes
+        return self.audio_max_bytes
+
+    def _load_media_url(self, kind: Literal["image", "audio"], media_url: str) -> bytes:
+        max_bytes = self._max_bytes_for_media(kind)
+        if media_url.startswith("data:"):
+            try:
+                _, encoded = media_url.split(",", 1)
+            except ValueError as exc:
+                raise CompletionRequestValidationError(f"invalid data {kind} URL") from exc
+            data = base64.b64decode(encoded, validate=False)
+            if len(data) > max_bytes:
+                raise CompletionRequestValidationError(f"{kind} exceeds model.mtmd.{kind}_max_bytes")
+            return data
+        if not (media_url.startswith("http://") or media_url.startswith("https://")):
+            raise CompletionRequestValidationError(
+                f"only data:, http:, and https: {kind} URLs are supported"
+            )
+        request = urllib.request.Request(
+            media_url,
+            headers={"User-Agent": "llama-cpp-python-batch-mtmd/0"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=self.image_timeout_seconds) as response:
+                data = response.read(max_bytes + 1)
+        except (OSError, TimeoutError, urllib.error.URLError) as exc:
+            raise CompletionRequestValidationError(
+                f"failed to fetch {kind} URL: {exc}"
+            ) from exc
+        if len(data) > max_bytes:
+            raise CompletionRequestValidationError(f"{kind} exceeds model.mtmd.{kind}_max_bytes")
+        return data
+
+    def load_media(self, media: MediaInput) -> bytes:
+        if media.url is not None:
+            return self._load_media_url(media.kind, media.url)
+        if media.kind != "audio" or media.data is None:
+            raise CompletionRequestValidationError(f"{media.kind} input requires a URL")
+        try:
+            data = base64.b64decode(media.data, validate=False)
+        except (ValueError, binascii.Error) as exc:
+            raise CompletionRequestValidationError("input_audio data must be valid base64") from exc
+        if len(data) > self.audio_max_bytes:
+            raise CompletionRequestValidationError("audio exceeds model.mtmd.audio_max_bytes")
+        return data
+
+    def _create_bitmap(self, media_bytes: bytes, kind: Literal["image", "audio"]) -> Any:
+        buffer = (ctypes.c_uint8 * len(media_bytes)).from_buffer_copy(media_bytes)
+        bitmap = mtmd_cpp.mtmd_helper_bitmap_init_from_buf(
+            self.ctx,
+            buffer,
+            len(media_bytes),
+        )
+        if bitmap is None:
+            raise CompletionRequestValidationError(f"failed to create MTMD {kind} bitmap")
+        return bitmap
+
+    def _media_identity_tokens(self, kind: Literal["image", "audio"], key: str, n_pos: int) -> List[int]:
+        tokens: List[int] = []
+        for index in range(n_pos):
+            digest = hashlib.sha256(f"{kind}:{key}:{index}".encode("utf-8")).digest()
+            tokens.append(-1 - (int.from_bytes(digest[:4], "little") & 0x3FFFFFFF))
+        return tokens
+
+    def _encode_media_chunk(
+        self,
+        *,
+        kind: Literal["image", "audio"],
+        key: str,
+        chunk: Any,
+    ) -> np.ndarray:
+        n_tokens = int(mtmd_cpp.mtmd_input_chunk_get_n_tokens(chunk))
+        if self.embedding_cache is not None:
+            cached = self.embedding_cache.load(key)
+            if (
+                cached is not None
+                and cached.embeddings.shape == (n_tokens, self.n_embd_inp)
+            ):
+                return cached.embeddings
+        result = int(mtmd_cpp.mtmd_encode_chunk(self.ctx, chunk))
+        if result != 0:
+            raise CompletionRequestValidationError(
+                f"failed to encode {kind} chunk: error code {result}"
+            )
+        output = mtmd_cpp.mtmd_get_output_embd(self.ctx)
+        if output is None:
+            raise CompletionRequestValidationError(f"MTMD {kind} encoder returned no embeddings")
+        flat = np.ctypeslib.as_array(output, shape=(n_tokens * self.n_embd_inp,))
+        embeddings = np.array(flat, dtype=np.float32, copy=True).reshape(
+            n_tokens,
+            self.n_embd_inp,
+        )
+        if self.embedding_cache is not None:
+            self.embedding_cache.save(key, embeddings)
+        return embeddings
+
+    def _positions_for_chunk(self, chunk: Any, start_pos: int) -> np.ndarray:
+        n_tokens = int(mtmd_cpp.mtmd_input_chunk_get_n_tokens(chunk))
+        if not mtmd_cpp.mtmd_decode_use_mrope(self.ctx):
+            return np.arange(start_pos, start_pos + n_tokens, dtype=np.int32)
+        chunk_type = int(mtmd_cpp.mtmd_input_chunk_get_type(chunk))
+        if chunk_type == mtmd_cpp.MTMD_INPUT_CHUNK_TYPE_AUDIO:
+            positions = np.empty((4, n_tokens), dtype=np.int32)
+            positions[:] = np.arange(start_pos, start_pos + n_tokens, dtype=np.int32)
+            return positions.reshape(-1)
+        image_tokens = mtmd_cpp.mtmd_input_chunk_get_tokens_image(chunk)
+        if image_tokens is None:
+            raise CompletionRequestValidationError("MTMD image chunk has no image tokens")
+        positions = np.empty((4, n_tokens), dtype=np.int32)
+        for index in range(n_tokens):
+            pos = mtmd_cpp.mtmd_image_tokens_get_decoder_pos(
+                image_tokens,
+                llama_cpp.llama_pos(start_pos),
+                index,
+            )
+            positions[0, index] = int(pos.t)
+            positions[1, index] = int(pos.y)
+            positions[2, index] = int(pos.x)
+            positions[3, index] = int(pos.z)
+        return positions.reshape(-1)
+
+    @staticmethod
+    def _row_weights_for_positions(
+        positions: np.ndarray,
+        *,
+        start_pos: int,
+        n_pos: int,
+        n_tokens: int,
+    ) -> List[int]:
+        if n_pos <= 0:
+            raise CompletionRequestValidationError("MTMD media chunk has no logical positions")
+        if len(positions) == n_tokens:
+            lanes = [positions]
+        elif len(positions) == n_tokens * 4:
+            lanes = [positions.reshape(4, n_tokens)[index] for index in range(4)]
+        else:
+            raise CompletionRequestValidationError("MTMD media position shape mismatch")
+        for lane in lanes:
+            weights: List[int] = []
+            row = 0
+            for logical_pos in range(start_pos, start_pos + n_pos):
+                row_start = row
+                while row < n_tokens and int(lane[row]) == logical_pos:
+                    row += 1
+                if row == row_start:
+                    break
+                weights.append(row - row_start)
+            if len(weights) == n_pos and row == n_tokens:
+                return weights
+        raise CompletionRequestValidationError(
+            "MTMD media decoder positions do not define contiguous logical positions"
+        )
+
+    def build_prompt_plan(
+        self,
+        *,
+        messages: List[ChatCompletionRequestMessage],
+        functions: Optional[List[Dict[str, Any]]] = None,
+        function_call: Optional[Union[str, Dict[str, Any]]] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
+        reasoning_effort: Optional[str] = None,
+    ) -> PromptPlan:
+        if self.model.chat_formatter is None:
+            raise CompletionRequestValidationError("model does not provide a GGUF chat template")
+        media_inputs = Jinja2ChatFormatter.media_inputs_from_messages(messages)
+        if not media_inputs:
+            prompt, generation_prompt, _ = self.model.chat_formatter.format(
+                messages=messages,
+                functions=functions,
+                function_call=function_call,
+                tools=tools,
+                tool_choice=tool_choice,
+                reasoning_effort=reasoning_effort,
+            )
+            tokens = self.model.tokenize(prompt, add_bos=False, special=True)
+            return PromptPlan.from_tokens(prompt, tokens, generation_prompt=generation_prompt)
+        if any(media.kind == "image" for media in media_inputs) and not self.supports_vision:
+            raise CompletionRequestValidationError("MTMD projector does not support images")
+        if any(media.kind == "audio" for media in media_inputs) and not self.supports_audio:
+            raise CompletionRequestValidationError("MTMD projector does not support audio")
+        with self.lock:
+            return self._build_prompt_plan_locked(
+                messages=messages,
+                media_inputs=media_inputs,
+                functions=functions,
+                function_call=function_call,
+                tools=tools,
+                tool_choice=tool_choice,
+                reasoning_effort=reasoning_effort,
+            )
+
+    def _build_prompt_plan_locked(
+        self,
+        *,
+        messages: List[ChatCompletionRequestMessage],
+        media_inputs: List[MediaInput],
+        functions: Optional[List[Dict[str, Any]]],
+        function_call: Optional[Union[str, Dict[str, Any]]],
+        tools: Optional[List[Dict[str, Any]]],
+        tool_choice: Optional[Union[str, Dict[str, Any]]],
+        reasoning_effort: Optional[str],
+    ) -> PromptPlan:
+        assert self.model.chat_formatter is not None
+        prompt, generation_prompt, _ = self.model.chat_formatter.format(
+            messages=messages,
+            media_marker=self.media_marker,
+            functions=functions,
+            function_call=function_call,
+            tools=tools,
+            tool_choice=tool_choice,
+            reasoning_effort=reasoning_effort,
+        )
+        media_bytes_by_index = [self.load_media(media) for media in media_inputs]
+        bitmaps: List[Any] = []
+        chunks: Optional[Any] = None
+        try:
+            bitmaps = [
+                self._create_bitmap(media_bytes, media.kind)
+                for media, media_bytes in zip(media_inputs, media_bytes_by_index)
+            ]
+            input_text = mtmd_cpp.mtmd_input_text()
+            input_text.text = prompt.encode("utf-8")
+            input_text.add_special = False
+            input_text.parse_special = True
+            chunks = mtmd_cpp.mtmd_input_chunks_init()
+            if chunks is None:
+                raise CompletionRequestValidationError("failed to create MTMD input chunks")
+            bitmap_array = (mtmd_cpp.mtmd_bitmap_p_ctypes * len(bitmaps))(*bitmaps)
+            result = int(
+                mtmd_cpp.mtmd_tokenize(
+                    self.ctx,
+                    chunks,
+                    ctypes.byref(input_text),
+                    bitmap_array,
+                    len(bitmaps),
+                )
+            )
+            if result != 0:
+                raise CompletionRequestValidationError(
+                    f"failed to tokenize MTMD prompt: error code {result}"
+                )
+            segments: List[PromptSegment] = []
+            identity_tokens: List[int] = []
+            text_tokens: List[int] = []
+            text_token_index_by_pos: Dict[int, int] = {}
+            pos = 0
+            media_index = 0
+            n_chunks = int(mtmd_cpp.mtmd_input_chunks_size(chunks))
+            for chunk_index in range(n_chunks):
+                chunk = mtmd_cpp.mtmd_input_chunks_get(chunks, chunk_index)
+                if chunk is None:
+                    continue
+                chunk_type = int(mtmd_cpp.mtmd_input_chunk_get_type(chunk))
+                if chunk_type == mtmd_cpp.MTMD_INPUT_CHUNK_TYPE_TEXT:
+                    n_tokens_out = ctypes.c_size_t()
+                    tokens_ptr = mtmd_cpp.mtmd_input_chunk_get_tokens_text(
+                        chunk,
+                        ctypes.byref(n_tokens_out),
+                    )
+                    tokens = (
+                        [int(tokens_ptr[index]) for index in range(int(n_tokens_out.value))]
+                        if tokens_ptr
+                        else []
+                    )
+                    if tokens:
+                        start_pos = pos
+                        segments.append(
+                            PromptSegment(
+                                kind="text",
+                                start_pos=start_pos,
+                                n_pos=len(tokens),
+                                identity_tokens=list(tokens),
+                                text_tokens=list(tokens),
+                            )
+                        )
+                        for offset, token in enumerate(tokens):
+                            text_token_index_by_pos[start_pos + offset] = len(text_tokens)
+                            text_tokens.append(token)
+                        identity_tokens.extend(tokens)
+                        pos += len(tokens)
+                    continue
+                if chunk_type == mtmd_cpp.MTMD_INPUT_CHUNK_TYPE_IMAGE:
+                    kind: Literal["image", "audio"] = "image"
+                    if not self.supports_vision:
+                        raise CompletionRequestValidationError("MTMD projector does not support images")
+                elif chunk_type == mtmd_cpp.MTMD_INPUT_CHUNK_TYPE_AUDIO:
+                    kind = "audio"
+                    if not self.supports_audio:
+                        raise CompletionRequestValidationError("MTMD projector does not support audio")
+                else:
+                    raise CompletionRequestValidationError("unsupported MTMD input chunk type")
+                if media_index >= len(media_bytes_by_index):
+                    raise CompletionRequestValidationError("MTMD media chunk count mismatch")
+                media = media_inputs[media_index]
+                media_bytes = media_bytes_by_index[media_index]
+                media_index += 1
+                if media.kind != kind:
+                    raise CompletionRequestValidationError("MTMD media chunk modality mismatch")
+                key = (
+                    self.embedding_cache.key_for_media(kind, media_bytes)
+                    if self.embedding_cache is not None
+                    else MTMDEmbeddingCache.key_for_media_parts(
+                        model_fingerprint=self.model_fingerprint,
+                        mmproj_fingerprint=self.mmproj_fingerprint,
+                        kind=kind,
+                        media_bytes=media_bytes,
+                    )
+                )
+                n_pos = int(mtmd_cpp.mtmd_input_chunk_get_n_pos(chunk))
+                embeddings = self._encode_media_chunk(kind=kind, key=key, chunk=chunk)
+                non_causal = bool(mtmd_cpp.mtmd_decode_use_non_causal(self.ctx, chunk))
+                segment_identity = self._media_identity_tokens(kind, key, n_pos)
+                positions = self._positions_for_chunk(chunk, pos)
+                row_weights = self._row_weights_for_positions(
+                    positions,
+                    start_pos=pos,
+                    n_pos=n_pos,
+                    n_tokens=int(embeddings.shape[0]),
+                )
+                segment = PromptSegment(
+                    kind=kind,
+                    start_pos=pos,
+                    n_pos=n_pos,
+                    identity_tokens=segment_identity,
+                    embeddings=embeddings,
+                    positions=positions,
+                    row_weights=row_weights,
+                    non_causal=non_causal,
+                )
+                if max(segment.history_weights, default=0) > self.model.n_batch:
+                    raise CompletionRequestValidationError(
+                        f"{kind} embedding logical position exceeds model.n_batch; "
+                        "increase n_batch"
+                    )
+                if non_causal and embeddings.shape[0] > min(self.model.n_batch, self.model.n_ubatch):
+                    raise CompletionRequestValidationError(
+                        f"non-causal {kind} embedding chunk exceeds model batch limits; "
+                        "increase n_batch and n_ubatch"
+                    )
+                segments.append(segment)
+                identity_tokens.extend(segment_identity)
+                pos += n_pos
+            if media_index != len(media_bytes_by_index):
+                raise CompletionRequestValidationError("not all media inputs were consumed by MTMD")
+            return PromptPlan(
+                text=prompt,
+                generation_prompt=generation_prompt,
+                text_tokens=text_tokens,
+                identity_tokens=identity_tokens,
+                segments=segments,
+                text_token_index_by_pos=text_token_index_by_pos,
+            )
+        finally:
+            if chunks is not None:
+                mtmd_cpp.mtmd_input_chunks_free(chunks)
+            for bitmap in bitmaps:
+                mtmd_cpp.mtmd_bitmap_free(bitmap)
 
 
 class Model:
@@ -9322,6 +10277,14 @@ class Model:
         self.n_rs_seq = int(llama_cpp.llama_n_rs_seq(ctx))
         self.n_batch = int(llama_cpp.llama_n_batch(ctx))
         self.n_ubatch = int(llama_cpp.llama_n_ubatch(ctx))
+        self.n_threads_batch = (
+            n_threads_batch
+            if n_threads_batch is not None
+            else max(multiprocessing.cpu_count(), 1)
+        )
+        self.mtmd_processor: Optional[MTMDProcessor] = None
+        self._embedding_batch: Optional[llama_cpp.llama_batch] = None
+        self._embedding_batch_refs: List[Any] = []
         if normalized_draft_model == "draft-mtp" and self.n_batch < required_mtp_batch:
             raise RuntimeError(
                 "MTP requires runtime n_batch to fit the pending token plus draft tokens "
@@ -9334,6 +10297,7 @@ class Model:
             )
         self.n_ctx_train = n_ctx_train
         self.n_vocab = int(llama_cpp.llama_vocab_n_tokens(self.vocab))
+        self.n_embd_inp = int(llama_cpp.llama_model_n_embd_inp(self.llama_model))
         self.kv_unified = kv_unified
         self.max_seq_len_limit = min(self.request_context_limit, self.n_ctx_train)
         if max_seq_len is None:
@@ -9689,6 +10653,9 @@ class Model:
         self._lora_scales_array = None
 
     def close(self) -> None:
+        if self.mtmd_processor is not None:
+            self.mtmd_processor.close()
+            self.mtmd_processor = None
         if self.draft_provider is not None:
             self.draft_provider.close()
         llama_cpp.llama_batch_free(self.batch)
@@ -9807,9 +10774,25 @@ class Model:
         tools: Optional[List[Dict[str, Any]]] = None,
         tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
         reasoning_effort: Optional[str] = None,
-    ) -> Tuple[str, str, List[int], List[str]]:
+    ) -> Tuple[str, str, PromptPlan, List[str]]:
         if self.chat_formatter is None:
             raise ValueError("model does not provide a GGUF chat template")
+        if self.mtmd_processor is not None:
+            prompt_plan = self.mtmd_processor.build_prompt_plan(
+                messages=messages,
+                functions=functions,
+                function_call=function_call,
+                tools=tools,
+                tool_choice=tool_choice,
+                reasoning_effort=reasoning_effort,
+            )
+            formatter_stop = [self.chat_formatter._eos_token] if self.chat_formatter._eos_token else []
+            return (
+                prompt_plan.text,
+                prompt_plan.generation_prompt,
+                prompt_plan,
+                formatter_stop,
+            )
         prompt, generation_prompt, formatter_stop = self.chat_formatter.format(
             messages=messages,
             functions=functions,
@@ -9819,7 +10802,16 @@ class Model:
             reasoning_effort=reasoning_effort,
         )
         prompt_tokens = self.tokenize(prompt, add_bos=False, special=True)
-        return prompt, generation_prompt, prompt_tokens, formatter_stop
+        return (
+            prompt,
+            generation_prompt,
+            PromptPlan.from_tokens(
+                prompt,
+                prompt_tokens,
+                generation_prompt=generation_prompt,
+            ),
+            formatter_stop,
+        )
 
     def detokenize(self, tokens: Sequence[int]) -> bytes:
         if not tokens:
@@ -9862,6 +10854,8 @@ class Model:
 
     def clear_batch(self) -> None:
         self.batch.n_tokens = 0
+        self._embedding_batch = None
+        self._embedding_batch_refs = []
 
     def add_batch_tokens(
         self,
@@ -9882,8 +10876,63 @@ class Model:
             self.batch.logits[slot] = int(output_indices[index] is not None)
             self.batch.n_tokens += 1
 
+    def add_batch_embeddings(
+        self,
+        *,
+        seq_id: int,
+        embeddings: np.ndarray,
+        positions: np.ndarray,
+        output_indices: Sequence[Optional[int]],
+    ) -> None:
+        if self.batch.n_tokens:
+            raise RuntimeError("cannot mix token and embedding batches")
+        if self._embedding_batch is not None:
+            raise RuntimeError("only one embedding batch is supported per scheduler step")
+        embeddings = np.ascontiguousarray(embeddings, dtype=np.float32)
+        positions = np.ascontiguousarray(positions, dtype=np.int32).reshape(-1)
+        n_tokens = int(embeddings.shape[0])
+        if n_tokens == 0:
+            return
+        if embeddings.ndim != 2 or embeddings.shape[1] != self.n_embd_inp:
+            raise RuntimeError("embedding batch shape does not match model input embedding size")
+        if len(positions) not in {n_tokens, n_tokens * 4}:
+            raise RuntimeError("embedding position length mismatch")
+        if len(output_indices) != n_tokens:
+            raise RuntimeError("embedding output index length mismatch")
+        pos_array = (llama_cpp.llama_pos * len(positions))(
+            *[int(pos) for pos in positions]
+        )
+        n_seq_id_array = (ctypes.c_int32 * n_tokens)(*[1] * n_tokens)
+        seq_id_array = (llama_cpp.llama_seq_id * 1)(llama_cpp.llama_seq_id(seq_id))
+        seq_ids_array = (ctypes.POINTER(llama_cpp.llama_seq_id) * (n_tokens + 1))()
+        for index in range(n_tokens):
+            seq_ids_array[index] = seq_id_array
+        logits_array = (ctypes.c_int8 * n_tokens)(
+            *[int(output_index is not None) for output_index in output_indices]
+        )
+        batch = llama_cpp.llama_batch(
+            n_tokens=n_tokens,
+            token=None,
+            embd=embeddings.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
+            pos=pos_array,
+            n_seq_id=n_seq_id_array,
+            seq_id=seq_ids_array,
+            logits=logits_array,
+        )
+        self._embedding_batch = batch
+        self._embedding_batch_refs = [
+            embeddings,
+            positions,
+            pos_array,
+            n_seq_id_array,
+            seq_id_array,
+            seq_ids_array,
+            logits_array,
+        ]
+
     def decode(self) -> None:
-        result = int(llama_cpp.llama_decode(self.ctx, self.batch))
+        batch = self._embedding_batch if self._embedding_batch is not None else self.batch
+        result = int(llama_cpp.llama_decode(self.ctx, batch))
         if result != 0:
             raise RuntimeError(f"llama_decode failed with code {result}")
 
@@ -10283,11 +11332,11 @@ class MemoryPolicy(abc.ABC):
 
     @staticmethod
     def attention_kv_required(
-        prompt_length: int,
-        reused_tokens: int,
+        prompt_kv: int,
+        reused_kv: int,
         generation_kv: int,
     ) -> int:
-        return prompt_length - reused_tokens + generation_kv
+        return prompt_kv - reused_kv + generation_kv
 
     def try_set_sequence_cache_match(
         self,
@@ -10347,7 +11396,7 @@ class AttentionMemoryPolicy(MemoryPolicy):
         reuse_len = match_length
         if needs_generation and request.prompt_tokens:
             reuse_len = min(reuse_len, len(request.prompt_tokens) - 1)
-        return reuse_len
+        return request.prompt_plan.clamp_to_reusable_boundary(reuse_len)
 
     def admit_request(self, request: CompletionRequest) -> None:
         match_seq_id = request.match_sequence_id
@@ -10397,28 +11446,31 @@ class AttentionMemoryPolicy(MemoryPolicy):
 class UnifiedAttentionMemoryPolicy(AttentionMemoryPolicy):
     def can_admit(self, request: CompletionRequest) -> bool:
         match_seq_id, match_length = self.match_prefix(request.prompt_tokens)
+        match_length = request.prompt_plan.clamp_to_reusable_boundary(match_length)
         request.match_sequence_id = match_seq_id
         request.match_length = match_length
         claimable = match_seq_id in self.scheduler.free_sequences
         required_sequence_ids = request.internal_completion_count - int(claimable)
         prompt_length = len(request.prompt_tokens)
+        prompt_kv = request.prompt_plan.eval_token_count
         reuse_len = self.reuse_len_for_request(request, match_length)
         prefix_credit = match_length if claimable else reuse_len
+        prefix_credit_kv = request.prompt_plan.rows_up_to(prefix_credit)
         generation_kv = self.generation_kv_for_request(request, prompt_length)
         if self.try_set_sequence_cache_match(
             request,
             resident_reuse_len=reuse_len,
             required_sequence_ids=request.internal_completion_count,
             required_attn_kv=self.attention_kv_required(
-                prompt_length,
-                reused_tokens=0,
+                prompt_kv,
+                reused_kv=0,
                 generation_kv=generation_kv,
             ),
         ):
             return True
         required_kv = self.attention_kv_required(
-            prompt_length,
-            reused_tokens=prefix_credit,
+            prompt_kv,
+            reused_kv=prefix_credit_kv,
             generation_kv=generation_kv,
         )
         if (
@@ -10441,6 +11493,9 @@ class UnifiedAttentionMemoryPolicy(AttentionMemoryPolicy):
             ):
                 request.match_sequence_id, request.match_length = self.match_prefix(
                     request.prompt_tokens,
+                )
+                request.match_length = request.prompt_plan.clamp_to_reusable_boundary(
+                    request.match_length
                 )
                 return True
         return False
@@ -10484,6 +11539,7 @@ class UnifiedAttentionMemoryPolicy(AttentionMemoryPolicy):
 class PartitionedAttentionMemoryPolicy(AttentionMemoryPolicy):
     def can_admit(self, request: CompletionRequest) -> bool:
         match_seq_id, match_length = self.match_prefix(request.prompt_tokens)
+        match_length = request.prompt_plan.clamp_to_reusable_boundary(match_length)
         request.match_sequence_id = match_seq_id
         request.match_length = match_length
         claimable = match_seq_id in self.scheduler.free_sequences
@@ -10503,6 +11559,9 @@ class PartitionedAttentionMemoryPolicy(AttentionMemoryPolicy):
             if len(self.scheduler.unused_sequences) >= required_sequence_ids:
                 request.match_sequence_id, request.match_length = self.match_prefix(
                     request.prompt_tokens,
+                )
+                request.match_length = request.prompt_plan.clamp_to_reusable_boundary(
+                    request.match_length
                 )
                 return True
         return False
@@ -10532,9 +11591,13 @@ class PartitionedAttentionMemoryPolicy(AttentionMemoryPolicy):
         if source_length > keep_len:
             llama_cpp.llama_memory_seq_rm(self.scheduler.model.mem, dest_sequence_id, keep_len, -1)
             self.scheduler.model.truncate_draft_sequence(dest_sequence_id, keep_len)
-        prefix_tokens = self.scheduler.radix_trie.tokens(source_sequence_id, keep_len)
         self.scheduler.radix_trie.copy(source_sequence_id, dest_sequence_id, keep_len)
-        self.scheduler.sequence_history.extend(dest_sequence_id, prefix_tokens)
+        self.scheduler.sequence_history.copy(
+            source_sequence_id,
+            dest_sequence_id,
+            source_length,
+            keep_len,
+        )
 
 
 class CheckpointMemoryPolicy(MemoryPolicy):
@@ -10555,22 +11618,23 @@ class CheckpointMemoryPolicy(MemoryPolicy):
         claimable = match_seq_id in self.scheduler.free_sequences
         required_sequence_ids = request.internal_completion_count - int(claimable)
         prompt_length = len(request.prompt_tokens)
+        prompt_kv = request.prompt_plan.eval_token_count
         generation_kv = self.generation_kv_for_request(request, prompt_length)
         if self.try_set_sequence_cache_match(
             request,
             resident_reuse_len=match_length,
             required_sequence_ids=request.internal_completion_count,
             required_attn_kv=self.attention_kv_required(
-                prompt_length,
-                reused_tokens=0,
+                prompt_kv,
+                reused_kv=0,
                 generation_kv=generation_kv,
             ),
             skip_attention_budget_when_unbounded=True,
         ):
             return True
         required_attn_kv = self.attention_kv_required(
-            prompt_length,
-            reused_tokens=match_length,
+            prompt_kv,
+            reused_kv=request.prompt_plan.rows_up_to(match_length),
             generation_kv=generation_kv,
         )
         if len(self.scheduler.unused_sequences) >= required_sequence_ids and (
@@ -10678,7 +11742,14 @@ class CompletionScheduler:
         seq_id: int
         start_pos: int
         tokens: List[int]
+        identity_tokens: List[int]
         output_indices: List[Optional[int]]
+        output_positions: List[int]
+        history_weights: List[int]
+        embeddings: Optional[np.ndarray] = None
+        positions: Optional[np.ndarray] = None
+        non_causal: bool = False
+        prompt_advance_to: Optional[int] = None
         completion_index: Optional[int] = None
         pending_count: int = 0
         accepted_draft_count: int = 0
@@ -10759,6 +11830,7 @@ class CompletionScheduler:
             match_length <= resident_reuse_len
             or match_length > len(request.prompt_tokens)
             or tuple(request.prompt_tokens[:match_length]) != match.tokens
+            or not request.prompt_plan.is_boundary(match_length)
         ):
             return False
         return not (
@@ -10832,7 +11904,11 @@ class CompletionScheduler:
         ):
             return self.fail_sequence_cache_load(request, seq_id)
         self.radix_trie.extend(seq_id, tokens)
-        self.sequence_history.extend(seq_id, tokens)
+        self.sequence_history.extend(
+            seq_id,
+            tokens,
+            request.prompt_plan.history_weights_up_to(len(tokens)),
+        )
         self.model.truncate_draft_sequence(seq_id, 0)
         self.metrics.sequence_cache_hits_total += 1
         self.metrics.sequence_cache_tokens_loaded_total += len(tokens)
@@ -10908,15 +11984,32 @@ class CompletionScheduler:
             self.model.set_draft_processing_enabled(draft_processing_enabled)
             self.model.clear_batch()
             for item in batch_items:
-                self.model.add_batch_tokens(
-                    seq_id=item.seq_id,
-                    start_pos=item.start_pos,
-                    tokens=item.tokens,
-                    output_indices=item.output_indices,
-                )
+                if item.embeddings is not None:
+                    if item.positions is None:
+                        raise RuntimeError("embedding batch item is missing positions")
+                    self.model.add_batch_embeddings(
+                        seq_id=item.seq_id,
+                        embeddings=item.embeddings,
+                        positions=item.positions,
+                        output_indices=item.output_indices,
+                    )
+                else:
+                    self.model.add_batch_tokens(
+                        seq_id=item.seq_id,
+                        start_pos=item.start_pos,
+                        tokens=item.tokens,
+                        output_indices=item.output_indices,
+                    )
             decode_started_at = time.perf_counter()
             try:
-                self.model.decode()
+                non_causal_decode = any(item.non_causal for item in batch_items)
+                try:
+                    if non_causal_decode:
+                        llama_cpp.llama_set_causal_attn(self.model.ctx, False)
+                    self.model.decode()
+                finally:
+                    if non_causal_decode:
+                        llama_cpp.llama_set_causal_attn(self.model.ctx, True)
                 decode_elapsed = time.perf_counter() - decode_started_at
                 if draft_processing_enabled and not self.defer_sampled_draft_processing:
                     draft_process_started_at = time.perf_counter()
@@ -10965,6 +12058,16 @@ class CompletionScheduler:
             return
         self.metrics.draft_seconds_total += elapsed_seconds
 
+    def item_allows_mtp_processing(self, item: "CompletionScheduler.BatchItem") -> bool:
+        request = self.requests.get(item.request_id)
+        if request is None:
+            return False
+        if item.kind == "prompt":
+            return not any(segment.kind != "text" for segment in request.prompt_plan.segments)
+        if item.completion_index is None:
+            return False
+        return not request.completions[item.completion_index].multimodal_prompt
+
     def batch_needs_draft_processing(
         self,
         batch_items: Sequence["CompletionScheduler.BatchItem"],
@@ -10972,6 +12075,10 @@ class CompletionScheduler:
         if self.model.draft_provider is None:
             return False
         if not self.draft_batch_size_allowed(batch_items):
+            return False
+        if isinstance(self.model.draft_provider, MTPDraftProvider) and not all(
+            self.item_allows_mtp_processing(item) for item in batch_items
+        ):
             return False
         for item in batch_items:
             request = self.requests.get(item.request_id)
@@ -11044,6 +12151,29 @@ class CompletionScheduler:
         if not prompt_requests and not completions:
             return []
 
+        for request in prompt_requests:
+            if request.prompt_cursor < len(request.prompt_tokens):
+                segment = self._current_prompt_segment(request)
+                if segment.kind != "text":
+                    token_count = min(
+                        segment.batch_rows
+                        if segment.non_causal
+                        else self._pending_tokens_length(request),
+                        self.model.n_batch,
+                    )
+                    if segment.batch_rows > self.model.n_batch:
+                        if segment.non_causal:
+                            raise RuntimeError(
+                                "non-causal media prompt segment exceeds model.n_batch; "
+                                "increase n_batch"
+                            )
+                    item, _ = self._build_pending_batch_item(
+                        request,
+                        token_count,
+                        0,
+                    )
+                    return [item]
+
         ordered_sequences = self._ordered_pending_sequences(prompt_requests, completions)
         allocations = self._allocate_pending_tokens_for_model(ordered_sequences)
         if ordered_sequences:
@@ -11061,7 +12191,37 @@ class CompletionScheduler:
                 output_index,
             )
             items.append(item)
-        return items
+        return self._split_mixed_mtp_batch(items)
+
+    def _split_mixed_mtp_batch(
+        self,
+        items: List["CompletionScheduler.BatchItem"],
+    ) -> List["CompletionScheduler.BatchItem"]:
+        if not isinstance(self.model.draft_provider, MTPDraftProvider) or len(items) <= 1:
+            return items
+        eligibility = [self.item_allows_mtp_processing(item) for item in items]
+        if all(eligibility) or not any(eligibility):
+            return items
+        keep_eligible = eligibility[0]
+        split_items = [
+            item
+            for item, item_eligible in zip(items, eligibility)
+            if item_eligible == keep_eligible
+        ]
+        self._renumber_output_indices(split_items)
+        return split_items
+
+    @staticmethod
+    def _renumber_output_indices(
+        items: Sequence["CompletionScheduler.BatchItem"],
+    ) -> None:
+        next_output_index = 0
+        for item in items:
+            for index, output_index in enumerate(item.output_indices):
+                if output_index is None:
+                    continue
+                item.output_indices[index] = next_output_index
+                next_output_index += 1
 
     def _allocate_pending_tokens_for_model(
         self,
@@ -11198,12 +12358,25 @@ class CompletionScheduler:
             return source.base_seq_id
         return source.seq_id
 
+    def _current_prompt_segment(self, request: CompletionRequest) -> PromptSegment:
+        return request.prompt_plan.segment_at(request.prompt_cursor)
+
     def _pending_tokens_length(
         self,
         source: Union[CompletionRequest, Completion],
     ) -> int:
         if isinstance(source, CompletionRequest):
-            return len(source.prompt_tokens) - source.prompt_cursor
+            if source.prompt_cursor >= len(source.prompt_tokens):
+                return 0
+            segment = self._current_prompt_segment(source)
+            if segment.kind != "text":
+                segment_offset = source.prompt_cursor - segment.start_pos
+                if segment.non_causal:
+                    if segment_offset != 0:
+                        raise RuntimeError("non-causal media segment was partially scheduled")
+                    return segment.batch_rows
+                return sum(segment.history_weights[segment_offset:])
+            return segment.end_pos - source.prompt_cursor
         draft_count = (
             len(source.draft_tokens)
             if source.pending_finish_reason is None
@@ -11211,6 +12384,42 @@ class CompletionScheduler:
             else 0
         )
         return len(source.pending_input_tokens) + draft_count
+
+    def _pending_allocation_for_capacity(
+        self,
+        source: Union[CompletionRequest, Completion],
+        already_allocated: int,
+        capacity: int,
+    ) -> int:
+        if capacity <= 0:
+            return 0
+        if not isinstance(source, CompletionRequest):
+            remaining = self._pending_tokens_length(source) - already_allocated
+            return min(remaining, capacity)
+        segment = self._current_prompt_segment(source)
+        if segment.kind == "text":
+            remaining = self._pending_tokens_length(source) - already_allocated
+            return min(remaining, capacity)
+        if segment.non_causal:
+            if already_allocated == 0 and segment.batch_rows <= capacity:
+                return segment.batch_rows
+            return 0
+        segment_offset = source.prompt_cursor - segment.start_pos
+        weights = segment.history_weights[segment_offset:]
+        weight_index = 0
+        consumed = already_allocated
+        while consumed > 0 and weight_index < len(weights):
+            weight = weights[weight_index]
+            if consumed < weight:
+                raise RuntimeError("media allocation stopped inside a logical position")
+            consumed -= weight
+            weight_index += 1
+        rows = 0
+        for weight in weights[weight_index:]:
+            if rows + weight > capacity:
+                break
+            rows += weight
+        return rows
 
     def _allocate_pending_tokens(
         self,
@@ -11225,8 +12434,15 @@ class CompletionScheduler:
             if remaining_capacity <= 0:
                 break
             seq_id = self._pending_sequence_id(source)
-            allocations[seq_id] = 1
-            remaining_capacity -= 1
+            allocation = self._pending_allocation_for_capacity(
+                source,
+                allocations.get(seq_id, 0),
+                remaining_capacity,
+            )
+            if allocation <= 0:
+                continue
+            allocations[seq_id] = allocations.get(seq_id, 0) + allocation
+            remaining_capacity -= allocation
 
         while remaining_capacity > 0 and active:
             share = max(1, remaining_capacity // len(active))
@@ -11237,7 +12453,11 @@ class CompletionScheduler:
                 remaining_tokens = self._pending_tokens_length(source) - allocations.get(seq_id, 0)
                 if remaining_tokens <= 0:
                     continue
-                allocation = min(remaining_tokens, share, remaining_capacity)
+                allocation = self._pending_allocation_for_capacity(
+                    source,
+                    allocations.get(seq_id, 0),
+                    min(share, remaining_capacity),
+                )
                 if allocation <= 0:
                     next_active.append(source)
                     continue
@@ -11260,18 +12480,90 @@ class CompletionScheduler:
         if isinstance(source, CompletionRequest):
             if source.base_seq_id is None:
                 raise RuntimeError("prompt sequence is missing base seq id")
-            remaining_prompt = source.prompt_tokens[source.prompt_cursor :]
-            chunk = list(remaining_prompt[:token_count])
-            ends_prompt = source.prompt_cursor + len(chunk) == len(source.prompt_tokens)
+            segment = self._current_prompt_segment(source)
+            if segment.kind != "text":
+                segment_offset = source.prompt_cursor - segment.start_pos
+                if segment.non_causal:
+                    if segment_offset != 0 or token_count < segment.batch_rows:
+                        raise RuntimeError("non-causal media segment must be scheduled atomically")
+                    logical_count = segment.n_pos
+                    row_count = segment.batch_rows
+                    embeddings, positions, history_weights = segment.media_slice(
+                        0,
+                        logical_count,
+                    )
+                else:
+                    logical_count = 0
+                    row_count = 0
+                    for weight in segment.history_weights[segment_offset:]:
+                        if row_count + weight > token_count:
+                            break
+                        row_count += weight
+                        logical_count += 1
+                    if logical_count <= 0:
+                        raise RuntimeError("media prompt allocation is too small")
+                    embeddings, positions, history_weights = segment.media_slice(
+                        segment_offset,
+                        logical_count,
+                    )
+                logical_start = source.prompt_cursor
+                logical_end = logical_start + logical_count
+                output_indices = [None] * row_count
+                output_positions = [logical_start] * row_count
+                if output_positions:
+                    output_positions[-1] = logical_end - 1
+                needs_last_output = (
+                    (source.payload.echo and source.payload.logprobs is not None
+                     and source.prompt_plan.has_text_token_at(logical_end))
+                    or self.model.exact_checkpoints_only
+                    or logical_end == len(source.prompt_tokens)
+                )
+                if needs_last_output and output_indices:
+                    output_indices[-1] = output_index
+                    output_index += 1
+                return (
+                    CompletionScheduler.BatchItem(
+                        kind="prompt",
+                        request_id=source.id,
+                        seq_id=source.base_seq_id,
+                        start_pos=logical_start,
+                        tokens=[],
+                        identity_tokens=list(
+                            segment.identity_tokens[
+                                segment_offset : segment_offset + logical_count
+                            ]
+                        ),
+                        output_indices=output_indices,
+                        output_positions=output_positions,
+                        history_weights=history_weights,
+                        embeddings=embeddings,
+                        positions=positions,
+                        non_causal=segment.non_causal,
+                        prompt_advance_to=logical_end,
+                    ),
+                    output_index,
+                )
+            segment_offset = source.prompt_cursor - segment.start_pos
+            max_count = min(token_count, segment.end_pos - source.prompt_cursor)
+            chunk = list(segment.text_tokens[segment_offset : segment_offset + max_count])
+            identity_chunk = list(
+                segment.identity_tokens[segment_offset : segment_offset + max_count]
+            )
+            ends_prompt = source.prompt_cursor + len(identity_chunk) == len(source.prompt_tokens)
             output_indices: List[Optional[int]] = [None] * len(chunk)
-            if source.payload.echo and source.payload.logprobs is not None:
-                for index in range(len(chunk)):
+            output_positions = [source.prompt_cursor + index for index in range(len(chunk))]
+            for index, output_position in enumerate(output_positions):
+                if (
+                    source.payload.echo
+                    and source.payload.logprobs is not None
+                    and source.prompt_plan.has_text_token_at(output_position + 1)
+                ):
                     output_indices[index] = output_index
                     output_index += 1
-            elif self.model.exact_checkpoints_only and chunk:
+            if self.model.exact_checkpoints_only and chunk and output_indices[-1] is None:
                 output_indices[-1] = output_index
                 output_index += 1
-            elif ends_prompt and chunk:
+            elif ends_prompt and chunk and output_indices[-1] is None:
                 output_indices[-1] = output_index
                 output_index += 1
             return (
@@ -11281,7 +12573,12 @@ class CompletionScheduler:
                     seq_id=source.base_seq_id,
                     start_pos=source.prompt_cursor,
                     tokens=chunk,
+                    identity_tokens=identity_chunk,
                     output_indices=output_indices,
+                    output_positions=output_positions,
+                    history_weights=segment.history_weights[
+                        segment_offset : segment_offset + len(identity_chunk)
+                    ],
                 ),
                 output_index,
             )
@@ -11309,7 +12606,13 @@ class CompletionScheduler:
                 seq_id=source.seq_id,
                 start_pos=self.radix_trie.length(source.seq_id),
                 tokens=list(scheduled_tokens),
+                identity_tokens=list(scheduled_tokens),
                 output_indices=output_indices,
+                output_positions=[
+                    self.radix_trie.length(source.seq_id) + index
+                    for index in range(len(scheduled_tokens))
+                ],
+                history_weights=[1] * len(scheduled_tokens),
                 completion_index=source.index,
                 pending_count=pending_count,
             ),
@@ -11326,14 +12629,18 @@ class CompletionScheduler:
             request = self.requests[item.request_id]
             if request.cancelled:
                 continue
-            self.radix_trie.extend(item.seq_id, item.tokens)
-            self.sequence_history.extend(item.seq_id, item.tokens)
+            self.radix_trie.extend(item.seq_id, item.identity_tokens)
+            self.sequence_history.extend(
+                item.seq_id,
+                item.identity_tokens,
+                item.history_weights,
+            )
             if item.kind == "prompt":
                 request.capture_prompt_logprobs(
                     model=self.model,
                     formatter=self.formatter,
-                    start_pos=item.start_pos,
                     output_indices=item.output_indices,
+                    output_positions=item.output_positions,
                     output_count=output_count,
                     output_arg=self.output_arg,
                 )
@@ -11346,7 +12653,10 @@ class CompletionScheduler:
                     if prompt_row_index is not None
                     else None
                 )
-                request.prompt_cursor += len(item.tokens)
+                if item.prompt_advance_to is not None:
+                    request.prompt_cursor = item.prompt_advance_to
+                else:
+                    request.prompt_cursor += len(item.identity_tokens)
                 if request.prompt_cursor == len(request.prompt_tokens):
                     request.prompt_done = True
                     request.prompt_logits = prompt_logits
@@ -11396,10 +12706,9 @@ class CompletionScheduler:
             remaining_tokens = min(remaining_tokens, 1)
         if remaining_tokens <= 0:
             return
-        input_ids = np.array(
-            [*completion.prompt_tokens, *completion.completion_tokens],
-            dtype=np.intc,
-        )
+        input_ids = self.draft_input_ids(completion)
+        if isinstance(self.model.draft_provider, MTPDraftProvider) and completion.multimodal_prompt:
+            return
         can_draft = getattr(self.model.draft_provider, "can_draft", None)
         if can_draft is not None and not can_draft(
             int(input_ids.shape[0]),
@@ -11453,10 +12762,12 @@ class CompletionScheduler:
                     remaining_tokens = min(remaining_tokens, 1)
                 if remaining_tokens <= 0:
                     continue
-                input_ids = np.array(
-                    [*completion.prompt_tokens, *completion.completion_tokens],
-                    dtype=np.intc,
-                )
+                input_ids = self.draft_input_ids(completion)
+                if (
+                    isinstance(self.model.draft_provider, MTPDraftProvider)
+                    and completion.multimodal_prompt
+                ):
+                    continue
                 can_draft = getattr(self.model.draft_provider, "can_draft", None)
                 if can_draft is not None and not can_draft(
                     int(input_ids.shape[0]),
@@ -11495,6 +12806,12 @@ class CompletionScheduler:
             completion.draft_tokens = limited
             made_progress = True
         return made_progress
+
+    def draft_input_ids(self, completion: Completion) -> np.ndarray:
+        return np.array(
+            [*completion.prompt_tokens, *completion.completion_tokens],
+            dtype=np.intc,
+        )
 
     def process_sampled_draft_batch(
         self,
@@ -11927,7 +13244,11 @@ class CompletionScheduler:
         if request.completions:
             return
         assert request.base_seq_id is not None
-        prompt_tokens = list(request.prompt_tokens)
+        prompt_tokens = list(request.prompt_plan.text_tokens)
+        prompt_length = len(request.prompt_tokens)
+        multimodal_prompt = any(
+            segment.kind != "text" for segment in request.prompt_plan.segments
+        )
         prompt_text = request.prompt_text
         if request.payload.stop is None:
             stop_sequences: List[bytes] = []
@@ -11943,11 +13264,11 @@ class CompletionScheduler:
         prompt_text_bytes = self.model.detokenize(prompt_tokens) if prompt_tokens else b""
         for offset, seq_id in enumerate(request.completion_seq_ids):
             if offset > 0:
-                if prompt_tokens:
+                if prompt_length:
                     self.memory_policy.copy_prompt_state(
                         request.base_seq_id,
                         seq_id,
-                        len(prompt_tokens),
+                        prompt_length,
                     )
             sampler = Sampler(
                 seed=(request.payload.seed or llama_cpp.LLAMA_DEFAULT_SEED) + offset,
@@ -11968,7 +13289,9 @@ class CompletionScheduler:
                     seq_id=seq_id,
                     sampler=sampler,
                     prompt_tokens=prompt_tokens,
+                    prompt_length=prompt_length,
                     prompt_text=prompt_text,
+                    multimodal_prompt=multimodal_prompt,
                     max_total_tokens=request.effective_max_len,
                     stop_sequences=stop_sequences,
                     logprobs=request.payload.logprobs,
@@ -11979,7 +13302,7 @@ class CompletionScheduler:
                     ),
                 )
             )
-        if request.payload.max_tokens == 0 or request.effective_max_len == len(prompt_tokens):
+        if request.payload.max_tokens == 0 or request.effective_max_len == prompt_length:
             for completion in request.completions:
                 self.finish_completion(completion, "length")
             self.finalize_request_if_ready(request)
@@ -12818,19 +14141,19 @@ class CompletionService:
 
 def unpack_completion_request_parts(
     parts: Tuple[Any, ...],
-) -> Tuple[CreateCompletionRequest, str, str, List[int], Optional[str], Optional[str]]:
+) -> Tuple[CreateCompletionRequest, str, str, PromptPlan, Optional[str], Optional[str]]:
     if len(parts) == 6:
         return cast(
-            Tuple[CreateCompletionRequest, str, str, List[int], Optional[str], Optional[str]],
+            Tuple[CreateCompletionRequest, str, str, PromptPlan, Optional[str], Optional[str]],
             parts,
         )
     if len(parts) == 5:
-        payload, prompt_text, prompt_tokens, grammar_text, tool_name = parts
+        payload, prompt_text, prompt_plan, grammar_text, tool_name = parts
         return (
             cast(CreateCompletionRequest, payload),
             cast(str, prompt_text),
             "",
-            cast(List[int], prompt_tokens),
+            cast(PromptPlan, prompt_plan),
             cast(Optional[str], grammar_text),
             cast(Optional[str], tool_name),
         )
@@ -13114,7 +14437,7 @@ def create_app() -> FastAPI:
         service: CompletionService = app.state.service
         formatter = service.formatter
         try:
-            payload, prompt_text, generation_prompt, prompt_tokens, grammar_text, tool_name = unpack_completion_request_parts(
+            payload, prompt_text, generation_prompt, prompt_plan, grammar_text, tool_name = unpack_completion_request_parts(
                 formatter.completion_request_from_chat_request(
                     body,
                 )
@@ -13141,7 +14464,8 @@ def create_app() -> FastAPI:
                 model=service.scheduler.model,
                 payload=payload,
                 prompt_text=prompt_text,
-                prompt_tokens=prompt_tokens,
+                prompt_tokens=prompt_plan.identity_tokens,
+                prompt_plan=prompt_plan,
                 grammar_text=grammar_text,
                 chat_tool_name=tool_name,
             )
@@ -13202,7 +14526,7 @@ def create_app() -> FastAPI:
         formatter = service.formatter
         try:
             chat_body = formatter.chat_request_from_responses_request(body)
-            payload, prompt_text, generation_prompt, prompt_tokens, grammar_text, tool_name = unpack_completion_request_parts(
+            payload, prompt_text, generation_prompt, prompt_plan, grammar_text, tool_name = unpack_completion_request_parts(
                 formatter.completion_request_from_chat_request(
                     chat_body,
                 )
@@ -13218,7 +14542,8 @@ def create_app() -> FastAPI:
                 model=service.scheduler.model,
                 payload=payload,
                 prompt_text=prompt_text,
-                prompt_tokens=prompt_tokens,
+                prompt_tokens=prompt_plan.identity_tokens,
+                prompt_plan=prompt_plan,
                 grammar_text=grammar_text,
                 chat_tool_name=tool_name,
             )
@@ -13358,7 +14683,7 @@ def create_app() -> FastAPI:
                         completion_payload,
                         prompt_text,
                         generation_prompt,
-                        prompt_tokens,
+                        prompt_plan,
                         grammar_text,
                         tool_name,
                     ) = unpack_completion_request_parts(
@@ -13372,7 +14697,8 @@ def create_app() -> FastAPI:
                         model=service.scheduler.model,
                         payload=completion_payload,
                         prompt_text=prompt_text,
-                        prompt_tokens=prompt_tokens,
+                        prompt_tokens=prompt_plan.identity_tokens,
+                        prompt_plan=prompt_plan,
                         grammar_text=grammar_text,
                         chat_tool_name=tool_name,
                     )
@@ -13540,6 +14866,24 @@ def main() -> None:
         response_schema=config.model.response_schema,
         store_logits=config.model.store_logits,
     )
+    if config.model.mtmd is not None:
+        mmproj_path = config.model.mtmd.resolve_mmproj_path()
+        embedding_cache: Optional[MTMDEmbeddingCache] = None
+        if config.model.mtmd.embedding_cache is not None:
+            embedding_cache = MTMDEmbeddingCache(
+                path=config.model.mtmd.embedding_cache.path,
+                max_bytes=config.model.mtmd.embedding_cache.max_bytes,
+                model_fingerprint=MTMDEmbeddingCache.fingerprint_file(model_path),
+                mmproj_fingerprint=MTMDEmbeddingCache.fingerprint_file(mmproj_path),
+            )
+        model.mtmd_processor = MTMDProcessor(
+            model=model,
+            mmproj_path=mmproj_path,
+            embedding_cache=embedding_cache,
+            image_max_bytes=config.model.mtmd.image_max_bytes,
+            audio_max_bytes=config.model.mtmd.audio_max_bytes,
+            image_timeout_seconds=config.model.mtmd.image_timeout_seconds,
+        )
     sequence_cache: Optional[SequenceCache] = None
     if config.disk_cache is not None:
         sequence_cache = SequenceDiskCache(
