@@ -540,6 +540,8 @@ Below are the supported multi-modal models and their respective chat handlers (P
 
 Try Gemma 4 12B in Google Colab -> [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/abetlen/llama-cpp-python/blob/main/examples/colab/notebook.ipynb)
 
+Try Gemma 4 12B QAT in Google Colab -> [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/abetlen/llama-cpp-python/blob/main/examples/colab/gemma4_qat_notebook.ipynb)
+
 Then you'll need to use a custom chat handler to load the clip model and process the chat messages and images.
 
 ```python
