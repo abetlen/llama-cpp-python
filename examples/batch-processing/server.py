@@ -1214,46 +1214,6 @@ class MTPDraftProvider(DraftProvider):
     batched_draft = True
     sampled_batch_draft = True
 
-    @dataclass(frozen=True)
-    class SampledContextRow:
-        seq_id: int
-        draft_pos: int
-        token: int
-        source_row: Optional[int]
-
-    @dataclass(frozen=True)
-    class SampledPendingRow:
-        update_index: int
-        seq_id: int
-        draft_pos: int
-        token: int
-        source_row: int
-
-    @dataclass(frozen=True)
-    class SampledOutput:
-        update_index: int
-        seq_id: int
-        output_index: int
-        keep_len: int
-        ready_pos: int
-
-    @dataclass(frozen=True)
-    class SampledBatchUpdate:
-        seq_id: int
-        start_pos: int
-        tokens: List[int]
-        row_indices: List[int]
-        target_count: int
-        sample_index: int
-        pending_token: Optional[int]
-        max_tokens: Optional[int]
-
-    @dataclass
-    class SampledBatchPlan:
-        context_rows: List["MTPDraftProvider.SampledContextRow"]
-        pending_rows: List["MTPDraftProvider.SampledPendingRow"]
-        sample_pending_index_by_update: Dict[int, int]
-
     @dataclass
     class DraftManyState:
         result_index: int
@@ -1265,17 +1225,6 @@ class MTPDraftProvider(DraftProvider):
         drafted: List[int]
         embedding: np.ndarray
         cache_key: Tuple[Tuple[int, ...], int]
-
-    @dataclass
-    class SampledDraftState:
-        update_index: int
-        seq_id: int
-        keep_len: int
-        pos: int
-        token: int
-        drafted: List[int]
-        n_predict: int
-        embedding: np.ndarray
 
     def __init__(
         self,
@@ -1982,6 +1931,57 @@ class MTPDraftProvider(DraftProvider):
                     dtype=np.intc,
                 )
         return results
+
+    @dataclass(frozen=True)
+    class SampledContextRow:
+        seq_id: int
+        draft_pos: int
+        token: int
+        source_row: Optional[int]
+
+    @dataclass(frozen=True)
+    class SampledPendingRow:
+        update_index: int
+        seq_id: int
+        draft_pos: int
+        token: int
+        source_row: int
+
+    @dataclass(frozen=True)
+    class SampledOutput:
+        update_index: int
+        seq_id: int
+        output_index: int
+        keep_len: int
+        ready_pos: int
+
+    @dataclass(frozen=True)
+    class SampledBatchUpdate:
+        seq_id: int
+        start_pos: int
+        tokens: List[int]
+        row_indices: List[int]
+        target_count: int
+        sample_index: int
+        pending_token: Optional[int]
+        max_tokens: Optional[int]
+
+    @dataclass
+    class SampledBatchPlan:
+        context_rows: List["MTPDraftProvider.SampledContextRow"]
+        pending_rows: List["MTPDraftProvider.SampledPendingRow"]
+        sample_pending_index_by_update: Dict[int, int]
+
+    @dataclass
+    class SampledDraftState:
+        update_index: int
+        seq_id: int
+        keep_len: int
+        pos: int
+        token: int
+        drafted: List[int]
+        n_predict: int
+        embedding: np.ndarray
 
     def _target_row_count(
         self,
