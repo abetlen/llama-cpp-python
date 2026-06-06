@@ -1230,10 +1230,10 @@ class MTPDraftProvider(DraftProvider):
         source_row: int
 
     @dataclass(frozen=True)
-    class SampledOutputRow:
+    class SampledOutput:
         update_index: int
         seq_id: int
-        row_index: int
+        output_index: int
         keep_len: int
         ready_pos: int
 
@@ -2100,8 +2100,8 @@ class MTPDraftProvider(DraftProvider):
         plan: "MTPDraftProvider.SampledBatchPlan",
         h_tgt_rows: np.ndarray,
         /,
-    ) -> List["MTPDraftProvider.SampledOutputRow"]:
-        pending_output_rows: List["MTPDraftProvider.SampledOutputRow"] = []
+    ) -> List["MTPDraftProvider.SampledOutput"]:
+        sampled_outputs: List["MTPDraftProvider.SampledOutput"] = []
         pending_rows = plan.pending_rows
 
         self._clear_batch()
@@ -2120,11 +2120,11 @@ class MTPDraftProvider(DraftProvider):
             )
             self._set_batch_embedding_row(slot, h_tgt_rows[row.source_row])
             if is_sample_row:
-                pending_output_rows.append(
-                    self.SampledOutputRow(
+                sampled_outputs.append(
+                    self.SampledOutput(
                         update_index=row.update_index,
                         seq_id=row.seq_id,
-                        row_index=slot,
+                        output_index=slot,
                         keep_len=row.draft_pos + 1,
                         ready_pos=row.draft_pos + 1,
                     )
@@ -2137,24 +2137,24 @@ class MTPDraftProvider(DraftProvider):
                 row.draft_pos + 1,
             )
 
-        return pending_output_rows
+        return sampled_outputs
 
     def _mark_sampled_outputs_ready(
         self,
         updates: Sequence["MTPDraftProvider.SampledBatchUpdate"],
-        pending_output_rows: Sequence["MTPDraftProvider.SampledOutputRow"],
+        sampled_outputs: Sequence["MTPDraftProvider.SampledOutput"],
         h_tgt_rows: np.ndarray,
         /,
     ) -> Dict[int, int]:
         cleanup_keep_len_by_seq: Dict[int, int] = {}
-        for row in pending_output_rows:
-            update = updates[row.update_index]
+        for output in sampled_outputs:
+            update = updates[output.update_index]
             sample_index = update.sample_index
             sample_source_row = update.row_indices[sample_index]
-            self.pending_h[row.seq_id] = h_tgt_rows[sample_source_row]
-            self.ready[row.seq_id] = True
-            self.ready_pos[row.seq_id] = row.ready_pos
-            cleanup_keep_len_by_seq[row.seq_id] = row.keep_len
+            self.pending_h[output.seq_id] = h_tgt_rows[sample_source_row]
+            self.ready[output.seq_id] = True
+            self.ready_pos[output.seq_id] = output.ready_pos
+            cleanup_keep_len_by_seq[output.seq_id] = output.keep_len
 
         return cleanup_keep_len_by_seq
 
@@ -2165,17 +2165,20 @@ class MTPDraftProvider(DraftProvider):
     def _start_sampled_draft_states(
         self,
         updates: Sequence["MTPDraftProvider.SampledBatchUpdate"],
-        pending_output_rows: Sequence["MTPDraftProvider.SampledOutputRow"],
+        sampled_outputs: Sequence["MTPDraftProvider.SampledOutput"],
         results: List[np.ndarray],
         /,
     ) -> List["MTPDraftProvider.SampledDraftState"]:
         active: List["MTPDraftProvider.SampledDraftState"] = []
-        for row in pending_output_rows:
-            self._reset_sampler(row.seq_id)
-            sampled_token = self._sample_token(row.row_index, seq_id=row.seq_id)
+        for output in sampled_outputs:
+            self._reset_sampler(output.seq_id)
+            sampled_token = self._sample_token(
+                output.output_index,
+                seq_id=output.seq_id,
+            )
             if sampled_token is None:
                 continue
-            update = updates[row.update_index]
+            update = updates[output.update_index]
             seq_id = update.seq_id
             self.ready[seq_id] = True
             n_predict = self.num_pred_tokens
@@ -2186,22 +2189,22 @@ class MTPDraftProvider(DraftProvider):
                 continue
             if n_predict > 1:
                 h_row = llama_cpp_ext.llama_get_embeddings_pre_norm_ith(
-                    self.ctx, row.row_index
+                    self.ctx, output.output_index
                 )
                 if h_row:
                     active.append(
                         self.SampledDraftState(
-                            update_index=row.update_index,
+                            update_index=output.update_index,
                             seq_id=seq_id,
-                            keep_len=row.keep_len,
-                            pos=row.keep_len,
+                            keep_len=output.keep_len,
+                            pos=output.keep_len,
                             token=sampled_token,
                             drafted=[sampled_token],
                             n_predict=n_predict,
                             embedding=self._normalize_draft_hidden_row(h_row),
                         )
                     )
-            results[row.update_index] = np.asarray([sampled_token], dtype=np.intc)
+            results[output.update_index] = np.asarray([sampled_token], dtype=np.intc)
 
         return active
 
@@ -2296,18 +2299,18 @@ class MTPDraftProvider(DraftProvider):
             raise RuntimeError("MTP draft batch capacity exceeded")
 
         self._decode_sampled_context_rows(plan.context_rows, h_tgt_rows)
-        pending_output_rows = self._decode_sampled_pending_rows(plan, h_tgt_rows)
+        sampled_outputs = self._decode_sampled_pending_rows(plan, h_tgt_rows)
         cleanup_keep_len_by_seq = self._mark_sampled_outputs_ready(
             updates,
-            pending_output_rows,
+            sampled_outputs,
             h_tgt_rows,
         )
         self._truncate_sampled_outputs(cleanup_keep_len_by_seq)
 
-        if pending_output_rows:
+        if sampled_outputs:
             active = self._start_sampled_draft_states(
                 updates,
-                pending_output_rows,
+                sampled_outputs,
                 results,
             )
             self._extend_sampled_draft_states(
@@ -11865,6 +11868,68 @@ class CompletionScheduler:
         deferred_accept_draft_count: Optional[int] = None
         deferred_truncate_draft_len: Optional[int] = None
 
+        @classmethod
+        def prefill(
+            cls,
+            *,
+            request_id: str,
+            seq_id: int,
+            start_pos: int,
+            tokens: List[int],
+            identity_tokens: List[int],
+            output_indices: List[Optional[int]],
+            output_positions: List[int],
+            history_weights: List[int],
+            embeddings: Optional[np.ndarray] = None,
+            positions: Optional[np.ndarray] = None,
+            non_causal: bool = False,
+            prompt_advance_to: Optional[int] = None,
+        ) -> "CompletionScheduler.BatchItem":
+            return cls(
+                kind="prefill",
+                request_id=request_id,
+                seq_id=seq_id,
+                start_pos=start_pos,
+                tokens=tokens,
+                identity_tokens=identity_tokens,
+                output_indices=output_indices,
+                output_positions=output_positions,
+                history_weights=history_weights,
+                embeddings=embeddings,
+                positions=positions,
+                non_causal=non_causal,
+                prompt_advance_to=prompt_advance_to,
+            )
+
+        @classmethod
+        def decode(
+            cls,
+            *,
+            request_id: str,
+            seq_id: int,
+            start_pos: int,
+            tokens: List[int],
+            identity_tokens: List[int],
+            output_indices: List[Optional[int]],
+            output_positions: List[int],
+            history_weights: List[int],
+            completion_index: int,
+            pending_count: int,
+        ) -> "CompletionScheduler.BatchItem":
+            return cls(
+                kind="decode",
+                request_id=request_id,
+                seq_id=seq_id,
+                start_pos=start_pos,
+                tokens=tokens,
+                identity_tokens=identity_tokens,
+                output_indices=output_indices,
+                output_positions=output_positions,
+                history_weights=history_weights,
+                completion_index=completion_index,
+                pending_count=pending_count,
+            )
+
     def __init__(
         self,
         model: Model,
@@ -12627,8 +12692,7 @@ class CompletionScheduler:
                     output_indices[-1] = output_index
                     output_index += 1
                 return (
-                    CompletionScheduler.BatchItem(
-                        kind="prefill",
+                    CompletionScheduler.BatchItem.prefill(
                         request_id=source.id,
                         seq_id=source.base_seq_id,
                         start_pos=logical_start,
@@ -12672,8 +12736,7 @@ class CompletionScheduler:
                 output_indices[-1] = output_index
                 output_index += 1
             return (
-                CompletionScheduler.BatchItem(
-                    kind="prefill",
+                CompletionScheduler.BatchItem.prefill(
                     request_id=source.id,
                     seq_id=source.base_seq_id,
                     start_pos=source.prompt_cursor,
@@ -12705,8 +12768,7 @@ class CompletionScheduler:
         ]
         output_indices = list(range(output_index, output_index + len(scheduled_tokens)))
         return (
-            CompletionScheduler.BatchItem(
-                kind="decode",
+            CompletionScheduler.BatchItem.decode(
                 request_id=request.id,
                 seq_id=source.seq_id,
                 start_pos=self.radix_trie.length(source.seq_id),
