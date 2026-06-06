@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- feat: update llama.cpp to ggml-org/llama.cpp@5a69c9743
+
 ## [0.3.26]
 
 - feat: Generic Multimodal Chat Handler by @abetlen in #2256
