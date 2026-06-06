@@ -1983,20 +1983,6 @@ class MTPDraftProvider(DraftProvider):
         n_predict: int
         embedding: np.ndarray
 
-    def _target_row_count(
-        self,
-        updates: Sequence["MTPDraftProvider.SampledBatchUpdate"],
-        /,
-    ) -> int:
-        return max(
-            (
-                max(update.row_indices) + 1
-                for update in updates
-                if update.row_indices
-            ),
-            default=0,
-        )
-
     def _build_sampled_batch_plan(
         self,
         updates: Sequence["MTPDraftProvider.SampledBatchUpdate"],
@@ -2140,29 +2126,6 @@ class MTPDraftProvider(DraftProvider):
 
         return sampled_outputs
 
-    def _mark_sampled_outputs_ready(
-        self,
-        updates: Sequence["MTPDraftProvider.SampledBatchUpdate"],
-        sampled_outputs: Sequence["MTPDraftProvider.SampledOutput"],
-        h_tgt_rows: np.ndarray,
-        /,
-    ) -> Dict[int, int]:
-        cleanup_keep_len_by_seq: Dict[int, int] = {}
-        for output in sampled_outputs:
-            update = updates[output.update_index]
-            sample_index = update.sample_index
-            sample_source_row = update.row_indices[sample_index]
-            self.pending_h[output.seq_id] = h_tgt_rows[sample_source_row]
-            self.ready[output.seq_id] = True
-            self.ready_pos[output.seq_id] = output.ready_pos
-            cleanup_keep_len_by_seq[output.seq_id] = output.keep_len
-
-        return cleanup_keep_len_by_seq
-
-    def _truncate_sampled_outputs(self, cleanup_keep_len_by_seq: Dict[int, int]) -> None:
-        for seq_id, keep_len in cleanup_keep_len_by_seq.items():
-            self._truncate_memory(seq_id, keep_len)
-
     def _start_sampled_draft_states(
         self,
         updates: Sequence["MTPDraftProvider.SampledBatchUpdate"],
@@ -2284,7 +2247,14 @@ class MTPDraftProvider(DraftProvider):
         h_tgt = llama_cpp_ext.llama_get_embeddings_pre_norm(self.target_ctx)
         if not h_tgt:
             raise RuntimeError("missing target pre-norm embeddings for MTP")
-        n_target_rows = self._target_row_count(updates)
+        n_target_rows = max(
+            (
+                max(update.row_indices) + 1
+                for update in updates
+                if update.row_indices
+            ),
+            default=0,
+        )
         if n_target_rows <= 0:
             return results
         h_tgt_rows = np.ctypeslib.as_array(h_tgt, shape=(n_target_rows, self.n_embd))
@@ -2301,12 +2271,18 @@ class MTPDraftProvider(DraftProvider):
 
         self._decode_sampled_context_rows(plan.context_rows, h_tgt_rows)
         sampled_outputs = self._decode_sampled_pending_rows(plan, h_tgt_rows)
-        cleanup_keep_len_by_seq = self._mark_sampled_outputs_ready(
-            updates,
-            sampled_outputs,
-            h_tgt_rows,
-        )
-        self._truncate_sampled_outputs(cleanup_keep_len_by_seq)
+        cleanup_keep_len_by_seq: Dict[int, int] = {}
+        for output in sampled_outputs:
+            update = updates[output.update_index]
+            sample_index = update.sample_index
+            sample_source_row = update.row_indices[sample_index]
+            self.pending_h[output.seq_id] = h_tgt_rows[sample_source_row]
+            self.ready[output.seq_id] = True
+            self.ready_pos[output.seq_id] = output.ready_pos
+            cleanup_keep_len_by_seq[output.seq_id] = output.keep_len
+
+        for seq_id, keep_len in cleanup_keep_len_by_seq.items():
+            self._truncate_memory(seq_id, keep_len)
 
         if sampled_outputs:
             active = self._start_sampled_draft_states(
