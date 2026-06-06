@@ -3880,7 +3880,7 @@ class CompletionRequest:
         output_indices: Sequence[Optional[int]],
         output_positions: Sequence[int],
         output_count: int,
-        output_arg: Callable[[Optional[int], int], Optional[int]],
+        output_index_to_logits_index: Callable[[Optional[int], int], Optional[int]],
     ) -> None:
         if self.payload.logprobs is None or not self.payload.echo:
             return
@@ -3893,7 +3893,7 @@ class CompletionRequest:
             text_token_index = self.prompt_plan.text_token_index_by_pos[next_pos]
             if text_token_index < self.prompt_visible_start:
                 continue
-            logits_index = output_arg(output_index, output_count)
+            logits_index = output_index_to_logits_index(output_index, output_count)
             assert logits_index is not None
             next_token = self.prompt_plan.text_token_at(next_pos)
             record = Token.from_logits(
@@ -12810,9 +12810,9 @@ class CompletionScheduler:
                     output_indices=item.output_indices,
                     output_positions=item.output_positions,
                     output_count=output_count,
-                    output_arg=self.output_arg,
+                    output_index_to_logits_index=self.output_index_to_logits_index,
                 )
-                prompt_output_index = self.output_arg(
+                prompt_output_index = self.output_index_to_logits_index(
                     self.last_output_index(item.output_indices),
                     output_count,
                 )
@@ -13024,7 +13024,7 @@ class CompletionScheduler:
             if remaining_tokens <= 0:
                 continue
             resolved_output_indices = [
-                self.output_arg(output_index, output_count)
+                self.output_index_to_logits_index(output_index, output_count)
                 for output_index in item.output_indices
             ]
             if any(output_index is None for output_index in resolved_output_indices):
@@ -13150,7 +13150,7 @@ class CompletionScheduler:
         if completion.finished:
             return
         resolved_output_indices = [
-            self.output_arg(output_index, output_count)
+            self.output_index_to_logits_index(output_index, output_count)
             for output_index in item.output_indices
         ]
         if any(output_index is None for output_index in resolved_output_indices):
@@ -13395,7 +13395,10 @@ class CompletionScheduler:
         self.metrics.checkpoint_saves_total += 1
 
     @staticmethod
-    def output_arg(output_index: Optional[int], output_count: int) -> Optional[int]:
+    def output_index_to_logits_index(
+        output_index: Optional[int],
+        output_count: int,
+    ) -> Optional[int]:
         if output_index is None:
             return None
         return output_index - output_count
