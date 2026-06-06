@@ -3554,7 +3554,7 @@ class SchedulerMetrics:
             if getattr(item, "embeddings", None) is not None
             else len(item.tokens)
             for item in items
-            if getattr(item, "kind", None) == "prompt"
+            if getattr(item, "kind", None) == "prefill"
         )
         generation_tokens = total_tokens - prompt_tokens
         self.n_decode_total += 1
@@ -11979,7 +11979,7 @@ class CompletionScheduler:
             self.defer_sampled_draft_processing = (
                 draft_processing_enabled
                 and self.supports_sampled_draft_processing
-                and all(item.kind == "token" for item in batch_items)
+                and all(item.kind == "decode" for item in batch_items)
             )
             self.model.set_draft_processing_enabled(draft_processing_enabled)
             self.model.clear_batch()
@@ -12062,7 +12062,7 @@ class CompletionScheduler:
         request = self.requests.get(item.request_id)
         if request is None:
             return False
-        if item.kind == "prompt":
+        if item.kind == "prefill":
             return not any(segment.kind != "text" for segment in request.prompt_plan.segments)
         if item.completion_index is None:
             return False
@@ -12084,7 +12084,7 @@ class CompletionScheduler:
             request = self.requests.get(item.request_id)
             if request is None:
                 continue
-            if item.kind == "prompt":
+            if item.kind == "prefill":
                 if self.request_needs_prompt_logits(request):
                     return True
                 continue
@@ -12105,7 +12105,7 @@ class CompletionScheduler:
         draft_batch_size = sum(
             1
             for item in batch_items
-            if item.kind == "token" and item.completion_index is not None
+            if item.kind == "decode" and item.completion_index is not None
         )
         return draft_batch_size <= max_batch_size
 
@@ -12523,7 +12523,7 @@ class CompletionScheduler:
                     output_index += 1
                 return (
                     CompletionScheduler.BatchItem(
-                        kind="prompt",
+                        kind="prefill",
                         request_id=source.id,
                         seq_id=source.base_seq_id,
                         start_pos=logical_start,
@@ -12568,7 +12568,7 @@ class CompletionScheduler:
                 output_index += 1
             return (
                 CompletionScheduler.BatchItem(
-                    kind="prompt",
+                    kind="prefill",
                     request_id=source.id,
                     seq_id=source.base_seq_id,
                     start_pos=source.prompt_cursor,
@@ -12601,7 +12601,7 @@ class CompletionScheduler:
         output_indices = list(range(output_index, output_index + len(scheduled_tokens)))
         return (
             CompletionScheduler.BatchItem(
-                kind="token",
+                kind="decode",
                 request_id=request.id,
                 seq_id=source.seq_id,
                 start_pos=self.radix_trie.length(source.seq_id),
@@ -12635,7 +12635,7 @@ class CompletionScheduler:
                 item.identity_tokens,
                 item.history_weights,
             )
-            if item.kind == "prompt":
+            if item.kind == "prefill":
                 request.capture_prompt_logprobs(
                     model=self.model,
                     formatter=self.formatter,
@@ -12844,7 +12844,7 @@ class CompletionScheduler:
                 range(batch_row_offset, batch_row_offset + len(item.tokens))
             )
             batch_row_offset += len(item.tokens)
-            if item.kind != "token" or item.completion_index is None:
+            if item.kind != "decode" or item.completion_index is None:
                 continue
             request = self.requests.get(item.request_id)
             if request is None:
