@@ -1249,6 +1249,12 @@ class MTPDraftProvider(DraftProvider):
         max_tokens: Optional[int]
 
     @dataclass
+    class SampledBatchPlan:
+        context_rows: List["MTPDraftProvider.SampledContextRow"]
+        pending_rows: List["MTPDraftProvider.SampledPendingRow"]
+        sample_row_by_update: Dict[int, int]
+
+    @dataclass
     class DraftManyState:
         result_index: int
         seq_id: int
@@ -1977,18 +1983,12 @@ class MTPDraftProvider(DraftProvider):
                 )
         return results
 
-    def process_sampled_batch(
+    def _target_row_count(
         self,
         updates: Sequence["MTPDraftProvider.SampledBatchUpdate"],
         /,
-    ) -> List[np.ndarray]:
-        results = [np.array([], dtype=np.intc) for _ in updates]
-        if self.num_pred_tokens <= 0 or not updates:
-            return results
-        h_tgt = llama_cpp_ext.llama_get_embeddings_pre_norm(self.target_ctx)
-        if not h_tgt:
-            raise RuntimeError("missing target pre-norm embeddings for MTP")
-        n_target_rows = max(
+    ) -> int:
+        return max(
             (
                 max(update.row_indices) + 1
                 for update in updates
@@ -1996,15 +1996,15 @@ class MTPDraftProvider(DraftProvider):
             ),
             default=0,
         )
-        if n_target_rows <= 0:
-            return results
-        h_tgt_rows = np.ctypeslib.as_array(h_tgt, shape=(n_target_rows, self.n_embd))
-        h_tgt_rows = self._normalize_target_hidden_rows(h_tgt_rows)
 
-        pending_output_rows: List["MTPDraftProvider.SampledOutputRow"] = []
+    def _build_sampled_batch_plan(
+        self,
+        updates: Sequence["MTPDraftProvider.SampledBatchUpdate"],
+        /,
+    ) -> "MTPDraftProvider.SampledBatchPlan":
         context_rows: List["MTPDraftProvider.SampledContextRow"] = []
         pending_rows: List["MTPDraftProvider.SampledPendingRow"] = []
-        sample_rows: Dict[int, int] = {}
+        sample_row_by_update: Dict[int, int] = {}
 
         for update_index, update in enumerate(updates):
             seq_id = update.seq_id
@@ -2055,13 +2055,20 @@ class MTPDraftProvider(DraftProvider):
                     source_row=row_indices[sample_index],
                 )
             )
-            sample_rows[update_index] = len(pending_rows) - 1
+            sample_row_by_update[update_index] = len(pending_rows) - 1
 
-        if not context_rows and not pending_rows:
-            return results
-        if len(context_rows) > self.n_batch or len(pending_rows) > self.n_batch:
-            raise RuntimeError("MTP draft batch capacity exceeded")
+        return self.SampledBatchPlan(
+            context_rows=context_rows,
+            pending_rows=pending_rows,
+            sample_row_by_update=sample_row_by_update,
+        )
 
+    def _decode_sampled_context_rows(
+        self,
+        context_rows: Sequence["MTPDraftProvider.SampledContextRow"],
+        h_tgt_rows: np.ndarray,
+        /,
+    ) -> None:
         self._clear_batch()
         decoded_context_rows: List[Tuple[int, int]] = []
         for row in context_rows:
@@ -2088,11 +2095,22 @@ class MTPDraftProvider(DraftProvider):
                     draft_pos + 1,
                 )
 
+    def _decode_sampled_pending_rows(
+        self,
+        plan: "MTPDraftProvider.SampledBatchPlan",
+        h_tgt_rows: np.ndarray,
+        /,
+    ) -> List["MTPDraftProvider.SampledOutputRow"]:
+        pending_output_rows: List["MTPDraftProvider.SampledOutputRow"] = []
+        pending_rows = plan.pending_rows
+
         self._clear_batch()
         for pending_row_index, row in enumerate(pending_rows):
             if row.draft_pos < self.context_pos[row.seq_id]:
                 continue
-            is_sample_row = pending_row_index == sample_rows.get(row.update_index)
+            is_sample_row = (
+                pending_row_index == plan.sample_row_by_update.get(row.update_index)
+            )
             slot = int(self.batch.n_tokens)
             self._add_batch_token(
                 token=row.token,
@@ -2119,6 +2137,15 @@ class MTPDraftProvider(DraftProvider):
                 row.draft_pos + 1,
             )
 
+        return pending_output_rows
+
+    def _mark_sampled_outputs_ready(
+        self,
+        updates: Sequence["MTPDraftProvider.SampledBatchUpdate"],
+        pending_output_rows: Sequence["MTPDraftProvider.SampledOutputRow"],
+        h_tgt_rows: np.ndarray,
+        /,
+    ) -> Dict[int, int]:
         cleanup_keep_len_by_seq: Dict[int, int] = {}
         for row in pending_output_rows:
             update = updates[row.update_index]
@@ -2129,12 +2156,19 @@ class MTPDraftProvider(DraftProvider):
             self.ready_pos[row.seq_id] = row.ready_pos
             cleanup_keep_len_by_seq[row.seq_id] = row.keep_len
 
+        return cleanup_keep_len_by_seq
+
+    def _truncate_sampled_outputs(self, cleanup_keep_len_by_seq: Dict[int, int]) -> None:
         for seq_id, keep_len in cleanup_keep_len_by_seq.items():
             self._truncate_memory(seq_id, keep_len)
 
-        if not pending_output_rows:
-            return results
-
+    def _start_sampled_draft_states(
+        self,
+        updates: Sequence["MTPDraftProvider.SampledBatchUpdate"],
+        pending_output_rows: Sequence["MTPDraftProvider.SampledOutputRow"],
+        results: List[np.ndarray],
+        /,
+    ) -> List["MTPDraftProvider.SampledDraftState"]:
         active: List["MTPDraftProvider.SampledDraftState"] = []
         for row in pending_output_rows:
             self._reset_sampler(row.seq_id)
@@ -2169,6 +2203,15 @@ class MTPDraftProvider(DraftProvider):
                     )
             results[row.update_index] = np.asarray([sampled_token], dtype=np.intc)
 
+        return active
+
+    def _extend_sampled_draft_states(
+        self,
+        active: List["MTPDraftProvider.SampledDraftState"],
+        results: List[np.ndarray],
+        cleanup_keep_len_by_seq: Dict[int, int],
+        /,
+    ) -> None:
         touched = list(active)
         try:
             while active:
@@ -2225,6 +2268,53 @@ class MTPDraftProvider(DraftProvider):
                     state.drafted,
                     dtype=np.intc,
                 )
+
+    def process_sampled_batch(
+        self,
+        updates: Sequence["MTPDraftProvider.SampledBatchUpdate"],
+        /,
+    ) -> List[np.ndarray]:
+        results = [np.array([], dtype=np.intc) for _ in updates]
+        if self.num_pred_tokens <= 0 or not updates:
+            return results
+        h_tgt = llama_cpp_ext.llama_get_embeddings_pre_norm(self.target_ctx)
+        if not h_tgt:
+            raise RuntimeError("missing target pre-norm embeddings for MTP")
+        n_target_rows = self._target_row_count(updates)
+        if n_target_rows <= 0:
+            return results
+        h_tgt_rows = np.ctypeslib.as_array(h_tgt, shape=(n_target_rows, self.n_embd))
+        h_tgt_rows = self._normalize_target_hidden_rows(h_tgt_rows)
+
+        plan = self._build_sampled_batch_plan(updates)
+        if not plan.context_rows and not plan.pending_rows:
+            return results
+        if (
+            len(plan.context_rows) > self.n_batch
+            or len(plan.pending_rows) > self.n_batch
+        ):
+            raise RuntimeError("MTP draft batch capacity exceeded")
+
+        self._decode_sampled_context_rows(plan.context_rows, h_tgt_rows)
+        pending_output_rows = self._decode_sampled_pending_rows(plan, h_tgt_rows)
+        cleanup_keep_len_by_seq = self._mark_sampled_outputs_ready(
+            updates,
+            pending_output_rows,
+            h_tgt_rows,
+        )
+        self._truncate_sampled_outputs(cleanup_keep_len_by_seq)
+
+        if pending_output_rows:
+            active = self._start_sampled_draft_states(
+                updates,
+                pending_output_rows,
+                results,
+            )
+            self._extend_sampled_draft_states(
+                active,
+                results,
+                cleanup_keep_len_by_seq,
+            )
 
         return results
 
