@@ -1477,10 +1477,10 @@ class MTPDraftProvider(DraftProvider):
             )
             self._samplers.append(sampler)
 
-    def _passes_p_min(self, row_index: int) -> bool:
+    def _passes_p_min(self, output_index: int) -> bool:
         if self.p_min <= 0.0:
             return True
-        logits_ptr = llama_cpp.llama_get_logits_ith(self.ctx, row_index)
+        logits_ptr = llama_cpp.llama_get_logits_ith(self.ctx, output_index)
         if not logits_ptr:
             return False
         logits = np.ctypeslib.as_array(logits_ptr, shape=(self.n_vocab,))
@@ -1499,13 +1499,13 @@ class MTPDraftProvider(DraftProvider):
             return False
         return 1.0 / total >= self.p_min
 
-    def _sample_token(self, row_index: int = 0, *, seq_id: int = 0) -> Optional[int]:
+    def _sample_token(self, output_index: int = 0, *, seq_id: int = 0) -> Optional[int]:
         if seq_id < 0 or seq_id >= len(self._samplers):
             return None
-        if not self._passes_p_min(row_index):
+        if not self._passes_p_min(output_index):
             return None
         sampler = self._samplers[seq_id]
-        token = int(llama_cpp.llama_sampler_sample(sampler, self.ctx, row_index))
+        token = int(llama_cpp.llama_sampler_sample(sampler, self.ctx, output_index))
         if token == llama_cpp.LLAMA_TOKEN_NULL:
             return None
         return token
@@ -3893,15 +3893,15 @@ class CompletionRequest:
             text_token_index = self.prompt_plan.text_token_index_by_pos[next_pos]
             if text_token_index < self.prompt_visible_start:
                 continue
-            row_index = output_arg(output_index, output_count)
-            assert row_index is not None
+            logits_index = output_arg(output_index, output_count)
+            assert logits_index is not None
             next_token = self.prompt_plan.text_token_at(next_pos)
             record = Token.from_logits(
                 model=model,
                 formatter=formatter,
                 prev_tokens=self.prompt_plan.prev_text_tokens_at(next_pos),
                 token=next_token,
-                logits=model.logits(row_index),
+                logits=model.logits(logits_index),
                 logprobs_count=self.payload.logprobs,
             )
             expected_index = text_token_index - self.prompt_visible_start
@@ -9625,8 +9625,8 @@ class Sampler:
             self._sampler, llama_cpp.llama_sampler_init_dist(seed)
         )
 
-    def sample(self, ctx: llama_cpp.llama_context_p, row_index: int) -> int:
-        return int(llama_cpp.llama_sampler_sample(self._sampler, ctx, row_index))
+    def sample(self, ctx: llama_cpp.llama_context_p, output_index: int) -> int:
+        return int(llama_cpp.llama_sampler_sample(self._sampler, ctx, output_index))
 
     def _ensure_sample_logits_buffer(self, size: int) -> None:
         if size == self._sample_logits_size and self._sample_logits_recarray is not None:
@@ -11071,10 +11071,10 @@ class Model:
         if self.draft_provider is not None:
             self.draft_provider.copy_sequence(source_seq_id, dest_seq_id, p0, p1)
 
-    def logits(self, row_index: int) -> np.ndarray:
-        ptr = llama_cpp.llama_get_logits_ith(self.ctx, row_index)
+    def logits(self, output_index: int) -> np.ndarray:
+        ptr = llama_cpp.llama_get_logits_ith(self.ctx, output_index)
         if not ptr:
-            raise RuntimeError(f"missing logits row {row_index}")
+            raise RuntimeError(f"missing logits output {output_index}")
         return np.ctypeslib.as_array(ptr, shape=(self.n_vocab,)).copy()
 
 
@@ -11547,7 +11547,7 @@ class AttentionMemoryPolicy(MemoryPolicy):
             self.scheduler.maybe_save_sequence_cache(request)
             self.scheduler.start_completions(
                 request,
-                prompt_row_index=None,
+                prompt_output_index=None,
                 prompt_logits=request.prompt_logits,
             )
 
@@ -11803,7 +11803,7 @@ class CheckpointMemoryPolicy(MemoryPolicy):
             self.scheduler.maybe_save_sequence_cache(request)
             self.scheduler.start_completions(
                 request,
-                prompt_row_index=None,
+                prompt_output_index=None,
                 prompt_logits=request.prompt_logits,
             )
 
@@ -12812,13 +12812,13 @@ class CompletionScheduler:
                     output_count=output_count,
                     output_arg=self.output_arg,
                 )
-                prompt_row_index = self.output_arg(
+                prompt_output_index = self.output_arg(
                     self.last_output_index(item.output_indices),
                     output_count,
                 )
                 prompt_logits = (
-                    self.model.logits(prompt_row_index)
-                    if prompt_row_index is not None
+                    self.model.logits(prompt_output_index)
+                    if prompt_output_index is not None
                     else None
                 )
                 if item.prompt_advance_to is not None:
@@ -12832,7 +12832,7 @@ class CompletionScheduler:
                     self.maybe_save_sequence_cache(request)
                     self.start_completions(
                         request,
-                        prompt_row_index=prompt_row_index,
+                        prompt_output_index=prompt_output_index,
                         prompt_logits=request.prompt_logits,
                     )
             else:
@@ -13023,11 +13023,11 @@ class CompletionScheduler:
             remaining_tokens = completion.max_total_tokens - completion.total_tokens
             if remaining_tokens <= 0:
                 continue
-            raw_row_indices = [
+            resolved_output_indices = [
                 self.output_arg(output_index, output_count)
                 for output_index in item.output_indices
             ]
-            if any(row_index is None for row_index in raw_row_indices):
+            if any(output_index is None for output_index in resolved_output_indices):
                 continue
             sample_index = item.pending_count + item.accepted_draft_count - 1
             target_count = len(item.tokens)
@@ -13133,10 +13133,10 @@ class CompletionScheduler:
             item.deferred_accept_draft_count = None
             item.deferred_truncate_draft_len = None
 
-    def sample_completion_token(self, completion: Completion, row_index: int) -> int:
+    def sample_completion_token(self, completion: Completion, output_index: int) -> int:
         sample_started_at = time.perf_counter()
         try:
-            return completion.sampler.sample(self.model.ctx, row_index)
+            return completion.sampler.sample(self.model.ctx, output_index)
         finally:
             self.metrics.sample_seconds_total += time.perf_counter() - sample_started_at
             self.metrics.sample_calls_total += 1
@@ -13149,19 +13149,21 @@ class CompletionScheduler:
     ) -> None:
         if completion.finished:
             return
-        raw_row_indices = [
+        resolved_output_indices = [
             self.output_arg(output_index, output_count)
             for output_index in item.output_indices
         ]
-        if any(row_index is None for row_index in raw_row_indices):
-            raise RuntimeError("generation rows are required")
-        row_indices: List[int] = []
-        for row_index in raw_row_indices:
-            assert row_index is not None
-            row_indices.append(int(row_index))
+        if any(output_index is None for output_index in resolved_output_indices):
+            raise RuntimeError("generation outputs are required")
+        logits_indices: List[int] = []
+        for output_index in resolved_output_indices:
+            assert output_index is not None
+            logits_indices.append(int(output_index))
         if completion.pending_finish_reason is not None:
             if self.model.store_logits:
-                self.checkpoint_logits[completion.seq_id] = self.model.logits(row_indices[-1])
+                self.checkpoint_logits[completion.seq_id] = self.model.logits(
+                    logits_indices[-1]
+                )
             completion.pending_input_tokens = completion.pending_input_tokens[item.pending_count :]
             finish_reason: str = completion.pending_finish_reason
             completion.pending_finish_reason = None
@@ -13181,13 +13183,13 @@ class CompletionScheduler:
             self.metrics.draft_target_tokens_verified_total += len(decoded_draft_tokens)
 
         for draft_index, draft_token in enumerate(decoded_draft_tokens):
-            verify_row_index = item.pending_count + draft_index - 1
-            if verify_row_index >= len(row_indices):
-                raise RuntimeError("missing target row for draft verification")
-            row_index = row_indices[verify_row_index]
-            sampled_token = self.sample_completion_token(completion, row_index)
+            verify_output_index = item.pending_count + draft_index - 1
+            if verify_output_index >= len(logits_indices):
+                raise RuntimeError("missing target output for draft verification")
+            logits_index = logits_indices[verify_output_index]
+            sampled_token = self.sample_completion_token(completion, logits_index)
             need_logits = self.model.store_logits or completion.needs_token_logprob
-            logits = self.model.logits(row_index) if need_logits else None
+            logits = self.model.logits(logits_index) if need_logits else None
             if self.model.store_logits and logits is not None:
                 self.checkpoint_logits[completion.seq_id] = logits
             if sampled_token != draft_token:
@@ -13294,10 +13296,12 @@ class CompletionScheduler:
         if accepted_draft_count:
             completion.draft_tokens = completion.draft_tokens[accepted_draft_count:]
 
-        final_row_index = row_indices[-1]
-        next_token = self.sample_completion_token(completion, final_row_index)
+        final_logits_index = logits_indices[-1]
+        next_token = self.sample_completion_token(completion, final_logits_index)
         need_final_logits = self.model.store_logits or completion.needs_token_logprob
-        final_logits = self.model.logits(final_row_index) if need_final_logits else None
+        final_logits = (
+            self.model.logits(final_logits_index) if need_final_logits else None
+        )
         if self.model.store_logits and final_logits is not None:
             self.checkpoint_logits[completion.seq_id] = final_logits
         if completion.draft_tokens and next_token != completion.draft_tokens[0]:
@@ -13406,7 +13410,7 @@ class CompletionScheduler:
     def start_completions(
         self,
         request: CompletionRequest,
-        prompt_row_index: Optional[int],
+        prompt_output_index: Optional[int],
         prompt_logits: Optional[np.ndarray] = None,
     ) -> None:
         if request.completions:
@@ -13475,24 +13479,28 @@ class CompletionScheduler:
                 self.finish_completion(completion, "length")
             self.finalize_request_if_ready(request)
             return
-        if prompt_row_index is None:
+        if prompt_output_index is None:
             if prompt_logits is not None:
                 for completion in request.completions:
                     self.sample_completion_from_logits(completion, prompt_logits)
                 return
-            raise RuntimeError("prompt row is required to start generation")
+            raise RuntimeError("prompt output is required to start generation")
         for completion in request.completions:
-            self.sample_completion(completion, prompt_row_index)
+            self.sample_completion(completion, prompt_output_index)
 
-    def sample_completion(self, completion: Completion, row_index: Optional[int]) -> None:
+    def sample_completion(
+        self,
+        completion: Completion,
+        output_index: Optional[int],
+    ) -> None:
         if completion.finished:
             return
-        if row_index is None:
-            raise RuntimeError("missing logits row")
-        token = self.sample_completion_token(completion, row_index)
+        if output_index is None:
+            raise RuntimeError("missing logits output")
+        token = self.sample_completion_token(completion, output_index)
         prev_tokens = [*completion.prompt_tokens, *completion.completion_tokens]
         if self.model.store_logits or completion.needs_token_logprob:
-            logits = self.model.logits(row_index)
+            logits = self.model.logits(output_index)
             if self.model.store_logits:
                 self.checkpoint_logits[completion.seq_id] = logits
             record = Token.from_logits(
