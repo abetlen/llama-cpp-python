@@ -11845,7 +11845,7 @@ class CheckpointMemoryPolicy(MemoryPolicy):
 class CompletionScheduler:
     @dataclass
     class BatchItem:
-        kind: str
+        kind: Literal["prefill", "decode"]
         request_id: str
         seq_id: int
         start_pos: int
