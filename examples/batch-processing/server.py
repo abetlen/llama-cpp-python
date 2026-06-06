@@ -1252,7 +1252,7 @@ class MTPDraftProvider(DraftProvider):
     class SampledBatchPlan:
         context_rows: List["MTPDraftProvider.SampledContextRow"]
         pending_rows: List["MTPDraftProvider.SampledPendingRow"]
-        sample_row_by_update: Dict[int, int]
+        sample_pending_index_by_update: Dict[int, int]
 
     @dataclass
     class DraftManyState:
@@ -2004,7 +2004,7 @@ class MTPDraftProvider(DraftProvider):
     ) -> "MTPDraftProvider.SampledBatchPlan":
         context_rows: List["MTPDraftProvider.SampledContextRow"] = []
         pending_rows: List["MTPDraftProvider.SampledPendingRow"] = []
-        sample_row_by_update: Dict[int, int] = {}
+        sample_pending_index_by_update: Dict[int, int] = {}
 
         for update_index, update in enumerate(updates):
             seq_id = update.seq_id
@@ -2055,12 +2055,12 @@ class MTPDraftProvider(DraftProvider):
                     source_row=row_indices[sample_index],
                 )
             )
-            sample_row_by_update[update_index] = len(pending_rows) - 1
+            sample_pending_index_by_update[update_index] = len(pending_rows) - 1
 
         return self.SampledBatchPlan(
             context_rows=context_rows,
             pending_rows=pending_rows,
-            sample_row_by_update=sample_row_by_update,
+            sample_pending_index_by_update=sample_pending_index_by_update,
         )
 
     def _decode_sampled_context_rows(
@@ -2105,21 +2105,22 @@ class MTPDraftProvider(DraftProvider):
         pending_rows = plan.pending_rows
 
         self._clear_batch()
-        for pending_row_index, row in enumerate(pending_rows):
+        for pending_index, row in enumerate(pending_rows):
             if row.draft_pos < self.context_pos[row.seq_id]:
                 continue
-            is_sample_row = (
-                pending_row_index == plan.sample_row_by_update.get(row.update_index)
+            is_sample_pending = (
+                pending_index
+                == plan.sample_pending_index_by_update.get(row.update_index)
             )
             slot = int(self.batch.n_tokens)
             self._add_batch_token(
                 token=row.token,
                 pos=row.draft_pos,
                 seq_id=row.seq_id,
-                logits=is_sample_row,
+                logits=is_sample_pending,
             )
             self._set_batch_embedding_row(slot, h_tgt_rows[row.source_row])
-            if is_sample_row:
+            if is_sample_pending:
                 sampled_outputs.append(
                     self.SampledOutput(
                         update_index=row.update_index,
