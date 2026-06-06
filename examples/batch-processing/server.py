@@ -1237,6 +1237,17 @@ class MTPDraftProvider(DraftProvider):
         keep_len: int
         ready_pos: int
 
+    @dataclass(frozen=True)
+    class SampledBatchUpdate:
+        seq_id: int
+        start_pos: int
+        tokens: List[int]
+        row_indices: List[int]
+        target_count: int
+        sample_index: int
+        pending_token: Optional[int]
+        max_tokens: Optional[int]
+
     @dataclass
     class DraftManyState:
         result_index: int
@@ -1968,7 +1979,7 @@ class MTPDraftProvider(DraftProvider):
 
     def process_sampled_batch(
         self,
-        updates: Sequence[Dict[str, Any]],
+        updates: Sequence["MTPDraftProvider.SampledBatchUpdate"],
         /,
     ) -> List[np.ndarray]:
         results = [np.array([], dtype=np.intc) for _ in updates]
@@ -1978,7 +1989,11 @@ class MTPDraftProvider(DraftProvider):
         if not h_tgt:
             raise RuntimeError("missing target pre-norm embeddings for MTP")
         n_target_rows = max(
-            (max(update["row_indices"]) + 1 for update in updates if update["row_indices"]),
+            (
+                max(update.row_indices) + 1
+                for update in updates
+                if update.row_indices
+            ),
             default=0,
         )
         if n_target_rows <= 0:
@@ -1992,15 +2007,15 @@ class MTPDraftProvider(DraftProvider):
         sample_rows: Dict[int, int] = {}
 
         for update_index, update in enumerate(updates):
-            seq_id = cast(int, update["seq_id"])
+            seq_id = update.seq_id
             if seq_id < 0 or seq_id >= self.n_seq_max:
                 continue
-            start_pos = cast(int, update["start_pos"])
-            tokens = cast(List[int], update["tokens"])
-            row_indices = cast(List[int], update["row_indices"])
-            target_count = cast(int, update["target_count"])
-            sample_index = cast(int, update["sample_index"])
-            pending_token = cast(Optional[int], update["pending_token"])
+            start_pos = update.start_pos
+            tokens = update.tokens
+            row_indices = update.row_indices
+            target_count = update.target_count
+            sample_index = update.sample_index
+            pending_token = update.pending_token
             if (
                 pending_token is None
                 or start_pos <= 0
@@ -2107,8 +2122,8 @@ class MTPDraftProvider(DraftProvider):
         cleanup_keep_len_by_seq: Dict[int, int] = {}
         for row in pending_output_rows:
             update = updates[row.update_index]
-            sample_index = cast(int, update["sample_index"])
-            sample_source_row = cast(List[int], update["row_indices"])[sample_index]
+            sample_index = update.sample_index
+            sample_source_row = update.row_indices[sample_index]
             self.pending_h[row.seq_id] = h_tgt_rows[sample_source_row]
             self.ready[row.seq_id] = True
             self.ready_pos[row.seq_id] = row.ready_pos
@@ -2127,10 +2142,10 @@ class MTPDraftProvider(DraftProvider):
             if sampled_token is None:
                 continue
             update = updates[row.update_index]
-            seq_id = cast(int, update["seq_id"])
+            seq_id = update.seq_id
             self.ready[seq_id] = True
             n_predict = self.num_pred_tokens
-            max_tokens = cast(Optional[int], update.get("max_tokens"))
+            max_tokens = update.max_tokens
             if max_tokens is not None:
                 n_predict = min(n_predict, max_tokens)
             if n_predict <= 0:
@@ -12836,7 +12851,7 @@ class CompletionScheduler:
         )
         completions: List[Completion] = []
         update_items: List["CompletionScheduler.BatchItem"] = []
-        updates: List[Dict[str, Any]] = []
+        updates: List["MTPDraftProvider.SampledBatchUpdate"] = []
         remaining_by_completion: List[int] = []
         batch_row_offset = 0
         for item in items:
@@ -12870,16 +12885,16 @@ class CompletionScheduler:
             completions.append(completion)
             update_items.append(item)
             updates.append(
-                {
-                    "seq_id": item.seq_id,
-                    "start_pos": item.start_pos,
-                    "tokens": item.tokens,
-                    "row_indices": item_batch_rows,
-                    "target_count": target_count,
-                    "sample_index": sample_index,
-                    "pending_token": item.sampled_pending_token,
-                    "max_tokens": remaining_tokens,
-                }
+                MTPDraftProvider.SampledBatchUpdate(
+                    seq_id=item.seq_id,
+                    start_pos=item.start_pos,
+                    tokens=item.tokens,
+                    row_indices=item_batch_rows,
+                    target_count=target_count,
+                    sample_index=sample_index,
+                    pending_token=item.sampled_pending_token,
+                    max_tokens=remaining_tokens,
+                )
             )
             remaining_by_completion.append(remaining_tokens)
 
