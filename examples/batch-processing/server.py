@@ -1025,7 +1025,7 @@ class RadixTrie:
 
 
 class SequenceHistory:
-    __slots__ = ("_root", "_tails", "size")
+    __slots__ = ("_position_lengths", "_root", "_tails", "size")
 
     @dataclass
     class Node:
@@ -1033,44 +1033,67 @@ class SequenceHistory:
         parent: Optional["SequenceHistory.Node"] = None
         children: Dict[int, "SequenceHistory.Node"] = field(default_factory=dict)
         sequences: set[int] = field(default_factory=set)
-        weight: int = 1
+        position_increment: int = 1
 
     def __init__(self) -> None:
         self._root = SequenceHistory.Node()
         self._tails: Dict[int, SequenceHistory.Node] = {}
+        self._position_lengths: Dict[int, int] = {}
         self.size = 0
 
     def extend(
         self,
         sequence_id: int,
         tokens: Sequence[int],
-        weights: Optional[Sequence[int]] = None,
+        position_increments: Optional[Sequence[int]] = None,
     ) -> None:
         assert sequence_id >= 0
-        if weights is None:
-            weights = [1] * len(tokens)
-        assert len(weights) == len(tokens)
+        if position_increments is None:
+            position_increments = [1] * len(tokens)
+        assert len(position_increments) == len(tokens)
         node = self._tails.get(sequence_id, self._root)
-        for token, weight in zip(tokens, weights):
+        position_length = self._position_lengths.get(sequence_id, 0)
+        for token, position_increment in zip(tokens, position_increments):
+            position_increment = max(0, int(position_increment))
             child = node.children.get(sequence_id)
             if child is None:
                 child = SequenceHistory.Node(
                     token=token,
                     parent=node,
-                    weight=max(0, int(weight)),
+                    position_increment=position_increment,
                 )
                 node.children[sequence_id] = child
-                self.size += child.weight
+                self.size += 1
             else:
                 assert child.parent is node
                 assert child.token == token
-                assert child.weight == max(0, int(weight))
+                assert child.position_increment == position_increment
             child.sequences.add(sequence_id)
+            position_length += position_increment
             node = child
         if node is self._root:
             self._tails.pop(sequence_id, None)
+            self._position_lengths.pop(sequence_id, None)
         else:
             self._tails[sequence_id] = node
+            self._position_lengths[sequence_id] = position_length
+
+    def position_length(self, sequence_id: int) -> int:
+        return self._position_lengths.get(sequence_id, 0)
+
+    def position_length_for_prefix(self, sequence_id: int, keep_len: int) -> int:
+        if keep_len <= 0 or sequence_id not in self._tails:
+            return 0
+        node = self._tails[sequence_id]
+        increments: List[int] = []
+        while node is not self._root:
+            increments.append(node.position_increment)
+            parent = node.parent
+            assert parent is not None
+            node = parent
+        increments.reverse()
+        assert keep_len <= len(increments)
+        return sum(increments[:keep_len])
 
     def copy(
         self,
@@ -1096,14 +1119,18 @@ class SequenceHistory:
             assert parent is not None
             node = parent
         parent = self._root
+        position_length = 0
         for child in reversed(path):
             parent.children[dest_sequence_id] = child
             child.sequences.add(dest_sequence_id)
+            position_length += child.position_increment
             parent = child
         if keep_len == 0:
             self._tails.pop(dest_sequence_id, None)
+            self._position_lengths.pop(dest_sequence_id, None)
         else:
             self._tails[dest_sequence_id] = path[0]
+            self._position_lengths[dest_sequence_id] = position_length
 
     def truncate(
         self,
@@ -1116,6 +1143,7 @@ class SequenceHistory:
         assert 0 <= keep_len <= current_length
         node = self._tails[sequence_id]
         drop = current_length - keep_len
+        position_length = self._position_lengths.get(sequence_id, 0)
         while node is not self._root and drop > 0:
             node.sequences.remove(sequence_id)
             parent = node.parent
@@ -1124,13 +1152,16 @@ class SequenceHistory:
             if child is node:
                 del parent.children[sequence_id]
             if not node.sequences:
-                self.size -= node.weight
+                self.size -= 1
+            position_length -= node.position_increment
             node = parent
             drop -= 1
         if node is self._root:
             self._tails.pop(sequence_id, None)
+            self._position_lengths.pop(sequence_id, None)
         else:
             self._tails[sequence_id] = node
+            self._position_lengths[sequence_id] = max(0, position_length)
 
 
 class DraftProvider(abc.ABC):
@@ -3424,10 +3455,11 @@ class PromptSegment:
     start_pos: int
     n_pos: int
     identity_tokens: List[int]
+    decode_start_pos: int
+    decode_n_pos: int
     text_tokens: List[int] = field(default_factory=list)
     embeddings: Optional[np.ndarray] = None
     positions: Optional[np.ndarray] = None
-    row_weights: Optional[List[int]] = None
     non_causal: bool = False
 
     @property
@@ -3443,35 +3475,29 @@ class PromptSegment:
         return len(self.text_tokens)
 
     @property
-    def history_weights(self) -> List[int]:
+    def decoder_position_increments(self) -> List[int]:
         if not self.identity_tokens:
             return []
         if self.kind == "text":
             return [1] * len(self.identity_tokens)
-        if self.row_weights is not None:
-            if len(self.row_weights) != len(self.identity_tokens):
-                raise RuntimeError("media row weight count does not match identity tokens")
-            return list(self.row_weights)
-        rows = self.batch_rows
-        count = len(self.identity_tokens)
-        if rows == count:
-            return [1] * count
-        raise RuntimeError("media segment requires explicit row weights")
+        return [*([0] * (len(self.identity_tokens) - 1)), self.decode_n_pos]
 
-    def row_offset(self, logical_offset: int) -> int:
+    def rows_for_capacity(self, offset: int, capacity: int) -> int:
+        if capacity <= 0:
+            return 0
         if self.kind == "text":
-            return logical_offset
-        return sum(self.history_weights[:logical_offset])
+            return min(capacity, self.end_pos - self.start_pos - offset)
+        return min(capacity, self.end_pos - self.start_pos - offset)
 
     def media_slice(
         self,
-        logical_offset: int,
-        logical_count: int,
+        row_offset: int,
+        row_count: int,
     ) -> Tuple[np.ndarray, np.ndarray, List[int]]:
         if self.embeddings is None or self.positions is None:
             raise RuntimeError("media segment is missing embeddings or positions")
-        row_start = self.row_offset(logical_offset)
-        row_end = self.row_offset(logical_offset + logical_count)
+        row_start = row_offset
+        row_end = row_offset + row_count
         embeddings = self.embeddings[row_start:row_end]
         if len(self.positions) == self.batch_rows:
             positions = self.positions[row_start:row_end]
@@ -3483,7 +3509,7 @@ class PromptSegment:
         return (
             embeddings,
             positions,
-            self.history_weights[logical_offset : logical_offset + logical_count],
+            self.decoder_position_increments[row_start:row_end],
         )
 
 
@@ -3509,6 +3535,8 @@ class PromptPlan:
             start_pos=0,
             n_pos=len(tokens),
             identity_tokens=list(tokens),
+            decode_start_pos=0,
+            decode_n_pos=len(tokens),
             text_tokens=list(tokens),
         )
         return cls(
@@ -3526,40 +3554,64 @@ class PromptPlan:
 
     @property
     def eval_token_count(self) -> int:
-        return self.rows_up_to(self.length)
+        return self.length
 
-    def history_weights_up_to(self, pos: int) -> List[int]:
-        weights: List[int] = []
+    def position_increments_up_to(self, pos: int) -> List[int]:
+        increments: List[int] = []
         for segment in self.segments:
             if pos <= segment.start_pos:
                 break
             take = min(pos, segment.end_pos) - segment.start_pos
             if take <= 0:
                 continue
-            weights.extend(segment.history_weights[:take])
+            increments.extend(segment.decoder_position_increments[:take])
             if pos <= segment.end_pos:
                 break
-        return weights
+        return increments
 
     def rows_up_to(self, pos: int) -> int:
-        return sum(self.history_weights_up_to(pos))
+        return max(0, min(pos, self.length))
 
     def is_boundary(self, pos: int) -> bool:
         if pos <= 0 or pos >= self.length:
             return True
         return any(segment.start_pos == pos or segment.end_pos == pos for segment in self.segments)
 
+    def is_reusable_boundary(self, pos: int) -> bool:
+        if pos <= 0 or pos >= self.length:
+            return True
+        if self.is_boundary(pos):
+            return True
+        return self.segment_at(pos).kind == "text"
+
     def clamp_to_reusable_boundary(self, pos: int) -> int:
         if pos <= 0:
             return 0
         if pos >= self.length:
             return self.length
-        if self.is_boundary(pos):
+        if self.is_reusable_boundary(pos):
             return pos
         segment = self.segment_at(pos)
-        if segment.kind != "text":
-            return segment.start_pos
-        return pos
+        return segment.start_pos
+
+    def decoder_pos_up_to(self, pos: int) -> int:
+        if not self.is_reusable_boundary(pos):
+            raise RuntimeError("decoder position requested inside a non-reusable media segment")
+        if pos <= 0:
+            return 0
+        if pos >= self.length:
+            if not self.segments:
+                return 0
+            segment = self.segments[-1]
+            return segment.decode_start_pos + segment.decode_n_pos
+        segment = self.segment_at(pos)
+        if segment.kind == "text":
+            return segment.decode_start_pos + (pos - segment.start_pos)
+        if pos == segment.start_pos:
+            return segment.decode_start_pos
+        if pos == segment.end_pos:
+            return segment.decode_start_pos + segment.decode_n_pos
+        raise RuntimeError("decoder position requested inside a media segment")
 
     def segment_at(self, pos: int) -> PromptSegment:
         for segment in self.segments:
@@ -9951,38 +10003,6 @@ class MTMDProcessor:
             positions[3, index] = int(pos.z)
         return positions.reshape(-1)
 
-    @staticmethod
-    def _row_weights_for_positions(
-        positions: np.ndarray,
-        *,
-        start_pos: int,
-        n_pos: int,
-        n_tokens: int,
-    ) -> List[int]:
-        if n_pos <= 0:
-            raise CompletionRequestValidationError("MTMD media chunk has no logical positions")
-        if len(positions) == n_tokens:
-            lanes = [positions]
-        elif len(positions) == n_tokens * 4:
-            lanes = [positions.reshape(4, n_tokens)[index] for index in range(4)]
-        else:
-            raise CompletionRequestValidationError("MTMD media position shape mismatch")
-        for lane in lanes:
-            weights: List[int] = []
-            row = 0
-            for logical_pos in range(start_pos, start_pos + n_pos):
-                row_start = row
-                while row < n_tokens and int(lane[row]) == logical_pos:
-                    row += 1
-                if row == row_start:
-                    break
-                weights.append(row - row_start)
-            if len(weights) == n_pos and row == n_tokens:
-                return weights
-        raise CompletionRequestValidationError(
-            "MTMD media decoder positions do not define contiguous logical positions"
-        )
-
     def build_prompt_plan(
         self,
         *,
@@ -10076,7 +10096,8 @@ class MTMDProcessor:
             identity_tokens: List[int] = []
             text_tokens: List[int] = []
             text_token_index_by_pos: Dict[int, int] = {}
-            pos = 0
+            identity_pos = 0
+            decode_pos = 0
             media_index = 0
             n_chunks = int(mtmd_cpp.mtmd_input_chunks_size(chunks))
             for chunk_index in range(n_chunks):
@@ -10096,13 +10117,15 @@ class MTMDProcessor:
                         else []
                     )
                     if tokens:
-                        start_pos = pos
+                        start_pos = identity_pos
                         segments.append(
                             PromptSegment(
                                 kind="text",
                                 start_pos=start_pos,
                                 n_pos=len(tokens),
                                 identity_tokens=list(tokens),
+                                decode_start_pos=decode_pos,
+                                decode_n_pos=len(tokens),
                                 text_tokens=list(tokens),
                             )
                         )
@@ -10110,7 +10133,8 @@ class MTMDProcessor:
                             text_token_index_by_pos[start_pos + offset] = len(text_tokens)
                             text_tokens.append(token)
                         identity_tokens.extend(tokens)
-                        pos += len(tokens)
+                        identity_pos += len(tokens)
+                        decode_pos += len(tokens)
                     continue
                 if chunk_type == mtmd_cpp.MTMD_INPUT_CHUNK_TYPE_IMAGE:
                     kind: Literal["image", "audio"] = "image"
@@ -10139,32 +10163,27 @@ class MTMDProcessor:
                         media_bytes=media_bytes,
                     )
                 )
-                n_pos = int(mtmd_cpp.mtmd_input_chunk_get_n_pos(chunk))
+                decode_n_pos = int(mtmd_cpp.mtmd_input_chunk_get_n_pos(chunk))
+                if decode_n_pos <= 0:
+                    raise CompletionRequestValidationError("MTMD media chunk has no decoder positions")
                 embeddings = self._encode_media_chunk(kind=kind, key=key, chunk=chunk)
+                n_tokens = int(embeddings.shape[0])
+                if n_tokens <= 0:
+                    raise CompletionRequestValidationError("MTMD media chunk has no embeddings")
                 non_causal = bool(mtmd_cpp.mtmd_decode_use_non_causal(self.ctx, chunk))
-                segment_identity = self._media_identity_tokens(kind, key, n_pos)
-                positions = self._positions_for_chunk(chunk, pos)
-                row_weights = self._row_weights_for_positions(
-                    positions,
-                    start_pos=pos,
-                    n_pos=n_pos,
-                    n_tokens=int(embeddings.shape[0]),
-                )
+                segment_identity = self._media_identity_tokens(kind, key, n_tokens)
+                positions = self._positions_for_chunk(chunk, decode_pos)
                 segment = PromptSegment(
                     kind=kind,
-                    start_pos=pos,
-                    n_pos=n_pos,
+                    start_pos=identity_pos,
+                    n_pos=n_tokens,
                     identity_tokens=segment_identity,
+                    decode_start_pos=decode_pos,
+                    decode_n_pos=decode_n_pos,
                     embeddings=embeddings,
                     positions=positions,
-                    row_weights=row_weights,
                     non_causal=non_causal,
                 )
-                if max(segment.history_weights, default=0) > self.model.n_batch:
-                    raise CompletionRequestValidationError(
-                        f"{kind} embedding logical position exceeds model.n_batch; "
-                        "increase n_batch"
-                    )
                 if non_causal and embeddings.shape[0] > min(self.model.n_batch, self.model.n_ubatch):
                     raise CompletionRequestValidationError(
                         f"non-causal {kind} embedding chunk exceeds model batch limits; "
@@ -10172,7 +10191,8 @@ class MTMDProcessor:
                     )
                 segments.append(segment)
                 identity_tokens.extend(segment_identity)
-                pos += n_pos
+                identity_pos += n_tokens
+                decode_pos += decode_n_pos
             if media_index != len(media_bytes_by_index):
                 raise CompletionRequestValidationError("not all media inputs were consumed by MTMD")
             return PromptPlan(
@@ -11594,8 +11614,12 @@ class UnifiedAttentionMemoryPolicy(AttentionMemoryPolicy):
         if keep_len <= 0:
             return
         source_length = self.scheduler.radix_trie.length(source_sequence_id)
+        keep_pos = self.scheduler.sequence_history.position_length_for_prefix(
+            source_sequence_id,
+            keep_len,
+        )
         copy_p0 = 0
-        copy_p1 = keep_len
+        copy_p1 = keep_pos
         if not self.scheduler.model.kv_unified:
             copy_p0 = -1
             copy_p1 = -1
@@ -11660,6 +11684,10 @@ class PartitionedAttentionMemoryPolicy(AttentionMemoryPolicy):
         if keep_len <= 0:
             return
         source_length = self.scheduler.radix_trie.length(source_sequence_id)
+        keep_pos = self.scheduler.sequence_history.position_length_for_prefix(
+            source_sequence_id,
+            keep_len,
+        )
         llama_cpp.llama_memory_seq_cp(
             self.scheduler.model.mem,
             source_sequence_id,
@@ -11674,8 +11702,8 @@ class PartitionedAttentionMemoryPolicy(AttentionMemoryPolicy):
             -1,
         )
         if source_length > keep_len:
-            llama_cpp.llama_memory_seq_rm(self.scheduler.model.mem, dest_sequence_id, keep_len, -1)
-            self.scheduler.model.truncate_draft_sequence(dest_sequence_id, keep_len)
+            llama_cpp.llama_memory_seq_rm(self.scheduler.model.mem, dest_sequence_id, keep_pos, -1)
+            self.scheduler.model.truncate_draft_sequence(dest_sequence_id, keep_pos)
         self.scheduler.radix_trie.copy(source_sequence_id, dest_sequence_id, keep_len)
         self.scheduler.sequence_history.copy(
             source_sequence_id,
@@ -11792,8 +11820,12 @@ class CheckpointMemoryPolicy(MemoryPolicy):
         if keep_len <= 0:
             return
         source_length = self.scheduler.radix_trie.length(source_sequence_id)
+        keep_pos = self.scheduler.sequence_history.position_length_for_prefix(
+            source_sequence_id,
+            keep_len,
+        )
         copy_p0 = 0
-        copy_p1 = keep_len
+        copy_p1 = keep_pos
         if not self.scheduler.model.kv_unified:
             copy_p0 = -1
             copy_p1 = -1
@@ -11826,11 +11858,12 @@ class CompletionScheduler:
         request_id: str
         seq_id: int
         start_pos: int
+        llama_start_pos: int
         tokens: List[int]
         identity_tokens: List[int]
         output_indices: List[Optional[int]]
         output_positions: List[int]
-        history_weights: List[int]
+        position_increments: List[int]
         embeddings: Optional[np.ndarray] = None
         positions: Optional[np.ndarray] = None
         non_causal: bool = False
@@ -11852,11 +11885,12 @@ class CompletionScheduler:
             request_id: str,
             seq_id: int,
             start_pos: int,
+            llama_start_pos: int,
             tokens: List[int],
             identity_tokens: List[int],
             output_indices: List[Optional[int]],
             output_positions: List[int],
-            history_weights: List[int],
+            position_increments: List[int],
             embeddings: Optional[np.ndarray] = None,
             positions: Optional[np.ndarray] = None,
             non_causal: bool = False,
@@ -11867,11 +11901,12 @@ class CompletionScheduler:
                 request_id=request_id,
                 seq_id=seq_id,
                 start_pos=start_pos,
+                llama_start_pos=llama_start_pos,
                 tokens=tokens,
                 identity_tokens=identity_tokens,
                 output_indices=output_indices,
                 output_positions=output_positions,
-                history_weights=history_weights,
+                position_increments=position_increments,
                 embeddings=embeddings,
                 positions=positions,
                 non_causal=non_causal,
@@ -11885,11 +11920,12 @@ class CompletionScheduler:
             request_id: str,
             seq_id: int,
             start_pos: int,
+            llama_start_pos: int,
             tokens: List[int],
             identity_tokens: List[int],
             output_indices: List[Optional[int]],
             output_positions: List[int],
-            history_weights: List[int],
+            position_increments: List[int],
             completion_index: int,
             pending_count: int,
         ) -> "CompletionScheduler.BatchItem":
@@ -11898,11 +11934,12 @@ class CompletionScheduler:
                 request_id=request_id,
                 seq_id=seq_id,
                 start_pos=start_pos,
+                llama_start_pos=llama_start_pos,
                 tokens=tokens,
                 identity_tokens=identity_tokens,
                 output_indices=output_indices,
                 output_positions=output_positions,
-                history_weights=history_weights,
+                position_increments=position_increments,
                 completion_index=completion_index,
                 pending_count=pending_count,
             )
@@ -11977,7 +12014,7 @@ class CompletionScheduler:
             match_length <= resident_reuse_len
             or match_length > len(request.prompt_tokens)
             or tuple(request.prompt_tokens[:match_length]) != match.tokens
-            or not request.prompt_plan.is_boundary(match_length)
+            or not request.prompt_plan.is_reusable_boundary(match_length)
         ):
             return False
         return not (
@@ -12054,7 +12091,7 @@ class CompletionScheduler:
         self.sequence_history.extend(
             seq_id,
             tokens,
-            request.prompt_plan.history_weights_up_to(len(tokens)),
+            request.prompt_plan.position_increments_up_to(len(tokens)),
         )
         self.model.truncate_draft_sequence(seq_id, 0)
         self.metrics.sequence_cache_hits_total += 1
@@ -12143,7 +12180,7 @@ class CompletionScheduler:
                 else:
                     self.model.add_batch_tokens(
                         seq_id=item.seq_id,
-                        start_pos=item.start_pos,
+                        start_pos=item.llama_start_pos,
                         tokens=item.tokens,
                         output_indices=item.output_indices,
                     )
@@ -12522,7 +12559,7 @@ class CompletionScheduler:
                     if segment_offset != 0:
                         raise RuntimeError("non-causal media segment was partially scheduled")
                     return segment.batch_rows
-                return sum(segment.history_weights[segment_offset:])
+                return segment.end_pos - source.prompt_cursor
             return segment.end_pos - source.prompt_cursor
         draft_count = (
             len(source.draft_tokens)
@@ -12551,22 +12588,8 @@ class CompletionScheduler:
             if already_allocated == 0 and segment.batch_rows <= capacity:
                 return segment.batch_rows
             return 0
-        segment_offset = source.prompt_cursor - segment.start_pos
-        weights = segment.history_weights[segment_offset:]
-        weight_index = 0
-        consumed = already_allocated
-        while consumed > 0 and weight_index < len(weights):
-            weight = weights[weight_index]
-            if consumed < weight:
-                raise RuntimeError("media allocation stopped inside a logical position")
-            consumed -= weight
-            weight_index += 1
-        rows = 0
-        for weight in weights[weight_index:]:
-            if rows + weight > capacity:
-                break
-            rows += weight
-        return rows
+        segment_offset = source.prompt_cursor - segment.start_pos + already_allocated
+        return segment.rows_for_capacity(segment_offset, capacity)
 
     def _allocate_pending_tokens(
         self,
@@ -12633,28 +12656,21 @@ class CompletionScheduler:
                 if segment.non_causal:
                     if segment_offset != 0 or token_count < segment.batch_rows:
                         raise RuntimeError("non-causal media segment must be scheduled atomically")
-                    logical_count = segment.n_pos
                     row_count = segment.batch_rows
-                    embeddings, positions, history_weights = segment.media_slice(
+                    embeddings, positions, position_increments = segment.media_slice(
                         0,
-                        logical_count,
+                        row_count,
                     )
                 else:
-                    logical_count = 0
-                    row_count = 0
-                    for weight in segment.history_weights[segment_offset:]:
-                        if row_count + weight > token_count:
-                            break
-                        row_count += weight
-                        logical_count += 1
-                    if logical_count <= 0:
+                    row_count = segment.rows_for_capacity(segment_offset, token_count)
+                    if row_count <= 0:
                         raise RuntimeError("media prompt allocation is too small")
-                    embeddings, positions, history_weights = segment.media_slice(
+                    embeddings, positions, position_increments = segment.media_slice(
                         segment_offset,
-                        logical_count,
+                        row_count,
                     )
                 logical_start = source.prompt_cursor
-                logical_end = logical_start + logical_count
+                logical_end = logical_start + row_count
                 output_indices = [None] * row_count
                 output_positions = [logical_start] * row_count
                 if output_positions:
@@ -12673,15 +12689,18 @@ class CompletionScheduler:
                         request_id=source.id,
                         seq_id=source.base_seq_id,
                         start_pos=logical_start,
+                        llama_start_pos=segment.decode_start_pos + sum(
+                            segment.decoder_position_increments[:segment_offset]
+                        ),
                         tokens=[],
                         identity_tokens=list(
                             segment.identity_tokens[
-                                segment_offset : segment_offset + logical_count
+                                segment_offset : segment_offset + row_count
                             ]
                         ),
                         output_indices=output_indices,
                         output_positions=output_positions,
-                        history_weights=history_weights,
+                        position_increments=position_increments,
                         embeddings=embeddings,
                         positions=positions,
                         non_causal=segment.non_causal,
@@ -12717,11 +12736,12 @@ class CompletionScheduler:
                     request_id=source.id,
                     seq_id=source.base_seq_id,
                     start_pos=source.prompt_cursor,
+                    llama_start_pos=segment.decode_start_pos + segment_offset,
                     tokens=chunk,
                     identity_tokens=identity_chunk,
                     output_indices=output_indices,
                     output_positions=output_positions,
-                    history_weights=segment.history_weights[
+                    position_increments=segment.decoder_position_increments[
                         segment_offset : segment_offset + len(identity_chunk)
                     ],
                 ),
@@ -12744,19 +12764,21 @@ class CompletionScheduler:
             ),
         ]
         output_indices = list(range(output_index, output_index + len(scheduled_tokens)))
+        start_pos = self.radix_trie.length(source.seq_id)
         return (
             CompletionScheduler.BatchItem.decode(
                 request_id=request.id,
                 seq_id=source.seq_id,
-                start_pos=self.radix_trie.length(source.seq_id),
+                start_pos=start_pos,
+                llama_start_pos=self.sequence_history.position_length(source.seq_id),
                 tokens=list(scheduled_tokens),
                 identity_tokens=list(scheduled_tokens),
                 output_indices=output_indices,
                 output_positions=[
-                    self.radix_trie.length(source.seq_id) + index
+                    start_pos + index
                     for index in range(len(scheduled_tokens))
                 ],
-                history_weights=[1] * len(scheduled_tokens),
+                position_increments=[1] * len(scheduled_tokens),
                 completion_index=source.index,
                 pending_count=pending_count,
             ),
@@ -12777,7 +12799,7 @@ class CompletionScheduler:
             self.sequence_history.extend(
                 item.seq_id,
                 item.identity_tokens,
-                item.history_weights,
+                item.position_increments,
             )
             if item.kind == "prefill":
                 request.capture_prompt_logprobs(
@@ -13016,7 +13038,7 @@ class CompletionScheduler:
             updates.append(
                 MTPDraftProvider.SampledBatchUpdate(
                     seq_id=item.seq_id,
-                    start_pos=item.start_pos,
+                    start_pos=item.llama_start_pos,
                     tokens=item.tokens,
                     row_indices=item_batch_rows,
                     target_count=target_count,
@@ -13340,7 +13362,7 @@ class CompletionScheduler:
             return
         checkpoint_seq_id = self.unused_sequences.pop()
         copy_p0 = 0
-        copy_p1 = len(request.prompt_tokens)
+        copy_p1 = request.prompt_plan.decoder_pos_up_to(len(request.prompt_tokens))
         if not self.model.kv_unified:
             copy_p0 = -1
             copy_p1 = -1
@@ -13640,12 +13662,13 @@ class CompletionScheduler:
         current_len = self.radix_trie.length(seq_id)
         if current_len <= keep_len:
             return
-        if not llama_cpp.llama_memory_seq_rm(self.model.mem, seq_id, keep_len, -1):
+        keep_pos = self.sequence_history.position_length_for_prefix(seq_id, keep_len)
+        if not llama_cpp.llama_memory_seq_rm(self.model.mem, seq_id, keep_pos, -1):
             raise RuntimeError(
-                f"failed to truncate model sequence {seq_id} at position {keep_len}"
+                f"failed to truncate model sequence {seq_id} at position {keep_pos}"
             )
         if truncate_draft:
-            self.model.truncate_draft_sequence(seq_id, keep_len)
+            self.model.truncate_draft_sequence(seq_id, keep_pos)
         self.truncate_sequence_metadata(seq_id, current_len, keep_len)
 
     def truncate_sequence_metadata(
