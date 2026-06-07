@@ -3335,7 +3335,7 @@ class ConfigFile(BaseModel):
         rope_scaling_type: Optional[int] = None
         pooling_type: Optional[int] = None
         attention_type: Optional[int] = None
-        embedding: bool = False
+        embedding: Optional[bool] = None
         rope_freq_base: Optional[float] = None
         rope_freq_scale: Optional[float] = None
         yarn_ext_factor: Optional[float] = None
@@ -10530,7 +10530,7 @@ class Model:
         rope_scaling_type: Optional[int] = None,
         pooling_type: Optional[int] = None,
         attention_type: Optional[int] = None,
-        embedding: bool = False,
+        embedding: Optional[bool] = None,
         rope_freq_base: Optional[float] = None,
         rope_freq_scale: Optional[float] = None,
         yarn_ext_factor: Optional[float] = None,
@@ -10566,7 +10566,6 @@ class Model:
         self.chat_template_override = chat_template
         self.response_schema = response_schema
         self.store_logits = store_logits
-        self.embedding = embedding
         self.max_output_tokens = max_output_tokens
         self.draft_model_max_batch_size = draft_model_max_batch_size
         self.draft_provider: Optional[DraftProvider] = None
@@ -10597,6 +10596,8 @@ class Model:
         if vocab is None:
             raise RuntimeError("failed to access model vocabulary")
         self.vocab = vocab
+        embedding = self.resolve_embedding_mode(llama_model, embedding)
+        self.embedding = embedding
         self.has_encoder = bool(llama_cpp.llama_model_has_encoder(llama_model))
         self.has_decoder = bool(llama_cpp.llama_model_has_decoder(llama_model))
         if self.has_encoder and not embedding:
@@ -11074,14 +11075,34 @@ class Model:
             llama_cpp.llama_backend_free()
             self.backend_initialized = False
 
-    def _meta_value(self, key: str) -> Optional[str]:
+    @staticmethod
+    def _model_meta_key_by_index(llama_model: Any, index: int) -> Optional[str]:
+        capacity = 256
+        while True:
+            buffer = ctypes.create_string_buffer(capacity)
+            count = int(
+                llama_cpp.llama_model_meta_key_by_index(
+                    llama_model,
+                    index,
+                    cast(Any, buffer),
+                    capacity,
+                )
+            )
+            if count < 0:
+                return None
+            if count < capacity:
+                return buffer.value.decode("utf-8", errors="ignore")
+            capacity = count + 1
+
+    @staticmethod
+    def _model_meta_value(llama_model: Any, key: str) -> Optional[str]:
         encoded = key.encode("utf-8")
         capacity = 256
         while True:
             buffer = ctypes.create_string_buffer(capacity)
             count = int(
                 llama_cpp.llama_model_meta_val_str(
-                    self.llama_model,
+                    llama_model,
                     encoded,
                     cast(Any, buffer),
                     capacity,
@@ -11092,6 +11113,50 @@ class Model:
             if count < capacity:
                 return buffer.value.decode("utf-8", errors="ignore")
             capacity = count + 1
+
+    @staticmethod
+    def _parse_pooling_type(value: str) -> Optional[int]:
+        normalized = value.strip().lower()
+        try:
+            return int(normalized)
+        except ValueError:
+            return {
+                "none": llama_cpp.LLAMA_POOLING_TYPE_NONE,
+                "mean": llama_cpp.LLAMA_POOLING_TYPE_MEAN,
+                "cls": llama_cpp.LLAMA_POOLING_TYPE_CLS,
+                "last": llama_cpp.LLAMA_POOLING_TYPE_LAST,
+                "rank": llama_cpp.LLAMA_POOLING_TYPE_RANK,
+            }.get(normalized)
+
+    @classmethod
+    def detect_embedding_model(cls, llama_model: Any) -> bool:
+        for index in range(int(llama_cpp.llama_model_meta_count(llama_model))):
+            key = cls._model_meta_key_by_index(llama_model, index)
+            if key is None or not key.endswith(".pooling_type"):
+                continue
+            value = cls._model_meta_value(llama_model, key)
+            if value is None:
+                continue
+            pooling_type = cls._parse_pooling_type(value)
+            return pooling_type in {
+                llama_cpp.LLAMA_POOLING_TYPE_MEAN,
+                llama_cpp.LLAMA_POOLING_TYPE_CLS,
+                llama_cpp.LLAMA_POOLING_TYPE_LAST,
+            }
+        return False
+
+    @classmethod
+    def resolve_embedding_mode(
+        cls,
+        llama_model: Any,
+        embedding: Optional[bool],
+    ) -> bool:
+        if embedding is not None:
+            return embedding
+        return cls.detect_embedding_model(llama_model)
+
+    def _meta_value(self, key: str) -> Optional[str]:
+        return self._model_meta_value(self.llama_model, key)
 
     def _build_chat_formatter(self) -> Optional[Jinja2ChatFormatter]:
         template_text = self.chat_template_override

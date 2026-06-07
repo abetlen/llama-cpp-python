@@ -213,8 +213,8 @@ Most model runtime fields map to `llama_model_params` or `llama_context_params` 
 | `threads` | Decode thread count. |
 | `threads_batch` | Prefill and batch thread count. |
 | `kv_unified` | Selects unified or per-sequence memory layout. |
-| `embedding` | Enables llama.cpp embedding extraction for `/v1/embeddings`. |
-| `pooling_type` | Selects pooled embedding behavior for embedding models, such as `1` for mean pooling. |
+| `embedding` | Overrides embedding mode; omit to auto-detect pooled embedding GGUFs from model metadata. |
+| `pooling_type` | Overrides pooled embedding behavior for embedding models, such as `1` for mean pooling. |
 | `store_logits` | Keeps logits after decode when needed by sampling or diagnostics. |
 | `use_mmap` | Memory maps model weights. |
 | `use_mlock` | Attempts to lock model pages into RAM. |
