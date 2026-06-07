@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.28]
+
 - feat(example): align server MTP support with llama.cpp by @abetlen in #2283
 - feat: update llama.cpp to ggml-org/llama.cpp@9e3b928fd
 - feat(example): add OpenAI-compatible embeddings endpoint by @abetlen in #2281
