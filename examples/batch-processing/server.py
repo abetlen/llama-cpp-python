@@ -3571,9 +3571,6 @@ class PromptPlan:
                 break
         return increments
 
-    def rows_up_to(self, pos: int) -> int:
-        return max(0, min(pos, self.length))
-
     def is_boundary(self, pos: int) -> bool:
         if pos <= 0 or pos >= self.length:
             return True
@@ -11483,7 +11480,7 @@ class UnifiedAttentionMemoryPolicy(AttentionMemoryPolicy):
         prompt_kv = request.prompt_plan.eval_token_count
         reuse_len = self.reuse_len_for_request(request, match_length)
         prefix_credit = match_length if claimable else reuse_len
-        prefix_credit_kv = request.prompt_plan.rows_up_to(prefix_credit)
+        prefix_credit_kv = max(0, min(prefix_credit, request.prompt_plan.length))
         generation_kv = self.generation_kv_for_request(request, prompt_length)
         if self.try_set_sequence_cache_match(
             request,
@@ -11619,7 +11616,7 @@ class CheckpointMemoryPolicy(MemoryPolicy):
             return True
         required_attn_kv = self.attention_kv_required(
             prompt_kv,
-            reused_kv=request.prompt_plan.rows_up_to(match_length),
+            reused_kv=max(0, min(match_length, request.prompt_plan.length)),
             generation_kv=generation_kv,
         )
         if len(self.scheduler.unused_sequences) >= required_sequence_ids and (
