@@ -12184,7 +12184,6 @@ class CompletionScheduler:
                 for request_id in list(self.active_request_ids):
                     self.fail_request(self.requests[request_id], exc)
                 for request in list(self.pending_requests):
-                    self.pending_requests.remove(request)
                     self.fail_request(request, exc)
                 return True
             self.metrics.observe_decode(
@@ -12281,7 +12280,6 @@ class CompletionScheduler:
         while self.pending_requests:
             request = self.pending_requests[0]
             if request.cancelled:
-                self.pending_requests.popleft()
                 self.fail_request(request, CompletionRequestCancelledError("request cancelled"))
                 continue
             if not self.can_admit(request):
@@ -13730,7 +13728,14 @@ class CompletionScheduler:
         self.active_request_ids.discard(request.id)
         self.requests.pop(request.id, None)
 
+    def remove_pending_request(self, request: CompletionRequest) -> None:
+        try:
+            self.pending_requests.remove(request)
+        except ValueError:
+            pass
+
     def fail_request(self, request: CompletionRequest, exc: BaseException) -> None:
+        self.remove_pending_request(request)
         if request.id in self.active_request_ids or request.admitted:
             self.release_request(request)
         else:
@@ -14184,7 +14189,6 @@ class CompletionScheduler:
         finalized = False
         for request in list(self.pending_requests):
             if request.cancelled:
-                self.pending_requests.remove(request)
                 self.fail_request(request, CompletionRequestCancelledError("request cancelled"))
                 finalized = True
         for request_id in list(self.active_request_ids):
