@@ -10102,6 +10102,7 @@ class MTMDProcessor:
             self.ctx,
             buffer,
             len(media_bytes),
+            False,
         )
         if bitmap is None:
             raise CompletionRequestValidationError(f"failed to create MTMD {kind} bitmap")

@@ -2841,6 +2841,7 @@ class Llava15ChatHandler:
                 self.mtmd_ctx,
                 (ctypes.c_uint8 * len(image_bytes)).from_buffer(bytearray(image_bytes)),
                 len(image_bytes),
+                False,
             )
 
             if bitmap is None:
@@ -3332,6 +3333,7 @@ class MTMDChatHandler:
                 self.mtmd_ctx,
                 (ctypes.c_uint8 * len(image_bytes)).from_buffer(bytearray(image_bytes)),
                 len(image_bytes),
+                False,
             )
 
             if bitmap is None:

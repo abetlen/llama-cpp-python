@@ -551,29 +551,30 @@ def mtmd_test_create_input_chunks() -> Optional[mtmd_input_chunks_p]:
 ################################################
 
 
-# MTMD_API mtmd_bitmap * mtmd_helper_bitmap_init_from_file(mtmd_context * ctx, const char * fname);
+# MTMD_API mtmd_bitmap * mtmd_helper_bitmap_init_from_file(mtmd_context * ctx, const char * fname, bool placeholder);
 @ctypes_function(
     "mtmd_helper_bitmap_init_from_file",
-    [mtmd_context_p_ctypes, c_char_p],
+    [mtmd_context_p_ctypes, c_char_p, c_bool],
     mtmd_bitmap_p_ctypes,
 )
 def mtmd_helper_bitmap_init_from_file(
-    ctx: mtmd_context_p, fname: bytes, /
+    ctx: mtmd_context_p, fname: bytes, placeholder: Union[c_bool, bool], /
 ) -> Optional[mtmd_bitmap_p]:
     """Initialize an MTMD bitmap from a file."""
     ...
 
 
-# MTMD_API mtmd_bitmap * mtmd_helper_bitmap_init_from_buf(mtmd_context * ctx, const unsigned char * buf, size_t len);
+# MTMD_API mtmd_bitmap * mtmd_helper_bitmap_init_from_buf(mtmd_context * ctx, const unsigned char * buf, size_t len, bool placeholder);
 @ctypes_function(
     "mtmd_helper_bitmap_init_from_buf",
-    [mtmd_context_p_ctypes, POINTER(c_uint8), c_size_t],
+    [mtmd_context_p_ctypes, POINTER(c_uint8), c_size_t, c_bool],
     mtmd_bitmap_p_ctypes,
 )
 def mtmd_helper_bitmap_init_from_buf(
     ctx: mtmd_context_p,
     buf: CtypesArray[c_uint8],
     length: Union[c_size_t, int],
+    placeholder: Union[c_bool, bool],
     /,
 ) -> Optional[mtmd_bitmap_p]: ...
 
