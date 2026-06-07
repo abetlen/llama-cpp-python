@@ -9841,27 +9841,38 @@ class MTMDProcessor:
     def __init__(
         self,
         *,
-        model: "Model",
+        model_path: str,
+        llama_model: Any,
+        chat_formatter: Jinja2ChatFormatter,
+        tokenize: Callable[..., List[int]],
+        n_embd_inp: int,
+        n_batch: int,
+        n_ubatch: int,
+        n_threads_batch: int,
         mmproj_path: str,
         embedding_cache: Optional[MTMDEmbeddingCache],
         image_max_bytes: int,
         audio_max_bytes: int,
         image_timeout_seconds: float,
     ) -> None:
-        self.model = model
+        self.chat_formatter = chat_formatter
+        self.tokenize = tokenize
+        self.n_embd_inp = n_embd_inp
+        self.n_batch = n_batch
+        self.n_ubatch = n_ubatch
         self.mmproj_path = mmproj_path
         self.embedding_cache = embedding_cache
-        self.model_fingerprint = MTMDEmbeddingCache.fingerprint_file(model.model_path)
+        self.model_fingerprint = MTMDEmbeddingCache.fingerprint_file(model_path)
         self.mmproj_fingerprint = MTMDEmbeddingCache.fingerprint_file(mmproj_path)
         self.image_max_bytes = image_max_bytes
         self.audio_max_bytes = audio_max_bytes
         self.image_timeout_seconds = image_timeout_seconds
         self.lock = threading.Lock()
         params = mtmd_cpp.mtmd_context_params_default()
-        params.n_threads = max(1, model.n_threads_batch)
+        params.n_threads = max(1, n_threads_batch)
         self.ctx = mtmd_cpp.mtmd_init_from_file(
             mmproj_path.encode("utf-8"),
-            model.llama_model,
+            llama_model,
             params,
         )
         if self.ctx is None:
@@ -9872,7 +9883,6 @@ class MTMDProcessor:
             mtmd_cpp.mtmd_free(self.ctx)
             self.ctx = None
             raise RuntimeError(f"MTMD projector does not support image or audio input: {mmproj_path}")
-        self.n_embd_inp = int(llama_cpp.llama_model_n_embd_inp(model.llama_model))
         self.media_marker = mtmd_cpp.mtmd_default_marker().decode("utf-8")
 
     def close(self) -> None:
@@ -10013,11 +10023,9 @@ class MTMDProcessor:
         tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
         reasoning_effort: Optional[str] = None,
     ) -> PromptPlan:
-        if self.model.chat_formatter is None:
-            raise CompletionRequestValidationError("model does not provide a GGUF chat template")
         media_inputs = Jinja2ChatFormatter.media_inputs_from_messages(messages)
         if not media_inputs:
-            prompt, generation_prompt, _ = self.model.chat_formatter.format(
+            prompt, generation_prompt, _ = self.chat_formatter.format(
                 messages=messages,
                 functions=functions,
                 function_call=function_call,
@@ -10025,7 +10033,7 @@ class MTMDProcessor:
                 tool_choice=tool_choice,
                 reasoning_effort=reasoning_effort,
             )
-            tokens = self.model.tokenize(prompt, add_bos=False, special=True)
+            tokens = self.tokenize(prompt, add_bos=False, special=True)
             return PromptPlan.from_tokens(prompt, tokens, generation_prompt=generation_prompt)
         if any(media.kind == "image" for media in media_inputs) and not self.supports_vision:
             raise CompletionRequestValidationError("MTMD projector does not support images")
@@ -10053,8 +10061,7 @@ class MTMDProcessor:
         tool_choice: Optional[Union[str, Dict[str, Any]]],
         reasoning_effort: Optional[str],
     ) -> PromptPlan:
-        assert self.model.chat_formatter is not None
-        prompt, generation_prompt, _ = self.model.chat_formatter.format(
+        prompt, generation_prompt, _ = self.chat_formatter.format(
             messages=messages,
             media_marker=self.media_marker,
             functions=functions,
@@ -10184,7 +10191,7 @@ class MTMDProcessor:
                     positions=positions,
                     non_causal=non_causal,
                 )
-                if non_causal and embeddings.shape[0] > min(self.model.n_batch, self.model.n_ubatch):
+                if non_causal and embeddings.shape[0] > min(self.n_batch, self.n_ubatch):
                     raise CompletionRequestValidationError(
                         f"non-causal {kind} embedding chunk exceeds model batch limits; "
                         "increase n_batch and n_ubatch"
@@ -15045,6 +15052,8 @@ def main() -> None:
         store_logits=config.model.store_logits,
     )
     if config.model.mtmd is not None:
+        if model.chat_formatter is None:
+            raise RuntimeError("MTMD requires a GGUF chat template")
         mmproj_path = config.model.mtmd.resolve_mmproj_path()
         embedding_cache: Optional[MTMDEmbeddingCache] = None
         if config.model.mtmd.embedding_cache is not None:
@@ -15055,7 +15064,14 @@ def main() -> None:
                 mmproj_fingerprint=MTMDEmbeddingCache.fingerprint_file(mmproj_path),
             )
         model.mtmd_processor = MTMDProcessor(
-            model=model,
+            model_path=model.model_path,
+            llama_model=model.llama_model,
+            chat_formatter=model.chat_formatter,
+            tokenize=model.tokenize,
+            n_embd_inp=model.n_embd_inp,
+            n_batch=model.n_batch,
+            n_ubatch=model.n_ubatch,
+            n_threads_batch=model.n_threads_batch,
             mmproj_path=mmproj_path,
             embedding_cache=embedding_cache,
             image_max_bytes=config.model.mtmd.image_max_bytes,
