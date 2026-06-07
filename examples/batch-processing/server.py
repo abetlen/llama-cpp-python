@@ -9704,9 +9704,8 @@ class MTMDEmbeddingCache:
         payload = f"{Path(path).resolve()}:{stat.st_size}:{stat.st_mtime_ns}"
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
-    @classmethod
-    def key_for_media_parts(
-        cls,
+    @staticmethod
+    def _build_key(
         *,
         model_fingerprint: str,
         mmproj_fingerprint: str,
@@ -9716,7 +9715,7 @@ class MTMDEmbeddingCache:
         digest = hashlib.sha256(f"{kind}:".encode("utf-8") + media_bytes).hexdigest()
         payload = ":".join(
             [
-                cls._metadata_version,
+                MTMDEmbeddingCache._metadata_version,
                 model_fingerprint,
                 mmproj_fingerprint,
                 kind,
@@ -9726,7 +9725,7 @@ class MTMDEmbeddingCache:
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
     def key_for_media(self, kind: Literal["image", "audio"], media_bytes: bytes) -> str:
-        return self.key_for_media_parts(
+        return self._build_key(
             model_fingerprint=self.model_fingerprint,
             mmproj_fingerprint=self.mmproj_fingerprint,
             kind=kind,
@@ -10114,7 +10113,7 @@ class MTMDProcessor:
                 key = (
                     self.embedding_cache.key_for_media(kind, media_bytes)
                     if self.embedding_cache is not None
-                    else MTMDEmbeddingCache.key_for_media_parts(
+                    else MTMDEmbeddingCache._build_key(
                         model_fingerprint=self.model_fingerprint,
                         mmproj_fingerprint=self.mmproj_fingerprint,
                         kind=kind,
