@@ -100,10 +100,10 @@ def _parse(text):
 
 def test_gemma4_parse_string_args():
     text = (
-        '<|tool_call>call:write_file{'
+        "<|tool_call>call:write_file{"
         'content:<|"|>print("hello")<|"|>,'
         'file_path:<|"|>hello.py<|"|>'
-        '}<tool_call|>'
+        "}<tool_call|>"
     )
     content, tool_calls = _parse(text)
     assert content is None
@@ -118,9 +118,9 @@ def test_gemma4_parse_string_args():
 
 def test_gemma4_parse_primitive_args():
     text = (
-        '<|tool_call>call:do_thing{'
-        'timeout:30,temperature:0.5,background:false,note:null'
-        '}<tool_call|>'
+        "<|tool_call>call:do_thing{"
+        "timeout:30,temperature:0.5,background:false,note:null"
+        "}<tool_call|>"
     )
     _, tool_calls = _parse(text)
     assert json.loads(tool_calls[0]["function"]["arguments"]) == {
@@ -133,9 +133,7 @@ def test_gemma4_parse_primitive_args():
 
 def test_gemma4_parse_list_of_strings():
     text = (
-        '<|tool_call>call:read_files{'
-        'files:[<|"|>a.py<|"|>,<|"|>b.py<|"|>]'
-        '}<tool_call|>'
+        '<|tool_call>call:read_files{files:[<|"|>a.py<|"|>,<|"|>b.py<|"|>]}<tool_call|>'
     )
     _, tool_calls = _parse(text)
     assert json.loads(tool_calls[0]["function"]["arguments"]) == {
@@ -145,8 +143,8 @@ def test_gemma4_parse_list_of_strings():
 
 def test_gemma4_strips_thought_block():
     text = (
-        '<|channel>thought\nLet me call the function.\n<channel|>'
-        '<|tool_call>call:f{x:1}<tool_call|>'
+        "<|channel>thought\nLet me call the function.\n<channel|>"
+        "<|tool_call>call:f{x:1}<tool_call|>"
     )
     _, tool_calls = _parse(text)
     assert tool_calls and json.loads(tool_calls[0]["function"]["arguments"]) == {"x": 1}
@@ -161,7 +159,7 @@ def test_gemma4_plain_text_passthrough():
 
 def test_gemma4_multiple_tool_calls():
     text = (
-        '<|tool_call>call:a{x:1}<tool_call|>'
+        "<|tool_call>call:a{x:1}<tool_call|>"
         '<|tool_call>call:b{y:<|"|>two<|"|>}<tool_call|>'
     )
     _, tool_calls = _parse(text)

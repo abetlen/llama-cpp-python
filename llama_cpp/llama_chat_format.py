@@ -4237,7 +4237,9 @@ def gemma4_chat_completion(
     if stop:
         effective_stop = [stop] if isinstance(stop, str) else list(stop)
     if result.stop is not None:
-        effective_stop += result.stop if isinstance(result.stop, list) else [result.stop]
+        effective_stop += (
+            result.stop if isinstance(result.stop, list) else [result.stop]
+        )
 
     if response_format is not None and response_format.get("type") == "json_object":
         grammar = _grammar_for_response_format(response_format, verbose=llama.verbose)
@@ -4275,7 +4277,10 @@ def gemma4_chat_completion(
     text = completion["choices"][0]["text"]
     content, tool_calls = _parse_gemma4_native_tool_calls(text)
 
-    message: Dict[str, Any] = {"role": "assistant", "content": content if not tool_calls else None}
+    message: Dict[str, Any] = {
+        "role": "assistant",
+        "content": content if not tool_calls else None,
+    }
     if tool_calls:
         message["tool_calls"] = tool_calls
 
@@ -4288,7 +4293,9 @@ def gemma4_chat_completion(
             {
                 "index": 0,
                 "finish_reason": (
-                    "tool_calls" if tool_calls else completion["choices"][0]["finish_reason"]
+                    "tool_calls"
+                    if tool_calls
+                    else completion["choices"][0]["finish_reason"]
                 ),
                 "logprobs": _convert_text_completion_logprobs_to_chat(
                     completion["choices"][0]["logprobs"]
