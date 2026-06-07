@@ -949,6 +949,10 @@ class llama_sampler_seq_config(ctypes.Structure):
 #                       // ref: https://github.com/ggml-org/llama.cpp/pull/14363
 #     struct llama_sampler_seq_config * samplers;
 #     size_t                            n_samplers;
+#
+#     // a source/target/parent context
+#     // can be utilized in various ways, for example by sharing results or llama_memory between 2 contexts
+#     struct llama_context * ctx_other;
 # };
 class llama_context_params(ctypes.Structure):
     """Parameters for llama_context
@@ -989,6 +993,7 @@ class llama_context_params(ctypes.Structure):
         kv_unified (bool): use a unified buffer across the input sequences when computing the attention
         samplers (ctypes.POINTER(llama_sampler_seq_config)): backend sampler chain configuration
         n_samplers (int): number of backend sampler chain configurations
+        ctx_other (llama_context_p): source, target, or parent context
     """
 
     if TYPE_CHECKING:
@@ -1027,6 +1032,7 @@ class llama_context_params(ctypes.Structure):
         kv_unified: bool
         samplers: ctypes.POINTER(llama_sampler_seq_config)
         n_samplers: int
+        ctx_other: llama_context_p
 
     _fields_ = [
         ("n_ctx", ctypes.c_uint32),
@@ -1064,6 +1070,7 @@ class llama_context_params(ctypes.Structure):
         ("kv_unified", ctypes.c_bool),
         ("samplers", ctypes.POINTER(llama_sampler_seq_config)),
         ("n_samplers", ctypes.c_size_t),
+        ("ctx_other", llama_context_p_ctypes),
     ]
 
 
