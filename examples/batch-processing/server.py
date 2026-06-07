@@ -10285,6 +10285,7 @@ class Model:
         self.max_output_tokens = max_output_tokens
         self.draft_model_max_batch_size = draft_model_max_batch_size
         self.draft_provider: Optional[DraftProvider] = None
+        self.loras = list(loras or [])
         self._lora_adapters: List[Any] = []
         self._lora_adapter_array: Optional[Any] = None
         self._lora_scales_array: Optional[Any] = None
@@ -10521,7 +10522,7 @@ class Model:
         else:
             raise RuntimeError(f"unsupported draft model: {draft_model}")
         try:
-            self._load_lora_adapters(loras or [])
+            self._load_lora_adapters(self.loras)
             self._apply_lora_adapters(self.ctx, "target")
             if isinstance(self.draft_provider, MTPDraftProvider):
                 self._apply_lora_adapters(self.draft_provider.ctx, "MTP draft")
@@ -11111,29 +11112,25 @@ class SequenceDiskCache(SequenceCache):
     TENSOR_PROMPT_LOGITS = "prompt_logits"
 
     METADATA_FORMAT = "sequence_cache_format"
-    METADATA_MODEL_PATH = "model_path"
-    METADATA_MODEL_SIZE = "model_size_bytes"
-    METADATA_MODEL_MTIME = "model_mtime_ns"
-    METADATA_MEMORY_MODEL = "memory_model"
-    METADATA_N_CTX = "n_ctx"
-    METADATA_N_CTX_SEQ = "n_ctx_seq"
-    METADATA_N_SEQ_MAX = "n_seq_max"
-    METADATA_N_VOCAB = "n_vocab"
-    METADATA_KV_UNIFIED = "kv_unified"
+    METADATA_COMPATIBILITY_KEY = "compatibility_key"
 
     def __init__(
         self,
         *,
         path: Union[str, Path],
         max_bytes: int,
-        model: "Model",
+        compatibility_key: str,
         min_tokens: int = 128,
     ) -> None:
         self.path = Path(path)
         self.path.mkdir(parents=True, exist_ok=True)
         self.max_bytes = max(0, int(max_bytes))
         self.min_tokens = max(1, int(min_tokens))
-        self._metadata = self._model_metadata(model)
+        self.compatibility_key = compatibility_key
+        self._metadata = {
+            self.METADATA_FORMAT: self.FORMAT_VERSION,
+            self.METADATA_COMPATIBILITY_KEY: compatibility_key,
+        }
         self._trie = RadixTrie()
         self._entries_by_id: Dict[int, SequenceDiskCache.Entry] = {}
         self._entries_by_tokens: Dict[Tuple[int, ...], SequenceDiskCache.Entry] = {}
@@ -11142,29 +11139,33 @@ class SequenceDiskCache(SequenceCache):
         self._load_entries()
         self._evict_if_needed()
 
-    @classmethod
-    def _model_metadata(cls, model: "Model") -> Dict[str, str]:
-        model_path = Path(model.model_path).resolve()
-        try:
-            model_stat = model_path.stat()
-            model_size = str(model_stat.st_size)
-            model_mtime_ns = str(model_stat.st_mtime_ns)
-        except OSError:
-            model_size = ""
-            model_mtime_ns = ""
+    @staticmethod
+    def fingerprint_file(path: str) -> str:
+        stat = os.stat(path)
+        payload = f"{Path(path).resolve()}:{stat.st_size}:{stat.st_mtime_ns}"
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
-        return {
-            cls.METADATA_FORMAT: cls.FORMAT_VERSION,
-            cls.METADATA_MODEL_PATH: str(model_path),
-            cls.METADATA_MODEL_SIZE: model_size,
-            cls.METADATA_MODEL_MTIME: model_mtime_ns,
-            cls.METADATA_MEMORY_MODEL: model.memory_model,
-            cls.METADATA_N_CTX: str(model.n_ctx),
-            cls.METADATA_N_CTX_SEQ: str(model.n_ctx_seq),
-            cls.METADATA_N_SEQ_MAX: str(model.n_seq_max),
-            cls.METADATA_N_VOCAB: str(model.n_vocab),
-            cls.METADATA_KV_UNIFIED: str(int(model.kv_unified)),
+    @classmethod
+    def compatibility_key_for_model(cls, model: "Model") -> str:
+        payload: Dict[str, Any] = {
+            "model": cls.fingerprint_file(model.model_path),
+            "memory_model": model.memory_model,
+            "loras": [
+                {
+                    "adapter": cls.fingerprint_file(lora.path),
+                    "scale": float(lora.scale),
+                }
+                for lora in model.loras
+            ],
         }
+        if model.memory_model == "attention-partitioned":
+            payload["attention_streams"] = model.n_seq_max
+        encoded = json.dumps(
+            payload,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
 
     @staticmethod
     def _safe_open(path: Path) -> Any:
@@ -15117,7 +15118,7 @@ def main() -> None:
             path=config.disk_cache.path,
             max_bytes=config.disk_cache.max_bytes,
             min_tokens=config.disk_cache.min_tokens,
-            model=model,
+            compatibility_key=SequenceDiskCache.compatibility_key_for_model(model),
         )
     scheduler = CompletionScheduler(model, sequence_cache=sequence_cache)
     APP.state.service = CompletionService(scheduler)
