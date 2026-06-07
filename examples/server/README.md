@@ -434,6 +434,22 @@ Use MTP when the loaded model and llama.cpp build expose the required draft stat
 }
 ```
 
+By default `draft-mtp` creates the MTP context from the target model.
+Set `draft_model_path` or `draft_model_from_pretrained` when the model uses a separate assistant GGUF.
+
+```json
+{
+  "model": {
+    "draft_model": "draft-mtp",
+    "draft_model_num_pred_tokens": 2,
+    "draft_model_from_pretrained": {
+      "repo_id": "example/gemma-assistant-GGUF",
+      "filename": "assistant.gguf"
+    }
+  }
+}
+```
+
 MTP currently applies to text-only requests.
 
 ## Disk Sequence Cache
