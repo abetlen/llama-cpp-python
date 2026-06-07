@@ -12,21 +12,39 @@ cd examples/server
 uv run --script server.py -C config.json
 ```
 
-Use the local checkout instead of the published `llama-cpp-python` package when testing changes in this repository.
+Use `uv run --index` to pull a pre-built `llama-cpp-python` binary wheel instead of building from source.
 
 ```bash
 cd examples/server
-uv run --with-editable ../.. --script server.py -C config.json
+uv run \
+  --index https://abetlen.github.io/llama-cpp-python/whl/cpu \
+  --script server.py -C config.json
 ```
 
-Check that the server is running.
+Pick the wheel index that matches the backend you want.
 
-```bash
-curl http://127.0.0.1:8000/healthz
-curl http://127.0.0.1:8000/v1/models
-```
+| Backend | Wheel index |
+| --- | --- |
+| CPU | `https://abetlen.github.io/llama-cpp-python/whl/cpu` |
+| CUDA 11.8 | `https://abetlen.github.io/llama-cpp-python/whl/cu118` |
+| CUDA 12.1 | `https://abetlen.github.io/llama-cpp-python/whl/cu121` |
+| CUDA 12.2 | `https://abetlen.github.io/llama-cpp-python/whl/cu122` |
+| CUDA 12.3 | `https://abetlen.github.io/llama-cpp-python/whl/cu123` |
+| CUDA 12.4 | `https://abetlen.github.io/llama-cpp-python/whl/cu124` |
+| CUDA 12.5 | `https://abetlen.github.io/llama-cpp-python/whl/cu125` |
+| CUDA 13.0 | `https://abetlen.github.io/llama-cpp-python/whl/cu130` |
+| CUDA 13.2 | `https://abetlen.github.io/llama-cpp-python/whl/cu132` |
+| Metal | `https://abetlen.github.io/llama-cpp-python/whl/metal` |
+| ROCm | `https://abetlen.github.io/llama-cpp-python/whl/rocm72` |
+| Vulkan | `https://abetlen.github.io/llama-cpp-python/whl/vulkan` |
 
-Use an OpenAI-compatible client by pointing it at the local server.
+See the repository installation section for the full [pre-built wheel requirements](../../README.md#supported-backends).
+
+## Client Examples
+
+Point an OpenAI-compatible client at the local `/v1` base URL.
+
+### Chat Completions
 
 ```python
 from openai import OpenAI
@@ -38,6 +56,20 @@ response = client.chat.completions.create(
     messages=[{"role": "user", "content": "What is the capital of France?"}],
 )
 print(response.choices[0].message.content)
+```
+
+### Responses API
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://127.0.0.1:8000/v1", api_key="not-used")
+
+response = client.responses.create(
+    model="gpt-4o-mini",
+    input="Write one sentence about why prefix caching helps batched inference.",
+)
+print(response.output_text)
 ```
 
 ## API Surface
