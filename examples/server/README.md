@@ -348,7 +348,9 @@ Set `model.draft_model` to enable speculative draft providers.
 }
 ```
 
-Use Qwen3.5 MTP when the loaded model and llama.cpp build expose the required draft state.
+### Multi-Token Prediction (MTP)
+
+Use MTP when the loaded model and llama.cpp build expose the required draft state.
 
 ```json
 {
@@ -384,33 +386,3 @@ MTP currently applies to text-only requests.
 | `min_tokens` | Minimum prefix length that is worth saving. |
 
 The cache is versioned by model and context compatibility data and should be treated as ephemeral.
-
-## Minimal Text-Only Config
-
-Use this as a starting point when multimodal support is not needed.
-
-```json
-{
-  "server": {
-    "host": "127.0.0.1",
-    "port": 8000
-  },
-  "model": {
-    "alias": "local-model",
-    "path": "/path/to/model.gguf",
-    "n_ctx": 8192,
-    "n_seq_max": 8,
-    "n_batch": 512,
-    "n_ubatch": 512,
-    "threads": 8,
-    "threads_batch": 8,
-    "kv_unified": true
-  }
-}
-```
-
-## Notes
-
-This example is self-contained while the server design is still changing.
-Keep checked-in `config.json` runnable and put machine-specific experiments in separate local config files.
-Do not depend on `llama_cpp_ext.py` outside this example because it exposes experimental non-public llama.cpp APIs.
