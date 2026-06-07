@@ -1,7 +1,7 @@
 # Server Example
 
 This example is an updated OpenAI-compatible web server that depends only on the low-level C bindings.
-It supports batched inference, prompt caching, response parsing, `/v1/responses`, disk sequence caching, MTP, LoRA, and multimodal image/audio inputs.
+It supports batched inference, prompt caching, response parsing, `/v1/responses`, `/v1/embeddings`, disk sequence caching, MTP, LoRA, and multimodal image/audio inputs.
 
 ## Setup
 
@@ -46,6 +46,7 @@ The smallest checked-in example uses Qwen3.5 0.8B so the server can be started o
 
 | Config | Model | Notes |
 | --- | --- | --- |
+| [`configs/bge-small-en-v1.5.json`](configs/bge-small-en-v1.5.json) | [`CompendiumLabs/bge-small-en-v1.5-gguf`](https://huggingface.co/CompendiumLabs/bge-small-en-v1.5-gguf) | Small embedding model config for `/v1/embeddings`. |
 | [`configs/qwen3.5-0.8b.json`](configs/qwen3.5-0.8b.json) | [`lmstudio-community/Qwen3.5-0.8B-GGUF`](https://huggingface.co/lmstudio-community/Qwen3.5-0.8B-GGUF) | Default small multimodal example. |
 | [`configs/gemma-4-12b-it-qat.json`](configs/gemma-4-12b-it-qat.json) | [`unsloth/gemma-4-12B-it-qat-GGUF`](https://huggingface.co/unsloth/gemma-4-12B-it-qat-GGUF) | Larger Gemma 4 QAT multimodal config with projector. |
 | [`configs/qwen3.6-27b.json`](configs/qwen3.6-27b.json) | [`unsloth/Qwen3.6-27B-GGUF`](https://huggingface.co/unsloth/Qwen3.6-27B-GGUF) | Larger Qwen3.6 multimodal config. |
@@ -86,11 +87,33 @@ response = client.responses.create(
 print(response.output_text)
 ```
 
+### Embeddings
+
+Start the server with an embedding config before calling `/v1/embeddings`.
+
+```bash
+cd examples/server
+uv run --script server.py -C configs/bge-small-en-v1.5.json
+```
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://127.0.0.1:8000/v1", api_key="not-used")
+
+response = client.embeddings.create(
+    model="bge-small-en-v1.5",
+    input=["The food was delicious.", "The meal was excellent."],
+)
+print(len(response.data[0].embedding))
+```
+
 ## API Surface
 
 | Endpoint | Purpose | Reference |
 | --- | --- | --- |
 | `POST /v1/completions` | Legacy text completions with streaming, stop sequences, logprobs, penalties, seeds, and grammar-backed JSON output. | [OpenAI Completions API](https://platform.openai.com/docs/api-reference/completions) |
+| `POST /v1/embeddings` | OpenAI-compatible embeddings for embedding-mode GGUF models, including string inputs, token inputs, base64 output, and dimensions truncation. | [OpenAI Embeddings API](https://platform.openai.com/docs/api-reference/embeddings) |
 | `POST /v1/chat/completions` | Chat completions with streaming, tools, forced tool choice, reasoning parsing, multimodal content parts, and structured response parsing. | [OpenAI Chat API](https://platform.openai.com/docs/api-reference/chat) |
 | `POST /v1/responses` | Stateless Responses API compatibility for clients that use response items and response events. | [OpenAI Responses API](https://platform.openai.com/docs/api-reference/responses) |
 | `WS /v1/responses` | Stateful websocket Responses transport with per-connection `previous_response_id` replay. | [OpenAI Responses API](https://platform.openai.com/docs/api-reference/responses) |
@@ -190,6 +213,8 @@ Most model runtime fields map to `llama_model_params` or `llama_context_params` 
 | `threads` | Decode thread count. |
 | `threads_batch` | Prefill and batch thread count. |
 | `kv_unified` | Selects unified or per-sequence memory layout. |
+| `embedding` | Enables llama.cpp embedding extraction for `/v1/embeddings`. |
+| `pooling_type` | Selects pooled embedding behavior for embedding models, such as `1` for mean pooling. |
 | `store_logits` | Keeps logits after decode when needed by sampling or diagnostics. |
 | `use_mmap` | Memory maps model weights. |
 | `use_mlock` | Attempts to lock model pages into RAM. |
