@@ -14420,24 +14420,14 @@ def create_app() -> FastAPI:
                 cancel()
                 return
 
-    async def disconnected_cancelled_response(
-        http_request: Request,
-        exc: BaseException,
-    ) -> Optional[Response]:
-        if not isinstance(exc, CompletionRequestCancelledError):
-            return None
-        if await http_request.is_disconnected():
-            return Response(status_code=204)
-        return None
-
     async def disconnected_cancelled_response_or_raise(
         http_request: Request,
         exc: BaseException,
     ) -> Response:
-        response = await disconnected_cancelled_response(http_request, exc)
-        if response is None:
-            raise exc
-        return response
+        if isinstance(exc, CompletionRequestCancelledError):
+            if await http_request.is_disconnected():
+                return Response(status_code=204)
+        raise exc
 
     def bad_request(exc: CompletionRequestValidationError) -> HTTPException:
         return HTTPException(status_code=400, detail=str(exc))
