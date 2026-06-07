@@ -144,10 +144,10 @@ ws ::= | " " | "\n" [ \t]{0,20}
 
 
 class JsonSchemaConverter:
+    @dataclass(frozen=True)
     class BuiltinRule:
-        def __init__(self, content: str, deps: Optional[List[str]] = None):
-            self.content = content
-            self.deps = deps or []
+        content: str
+        deps: Sequence[str] = ()
 
     SPACE_RULE = '" "?'
     INVALID_RULE_CHARS_RE = re.compile(r"[^a-zA-Z0-9-]+")
