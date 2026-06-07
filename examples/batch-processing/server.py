@@ -3728,6 +3728,7 @@ class SequenceCache(Protocol):
     @dataclass
     class Load:
         tokens: List[int]
+        state_bytes: np.ndarray
         prompt_logits: Optional[np.ndarray] = None
 
     def lookup(self, tokens: Sequence[int]) -> Optional["SequenceCache.Match"]:
@@ -3736,16 +3737,13 @@ class SequenceCache(Protocol):
     def load(
         self,
         match: "SequenceCache.Match",
-        model: "Model",
-        seq_id: int,
     ) -> Optional["SequenceCache.Load"]:
         ...
 
     def save(
         self,
-        model: "Model",
-        seq_id: int,
         tokens: Sequence[int],
+        state_bytes: np.ndarray,
         prompt_logits: Optional[np.ndarray],
     ) -> None:
         ...
@@ -11355,31 +11353,16 @@ class SequenceDiskCache(SequenceCache):
     def load(
         self,
         match: SequenceCache.Match,
-        model: "Model",
-        seq_id: int,
     ) -> Optional[SequenceCache.Load]:
         entry = self._entries_by_tokens.get(match.tokens)
         if entry is None:
             return None
 
         payload = self._read_entry_payload(entry)
-        state_size = int(payload.state_bytes.size)
-        state_buffer = (ctypes.c_uint8 * state_size).from_buffer(
-            cast(Any, payload.state_bytes)
-        )
-        loaded_bytes = int(
-            llama_cpp.llama_state_seq_set_data(
-                model.ctx,
-                state_buffer,
-                state_size,
-                cast(llama_cpp.llama_seq_id, seq_id),
-            )
-        )
-        if loaded_bytes != state_size:
-            return None
         self._touch(entry)
         return SequenceCache.Load(
             tokens=payload.tokens,
+            state_bytes=payload.state_bytes,
             prompt_logits=(
                 np.asarray(payload.prompt_logits, dtype=np.float32)
                 if payload.prompt_logits is not None
@@ -11389,29 +11372,16 @@ class SequenceDiskCache(SequenceCache):
 
     def save(
         self,
-        model: "Model",
-        seq_id: int,
         tokens: Sequence[int],
+        state_bytes: np.ndarray,
         prompt_logits: Optional[np.ndarray],
     ) -> None:
         if len(tokens) < self.min_tokens or self.max_bytes <= 0:
             return
-        c_seq_id = cast(llama_cpp.llama_seq_id, seq_id)
-        state_size = int(llama_cpp.llama_state_seq_get_size(model.ctx, c_seq_id))
-        if state_size <= 0:
+        state = np.asarray(state_bytes, dtype=np.uint8)
+        if state.size <= 0:
             return
-        state_buffer = (ctypes.c_uint8 * state_size)()
-        state_bytes = int(
-            llama_cpp.llama_state_seq_get_data(
-                model.ctx,
-                state_buffer,
-                state_size,
-                c_seq_id,
-            )
-        )
-        if state_bytes <= 0:
-            return
-        state = np.ctypeslib.as_array(state_buffer, shape=(state_bytes,)).copy()
+        state = np.ascontiguousarray(state).copy()
         entry_tokens = tuple(int(token) for token in tokens)
         tensors: Dict[str, np.ndarray] = {
             self.TENSOR_TOKENS: np.asarray(entry_tokens, dtype=np.int32),
@@ -11995,6 +11965,44 @@ class CompletionScheduler:
         self.metrics.sequence_cache_load_failures_total += 1
         return 0, None
 
+    def load_sequence_state_bytes(
+        self,
+        seq_id: int,
+        state_bytes: np.ndarray,
+    ) -> bool:
+        state = np.ascontiguousarray(state_bytes, dtype=np.uint8)
+        state_size = int(state.size)
+        if state_size <= 0:
+            return False
+        state_buffer = (ctypes.c_uint8 * state_size).from_buffer(cast(Any, state))
+        loaded_bytes = int(
+            llama_cpp.llama_state_seq_set_data(
+                self.model.ctx,
+                state_buffer,
+                state_size,
+                cast(llama_cpp.llama_seq_id, seq_id),
+            )
+        )
+        return loaded_bytes == state_size
+
+    def save_sequence_state_bytes(self, seq_id: int) -> Optional[np.ndarray]:
+        c_seq_id = cast(llama_cpp.llama_seq_id, seq_id)
+        state_size = int(llama_cpp.llama_state_seq_get_size(self.model.ctx, c_seq_id))
+        if state_size <= 0:
+            return None
+        state_buffer = (ctypes.c_uint8 * state_size)()
+        state_bytes = int(
+            llama_cpp.llama_state_seq_get_data(
+                self.model.ctx,
+                state_buffer,
+                state_size,
+                c_seq_id,
+            )
+        )
+        if state_bytes <= 0:
+            return None
+        return np.ctypeslib.as_array(state_buffer, shape=(state_bytes,)).copy()
+
     def hydrate_sequence_cache_match(
         self,
         request: CompletionRequest,
@@ -12004,7 +12012,7 @@ class CompletionScheduler:
         if self.sequence_cache is None or match is None:
             return 0, None
         try:
-            loaded = self.sequence_cache.load(match, self.model, seq_id)
+            loaded = self.sequence_cache.load(match)
         except Exception:  # noqa: BLE001
             return self.fail_sequence_cache_load(request, seq_id)
         if loaded is None:
@@ -12021,6 +12029,8 @@ class CompletionScheduler:
             and self.request_needs_prompt_logits(request)
             and loaded.prompt_logits is None
         ):
+            return self.fail_sequence_cache_load(request, seq_id)
+        if not self.load_sequence_state_bytes(seq_id, loaded.state_bytes):
             return self.fail_sequence_cache_load(request, seq_id)
         self.radix_trie.extend(seq_id, tokens)
         self.sequence_history.extend(
@@ -12043,11 +12053,13 @@ class CompletionScheduler:
             or request.sequence_cache_match_length == len(request.prompt_tokens)
         ):
             return
+        state_bytes = self.save_sequence_state_bytes(request.base_seq_id)
+        if state_bytes is None:
+            return
         try:
             self.sequence_cache.save(
-                self.model,
-                request.base_seq_id,
                 request.prompt_tokens,
+                state_bytes,
                 request.prompt_logits,
             )
         except Exception:  # noqa: BLE001
