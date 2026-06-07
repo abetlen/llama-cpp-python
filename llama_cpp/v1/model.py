@@ -288,7 +288,9 @@ class Model:
             return _dump_json(
                 self._service.formatter.aggregate_completion_results(completions)
             )
-        stream, cancel = self._service.submit(body.model_copy(update={"prompt": prompts[0]}))
+        stream, cancel = self._service.submit(
+            body.model_copy(update={"prompt": prompts[0]})
+        )
         if body.stream:
             return self._completion_stream(stream, cancel)
         return self._collect_completion(stream, cancel)
@@ -349,7 +351,9 @@ class Model:
         )
         stream, cancel = self._service.submit_request(request)
         if body.stream:
-            return self._response_stream(stream, cancel, body, request, parts, response_tools)
+            return self._response_stream(
+                stream, cancel, body, request, parts, response_tools
+            )
         completion = self._collect_completion_model(stream, cancel)
         return _dump_json(
             formatter.convert_completion_response_to_response(
@@ -445,7 +449,9 @@ class Model:
         finally:
             stream.close()
 
-    def _collect_completion(self, stream: Any, cancel: Callable[[], None]) -> Dict[str, Any]:
+    def _collect_completion(
+        self, stream: Any, cancel: Callable[[], None]
+    ) -> Dict[str, Any]:
         return _dump_json(self._collect_completion_model(stream, cancel))
 
     @staticmethod
@@ -519,7 +525,9 @@ class Model:
             for payload in formatter.start_response_stream(stream_state):
                 yield _dump_json(payload)
             while True:
-                done, completion_chunk, completion = formatter.next_stream_output(stream)
+                done, completion_chunk, completion = formatter.next_stream_output(
+                    stream
+                )
                 if done:
                     for payload in formatter.response_stream_terminal_events(
                         stream_state,

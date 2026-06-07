@@ -181,16 +181,22 @@ class JsonSchemaConverter:
             if up_to_n == 1:
                 return f"({content})?"
             if separator_rule and not prefix_with_sep:
-                return f"({content} {opt_repetitions(up_to_n - 1, prefix_with_sep=True)})?"
+                return (
+                    f"({content} {opt_repetitions(up_to_n - 1, prefix_with_sep=True)})?"
+                )
             return (f"({content} " * up_to_n).rstrip() + (")?" * up_to_n)
 
         if min_items > 0 and max_items != min_items:
             result += " "
 
         if max_items is not None:
-            result += opt_repetitions(max_items - min_items, prefix_with_sep=min_items > 0)
+            result += opt_repetitions(
+                max_items - min_items, prefix_with_sep=min_items > 0
+            )
         else:
-            item_operator = f"({separator_rule + ' ' if separator_rule else ''}{item_rule})"
+            item_operator = (
+                f"({separator_rule + ' ' if separator_rule else ''}{item_rule})"
+            )
             if min_items == 0 and separator_rule:
                 result = f"({item_rule} {item_operator}*)?"
             else:
@@ -213,7 +219,9 @@ class JsonSchemaConverter:
                     '("-"? integral-part) ("." decimal-part)? ([eE] [-+]? integral-part)? space',
                     ["integral-part", "decimal-part"],
                 ),
-                "integer": cls.BuiltinRule('("-"? integral-part) space', ["integral-part"]),
+                "integer": cls.BuiltinRule(
+                    '("-"? integral-part) space', ["integral-part"]
+                ),
                 "value": cls.BuiltinRule(
                     "object | array | string | number | boolean | null",
                     ["object", "array", "string", "number", "boolean", "null"],
@@ -267,7 +275,12 @@ class JsonSchemaConverter:
     def _reserved_names(cls) -> set[str]:
         if cls.RESERVED_NAMES is None:
             cls.RESERVED_NAMES = set(
-                ["root", "dot", *cls._primitive_rules().keys(), *cls._string_format_rules().keys()]
+                [
+                    "root",
+                    "dot",
+                    *cls._primitive_rules().keys(),
+                    *cls._string_format_rules().keys(),
+                ]
             )
         return cls.RESERVED_NAMES
 
@@ -442,7 +455,9 @@ class JsonSchemaConverter:
                     if not sub_is_literal:
                         rule_id = sub_rule_ids.get(sub)
                         if rule_id is None:
-                            rule_id = self._add_rule(f"{name}-{len(sub_rule_ids) + 1}", sub)
+                            rule_id = self._add_rule(
+                                f"{name}-{len(sub_rule_ids) + 1}", sub
+                            )
                             sub_rule_ids[sub] = rule_id
                         sub = rule_id
 
@@ -518,32 +533,49 @@ class JsonSchemaConverter:
         if "oneOf" in schema or "anyOf" in schema:
             return self._add_rule(
                 rule_name,
-                self._generate_union_rule(name, cast(List[Dict[str, Any]], schema.get("oneOf") or schema["anyOf"])),
+                self._generate_union_rule(
+                    name,
+                    cast(List[Dict[str, Any]], schema.get("oneOf") or schema["anyOf"]),
+                ),
             )
 
         if isinstance(schema_type, list):
             return self._add_rule(
                 rule_name,
-                self._generate_union_rule(name, [{"type": entry} for entry in schema_type]),
+                self._generate_union_rule(
+                    name, [{"type": entry} for entry in schema_type]
+                ),
             )
 
         if "const" in schema:
-            return self._add_rule(rule_name, self._generate_constant_rule(schema["const"]))
+            return self._add_rule(
+                rule_name, self._generate_constant_rule(schema["const"])
+            )
 
         if "enum" in schema:
-            rule = " | ".join(self._generate_constant_rule(value) for value in schema["enum"])
+            rule = " | ".join(
+                self._generate_constant_rule(value) for value in schema["enum"]
+            )
             return self._add_rule(rule_name, rule)
 
         if schema_type in (None, "object") and (
             "properties" in schema
-            or ("additionalProperties" in schema and schema["additionalProperties"] is not True)
+            or (
+                "additionalProperties" in schema
+                and schema["additionalProperties"] is not True
+            )
         ):
             required_props = set(schema.get("required", []))
-            property_items = list(cast(Dict[str, Any], schema.get("properties", {})).items())
+            property_items = list(
+                cast(Dict[str, Any], schema.get("properties", {})).items()
+            )
             return self._add_rule(
                 rule_name,
                 self._build_object_rule(
-                    property_items, required_props, name, schema.get("additionalProperties")
+                    property_items,
+                    required_props,
+                    name,
+                    schema.get("additionalProperties"),
                 ),
             )
 
@@ -551,12 +583,16 @@ class JsonSchemaConverter:
             allof_required_props: set[str] = set()
             allof_property_items: List[Tuple[str, Any]] = []
 
-            def add_component(component_schema: Dict[str, Any], is_required: bool) -> None:
+            def add_component(
+                component_schema: Dict[str, Any], is_required: bool
+            ) -> None:
                 component_ref = component_schema.get("$ref")
                 if component_ref is not None:
                     component_schema = cast(Dict[str, Any], self._refs[component_ref])
                 if "properties" in component_schema:
-                    for prop_name, prop_schema in cast(Dict[str, Any], component_schema["properties"]).items():
+                    for prop_name, prop_schema in cast(
+                        Dict[str, Any], component_schema["properties"]
+                    ).items():
                         allof_property_items.append((prop_name, prop_schema))
                         if is_required:
                             allof_required_props.add(prop_name)
@@ -578,7 +614,9 @@ class JsonSchemaConverter:
                 ),
             )
 
-        if schema_type in (None, "array") and ("items" in schema or "prefixItems" in schema):
+        if schema_type in (None, "array") and (
+            "items" in schema or "prefixItems" in schema
+        ):
             items = schema.get("items") or schema["prefixItems"]
             if isinstance(items, list):
                 return self._add_rule(
@@ -590,7 +628,9 @@ class JsonSchemaConverter:
                     )
                     + ' "]" space',
                 )
-            item_rule_name = self.visit(cast(Dict[str, Any], items), f"{name}{'-' if name else ''}item")
+            item_rule_name = self.visit(
+                cast(Dict[str, Any], items), f"{name}{'-' if name else ''}item"
+            )
             min_items = int(schema.get("minItems", 0))
             max_items = cast(Optional[int], schema.get("maxItems"))
             return self._add_rule(
@@ -608,17 +648,24 @@ class JsonSchemaConverter:
         if schema_type in (None, "string") and "pattern" in schema:
             return self._visit_pattern(cast(str, schema["pattern"]), rule_name)
 
-        if schema_type in (None, "string") and re.match(r"^uuid[1-5]?$", schema_format or ""):
+        if schema_type in (None, "string") and re.match(
+            r"^uuid[1-5]?$", schema_format or ""
+        ):
             return self._add_primitive(
                 "root" if rule_name == "root" else cast(str, schema_format),
                 self._primitive_rules()["uuid"],
             )
 
-        if schema_type in (None, "string") and f"{schema_format}-string" in self._string_format_rules():
+        if (
+            schema_type in (None, "string")
+            and f"{schema_format}-string" in self._string_format_rules()
+        ):
             primitive_name = f"{schema_format}-string"
             return self._add_rule(
                 rule_name,
-                self._add_primitive(primitive_name, self._string_format_rules()[primitive_name]),
+                self._add_primitive(
+                    primitive_name, self._string_format_rules()[primitive_name]
+                ),
             )
 
         if schema_type == "string" and ("minLength" in schema or "maxLength" in schema):
@@ -650,9 +697,9 @@ class JsonSchemaConverter:
         primitive_rules = self._primitive_rules()
         string_format_rules = self._string_format_rules()
         for dependency in rule.deps:
-            dependency_rule = primitive_rules.get(dependency) or string_format_rules.get(
+            dependency_rule = primitive_rules.get(
                 dependency
-            )
+            ) or string_format_rules.get(dependency)
             assert dependency_rule is not None, f"Rule {dependency} not known"
             if dependency not in self._rules:
                 self._add_primitive(dependency, dependency_rule)
@@ -694,7 +741,9 @@ class JsonSchemaConverter:
         if additional_properties is True or isinstance(additional_properties, dict):
             sub_name = f"{name}{'-' if name else ''}additional"
             value_rule = self.visit(
-                {} if additional_properties is True else cast(Dict[str, Any], additional_properties),
+                {}
+                if additional_properties is True
+                else cast(Dict[str, Any], additional_properties),
                 f"{sub_name}-value",
             )
             property_kv_rule_names["*"] = self._add_rule(
@@ -705,7 +754,9 @@ class JsonSchemaConverter:
             optional_props.append("*")
 
         rule = '"{" space '
-        rule += ' "," space '.join(property_kv_rule_names[key] for key in required_props)
+        rule += ' "," space '.join(
+            property_kv_rule_names[key] for key in required_props
+        )
 
         if optional_props:
             if required_props:
@@ -944,7 +995,9 @@ class RadixTrie:
             self.sequence_lengths[sequence_id] = keep_len
             boundary.tails.add(sequence_id)
 
-    def copy(self, source_sequence_id: int, dest_sequence_id: int, keep_len: int) -> None:
+    def copy(
+        self, source_sequence_id: int, dest_sequence_id: int, keep_len: int
+    ) -> None:
         assert source_sequence_id >= 0
         assert dest_sequence_id >= 0
         assert source_sequence_id in self.sequence_lengths
@@ -1003,7 +1056,9 @@ class RadixTrie:
             index += match_len
             candidates = node.tails if exact_only else node.sequences
             if candidates:
-                longest_sequence_id = self._pick_sequence(candidates, preferred_sequences)
+                longest_sequence_id = self._pick_sequence(
+                    candidates, preferred_sequences
+                )
                 longest_length = index
         return longest_sequence_id, longest_length
 
@@ -1282,8 +1337,7 @@ class MTPDraftProvider(DraftProvider):
         self._samplers: List[Any] = []
         self.pending_h = np.zeros((self.n_seq_max, self.n_embd), dtype=np.float32)
         self.verify_h: List[np.ndarray] = [
-            np.empty((0, self.n_embd), dtype=np.float32)
-            for _ in range(self.n_seq_max)
+            np.empty((0, self.n_embd), dtype=np.float32) for _ in range(self.n_seq_max)
         ]
         self.verify_h_pos: List[List[int]] = [[] for _ in range(self.n_seq_max)]
         self.verify_h_rows = [0] * self.n_seq_max
@@ -1307,6 +1361,7 @@ class MTPDraftProvider(DraftProvider):
     def _load_gguf_reader() -> Any:
         try:
             from gguf import GGUFReader  # type: ignore[import-not-found]
+
             return GGUFReader
         except ImportError:
             pass
@@ -1372,9 +1427,7 @@ class MTPDraftProvider(DraftProvider):
             f"{arch}.attention.layer_norm_rms_epsilon",
         )
         if epsilon is None:
-            raise RuntimeError(
-                f"MTP requires {arch}.attention.layer_norm_rms_epsilon"
-            )
+            raise RuntimeError(f"MTP requires {arch}.attention.layer_norm_rms_epsilon")
         for tensor in reader.tensors:
             if tensor.name == "output_norm.weight":
                 target_weight = np.asarray(tensor.data, dtype=np.float32).copy()
@@ -1399,7 +1452,9 @@ class MTPDraftProvider(DraftProvider):
             )
         return target_weight, draft_weight, float(epsilon)
 
-    def _normalize_hidden_rows(self, rows: np.ndarray, weight: np.ndarray) -> np.ndarray:
+    def _normalize_hidden_rows(
+        self, rows: np.ndarray, weight: np.ndarray
+    ) -> np.ndarray:
         rows = np.asarray(rows, dtype=np.float32)
         scale = np.reciprocal(
             np.sqrt(
@@ -1914,7 +1969,9 @@ class MTPDraftProvider(DraftProvider):
                     self._sample_token(row, seq_id=state.seq_id)
                     for row, state in enumerate(active)
                 ]
-                for row, (state, sampled_token) in enumerate(zip(active, sampled_tokens)):
+                for row, (state, sampled_token) in enumerate(
+                    zip(active, sampled_tokens)
+                ):
                     decoded_pos = state.first_pos + len(state.drafted)
                     self.context_pos[state.seq_id] = max(
                         self.context_pos[state.seq_id],
@@ -2033,9 +2090,7 @@ class MTPDraftProvider(DraftProvider):
                 if mtp_pos < 0:
                     continue
                 source_row = (
-                    None
-                    if target_index == 0
-                    else row_indices[target_index - 1]
+                    None if target_index == 0 else row_indices[target_index - 1]
                 )
                 context_rows.append(
                     self.SampledContextRow(
@@ -2263,11 +2318,7 @@ class MTPDraftProvider(DraftProvider):
         if not h_tgt:
             raise RuntimeError("missing target pre-norm embeddings for MTP")
         n_target_rows = max(
-            (
-                max(update.row_indices) + 1
-                for update in updates
-                if update.row_indices
-            ),
+            (max(update.row_indices) + 1 for update in updates if update.row_indices),
             default=0,
         )
         if n_target_rows <= 0:
@@ -2465,7 +2516,9 @@ class CreateCompletionRequest(BaseModel):
 
     @field_validator("logit_bias")
     @classmethod
-    def validate_logit_bias(cls, value: Optional[Dict[str, float]]) -> Optional[Dict[str, float]]:
+    def validate_logit_bias(
+        cls, value: Optional[Dict[str, float]]
+    ) -> Optional[Dict[str, float]]:
         if value is None:
             return None
         result: Dict[str, float] = {}
@@ -2494,15 +2547,16 @@ class CreateCompletionRequest(BaseModel):
         if all(isinstance(prompt, str) for prompt in self.prompt):
             return cast(List[Union[str, List[int]]], list(cast(List[str], self.prompt)))
         if all(
-            isinstance(prompt, list)
-            and all(isinstance(token, int) for token in prompt)
+            isinstance(prompt, list) and all(isinstance(token, int) for token in prompt)
             for prompt in self.prompt
         ):
             return cast(
                 List[Union[str, List[int]]],
                 list(cast(List[List[int]], self.prompt)),
             )
-        raise ValueError("prompt must be a string, token ids, list of strings, or list of token-id lists")
+        raise ValueError(
+            "prompt must be a string, token ids, list of strings, or list of token-id lists"
+        )
 
 
 class ChatCompletionFunctionCall(BaseModel):
@@ -2529,8 +2583,8 @@ class ChatCompletionRequestMessage(BaseModel):
         json_schema_extra=omit_additional_properties,
     )
 
-    role: Literal["system", "developer", "user", "assistant", "tool", "function"] = Field(
-        default="user"
+    role: Literal["system", "developer", "user", "assistant", "tool", "function"] = (
+        Field(default="user")
     )
     content: Optional[Union[str, List[Dict[str, Any]]]] = Field(default="")
     name: Optional[str] = Field(default=None)
@@ -2709,13 +2763,15 @@ class CreateChatCompletionRequest(BaseModel):
         Union[Literal["none", "auto", "required"], ChatCompletionToolChoiceObject]
     ] = None
     response_format: Optional[ChatCompletionResponseFormat] = None
-    reasoning_effort: Optional[
-        Literal["low", "medium", "high", "minimal", "none"]
-    ] = None
+    reasoning_effort: Optional[Literal["low", "medium", "high", "minimal", "none"]] = (
+        None
+    )
 
     @field_validator("logit_bias")
     @classmethod
-    def validate_logit_bias(cls, value: Optional[Dict[str, float]]) -> Optional[Dict[str, float]]:
+    def validate_logit_bias(
+        cls, value: Optional[Dict[str, float]]
+    ) -> Optional[Dict[str, float]]:
         if value is None:
             return None
         result: Dict[str, float] = {}
@@ -2777,13 +2833,12 @@ class ResponsesCustomTool(BaseModel):
             "This is a text tool. When calling it, the "
             "`function.arguments` field itself must be the raw input string. "
             "Do not wrap the input in JSON and do not use an object such as "
-            "'{\"input\": \"...\"}' or '{\"patch\": \"...\"}'."
+            '\'{"input": "..."}\' or \'{"patch": "..."}\'.'
         )
         if isinstance(syntax, str) and isinstance(definition, str):
             if description:
                 description = (
-                    f"{description}\n\n{text_tool_guidance}\n\n"
-                    f"{syntax}:\n{definition}"
+                    f"{description}\n\n{text_tool_guidance}\n\n{syntax}:\n{definition}"
                 )
             else:
                 description = f"{text_tool_guidance}\n\n{syntax}:\n{definition}"
@@ -3063,7 +3118,9 @@ class ConfigFile(BaseModel):
 
         @staticmethod
         def _match_single_file(pattern: str, file_list: Sequence[str]) -> str:
-            matching_files = [file for file in file_list if fnmatch.fnmatch(file, pattern)]
+            matching_files = [
+                file for file in file_list if fnmatch.fnmatch(file, pattern)
+            ]
             if len(matching_files) == 0:
                 raise ValueError(
                     f"No file found matching {pattern}\n\n"
@@ -3092,7 +3149,9 @@ class ConfigFile(BaseModel):
 
             validate_repo_id(self.repo_id)
             requested_patterns = [self.filename, *(self.additional_files or [])]
-            if not any(self._pattern_has_glob(pattern) for pattern in requested_patterns):
+            if not any(
+                self._pattern_has_glob(pattern) for pattern in requested_patterns
+            ):
                 model_path = self._download_repo_file(self.filename)
                 if self.additional_files:
                     for additional_file_name in self.additional_files:
@@ -3105,7 +3164,9 @@ class ConfigFile(BaseModel):
                     file["name"] if isinstance(file, dict) else file
                     for file in hffs.ls(self.repo_id, recursive=True)
                 ]
-                file_list = [str(Path(file).relative_to(self.repo_id)) for file in files]
+                file_list = [
+                    str(Path(file).relative_to(self.repo_id)) for file in files
+                ]
             except Exception as exc:
                 file_list = self._cached_repo_file_list()
                 if not file_list:
@@ -3131,7 +3192,9 @@ class ConfigFile(BaseModel):
         @model_validator(mode="after")
         def validate_source(self) -> "ConfigFile.LoraOptions":
             if (self.path is None) == (self.from_pretrained is None):
-                raise ValueError("exactly one of lora.path or lora.from_pretrained is required")
+                raise ValueError(
+                    "exactly one of lora.path or lora.from_pretrained is required"
+                )
             return self
 
         def resolve_path(self) -> str:
@@ -3228,7 +3291,9 @@ class ConfigFile(BaseModel):
         @model_validator(mode="after")
         def validate_source(self) -> "ConfigFile.ModelOptions":
             if (self.path is None) == (self.from_pretrained is None):
-                raise ValueError("exactly one of model.path or model.from_pretrained is required")
+                raise ValueError(
+                    "exactly one of model.path or model.from_pretrained is required"
+                )
             return self
 
         @field_validator("chat_template", mode="before")
@@ -3246,7 +3311,9 @@ class ConfigFile(BaseModel):
             assert self.path is not None
             return self.path
 
-    server: "ConfigFile.ServerOptions" = Field(default_factory=lambda: ConfigFile.ServerOptions())
+    server: "ConfigFile.ServerOptions" = Field(
+        default_factory=lambda: ConfigFile.ServerOptions()
+    )
     model: "ConfigFile.ModelOptions"
     disk_cache: Optional["ConfigFile.DiskCacheOptions"] = None
 
@@ -3302,8 +3369,12 @@ class Jinja2ChatFormatter:
                     image_url = part.get("image_url") or part.get("url")
                     if isinstance(image_url, str):
                         media_inputs.append(MediaInput(kind="image", url=image_url))
-                    elif isinstance(image_url, dict) and isinstance(image_url.get("url"), str):
-                        media_inputs.append(MediaInput(kind="image", url=cast(str, image_url["url"])))
+                    elif isinstance(image_url, dict) and isinstance(
+                        image_url.get("url"), str
+                    ):
+                        media_inputs.append(
+                            MediaInput(kind="image", url=cast(str, image_url["url"]))
+                        )
                     else:
                         raise ValueError("image_url content part requires a URL string")
                     continue
@@ -3311,8 +3382,12 @@ class Jinja2ChatFormatter:
                     audio_url = part.get("audio_url")
                     if isinstance(audio_url, str):
                         media_inputs.append(MediaInput(kind="audio", url=audio_url))
-                    elif isinstance(audio_url, dict) and isinstance(audio_url.get("url"), str):
-                        media_inputs.append(MediaInput(kind="audio", url=cast(str, audio_url["url"])))
+                    elif isinstance(audio_url, dict) and isinstance(
+                        audio_url.get("url"), str
+                    ):
+                        media_inputs.append(
+                            MediaInput(kind="audio", url=cast(str, audio_url["url"]))
+                        )
                     else:
                         raise ValueError("audio_url content part requires a URL string")
                     continue
@@ -3325,7 +3400,9 @@ class Jinja2ChatFormatter:
                         data = part.get("data")
                         audio_format = part.get("format")
                     if not isinstance(data, str):
-                        raise ValueError("input_audio content part requires base64 data")
+                        raise ValueError(
+                            "input_audio content part requires base64 data"
+                        )
                     if audio_format is not None and not isinstance(audio_format, str):
                         raise ValueError("input_audio format must be a string")
                     media_inputs.append(
@@ -3357,7 +3434,13 @@ class Jinja2ChatFormatter:
         if not isinstance(part, dict):
             raise ValueError("content parts must be strings or objects")
         part_type = part.get("type")
-        if part_type in {"image_url", "input_image", "image", "audio_url", "input_audio"}:
+        if part_type in {
+            "image_url",
+            "input_image",
+            "image",
+            "audio_url",
+            "input_audio",
+        }:
             if media_marker is None:
                 raise ValueError("multimodal content requires model.mtmd")
             return media_marker
@@ -3464,7 +3547,9 @@ class Jinja2ChatFormatter:
             add_generation_prompt=True,
             strftime_now=strftime_now,
         )
-        generation_prompt = prompt[len(chat_template) :] if prompt.startswith(chat_template) else ""
+        generation_prompt = (
+            prompt[len(chat_template) :] if prompt.startswith(chat_template) else ""
+        )
         stop = [self._eos_token] if self._eos_token else []
         return prompt, generation_prompt, stop
 
@@ -3651,10 +3736,9 @@ class PromptSegment:
         if len(self.media.positions) == self.batch_rows:
             positions = self.media.positions[row_start:row_end]
         else:
-            positions = (
-                self.media.positions.reshape(4, self.batch_rows)[:, row_start:row_end]
-                .reshape(-1)
-            )
+            positions = self.media.positions.reshape(4, self.batch_rows)[
+                :, row_start:row_end
+            ].reshape(-1)
         return (
             embeddings,
             positions,
@@ -3721,7 +3805,10 @@ class PromptPlan:
     def is_boundary(self, pos: int) -> bool:
         if pos <= 0 or pos >= self.length:
             return True
-        return any(segment.start_pos == pos or segment.end_pos == pos for segment in self.segments)
+        return any(
+            segment.start_pos == pos or segment.end_pos == pos
+            for segment in self.segments
+        )
 
     def is_reusable_boundary(self, pos: int) -> bool:
         if pos <= 0 or pos >= self.length:
@@ -3742,7 +3829,9 @@ class PromptPlan:
 
     def decoder_pos_up_to(self, pos: int) -> int:
         if not self.is_reusable_boundary(pos):
-            raise RuntimeError("decoder position requested inside a non-reusable media segment")
+            raise RuntimeError(
+                "decoder position requested inside a non-reusable media segment"
+            )
         if pos <= 0:
             return 0
         if pos >= self.length:
@@ -3797,7 +3886,9 @@ class ResponsesChatRequestParts:
     model: Optional[str]
     user: Optional[str]
     tools: Optional[List[ChatTemplateTool]]
-    tool_choice: Optional[Union[Literal["auto", "none", "required"], ChatTemplateToolChoice]]
+    tool_choice: Optional[
+        Union[Literal["auto", "none", "required"], ChatTemplateToolChoice]
+    ]
     response_format: Optional[ChatTemplateResponseFormat]
     reasoning_effort: Optional[str]
 
@@ -3851,10 +3942,7 @@ class SchedulerMetrics:
     ) -> None:
         if not items:
             return
-        total_tokens = sum(
-            item.batch_token_count
-            for item in items
-        )
+        total_tokens = sum(item.batch_token_count for item in items)
         if total_tokens <= 0:
             return
         prompt_tokens = sum(
@@ -3868,7 +3956,9 @@ class SchedulerMetrics:
         self.n_tokens_max = max(self.n_tokens_max, total_tokens)
         self.prompt_tokens_total += prompt_tokens
         if prompt_tokens > 0:
-            self.prompt_seconds_total += elapsed_seconds * (prompt_tokens / total_tokens)
+            self.prompt_seconds_total += elapsed_seconds * (
+                prompt_tokens / total_tokens
+            )
         if generation_tokens > 0:
             self.tokens_predicted_seconds_total += elapsed_seconds * (
                 generation_tokens / total_tokens
@@ -3896,22 +3986,19 @@ class SequenceCache(Protocol):
         state_bytes: np.ndarray
         prompt_logits: Optional[np.ndarray] = None
 
-    def lookup(self, tokens: Sequence[int]) -> Optional["SequenceCache.Match"]:
-        ...
+    def lookup(self, tokens: Sequence[int]) -> Optional["SequenceCache.Match"]: ...
 
     def load(
         self,
         match: "SequenceCache.Match",
-    ) -> Optional["SequenceCache.Load"]:
-        ...
+    ) -> Optional["SequenceCache.Load"]: ...
 
     def save(
         self,
         tokens: Sequence[int],
         state_bytes: np.ndarray,
         prompt_logits: Optional[np.ndarray],
-    ) -> None:
-        ...
+    ) -> None: ...
 
 
 @dataclass
@@ -3977,7 +4064,9 @@ class CompletionRequest:
             effective_max_len = min(ctx_limit, prompt_plan.length + payload.max_tokens)
         if effective_max_len < prompt_plan.length:
             raise CompletionRequestValidationError("prompt exceeds context window")
-        internal_completion_count = payload.best_of if payload.best_of is not None else payload.n
+        internal_completion_count = (
+            payload.best_of if payload.best_of is not None else payload.n
+        )
         request = cls(
             payload=payload,
             prompt_text=prompt_text,
@@ -3997,7 +4086,9 @@ class CompletionRequest:
 
     def selected_completions(self) -> List[Completion]:
         completions = list(self.completions)
-        best_of = self.payload.best_of if self.payload.best_of is not None else self.payload.n
+        best_of = (
+            self.payload.best_of if self.payload.best_of is not None else self.payload.n
+        )
         if best_of > self.payload.n:
             completions.sort(
                 key=lambda completion: (
@@ -4006,7 +4097,9 @@ class CompletionRequest:
                 ),
                 reverse=True,
             )
-        return sorted(completions[: self.payload.n], key=lambda completion: completion.index)
+        return sorted(
+            completions[: self.payload.n], key=lambda completion: completion.index
+        )
 
     def capture_prompt_logprobs(
         self,
@@ -4165,7 +4258,9 @@ class ResponseParser:
         self._message: Dict[str, Any] = {}
         self._stream_plan = self._cached_stream_plan(schema)
         self._direct = ResponseParser.DirectState(
-            deltas=bool(self._stream_plan is not None and self._stream_plan.get("direct_deltas")),
+            deltas=bool(
+                self._stream_plan is not None and self._stream_plan.get("direct_deltas")
+            ),
             pending="",
             mode=self.DIRECT_MODE_PRELUDE,
             done=False,
@@ -4231,7 +4326,9 @@ class ResponseParser:
             self._stream_state = None
         else:
             self._stream_state = (
-                self._new_stream_state(self._stream_plan) if self._stream_plan is not None else None
+                self._new_stream_state(self._stream_plan)
+                if self._stream_plan is not None
+                else None
             )
         self._stream_failed = False
         if self._generation_prompt and self._stream_plan is not None:
@@ -4250,7 +4347,9 @@ class ResponseParser:
             return None
         group_dict = match.groupdict()
         if group_dict:
-            return {key: value for key, value in group_dict.items() if value is not None}
+            return {
+                key: value for key, value in group_dict.items() if value is not None
+            }
         return match.group(1) if match.lastindex else match.group(0)
 
     @staticmethod
@@ -4321,7 +4420,12 @@ class ResponseParser:
             if marker_index < 0:
                 return text, False, "", ""
             if text.startswith(literal, marker_index):
-                return text[:marker_index], True, text[marker_index + literal_length :], ""
+                return (
+                    text[:marker_index],
+                    True,
+                    text[marker_index + literal_length :],
+                    "",
+                )
             suffix = text[marker_index:]
             if literal.startswith(suffix):
                 return text[:marker_index], False, "", suffix
@@ -4373,7 +4477,9 @@ class ResponseParser:
         suffix_pattern = pattern[last_group + 1 :]
         if suffix_pattern == "":
             return {"start": start, "end": "", "allow_eof": True}
-        eof_variant = suffix_pattern.endswith("|$)") and suffix_pattern.startswith("(?:")
+        eof_variant = suffix_pattern.endswith("|$)") and suffix_pattern.startswith(
+            "(?:"
+        )
         if eof_variant:
             suffix_pattern = suffix_pattern[3:-3]
         end = cls._regex_literal_prefix(suffix_pattern)
@@ -4394,7 +4500,9 @@ class ResponseParser:
                 return None
             if suffix_pattern == "":
                 return {"start": start, "end": "", "allow_eof": True}
-            eof_variant = suffix_pattern.endswith("|$)") and suffix_pattern.startswith("(?:")
+            eof_variant = suffix_pattern.endswith("|$)") and suffix_pattern.startswith(
+                "(?:"
+            )
             if eof_variant:
                 suffix_pattern = suffix_pattern[3:-3]
             end = cls._regex_literal_prefix(suffix_pattern)
@@ -4408,7 +4516,9 @@ class ResponseParser:
                 return None
             if suffix_pattern == "":
                 return {"start": start, "end": "", "allow_eof": True}
-            eof_variant = suffix_pattern.endswith("|$)") and suffix_pattern.startswith("(?:")
+            eof_variant = suffix_pattern.endswith("|$)") and suffix_pattern.startswith(
+                "(?:"
+            )
             if eof_variant:
                 suffix_pattern = suffix_pattern[3:-3]
             end = cls._regex_literal_prefix(suffix_pattern)
@@ -4446,7 +4556,9 @@ class ResponseParser:
             if literal and len(text) < len(literal) and literal.startswith(text):
                 return "", None, "", text
         literal_first_chars = {literal[0] for literal in literals if literal}
-        if literal_first_chars and not any(char in text for char in literal_first_chars):
+        if literal_first_chars and not any(
+            char in text for char in literal_first_chars
+        ):
             return text, None, "", ""
         earliest_index: Optional[int] = None
         earliest_literal: Optional[str] = None
@@ -4562,7 +4674,10 @@ class ResponseParser:
                 if not isinstance(iterator_pattern, str):
                     continue
                 iterator_capture = cls._compile_iterator_block_pattern(iterator_pattern)
-                if not isinstance(iterator_capture, dict) or not iterator_capture["start"]:
+                if (
+                    not isinstance(iterator_capture, dict)
+                    or not iterator_capture["start"]
+                ):
                     return None
                 items_schema = value_schema.get("items")
                 if not isinstance(items_schema, dict):
@@ -4636,13 +4751,16 @@ class ResponseParser:
             return None
         content_schema = properties.get("content")
         content_regex = (
-            content_schema.get("x-regex")
-            if isinstance(content_schema, dict)
-            else None
+            content_schema.get("x-regex") if isinstance(content_schema, dict) else None
         )
-        object_regex = schema.get("x-regex") if isinstance(schema.get("x-regex"), str) else None
+        object_regex = (
+            schema.get("x-regex") if isinstance(schema.get("x-regex"), str) else None
+        )
         assistant_prefix: Optional[str] = None
-        if isinstance(content_regex, str) and r"<\|im_start\|>assistant\n" in content_regex:
+        if (
+            isinstance(content_regex, str)
+            and r"<\|im_start\|>assistant\n" in content_regex
+        ):
             assistant_prefix = "<|im_start|>assistant\n"
         leading_capture: Optional[Dict[str, Any]] = None
         for field_name, value_schema in properties.items():
@@ -4684,8 +4802,7 @@ class ResponseParser:
         if not end_markers and iterator_start:
             end_markers.append(iterator_start)
         trim_before_iterator = (
-            isinstance(content_regex, str)
-            and r"\s*<tool_call>\n" in content_regex
+            isinstance(content_regex, str) and r"\s*<tool_call>\n" in content_regex
         )
         end_marker_tuple = tuple(end_markers)
         direct_deltas = item_plan["kind"] == "tagged-parameters"
@@ -4695,11 +4812,17 @@ class ResponseParser:
                 leading_capture["field"] if leading_capture is not None else None,
                 leading_capture["start"] if leading_capture is not None else "",
                 leading_capture["end"] if leading_capture is not None else "",
-                bool(leading_capture.get("strip_after")) if leading_capture is not None else False,
-                bool(leading_capture.get("implicit_at_start")) if leading_capture is not None else False,
+                bool(leading_capture.get("strip_after"))
+                if leading_capture is not None
+                else False,
+                bool(leading_capture.get("implicit_at_start"))
+                if leading_capture is not None
+                else False,
                 trim_before_iterator,
                 end_marker_tuple,
-                tuple(marker for marker in end_marker_tuple if marker != iterator_start),
+                tuple(
+                    marker for marker in end_marker_tuple if marker != iterator_start
+                ),
                 iterator_start,
                 iterator_end,
                 item_plan["function_start"],
@@ -4720,7 +4843,9 @@ class ResponseParser:
             "content_field": "content" if "content" in properties else None,
             "content_end_markers": end_marker_tuple,
             "trim_before_iterator": trim_before_iterator,
-            "stop_markers": tuple(marker for marker in end_marker_tuple if marker != iterator_start),
+            "stop_markers": tuple(
+                marker for marker in end_marker_tuple if marker != iterator_start
+            ),
             "direct_init": direct_init,
             "iterator": {
                 "start": iterator_start,
@@ -4935,7 +5060,9 @@ class ResponseParser:
                 "type": "function",
                 "function": {
                     "name": "",
-                    "arguments": ResponseParser.PartialJsonObject(OrderedDict(), complete=False),
+                    "arguments": ResponseParser.PartialJsonObject(
+                        OrderedDict(), complete=False
+                    ),
                 },
             },
             "current_parameter": None,
@@ -5011,7 +5138,9 @@ class ResponseParser:
         self._item.current_schema_type = None
         self._item.current_parameter_schema = {}
 
-    def _advance_direct_tool_call_state(self, text: str) -> Tuple[bool, List[Dict[str, Any]]]:
+    def _advance_direct_tool_call_state(
+        self, text: str
+    ) -> Tuple[bool, List[Dict[str, Any]]]:
         deltas: List[Dict[str, Any]] = []
         mode = self._item.mode
         tool_call_index = self._item.tool_call_index
@@ -5101,7 +5230,9 @@ class ResponseParser:
                     )
                     mode = self.ITEM_MODE_DONE
                     continue
-                if parameter_start.startswith(buffer) or function_end.startswith(buffer):
+                if parameter_start.startswith(buffer) or function_end.startswith(
+                    buffer
+                ):
                     self._item.pending = buffer
                     self._item.mode = mode
                     self._item.tool_name = tool_name
@@ -5136,13 +5267,26 @@ class ResponseParser:
                 if not parameter_name:
                     self._item.pending = ""
                     return False, deltas
-                parameter_schema = self._parameter_schema_for_tool(tool_name, parameter_name)
-                schema_type = parameter_schema.get("type") if isinstance(parameter_schema, dict) else None
+                parameter_schema = self._parameter_schema_for_tool(
+                    tool_name, parameter_name
+                )
+                schema_type = (
+                    parameter_schema.get("type")
+                    if isinstance(parameter_schema, dict)
+                    else None
+                )
                 current_parameter = parameter_name
                 current_parameter_value = ""
-                current_schema_type = schema_type if isinstance(schema_type, str) else None
+                current_schema_type = (
+                    schema_type if isinstance(schema_type, str) else None
+                )
                 current_parameter_schema = parameter_schema
-                key_prefix = json.dumps(parameter_name, ensure_ascii=False, separators=(",", ":")) + ":"
+                key_prefix = (
+                    json.dumps(
+                        parameter_name, ensure_ascii=False, separators=(",", ":")
+                    )
+                    + ":"
+                )
                 if parameter_count > 0:
                     key_prefix = "," + key_prefix
                 if schema_type in {None, "string"}:
@@ -5164,7 +5308,9 @@ class ResponseParser:
                 mode = self.ITEM_MODE_PARAMETER_VALUE
                 continue
             if mode == self.ITEM_MODE_PARAMETER_VALUE:
-                value_delta, matched, remainder, pending = self._consume_until_literal(buffer, parameter_end)
+                value_delta, matched, remainder, pending = self._consume_until_literal(
+                    buffer, parameter_end
+                )
                 current_parameter_value += value_delta
                 if value_delta:
                     assert visible_function is not None
@@ -5238,7 +5384,9 @@ class ResponseParser:
                     )
                     mode = self.ITEM_MODE_DONE
                     continue
-                if parameter_start.startswith(buffer) or function_end.startswith(buffer):
+                if parameter_start.startswith(buffer) or function_end.startswith(
+                    buffer
+                ):
                     self._item.pending = buffer
                     self._item.mode = mode
                     self._item.tool_name = tool_name
@@ -5262,7 +5410,9 @@ class ResponseParser:
                 self._item.parameter_count = parameter_count
                 return True, deltas
 
-    def _advance_direct_stream_state(self, text: str) -> Tuple[bool, List[Dict[str, Any]]]:
+    def _advance_direct_stream_state(
+        self, text: str
+    ) -> Tuple[bool, List[Dict[str, Any]]]:
         deltas: List[Dict[str, Any]] = []
         mode = self._direct.mode
         tool_call_count = self._direct.tool_call_count
@@ -5305,14 +5455,21 @@ class ResponseParser:
                     if leading_capture_implicit:
                         tool_index = buffer.find(iterator_start)
                         end_index = buffer.find(leading_capture_end)
-                        overlap = self._literal_suffix_prefix_length(buffer, leading_capture_end)
-                        if ((end_index >= 0 and (tool_index < 0 or end_index < tool_index)) or overlap):
+                        overlap = self._literal_suffix_prefix_length(
+                            buffer, leading_capture_end
+                        )
+                        if (
+                            end_index >= 0
+                            and (tool_index < 0 or end_index < tool_index)
+                        ) or overlap:
                             mode = self.DIRECT_MODE_LEADING_CAPTURE
                             continue
                 mode = self.DIRECT_MODE_CONTENT
                 continue
             if mode == self.DIRECT_MODE_LEADING_CAPTURE:
-                segment, matched, remainder, pending = self._consume_until_literal(buffer, leading_capture_end)
+                segment, matched, remainder, pending = self._consume_until_literal(
+                    buffer, leading_capture_end
+                )
                 if segment:
                     assert leading_capture_field is not None
                     self._append_visible_text(leading_capture_field, segment)
@@ -5324,15 +5481,24 @@ class ResponseParser:
                     self._direct.saw_tool_calls = saw_tool_calls
                     self._direct.done = done
                     return True, deltas
-                buffer = remainder.lstrip() if leading_capture_strip_after else remainder
+                buffer = (
+                    remainder.lstrip() if leading_capture_strip_after else remainder
+                )
                 mode = self.DIRECT_MODE_CONTENT
                 continue
             if mode == self.DIRECT_MODE_CONTENT:
-                segment, matched_marker, remainder, pending = self._consume_until_any_literal(
-                    buffer,
-                    content_end_markers,
+                segment, matched_marker, remainder, pending = (
+                    self._consume_until_any_literal(
+                        buffer,
+                        content_end_markers,
+                    )
                 )
-                content_segment = segment.rstrip() if matched_marker == iterator_start and self._direct.trim_before_iterator else segment
+                content_segment = (
+                    segment.rstrip()
+                    if matched_marker == iterator_start
+                    and self._direct.trim_before_iterator
+                    else segment
+                )
                 if content_segment:
                     self._append_visible_text("content", content_segment)
                     deltas.append({"content": content_segment})
@@ -5358,9 +5524,13 @@ class ResponseParser:
                 self._direct.done = done
                 return True, deltas
             if mode == self.DIRECT_MODE_TOOL_ITEM:
-                item_text, matched, remainder, pending = self._consume_until_literal(buffer, iterator_end)
+                item_text, matched, remainder, pending = self._consume_until_literal(
+                    buffer, iterator_end
+                )
                 if item_text:
-                    success, item_deltas = self._advance_direct_tool_call_state(item_text)
+                    success, item_deltas = self._advance_direct_tool_call_state(
+                        item_text
+                    )
                     if not success:
                         self._direct.pending = ""
                         self._direct.mode = mode
@@ -5403,7 +5573,10 @@ class ResponseParser:
                         self._direct.saw_tool_calls = saw_tool_calls
                         self._direct.done = done
                         return True, deltas
-                if any(marker.startswith(buffer) for marker in content_end_markers) or buffer.isspace():
+                if (
+                    any(marker.startswith(buffer) for marker in content_end_markers)
+                    or buffer.isspace()
+                ):
                     self._direct.pending = buffer
                     self._direct.mode = mode
                     self._direct.tool_call_count = tool_call_count
@@ -5490,24 +5663,32 @@ class ResponseParser:
                     continue
                 if mode == "arguments":
                     if buffer:
-                        item_state["arguments_text"] = item_state["arguments_text"] + buffer
+                        item_state["arguments_text"] = (
+                            item_state["arguments_text"] + buffer
+                        )
                         deltas.append(
                             {
                                 "tool_calls": [
                                     {
-                                        "index": cast(int, item_state["tool_call_index"]),
+                                        "index": cast(
+                                            int, item_state["tool_call_index"]
+                                        ),
                                         "function": {"arguments": buffer},
                                     }
                                 ]
                             }
                         )
                     item_state["pending"] = ""
-                    arguments_schema = cast(Dict[str, Any], item_plan["arguments_schema"])
+                    arguments_schema = cast(
+                        Dict[str, Any], item_plan["arguments_schema"]
+                    )
                     schema_type = arguments_schema.get("type")
                     if not self._advance_json_scanner(
                         item_state,
                         buffer,
-                        schema_type=schema_type if isinstance(schema_type, str) else None,
+                        schema_type=schema_type
+                        if isinstance(schema_type, str)
+                        else None,
                     ):
                         return False, deltas
                     return True, deltas
@@ -5578,7 +5759,9 @@ class ResponseParser:
                         }
                     )
                     continue
-                if parameter_start.startswith(buffer) or function_end.startswith(buffer):
+                if parameter_start.startswith(buffer) or function_end.startswith(
+                    buffer
+                ):
                     item_state["pending"] = buffer
                     return True, deltas
                 if not buffer:
@@ -5602,9 +5785,13 @@ class ResponseParser:
                 if not parameter_name:
                     return False, deltas
                 function = item_state["tool_call"]["function"]
-                arguments = cast(ResponseParser.PartialJsonObject, function["arguments"])
+                arguments = cast(
+                    ResponseParser.PartialJsonObject, function["arguments"]
+                )
                 tool_name = function["name"]
-                parameter_schema = self._parameter_schema_for_tool(tool_name, parameter_name)
+                parameter_schema = self._parameter_schema_for_tool(
+                    tool_name, parameter_name
+                )
                 schema_type = (
                     parameter_schema.get("type")
                     if isinstance(parameter_schema, dict)
@@ -5615,11 +5802,14 @@ class ResponseParser:
                     schema_type=schema_type if isinstance(schema_type, str) else None,
                     complete=False,
                 )
-                key_prefix = json.dumps(
-                    parameter_name,
-                    ensure_ascii=False,
-                    separators=(",", ":"),
-                ) + ":"
+                key_prefix = (
+                    json.dumps(
+                        parameter_name,
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    )
+                    + ":"
+                )
                 if len(arguments.value) > 1:
                     key_prefix = "," + key_prefix
                 if schema_type in {None, "string"}:
@@ -5648,7 +5838,9 @@ class ResponseParser:
                     parameter_end,
                 )
                 function = item_state["tool_call"]["function"]
-                arguments = cast(ResponseParser.PartialJsonObject, function["arguments"])
+                arguments = cast(
+                    ResponseParser.PartialJsonObject, function["arguments"]
+                )
                 parameter_name = cast(str, item_state["current_parameter"])
                 current_value = arguments.value[parameter_name]
                 assert isinstance(current_value, ResponseParser.PartialJsonValue)
@@ -5668,7 +5860,9 @@ class ResponseParser:
                     item_state["pending"] = pending
                     return True, deltas
                 tool_name = function["name"]
-                parameter_schema = self._parameter_schema_for_tool(tool_name, parameter_name)
+                parameter_schema = self._parameter_schema_for_tool(
+                    tool_name, parameter_name
+                )
                 self._coerce_tool_argument(
                     current_value.text,
                     parameter_schema,
@@ -5719,7 +5913,9 @@ class ResponseParser:
                         }
                     )
                     continue
-                if parameter_start.startswith(buffer) or function_end.startswith(buffer):
+                if parameter_start.startswith(buffer) or function_end.startswith(
+                    buffer
+                ):
                     item_state["pending"] = buffer
                     return True, deltas
                 if not buffer:
@@ -5746,7 +5942,11 @@ class ResponseParser:
         if item_plan["kind"] == "json-message":
             if item_state["mode"] != "arguments":
                 return None
-            if item_state["pending"] or not item_state["json_started"] or not item_state["json_complete"]:
+            if (
+                item_state["pending"]
+                or not item_state["json_started"]
+                or not item_state["json_complete"]
+            ):
                 return None
             try:
                 arguments = self._parse_response_value(
@@ -5809,9 +6009,11 @@ class ResponseParser:
             state.pending = ""
             while True:
                 if state.mode == "segment-start":
-                    _, matched_start, remainder, pending = self._consume_until_any_literal(
-                        buffer,
-                        cast(Tuple[str, ...], self._stream_plan["segment_starts"]),
+                    _, matched_start, remainder, pending = (
+                        self._consume_until_any_literal(
+                            buffer,
+                            cast(Tuple[str, ...], self._stream_plan["segment_starts"]),
+                        )
                     )
                     if matched_start is None:
                         state.pending = buffer if not pending else pending
@@ -5827,7 +6029,9 @@ class ResponseParser:
                         else "segment-field"
                     )
                     if state.current_segment["kind"] == "iterator":
-                        item_state = self._new_tool_call_state(state.current_segment["item"])
+                        item_state = self._new_tool_call_state(
+                            state.current_segment["item"]
+                        )
                         if item_state["kind"] in {"tagged-parameters", "json-message"}:
                             tool_calls = cast(
                                 List[Dict[str, Any]],
@@ -5842,9 +6046,11 @@ class ResponseParser:
                     current_segment = state.current_segment
                     if not isinstance(current_segment, dict):
                         return False, deltas
-                    segment_text, matched, remainder, pending = self._consume_until_literal(
-                        buffer,
-                        cast(str, current_segment["end"]),
+                    segment_text, matched, remainder, pending = (
+                        self._consume_until_literal(
+                            buffer,
+                            cast(str, current_segment["end"]),
+                        )
                     )
                     field_name = cast(str, current_segment["field"])
                     self._append_parsed_text(parsed, field_name, segment_text)
@@ -5864,9 +6070,11 @@ class ResponseParser:
                     active_item_state = state.current_item
                     if not isinstance(active_item_state, dict):
                         return False, deltas
-                    item_text, matched, remainder, pending = self._consume_until_literal(
-                        buffer,
-                        cast(str, current_segment["end"]),
+                    item_text, matched, remainder, pending = (
+                        self._consume_until_literal(
+                            buffer,
+                            cast(str, current_segment["end"]),
+                        )
                     )
                     if item_text:
                         success, item_deltas = self._advance_tool_call_state(
@@ -5887,7 +6095,9 @@ class ResponseParser:
                     if tool_call is None:
                         return False, deltas
                     if active_item_state["kind"] == "buffered":
-                        tool_calls = cast(List[Dict[str, Any]], parsed.setdefault("tool_calls", []))
+                        tool_calls = cast(
+                            List[Dict[str, Any]], parsed.setdefault("tool_calls", [])
+                        )
                         tool_call_index = len(tool_calls)
                         tool_calls.append(tool_call)
                         deltas.append(
@@ -5951,7 +6161,9 @@ class ResponseParser:
                         capture_end = leading_capture["end"]
                         tool_index = buffer.find(iterator_start)
                         end_index = buffer.find(capture_end)
-                        overlap = self._literal_suffix_prefix_length(buffer, capture_end)
+                        overlap = self._literal_suffix_prefix_length(
+                            buffer, capture_end
+                        )
                         if (
                             end_index >= 0
                             and (tool_index < 0 or end_index < tool_index)
@@ -5972,20 +6184,27 @@ class ResponseParser:
                 if not matched:
                     state.pending = pending
                     return True, deltas
-                buffer = remainder.lstrip() if leading_capture.get("strip_after") else remainder
+                buffer = (
+                    remainder.lstrip()
+                    if leading_capture.get("strip_after")
+                    else remainder
+                )
                 state.mode = "content"
                 continue
             if mode == "content":
                 content_field = plan.get("content_field")
                 end_markers = cast(List[str], plan["content_end_markers"])
-                segment, matched_marker, remainder, pending = self._consume_until_any_literal(
-                    buffer,
-                    end_markers,
+                segment, matched_marker, remainder, pending = (
+                    self._consume_until_any_literal(
+                        buffer,
+                        end_markers,
+                    )
                 )
                 if content_field is not None:
                     content_segment = (
                         segment.rstrip()
-                        if matched_marker == iterator_start and plan.get("trim_before_iterator")
+                        if matched_marker == iterator_start
+                        and plan.get("trim_before_iterator")
                         else segment
                     )
                     self._append_parsed_text(parsed, content_field, content_segment)
@@ -5998,7 +6217,9 @@ class ResponseParser:
                     item_state = self._new_tool_call_state(plan["iterator"]["item"])
                     state.saw_tool_calls = True
                     if item_state["kind"] == "tagged-parameters":
-                        tool_calls = cast(List[Dict[str, Any]], parsed.setdefault("tool_calls", []))
+                        tool_calls = cast(
+                            List[Dict[str, Any]], parsed.setdefault("tool_calls", [])
+                        )
                         tool_calls.append(item_state["tool_call"])
                         item_state["tool_call_index"] = len(tool_calls) - 1
                     state.current_item = item_state
@@ -6056,7 +6277,9 @@ class ResponseParser:
                     item_state = self._new_tool_call_state(plan["iterator"]["item"])
                     state.saw_tool_calls = True
                     if item_state["kind"] == "tagged-parameters":
-                        tool_calls = cast(List[Dict[str, Any]], parsed.setdefault("tool_calls", []))
+                        tool_calls = cast(
+                            List[Dict[str, Any]], parsed.setdefault("tool_calls", [])
+                        )
                         tool_calls.append(item_state["tool_call"])
                         item_state["tool_call_index"] = len(tool_calls) - 1
                     state.current_item = item_state
@@ -6552,7 +6775,9 @@ class ResponseParser:
             partial=partial,
         )
         if not isinstance(parsed, dict):
-            raise CompletionResponseParsingError("response_schema must produce an object")
+            raise CompletionResponseParsingError(
+                "response_schema must produce an object"
+            )
         if partial:
             self._trim_partial_tool_call_prefix(
                 response_text=full_response_text,
@@ -6660,7 +6885,9 @@ class ResponseParser:
             if value.complete and value.schema_type in {None, "string"}:
                 return json.dumps(value.text, ensure_ascii=False, separators=(",", ":"))
             if value.schema_type in {None, "string"}:
-                return json.dumps(value.text, ensure_ascii=False, separators=(",", ":"))[:-1]
+                return json.dumps(
+                    value.text, ensure_ascii=False, separators=(",", ":")
+                )[:-1]
             return value.text
         if isinstance(value, ResponseParser.PartialJsonObject):
             return cls._serialize_partial_json_prefix(value.value)
@@ -6673,13 +6900,17 @@ class ResponseParser:
             for index, (key, item_value) in enumerate(items):
                 if index > 0:
                     rendered.append(",")
-                rendered.append(json.dumps(key, ensure_ascii=False, separators=(",", ":")))
+                rendered.append(
+                    json.dumps(key, ensure_ascii=False, separators=(",", ":"))
+                )
                 rendered.append(":")
                 if index == last_index:
                     rendered.append(cls._serialize_partial_json_prefix(item_value))
                 else:
                     rendered.append(
-                        json.dumps(item_value, ensure_ascii=False, separators=(",", ":"))
+                        json.dumps(
+                            item_value, ensure_ascii=False, separators=(",", ":")
+                        )
                     )
             return "".join(rendered)
         if isinstance(value, list):
@@ -6694,7 +6925,9 @@ class ResponseParser:
                     rendered.append(cls._serialize_partial_json_prefix(item_value))
                 else:
                     rendered.append(
-                        json.dumps(item_value, ensure_ascii=False, separators=(",", ":"))
+                        json.dumps(
+                            item_value, ensure_ascii=False, separators=(",", ":")
+                        )
                     )
             return "".join(rendered)
         if isinstance(value, str):
@@ -6708,7 +6941,9 @@ class ResponseParser:
         if isinstance(value, ResponseParser.PartialJsonObject):
             return True
         if isinstance(value, dict):
-            return any(cls._contains_partial_json_value(item) for item in value.values())
+            return any(
+                cls._contains_partial_json_value(item) for item in value.values()
+            )
         if isinstance(value, list):
             return any(cls._contains_partial_json_value(item) for item in value)
         return False
@@ -6717,7 +6952,9 @@ class ResponseParser:
     def _serialize_partial_json_state(cls, value: Any) -> Tuple[str, bool]:
         if isinstance(value, ResponseParser.PartialJsonValue):
             if value.schema_type in {None, "string"}:
-                rendered = json.dumps(value.text, ensure_ascii=False, separators=(",", ":"))
+                rendered = json.dumps(
+                    value.text, ensure_ascii=False, separators=(",", ":")
+                )
                 if value.complete:
                     return rendered, True
                 return rendered[:-1], False
@@ -6737,7 +6974,9 @@ class ResponseParser:
                     parts.append(",")
                 parts.append(json.dumps(key, ensure_ascii=False, separators=(",", ":")))
                 parts.append(":")
-                rendered_item, item_complete = cls._serialize_partial_json_state(item_value)
+                rendered_item, item_complete = cls._serialize_partial_json_state(
+                    item_value
+                )
                 parts.append(rendered_item)
                 if index == len(items) - 1 and not item_complete:
                     return "".join(parts), False
@@ -6748,7 +6987,9 @@ class ResponseParser:
             for index, item_value in enumerate(value):
                 if index > 0:
                     parts.append(",")
-                rendered_item, item_complete = cls._serialize_partial_json_state(item_value)
+                rendered_item, item_complete = cls._serialize_partial_json_state(
+                    item_value
+                )
                 parts.append(rendered_item)
                 if index == len(value) - 1 and not item_complete:
                     return "".join(parts), False
@@ -6851,9 +7092,15 @@ class ResponseParser:
                 deltas.append({"content": content_delta})
 
         new_tool_calls = cast(List[Dict[str, Any]], message.get("tool_calls", []))
-        old_tool_calls = cast(List[Dict[str, Any]], previous_message.get("tool_calls", []))
+        old_tool_calls = cast(
+            List[Dict[str, Any]], previous_message.get("tool_calls", [])
+        )
         for tool_call_index, tool_call in enumerate(new_tool_calls):
-            old_tool_call = old_tool_calls[tool_call_index] if tool_call_index < len(old_tool_calls) else None
+            old_tool_call = (
+                old_tool_calls[tool_call_index]
+                if tool_call_index < len(old_tool_calls)
+                else None
+            )
             delta_tool_call: Dict[str, Any] = {"index": tool_call_index}
             if old_tool_call is None:
                 delta_tool_call["id"] = tool_call["id"]
@@ -6865,7 +7112,9 @@ class ResponseParser:
                 else {}
             )
             function_delta: Dict[str, Any] = {}
-            if function.get("name") and function.get("name") != old_function.get("name"):
+            if function.get("name") and function.get("name") != old_function.get(
+                "name"
+            ):
                 function_delta["name"] = function["name"]
             arguments = cast(str, function.get("arguments", ""))
             old_arguments = cast(str, old_function.get("arguments", ""))
@@ -6924,9 +7173,13 @@ class ResponseParser:
                 function["name"] = cast(str, function.get("name", "")) + name_delta
             arguments_delta = function_delta.get("arguments")
             if isinstance(arguments_delta, str):
-                function["arguments"] = cast(str, function.get("arguments", "")) + arguments_delta
+                function["arguments"] = (
+                    cast(str, function.get("arguments", "")) + arguments_delta
+                )
         if tool_calls:
-            message["function_call"] = dict(cast(Dict[str, Any], tool_calls[0]["function"]))
+            message["function_call"] = dict(
+                cast(Dict[str, Any], tool_calls[0]["function"])
+            )
 
     def parse_completion_message(self, response_text: str) -> Dict[str, Any]:
         parsed = self.parse_chat_response(response_text, partial=False)
@@ -6965,10 +7218,10 @@ class ResponseParser:
         if self._stream_plan is None:
             return False
         if self._direct.deltas:
-            return (
-                not self._direct.pending
-                and self._direct.mode in {self.DIRECT_MODE_CONTENT, self.DIRECT_MODE_AFTER_TOOL_ITEM}
-            )
+            return not self._direct.pending and self._direct.mode in {
+                self.DIRECT_MODE_CONTENT,
+                self.DIRECT_MODE_AFTER_TOOL_ITEM,
+            }
         if self._stream_state is None:
             return False
         if self._stream_plan["kind"] == "json-root":
@@ -7124,7 +7377,9 @@ class ResponseParser:
                             model=model,
                             deltas=stream_deltas,
                             finish_reason=(
-                                "tool_calls" if self._direct.saw_tool_calls else finish_reason
+                                "tool_calls"
+                                if self._direct.saw_tool_calls
+                                else finish_reason
                             ),
                             logprobs=logprobs,
                             leading_delta=role_delta,
@@ -7151,7 +7406,9 @@ class ResponseParser:
                             model=model,
                             deltas=stream_deltas,
                             finish_reason=(
-                                "tool_calls" if self._message.get("tool_calls") else finish_reason
+                                "tool_calls"
+                                if self._message.get("tool_calls")
+                                else finish_reason
                             ),
                             logprobs=logprobs,
                         )
@@ -7168,7 +7425,9 @@ class ResponseParser:
                     if finish_reason is None:
                         if role_delta is not None:
                             partial_deltas.append(role_delta)
-                        partial_deltas.extend(self._message_deltas(previous_message, message))
+                        partial_deltas.extend(
+                            self._message_deltas(previous_message, message)
+                        )
                         self._message = message
                         return self._chunk_payloads(
                             chunk_id=chunk_id,
@@ -7181,7 +7440,9 @@ class ResponseParser:
                     if self._stream_state_complete():
                         if role_delta is not None:
                             partial_deltas.append(role_delta)
-                        partial_deltas.extend(self._message_deltas(previous_message, message))
+                        partial_deltas.extend(
+                            self._message_deltas(previous_message, message)
+                        )
                         self._message = message
                         return self._chunk_payloads(
                             chunk_id=chunk_id,
@@ -7189,7 +7450,9 @@ class ResponseParser:
                             model=model,
                             deltas=partial_deltas,
                             finish_reason=(
-                                "tool_calls" if message.get("tool_calls") else finish_reason
+                                "tool_calls"
+                                if message.get("tool_calls")
+                                else finish_reason
                             ),
                             logprobs=logprobs,
                         )
@@ -7199,7 +7462,9 @@ class ResponseParser:
 
         response_text = "".join(self._text_parts)
         parsed = self.parse_chat_response(response_text, partial=finish_reason is None)
-        message = self._parsed_chat_message(parsed=parsed, partial=finish_reason is None)
+        message = self._parsed_chat_message(
+            parsed=parsed, partial=finish_reason is None
+        )
         previous_message = self._message
         deltas: List[Dict[str, Any]] = []
         if role_delta is not None:
@@ -7267,8 +7532,7 @@ class OpenAIFormatter:
             else payload
         )
         return (
-            "data: "
-            f"{json.dumps(data, ensure_ascii=False, separators=(',', ':'))}\n\n"
+            f"data: {json.dumps(data, ensure_ascii=False, separators=(',', ':'))}\n\n"
         ).encode("utf-8")
 
     @staticmethod
@@ -7354,13 +7618,23 @@ class OpenAIFormatter:
         if isinstance(content, str):
             return content
         if not isinstance(content, list):
-            raise CompletionRequestValidationError("responses input content must be a string or list")
+            raise CompletionRequestValidationError(
+                "responses input content must be a string or list"
+            )
         parts: List[str] = []
         for part in content:
             if not isinstance(part, dict):
-                raise CompletionRequestValidationError("responses content parts must be objects")
+                raise CompletionRequestValidationError(
+                    "responses content parts must be objects"
+                )
             part_type = part.get("type")
-            if part_type in {"input_text", "output_text", "reasoning_text", "summary_text", "text"}:
+            if part_type in {
+                "input_text",
+                "output_text",
+                "reasoning_text",
+                "summary_text",
+                "text",
+            }:
                 text = part.get("text")
                 if not isinstance(text, str):
                     raise CompletionRequestValidationError(
@@ -7380,13 +7654,23 @@ class OpenAIFormatter:
         if isinstance(content, str):
             return content
         if not isinstance(content, list):
-            raise CompletionRequestValidationError("responses input content must be a string or list")
+            raise CompletionRequestValidationError(
+                "responses input content must be a string or list"
+            )
         parts: List[Dict[str, Any]] = []
         for part in content:
             if not isinstance(part, dict):
-                raise CompletionRequestValidationError("responses content parts must be objects")
+                raise CompletionRequestValidationError(
+                    "responses content parts must be objects"
+                )
             part_type = part.get("type")
-            if part_type in {"input_text", "output_text", "reasoning_text", "summary_text", "text"}:
+            if part_type in {
+                "input_text",
+                "output_text",
+                "reasoning_text",
+                "summary_text",
+                "text",
+            }:
                 text = part.get("text")
                 if not isinstance(text, str):
                     raise CompletionRequestValidationError(
@@ -7512,7 +7796,9 @@ class OpenAIFormatter:
             raise CompletionRequestValidationError("function_call input requires name")
         arguments = item.get("arguments", "")
         if not isinstance(arguments, str):
-            raise CompletionRequestValidationError("function_call input requires string arguments")
+            raise CompletionRequestValidationError(
+                "function_call input requires string arguments"
+            )
         call_id = item.get("call_id") or item.get("id") or f"call_{uuid.uuid4().hex}"
         return self._response_tool_call_input_message(
             name=name,
@@ -7527,10 +7813,14 @@ class OpenAIFormatter:
     ) -> ChatCompletionRequestMessage:
         name = item.get("name")
         if not isinstance(name, str) or not name:
-            raise CompletionRequestValidationError("custom_tool_call input requires name")
+            raise CompletionRequestValidationError(
+                "custom_tool_call input requires name"
+            )
         input_text = item.get("input", "")
         if not isinstance(input_text, str):
-            raise CompletionRequestValidationError("custom_tool_call input requires string input")
+            raise CompletionRequestValidationError(
+                "custom_tool_call input requires string input"
+            )
         call_id = item.get("call_id") or item.get("id") or f"call_{uuid.uuid4().hex}"
         content_type = item.get("content_type")
         if not isinstance(content_type, str) or not content_type:
@@ -7791,7 +8081,9 @@ class OpenAIFormatter:
         )
 
     @staticmethod
-    def _response_format_type(response_format: Optional[ChatTemplateResponseFormat]) -> Optional[str]:
+    def _response_format_type(
+        response_format: Optional[ChatTemplateResponseFormat],
+    ) -> Optional[str]:
         if response_format is None:
             return None
         format_type = response_format.get("type")
@@ -7812,7 +8104,9 @@ class OpenAIFormatter:
             assert response_format is not None
             schema = response_format.get("schema")
             if schema is None and isinstance(response_format.get("json_schema"), dict):
-                schema = cast(Dict[str, Any], response_format["json_schema"]).get("schema")
+                schema = cast(Dict[str, Any], response_format["json_schema"]).get(
+                    "schema"
+                )
             if not isinstance(schema, dict):
                 raise CompletionRequestValidationError(
                     "json_schema response format requires a schema object"
@@ -7845,7 +8139,9 @@ class OpenAIFormatter:
             model=body.model,
             user=body.user,
             tools=chat_tools,
-            tool_choice=self._responses_tool_choice_to_chat_tool_choice(body.tool_choice),
+            tool_choice=self._responses_tool_choice_to_chat_tool_choice(
+                body.tool_choice
+            ),
             response_format=response_format,
             reasoning_effort=self._response_reasoning_effort(body),
         )
@@ -7859,7 +8155,9 @@ class OpenAIFormatter:
         generation_prompt: str = "",
     ) -> ResponseParser:
         if self.model.response_schema is None:
-            raise CompletionResponseParsingError("model does not define response_schema")
+            raise CompletionResponseParsingError(
+                "model does not define response_schema"
+            )
         return ResponseParser(
             self.model.response_schema,
             tools=tools,
@@ -7888,8 +8186,12 @@ class OpenAIFormatter:
         self,
         *,
         tools: Optional[List[ChatTemplateTool]],
-        function_call: Optional[Union[Literal["none", "auto"], ChatTemplateFunctionCall]],
-        tool_choice: Optional[Union[Literal["none", "auto", "required"], ChatTemplateToolChoice]],
+        function_call: Optional[
+            Union[Literal["none", "auto"], ChatTemplateFunctionCall]
+        ],
+        tool_choice: Optional[
+            Union[Literal["none", "auto", "required"], ChatTemplateToolChoice]
+        ],
         response_format: Optional[ChatTemplateResponseFormat],
     ) -> Tuple[Optional[str], Optional[str]]:
         selected_tool_choice: Optional[Union[str, ChatTemplateToolChoice]] = tool_choice
@@ -7909,7 +8211,9 @@ class OpenAIFormatter:
         if tools is None:
             raise CompletionRequestValidationError("tool choice requires tools")
         tool_name = selected_tool_choice["function"]["name"]
-        tool = next((tool for tool in tools if tool["function"]["name"] == tool_name), None)
+        tool = next(
+            (tool for tool in tools if tool["function"]["name"] == tool_name), None
+        )
         if tool is None:
             raise CompletionRequestValidationError(
                 f"Tool choice '{tool_name}' not found in tools."
@@ -7952,13 +8256,15 @@ class OpenAIFormatter:
             tools=tools,
         )
         try:
-            prompt_text, generation_prompt, prompt_plan, formatter_stop = self.model.build_chat_prompt(
-                body.messages,
-                functions=functions,
-                function_call=function_call,
-                tools=tools,
-                tool_choice=tool_choice,
-                reasoning_effort=body.reasoning_effort,
+            prompt_text, generation_prompt, prompt_plan, formatter_stop = (
+                self.model.build_chat_prompt(
+                    body.messages,
+                    functions=functions,
+                    function_call=function_call,
+                    tools=tools,
+                    tool_choice=tool_choice,
+                    reasoning_effort=body.reasoning_effort,
+                )
             )
             tool_name, grammar_text = self._chat_tool_name_and_grammar(
                 tools=parser_tools,
@@ -8015,11 +8321,13 @@ class OpenAIFormatter:
         body: ResponsesChatRequestParts,
     ) -> PreparedCompletionParts:
         try:
-            prompt_text, generation_prompt, prompt_plan, formatter_stop = self.model.build_chat_prompt(
-                body.messages,
-                tools=body.tools,
-                tool_choice=body.tool_choice,
-                reasoning_effort=body.reasoning_effort,
+            prompt_text, generation_prompt, prompt_plan, formatter_stop = (
+                self.model.build_chat_prompt(
+                    body.messages,
+                    tools=body.tools,
+                    tool_choice=body.tool_choice,
+                    reasoning_effort=body.reasoning_effort,
+                )
             )
             tool_name, grammar_text = self._chat_tool_name_and_grammar(
                 tools=body.tools,
@@ -8512,7 +8820,9 @@ class OpenAIFormatter:
         choice = cast(Dict[str, Any], chat_payload["choices"][0])
         message = cast(Dict[str, Any], choice["message"])
         response_id = "resp_" + completion.id
-        logprobs = self._response_logprobs_from_completion(completion.choices[0].logprobs)
+        logprobs = self._response_logprobs_from_completion(
+            completion.choices[0].logprobs
+        )
         return self._response_from_chat_message(
             body=body,
             response_id=response_id,
@@ -8726,7 +9036,9 @@ class OpenAIFormatter:
                 item["name"] = current_name + name_delta
         if isinstance(arguments_delta, str) and arguments_delta:
             if item.get("type") == "custom_tool_call":
-                raw_arguments = cast(str, item.get("_raw_arguments", "")) + arguments_delta
+                raw_arguments = (
+                    cast(str, item.get("_raw_arguments", "")) + arguments_delta
+                )
                 item["_raw_arguments"] = raw_arguments
                 normalized_input = self._normalize_text_tool_payload(raw_arguments)
                 if normalized_input is not None:
@@ -9044,7 +9356,9 @@ class OpenAIFormatter:
             incomplete_details=state.incomplete_details,
             completed_at=time.time() if status in {"completed", "incomplete"} else None,
         )
-        event_type = "response.incomplete" if status == "incomplete" else "response.completed"
+        event_type = (
+            "response.incomplete" if status == "incomplete" else "response.completed"
+        )
         return [self._response_event(state, event_type, response=response)]
 
     def aggregate_completion_results(
@@ -9116,7 +9430,9 @@ class OpenAIFormatter:
     def _convert_completion_logprobs_to_chat_chunk(
         logprobs: Optional[CompletionLogprobs],
     ) -> Optional[ChatCompletionChunkChoiceLogprobs]:
-        choice_logprobs = OpenAIFormatter._convert_completion_logprobs_to_chat_choice(logprobs)
+        choice_logprobs = OpenAIFormatter._convert_completion_logprobs_to_chat_choice(
+            logprobs
+        )
         if choice_logprobs is None:
             return None
         return ChatCompletionChunkChoiceLogprobs.model_validate(
@@ -9204,7 +9520,9 @@ class OpenAIFormatter:
                     generation_prompt=generation_prompt,
                 )
                 message = parser.parse_completion_message(choice.text)
-                logprobs = self._convert_completion_logprobs_to_chat_choice(choice.logprobs)
+                logprobs = self._convert_completion_logprobs_to_chat_choice(
+                    choice.logprobs
+                )
                 choices.append(
                     {
                         "index": choice.index,
@@ -9246,10 +9564,17 @@ class OpenAIFormatter:
                         choice,
                         tool_name,
                     ),
-                    logprobs=self._convert_completion_logprobs_to_chat_choice(choice.logprobs),
-                    finish_reason=cast(Any, (
-                        "tool_calls" if tool_name is not None else choice.finish_reason
-                    )),
+                    logprobs=self._convert_completion_logprobs_to_chat_choice(
+                        choice.logprobs
+                    ),
+                    finish_reason=cast(
+                        Any,
+                        (
+                            "tool_calls"
+                            if tool_name is not None
+                            else choice.finish_reason
+                        ),
+                    ),
                 )
                 for choice in completion.choices
             ],
@@ -9379,7 +9704,9 @@ class OpenAIFormatter:
                                 index=index,
                                 delta=delta,
                                 logprobs=self._convert_completion_logprobs_to_chat_chunk(
-                                    CompletionLogprobs.model_validate(choice["logprobs"])
+                                    CompletionLogprobs.model_validate(
+                                        choice["logprobs"]
+                                    )
                                     if choice["logprobs"] is not None
                                     else None
                                 ),
@@ -9428,10 +9755,14 @@ class OpenAIFormatter:
         if completion.rendered_bytes:
             completion_bytes = completion.rendered_bytes
         else:
-            completion_bytes = b"".join(record.text_bytes for record in completion.token_records)
+            completion_bytes = b"".join(
+                record.text_bytes for record in completion.token_records
+            )
         returned_end = len(completion_bytes)
         if finish_reason == "stop":
-            stops = [stop for stop in completion.stop_sequences if stop in completion_bytes]
+            stops = [
+                stop for stop in completion.stop_sequences if stop in completion_bytes
+            ]
             if stops:
                 returned_end = min(completion_bytes.index(stop) for stop in stops)
         elif finish_reason is None:
@@ -9504,7 +9835,8 @@ class OpenAIFormatter:
                                 "logprobs": {
                                     "tokens": [self.decode_text(token.text_bytes)],
                                     "text_offset": [
-                                        len(completion.prompt_text) + returned_token.text_offset
+                                        len(completion.prompt_text)
+                                        + returned_token.text_offset
                                     ],
                                     "token_logprobs": [token.token_logprob],
                                     "top_logprobs": [token.top_logprobs],
@@ -9592,7 +9924,9 @@ class OpenAIFormatter:
         completion: Completion,
     ) -> CompletionChoice:
         returned_tokens = self.returned_tokens(completion, completion.finish_reason)
-        text_bytes = b"".join(returned_token.text_bytes for returned_token in returned_tokens)
+        text_bytes = b"".join(
+            returned_token.text_bytes for returned_token in returned_tokens
+        )
         text = self.decode_text(text_bytes)
         if request.payload.echo:
             text = completion.prompt_text + text
@@ -9638,7 +9972,9 @@ class OpenAIFormatter:
         request: CompletionRequest,
         completions: Sequence[Completion],
     ) -> OpenAICompletion:
-        completion_tokens = sum(completion.completion_token_count for completion in completions)
+        completion_tokens = sum(
+            completion.completion_token_count for completion in completions
+        )
         prompt_tokens = request.prompt_plan.eval_token_count
         return OpenAICompletion(
             id=request.id,
@@ -9740,7 +10076,10 @@ class Sampler:
         return int(llama_cpp.llama_sampler_sample(self._sampler, ctx, output_index))
 
     def _ensure_sample_logits_buffer(self, size: int) -> None:
-        if size == self._sample_logits_size and self._sample_logits_recarray is not None:
+        if (
+            size == self._sample_logits_size
+            and self._sample_logits_recarray is not None
+        ):
             return
         token_data = (llama_cpp.llama_token_data * size)()
         token_data_address = ctypes.addressof(token_data)
@@ -9776,7 +10115,9 @@ class Sampler:
             self._sampler,
             cast(Any, ctypes.byref(self._sample_logits_token_array)),
         )
-        token = int(self._sample_logits_recarray.id[self._sample_logits_token_array.selected])
+        token = int(
+            self._sample_logits_recarray.id[self._sample_logits_token_array.selected]
+        )
         llama_cpp.llama_sampler_accept(self._sampler, token)
         return token
 
@@ -9880,7 +10221,9 @@ class MTMDEmbeddingCache:
             if metadata.get("mmproj") != self.mmproj_fingerprint:
                 return None
             embeddings = np.array(tensors.get_tensor("embeddings"), copy=True)
-        return MTMDEmbedding(key=key, embeddings=embeddings.astype(np.float32, copy=False))
+        return MTMDEmbedding(
+            key=key, embeddings=embeddings.astype(np.float32, copy=False)
+        )
 
     def save(self, key: str, embeddings: np.ndarray) -> None:
         if self.max_bytes == 0:
@@ -9976,7 +10319,9 @@ class MTMDProcessor:
         if not self.supports_vision and not self.supports_audio:
             mtmd_cpp.mtmd_free(self.ctx)
             self.ctx = None
-            raise RuntimeError(f"MTMD projector does not support image or audio input: {mmproj_path}")
+            raise RuntimeError(
+                f"MTMD projector does not support image or audio input: {mmproj_path}"
+            )
         self.media_marker = mtmd_cpp.mtmd_default_marker().decode("utf-8")
 
     def close(self) -> None:
@@ -9989,7 +10334,9 @@ class MTMDProcessor:
             return self.image_max_bytes
         return self.audio_max_bytes
 
-    def _load_media_file(self, kind: Literal["image", "audio"], media_url: str) -> bytes:
+    def _load_media_file(
+        self, kind: Literal["image", "audio"], media_url: str
+    ) -> bytes:
         if self.allowed_local_media_path is None:
             raise CompletionRequestValidationError("local media path is not allowed")
         parsed = urllib.parse.urlsplit(media_url)
@@ -9999,16 +10346,24 @@ class MTMDProcessor:
         try:
             path.relative_to(self.allowed_local_media_path)
         except ValueError as exc:
-            raise CompletionRequestValidationError("local media path is not allowed") from exc
+            raise CompletionRequestValidationError(
+                "local media path is not allowed"
+            ) from exc
         max_bytes = self._max_bytes_for_media(kind)
         try:
             if path.stat().st_size > max_bytes:
-                raise CompletionRequestValidationError(f"{kind} exceeds model.mtmd.{kind}_max_bytes")
+                raise CompletionRequestValidationError(
+                    f"{kind} exceeds model.mtmd.{kind}_max_bytes"
+                )
             data = path.read_bytes()
         except OSError as exc:
-            raise CompletionRequestValidationError(f"failed to read local {kind}: {exc}") from exc
+            raise CompletionRequestValidationError(
+                f"failed to read local {kind}: {exc}"
+            ) from exc
         if len(data) > max_bytes:
-            raise CompletionRequestValidationError(f"{kind} exceeds model.mtmd.{kind}_max_bytes")
+            raise CompletionRequestValidationError(
+                f"{kind} exceeds model.mtmd.{kind}_max_bytes"
+            )
         return data
 
     def _validate_remote_media_url(self, media_url: str) -> str:
@@ -10043,10 +10398,14 @@ class MTMDProcessor:
             try:
                 _, encoded = media_url.split(",", 1)
             except ValueError as exc:
-                raise CompletionRequestValidationError(f"invalid data {kind} URL") from exc
+                raise CompletionRequestValidationError(
+                    f"invalid data {kind} URL"
+                ) from exc
             data = base64.b64decode(encoded, validate=False)
             if len(data) > max_bytes:
-                raise CompletionRequestValidationError(f"{kind} exceeds model.mtmd.{kind}_max_bytes")
+                raise CompletionRequestValidationError(
+                    f"{kind} exceeds model.mtmd.{kind}_max_bytes"
+                )
             return data
         if media_url.startswith("file:"):
             return self._load_media_file(kind, media_url)
@@ -10056,14 +10415,18 @@ class MTMDProcessor:
             headers={"User-Agent": "llama-cpp-python-batch-mtmd/0"},
         )
         try:
-            with self._urlopen_without_redirects(request, timeout=self.image_timeout_seconds) as response:
+            with self._urlopen_without_redirects(
+                request, timeout=self.image_timeout_seconds
+            ) as response:
                 data = response.read(max_bytes + 1)
         except (OSError, TimeoutError, urllib.error.URLError) as exc:
             raise CompletionRequestValidationError(
                 f"failed to fetch {kind} URL: {exc}"
             ) from exc
         if len(data) > max_bytes:
-            raise CompletionRequestValidationError(f"{kind} exceeds model.mtmd.{kind}_max_bytes")
+            raise CompletionRequestValidationError(
+                f"{kind} exceeds model.mtmd.{kind}_max_bytes"
+            )
         return data
 
     def load_media(self, media: MediaInput) -> bytes:
@@ -10074,12 +10437,18 @@ class MTMDProcessor:
         try:
             data = base64.b64decode(media.data, validate=False)
         except (ValueError, binascii.Error) as exc:
-            raise CompletionRequestValidationError("input_audio data must be valid base64") from exc
+            raise CompletionRequestValidationError(
+                "input_audio data must be valid base64"
+            ) from exc
         if len(data) > self.audio_max_bytes:
-            raise CompletionRequestValidationError("audio exceeds model.mtmd.audio_max_bytes")
+            raise CompletionRequestValidationError(
+                "audio exceeds model.mtmd.audio_max_bytes"
+            )
         return data
 
-    def _create_bitmap(self, media_bytes: bytes, kind: Literal["image", "audio"]) -> Any:
+    def _create_bitmap(
+        self, media_bytes: bytes, kind: Literal["image", "audio"]
+    ) -> Any:
         buffer = (ctypes.c_uint8 * len(media_bytes)).from_buffer_copy(media_bytes)
         bitmap = mtmd_cpp.mtmd_helper_bitmap_init_from_buf(
             self.ctx,
@@ -10088,10 +10457,14 @@ class MTMDProcessor:
             False,
         )
         if bitmap is None:
-            raise CompletionRequestValidationError(f"failed to create MTMD {kind} bitmap")
+            raise CompletionRequestValidationError(
+                f"failed to create MTMD {kind} bitmap"
+            )
         return bitmap
 
-    def _media_identity_tokens(self, kind: Literal["image", "audio"], key: str, n_pos: int) -> List[int]:
+    def _media_identity_tokens(
+        self, kind: Literal["image", "audio"], key: str, n_pos: int
+    ) -> List[int]:
         tokens: List[int] = []
         for index in range(n_pos):
             digest = hashlib.sha256(f"{kind}:{key}:{index}".encode("utf-8")).digest()
@@ -10108,9 +10481,9 @@ class MTMDProcessor:
         n_tokens = int(mtmd_cpp.mtmd_input_chunk_get_n_tokens(chunk))
         if self.embedding_cache is not None:
             cached = self.embedding_cache.load(key)
-            if (
-                cached is not None
-                and cached.embeddings.shape == (n_tokens, self.n_embd_inp)
+            if cached is not None and cached.embeddings.shape == (
+                n_tokens,
+                self.n_embd_inp,
             ):
                 return cached.embeddings
         result = int(mtmd_cpp.mtmd_encode_chunk(self.ctx, chunk))
@@ -10120,7 +10493,9 @@ class MTMDProcessor:
             )
         output = mtmd_cpp.mtmd_get_output_embd(self.ctx)
         if output is None:
-            raise CompletionRequestValidationError(f"MTMD {kind} encoder returned no embeddings")
+            raise CompletionRequestValidationError(
+                f"MTMD {kind} encoder returned no embeddings"
+            )
         flat = np.ctypeslib.as_array(output, shape=(n_tokens * self.n_embd_inp,))
         embeddings = np.array(flat, dtype=np.float32, copy=True).reshape(
             n_tokens,
@@ -10141,7 +10516,9 @@ class MTMDProcessor:
             return positions.reshape(-1)
         image_tokens = mtmd_cpp.mtmd_input_chunk_get_tokens_image(chunk)
         if image_tokens is None:
-            raise CompletionRequestValidationError("MTMD image chunk has no image tokens")
+            raise CompletionRequestValidationError(
+                "MTMD image chunk has no image tokens"
+            )
         positions = np.empty((4, n_tokens), dtype=np.int32)
         for index in range(n_tokens):
             pos = mtmd_cpp.mtmd_image_tokens_get_decoder_pos(
@@ -10176,11 +10553,23 @@ class MTMDProcessor:
                 reasoning_effort=reasoning_effort,
             )
             tokens = self.tokenize(prompt, add_bos=False, special=True)
-            return PromptPlan.from_tokens(prompt, tokens, generation_prompt=generation_prompt)
-        if any(media.kind == "image" for media in media_inputs) and not self.supports_vision:
-            raise CompletionRequestValidationError("MTMD projector does not support images")
-        if any(media.kind == "audio" for media in media_inputs) and not self.supports_audio:
-            raise CompletionRequestValidationError("MTMD projector does not support audio")
+            return PromptPlan.from_tokens(
+                prompt, tokens, generation_prompt=generation_prompt
+            )
+        if (
+            any(media.kind == "image" for media in media_inputs)
+            and not self.supports_vision
+        ):
+            raise CompletionRequestValidationError(
+                "MTMD projector does not support images"
+            )
+        if (
+            any(media.kind == "audio" for media in media_inputs)
+            and not self.supports_audio
+        ):
+            raise CompletionRequestValidationError(
+                "MTMD projector does not support audio"
+            )
         with self.lock:
             return self._build_prompt_plan_locked(
                 messages=messages,
@@ -10226,7 +10615,9 @@ class MTMDProcessor:
             input_text.parse_special = True
             chunks = mtmd_cpp.mtmd_input_chunks_init()
             if chunks is None:
-                raise CompletionRequestValidationError("failed to create MTMD input chunks")
+                raise CompletionRequestValidationError(
+                    "failed to create MTMD input chunks"
+                )
             bitmap_array = (mtmd_cpp.mtmd_bitmap_p_ctypes * len(bitmaps))(*bitmaps)
             result = int(
                 mtmd_cpp.mtmd_tokenize(
@@ -10261,7 +10652,10 @@ class MTMDProcessor:
                         ctypes.byref(n_tokens_out),
                     )
                     tokens = (
-                        [int(tokens_ptr[index]) for index in range(int(n_tokens_out.value))]
+                        [
+                            int(tokens_ptr[index])
+                            for index in range(int(n_tokens_out.value))
+                        ]
                         if tokens_ptr
                         else []
                     )
@@ -10279,7 +10673,9 @@ class MTMDProcessor:
                             )
                         )
                         for offset, token in enumerate(tokens):
-                            text_token_index_by_pos[start_pos + offset] = len(text_tokens)
+                            text_token_index_by_pos[start_pos + offset] = len(
+                                text_tokens
+                            )
                             text_tokens.append(token)
                         identity_tokens.extend(tokens)
                         identity_pos += len(tokens)
@@ -10288,20 +10684,30 @@ class MTMDProcessor:
                 if chunk_type == mtmd_cpp.MTMD_INPUT_CHUNK_TYPE_IMAGE:
                     kind: Literal["image", "audio"] = "image"
                     if not self.supports_vision:
-                        raise CompletionRequestValidationError("MTMD projector does not support images")
+                        raise CompletionRequestValidationError(
+                            "MTMD projector does not support images"
+                        )
                 elif chunk_type == mtmd_cpp.MTMD_INPUT_CHUNK_TYPE_AUDIO:
                     kind = "audio"
                     if not self.supports_audio:
-                        raise CompletionRequestValidationError("MTMD projector does not support audio")
+                        raise CompletionRequestValidationError(
+                            "MTMD projector does not support audio"
+                        )
                 else:
-                    raise CompletionRequestValidationError("unsupported MTMD input chunk type")
+                    raise CompletionRequestValidationError(
+                        "unsupported MTMD input chunk type"
+                    )
                 if media_index >= len(media_bytes_by_index):
-                    raise CompletionRequestValidationError("MTMD media chunk count mismatch")
+                    raise CompletionRequestValidationError(
+                        "MTMD media chunk count mismatch"
+                    )
                 media = media_inputs[media_index]
                 media_bytes = media_bytes_by_index[media_index]
                 media_index += 1
                 if media.kind != kind:
-                    raise CompletionRequestValidationError("MTMD media chunk modality mismatch")
+                    raise CompletionRequestValidationError(
+                        "MTMD media chunk modality mismatch"
+                    )
                 key = (
                     self.embedding_cache.key_for_media(kind, media_bytes)
                     if self.embedding_cache is not None
@@ -10314,11 +10720,15 @@ class MTMDProcessor:
                 )
                 decode_n_pos = int(mtmd_cpp.mtmd_input_chunk_get_n_pos(chunk))
                 if decode_n_pos <= 0:
-                    raise CompletionRequestValidationError("MTMD media chunk has no decoder positions")
+                    raise CompletionRequestValidationError(
+                        "MTMD media chunk has no decoder positions"
+                    )
                 embeddings = self._encode_media_chunk(kind=kind, key=key, chunk=chunk)
                 n_tokens = int(embeddings.shape[0])
                 if n_tokens <= 0:
-                    raise CompletionRequestValidationError("MTMD media chunk has no embeddings")
+                    raise CompletionRequestValidationError(
+                        "MTMD media chunk has no embeddings"
+                    )
                 non_causal = bool(mtmd_cpp.mtmd_decode_use_non_causal(self.ctx, chunk))
                 segment_identity = self._media_identity_tokens(kind, key, n_tokens)
                 positions = self._positions_for_chunk(chunk, decode_pos)
@@ -10335,7 +10745,9 @@ class MTMDProcessor:
                         non_causal=non_causal,
                     ),
                 )
-                if non_causal and embeddings.shape[0] > min(self.n_batch, self.n_ubatch):
+                if non_causal and embeddings.shape[0] > min(
+                    self.n_batch, self.n_ubatch
+                ):
                     raise CompletionRequestValidationError(
                         f"non-causal {kind} embedding chunk exceeds model batch limits; "
                         "increase n_batch and n_ubatch"
@@ -10345,7 +10757,9 @@ class MTMDProcessor:
                 identity_pos += n_tokens
                 decode_pos += decode_n_pos
             if media_index != len(media_bytes_by_index):
-                raise CompletionRequestValidationError("not all media inputs were consumed by MTMD")
+                raise CompletionRequestValidationError(
+                    "not all media inputs were consumed by MTMD"
+                )
             return PromptPlan(
                 text=prompt,
                 generation_prompt=generation_prompt,
@@ -10467,7 +10881,7 @@ class Model:
         else:
             self.memory_model = (
                 "attention-unified" if kv_unified else "attention-partitioned"
-        )
+            )
         normalized_draft_model = draft_model
         required_mtp_batch = max(1, draft_model_num_pred_tokens + 1)
         if normalized_draft_model == "draft-mtp":
@@ -10697,7 +11111,9 @@ class Model:
     ) -> Tuple[Any, Optional[Any], Optional[Any]]:
         model_params = llama_cpp.llama_model_default_params()
         if n_gpu_layers is not None:
-            model_params.n_gpu_layers = 0x7FFFFFFF if n_gpu_layers == -1 else n_gpu_layers
+            model_params.n_gpu_layers = (
+                0x7FFFFFFF if n_gpu_layers == -1 else n_gpu_layers
+            )
         if split_mode is not None:
             model_params.split_mode = split_mode
         if main_gpu is not None:
@@ -10752,7 +11168,9 @@ class Model:
                     buffer_start = ctypes.cast(address, ctypes.POINTER(ctypes.c_char))
                     ctypes.memmove(buffer_start, encoded, 128)
                 else:
-                    raise ValueError(f"unsupported kv_override value for {key}: {value!r}")
+                    raise ValueError(
+                        f"unsupported kv_override value for {key}: {value!r}"
+                    )
             kv_overrides_ref[-1].key = b"\0"
             model_params.kv_overrides = kv_overrides_ref
         return model_params, tensor_split_ref, kv_overrides_ref
@@ -10900,7 +11318,9 @@ class Model:
             self._lora_scales_array,
         )
         if result:
-            raise RuntimeError(f"failed to apply LoRA adapters to {context_name} context")
+            raise RuntimeError(
+                f"failed to apply LoRA adapters to {context_name} context"
+            )
 
     def _free_lora_adapters(self) -> None:
         while self._lora_adapters:
@@ -11020,7 +11440,13 @@ class Model:
                     special=False,
                 )[suffix_space_prefix:]
             )
-        return bos_tokens + prefix_tokens + suffix_tokens + [self.fim_mid_token] + eos_tokens
+        return (
+            bos_tokens
+            + prefix_tokens
+            + suffix_tokens
+            + [self.fim_mid_token]
+            + eos_tokens
+        )
 
     def build_chat_prompt(
         self,
@@ -11043,7 +11469,11 @@ class Model:
                 tool_choice=tool_choice,
                 reasoning_effort=reasoning_effort,
             )
-            formatter_stop = [self.chat_formatter._eos_token] if self.chat_formatter._eos_token else []
+            formatter_stop = (
+                [self.chat_formatter._eos_token]
+                if self.chat_formatter._eos_token
+                else []
+            )
             return (
                 prompt_plan.text,
                 prompt_plan.generation_prompt,
@@ -11144,14 +11574,18 @@ class Model:
         if self.batch.n_tokens:
             raise RuntimeError("cannot mix token and embedding batches")
         if self._embedding_batch is not None:
-            raise RuntimeError("only one embedding batch is supported per scheduler step")
+            raise RuntimeError(
+                "only one embedding batch is supported per scheduler step"
+            )
         embeddings = np.ascontiguousarray(embeddings, dtype=np.float32)
         positions = np.ascontiguousarray(positions, dtype=np.int32).reshape(-1)
         n_tokens = int(embeddings.shape[0])
         if n_tokens == 0:
             return
         if embeddings.ndim != 2 or embeddings.shape[1] != self.n_embd_inp:
-            raise RuntimeError("embedding batch shape does not match model input embedding size")
+            raise RuntimeError(
+                "embedding batch shape does not match model input embedding size"
+            )
         if len(positions) not in {n_tokens, n_tokens * 4}:
             raise RuntimeError("embedding position length mismatch")
         if len(output_indices) != n_tokens:
@@ -11188,7 +11622,9 @@ class Model:
         ]
 
     def decode(self) -> None:
-        batch = self._embedding_batch if self._embedding_batch is not None else self.batch
+        batch = (
+            self._embedding_batch if self._embedding_batch is not None else self.batch
+        )
         result = int(llama_cpp.llama_decode(self.ctx, batch))
         if result != 0:
             raise RuntimeError(f"llama_decode failed with code {result}")
@@ -11357,8 +11793,7 @@ class SequenceDiskCache(SequenceCache):
     ) -> "SequenceDiskCache.Payload":
         with self._safe_open(entry.path) as tensors:
             tokens = [
-                int(token)
-                for token in tensors.get_tensor(self.TENSOR_TOKENS).tolist()
+                int(token) for token in tensors.get_tensor(self.TENSOR_TOKENS).tolist()
             ]
             state_bytes = np.ascontiguousarray(
                 tensors.get_tensor(self.TENSOR_STATE),
@@ -11529,7 +11964,9 @@ class SequenceDiskCache(SequenceCache):
             self.TENSOR_STATE: state,
         }
         if prompt_logits is not None:
-            tensors[self.TENSOR_PROMPT_LOGITS] = np.asarray(prompt_logits, dtype=np.float32)
+            tensors[self.TENSOR_PROMPT_LOGITS] = np.asarray(
+                prompt_logits, dtype=np.float32
+            )
         path = self.path / f"{uuid.uuid4().hex}.safetensors"
         self._write_entry(path, tensors)
         self._add_entry(
@@ -11545,7 +11982,9 @@ class MemoryPolicy(abc.ABC):
         self.scheduler = scheduler
 
     def reclaim_order(self, best_free: Optional[int]) -> List[int]:
-        reclaim_order = [seq_id for seq_id in self.scheduler.free_sequences if seq_id != best_free]
+        reclaim_order = [
+            seq_id for seq_id in self.scheduler.free_sequences if seq_id != best_free
+        ]
         if best_free is not None:
             reclaim_order.append(best_free)
         return reclaim_order
@@ -11581,11 +12020,18 @@ class MemoryPolicy(abc.ABC):
         )
         if cache_match_length <= resident_reuse_len:
             return False
-        has_sequence_budget = len(self.scheduler.unused_sequences) >= required_sequence_ids
-        has_attention_budget = required_attn_kv is None or (
-            skip_attention_budget_when_unbounded
-            and not self.scheduler.model.has_attention_budget
-        ) or self.scheduler.sequence_history.size + required_attn_kv <= self.scheduler.model.n_ctx
+        has_sequence_budget = (
+            len(self.scheduler.unused_sequences) >= required_sequence_ids
+        )
+        has_attention_budget = (
+            required_attn_kv is None
+            or (
+                skip_attention_budget_when_unbounded
+                and not self.scheduler.model.has_attention_budget
+            )
+            or self.scheduler.sequence_history.size + required_attn_kv
+            <= self.scheduler.model.n_ctx
+        )
         if has_sequence_budget and has_attention_budget:
             return True
         self.scheduler.clear_sequence_cache_match(request)
@@ -11634,9 +12080,11 @@ class AttentionMemoryPolicy(MemoryPolicy):
         claimable = match_seq_id in self.scheduler.free_sequences
         if request.sequence_cache_match is not None:
             base_seq_id = self.scheduler.claim_unused_sequence()
-            reuse_len, request.prompt_logits = self.scheduler.hydrate_sequence_cache_match(
-                request,
-                base_seq_id,
+            reuse_len, request.prompt_logits = (
+                self.scheduler.hydrate_sequence_cache_match(
+                    request,
+                    base_seq_id,
+                )
             )
         elif claimable:
             base_seq_id = self.scheduler.claim_free_sequence(match_seq_id)
@@ -11699,21 +12147,26 @@ class UnifiedAttentionMemoryPolicy(AttentionMemoryPolicy):
         )
         if (
             len(self.scheduler.unused_sequences) >= required_sequence_ids
-            and self.scheduler.sequence_history.size + required_kv <= self.scheduler.model.n_ctx
+            and self.scheduler.sequence_history.size + required_kv
+            <= self.scheduler.model.n_ctx
         ):
             return True
         best_free = match_seq_id if claimable else None
         for seq_id in self.reclaim_order(best_free):
             if len(self.scheduler.unused_sequences) < required_sequence_ids:
                 self.scheduler.delete_free_sequence(seq_id)
-            elif self.scheduler.sequence_history.size + required_kv > self.scheduler.model.n_ctx:
+            elif (
+                self.scheduler.sequence_history.size + required_kv
+                > self.scheduler.model.n_ctx
+            ):
                 if seq_id == best_free and request.match_length > 0:
                     self.scheduler.truncate_free_sequence(seq_id, request.match_length)
                 else:
                     self.scheduler.delete_free_sequence(seq_id)
             if (
                 len(self.scheduler.unused_sequences) >= required_sequence_ids
-                and self.scheduler.sequence_history.size + required_kv <= self.scheduler.model.n_ctx
+                and self.scheduler.sequence_history.size + required_kv
+                <= self.scheduler.model.n_ctx
             ):
                 request.match_sequence_id, request.match_length = self.match_prefix(
                     request.prompt_tokens,
@@ -11820,7 +12273,8 @@ class CheckpointMemoryPolicy(MemoryPolicy):
         )
         if len(self.scheduler.unused_sequences) >= required_sequence_ids and (
             not self.scheduler.model.has_attention_budget
-            or self.scheduler.sequence_history.size + required_attn_kv <= self.scheduler.model.n_ctx
+            or self.scheduler.sequence_history.size + required_attn_kv
+            <= self.scheduler.model.n_ctx
         ):
             return True
         best_free = match_seq_id if claimable else None
@@ -11828,10 +12282,13 @@ class CheckpointMemoryPolicy(MemoryPolicy):
             self.scheduler.delete_free_sequence(seq_id)
             if len(self.scheduler.unused_sequences) >= required_sequence_ids and (
                 not self.scheduler.model.has_attention_budget
-                or self.scheduler.sequence_history.size + required_attn_kv <= self.scheduler.model.n_ctx
+                or self.scheduler.sequence_history.size + required_attn_kv
+                <= self.scheduler.model.n_ctx
             ):
-                request.match_sequence_id, request.match_length = self.exact_checkpoint_match(
-                    request.prompt_tokens,
+                request.match_sequence_id, request.match_length = (
+                    self.exact_checkpoint_match(
+                        request.prompt_tokens,
+                    )
                 )
                 return True
         return False
@@ -11842,9 +12299,11 @@ class CheckpointMemoryPolicy(MemoryPolicy):
         claimable = match_seq_id in self.scheduler.free_sequences
         if request.sequence_cache_match is not None:
             base_seq_id = self.scheduler.claim_unused_sequence()
-            match_length, request.prompt_logits = self.scheduler.hydrate_sequence_cache_match(
-                request,
-                base_seq_id,
+            match_length, request.prompt_logits = (
+                self.scheduler.hydrate_sequence_cache_match(
+                    request,
+                    base_seq_id,
+                )
             )
         elif claimable:
             base_seq_id = self.scheduler.claim_free_sequence(match_seq_id)
@@ -12311,7 +12770,9 @@ class CompletionScheduler:
                 if draft_processing_enabled and not self.defer_sampled_draft_processing:
                     draft_process_started_at = time.perf_counter()
                     self.model.process_draft_batch()
-                    draft_process_elapsed = time.perf_counter() - draft_process_started_at
+                    draft_process_elapsed = (
+                        time.perf_counter() - draft_process_started_at
+                    )
                     self.metrics.draft_process_seconds_total += draft_process_elapsed
                     self.metrics.draft_process_calls_total += 1
                     self.observe_draft_process(batch_items, draft_process_elapsed)
@@ -12359,7 +12820,9 @@ class CompletionScheduler:
         if request is None:
             return False
         if item.kind == "prefill":
-            return not any(segment.kind != "text" for segment in request.prompt_plan.segments)
+            return not any(
+                segment.kind != "text" for segment in request.prompt_plan.segments
+            )
         decode = item.decode_state
         if decode is None:
             return False
@@ -12415,7 +12878,9 @@ class CompletionScheduler:
         while self.pending_requests:
             request = self.pending_requests[0]
             if request.cancelled:
-                self.fail_request(request, CompletionRequestCancelledError("request cancelled"))
+                self.fail_request(
+                    request, CompletionRequestCancelledError("request cancelled")
+                )
                 continue
             if not self.can_admit(request):
                 break
@@ -12471,7 +12936,9 @@ class CompletionScheduler:
                     )
                     return [item]
 
-        ordered_sequences = self._ordered_pending_sequences(prompt_requests, completions)
+        ordered_sequences = self._ordered_pending_sequences(
+            prompt_requests, completions
+        )
         allocations = self._allocate_pending_tokens_for_model(ordered_sequences)
         if ordered_sequences:
             self.sequence_round_robin += 1
@@ -12494,7 +12961,10 @@ class CompletionScheduler:
         self,
         items: List["CompletionScheduler.BatchItem"],
     ) -> List["CompletionScheduler.BatchItem"]:
-        if not isinstance(self.model.draft_provider, MTPDraftProvider) or len(items) <= 1:
+        if (
+            not isinstance(self.model.draft_provider, MTPDraftProvider)
+            or len(items) <= 1
+        ):
             return items
         eligibility = [self.item_allows_mtp_processing(item) for item in items]
         if all(eligibility) or not any(eligibility):
@@ -12630,7 +13100,9 @@ class CompletionScheduler:
         prompt_by_request_id = {request.id: request for request in prompt_requests}
         completions_by_request_id: Dict[str, List[Completion]] = {}
         for completion in completions:
-            completions_by_request_id.setdefault(completion.request_id, []).append(completion)
+            completions_by_request_id.setdefault(completion.request_id, []).append(
+                completion
+            )
         sequence_list: List[Union[CompletionRequest, Completion]] = []
         for request_id, request in self.requests.items():
             if request_id not in self.active_request_ids or request.cancelled:
@@ -12669,7 +13141,9 @@ class CompletionScheduler:
                 segment_offset = source.prompt_cursor - segment.start_pos
                 if segment.media is not None and segment.media.non_causal:
                     if segment_offset != 0:
-                        raise RuntimeError("non-causal media segment was partially scheduled")
+                        raise RuntimeError(
+                            "non-causal media segment was partially scheduled"
+                        )
                     return segment.batch_rows
                 return segment.end_pos - source.prompt_cursor
             return segment.end_pos - source.prompt_cursor
@@ -12709,7 +13183,9 @@ class CompletionScheduler:
         capacity: int,
     ) -> Dict[int, int]:
         allocations: Dict[int, int] = {}
-        active = [source for source in sources if self._pending_tokens_length(source) > 0]
+        active = [
+            source for source in sources if self._pending_tokens_length(source) > 0
+        ]
         remaining_capacity = capacity
 
         for source in active:
@@ -12732,7 +13208,9 @@ class CompletionScheduler:
             next_active: List[Union[CompletionRequest, Completion]] = []
             for source in active:
                 seq_id = self._pending_sequence_id(source)
-                remaining_tokens = self._pending_tokens_length(source) - allocations.get(seq_id, 0)
+                remaining_tokens = self._pending_tokens_length(
+                    source
+                ) - allocations.get(seq_id, 0)
                 if remaining_tokens <= 0:
                     continue
                 allocation = self._pending_allocation_for_capacity(
@@ -12768,7 +13246,9 @@ class CompletionScheduler:
                 non_causal = segment.media is not None and segment.media.non_causal
                 if non_causal:
                     if segment_offset != 0 or token_count < segment.batch_rows:
-                        raise RuntimeError("non-causal media segment must be scheduled atomically")
+                        raise RuntimeError(
+                            "non-causal media segment must be scheduled atomically"
+                        )
                     row_count = segment.batch_rows
                     embeddings, positions, position_increments = segment.media_slice(
                         0,
@@ -12789,8 +13269,11 @@ class CompletionScheduler:
                 if output_positions:
                     output_positions[-1] = logical_end - 1
                 needs_last_output = (
-                    (source.payload.echo and source.payload.logprobs is not None
-                     and source.prompt_plan.has_text_token_at(logical_end))
+                    (
+                        source.payload.echo
+                        and source.payload.logprobs is not None
+                        and source.prompt_plan.has_text_token_at(logical_end)
+                    )
                     or self.model.exact_checkpoints_only
                     or logical_end == len(source.prompt_tokens)
                 )
@@ -12802,9 +13285,8 @@ class CompletionScheduler:
                         request_id=source.id,
                         seq_id=source.base_seq_id,
                         start_pos=logical_start,
-                        llama_start_pos=segment.decode_start_pos + sum(
-                            segment.decoder_position_increments[:segment_offset]
-                        ),
+                        llama_start_pos=segment.decode_start_pos
+                        + sum(segment.decoder_position_increments[:segment_offset]),
                         tokens=[],
                         identity_tokens=list(
                             segment.identity_tokens[
@@ -12823,13 +13305,19 @@ class CompletionScheduler:
                 )
             segment_offset = source.prompt_cursor - segment.start_pos
             max_count = min(token_count, segment.end_pos - source.prompt_cursor)
-            chunk = list(segment.text_tokens[segment_offset : segment_offset + max_count])
+            chunk = list(
+                segment.text_tokens[segment_offset : segment_offset + max_count]
+            )
             identity_chunk = list(
                 segment.identity_tokens[segment_offset : segment_offset + max_count]
             )
-            ends_prompt = source.prompt_cursor + len(identity_chunk) == len(source.prompt_tokens)
+            ends_prompt = source.prompt_cursor + len(identity_chunk) == len(
+                source.prompt_tokens
+            )
             output_indices: List[Optional[int]] = [None] * len(chunk)
-            output_positions = [source.prompt_cursor + index for index in range(len(chunk))]
+            output_positions = [
+                source.prompt_cursor + index for index in range(len(chunk))
+            ]
             for index, output_position in enumerate(output_positions):
                 if (
                     source.payload.echo
@@ -12838,7 +13326,11 @@ class CompletionScheduler:
                 ):
                     output_indices[index] = output_index
                     output_index += 1
-            if self.model.exact_checkpoints_only and chunk and output_indices[-1] is None:
+            if (
+                self.model.exact_checkpoints_only
+                and chunk
+                and output_indices[-1] is None
+            ):
                 output_indices[-1] = output_index
                 output_index += 1
             elif ends_prompt and chunk and output_indices[-1] is None:
@@ -12888,8 +13380,7 @@ class CompletionScheduler:
                 identity_tokens=list(scheduled_tokens),
                 output_indices=output_indices,
                 output_positions=[
-                    start_pos + index
-                    for index in range(len(scheduled_tokens))
+                    start_pos + index for index in range(len(scheduled_tokens))
                 ],
                 position_increments=[1] * len(scheduled_tokens),
                 completion_index=source.index,
@@ -12987,7 +13478,10 @@ class CompletionScheduler:
         if remaining_tokens <= 0:
             return
         input_ids = self.draft_input_ids(completion)
-        if isinstance(self.model.draft_provider, MTPDraftProvider) and completion.multimodal_prompt:
+        if (
+            isinstance(self.model.draft_provider, MTPDraftProvider)
+            and completion.multimodal_prompt
+        ):
             return
         can_draft = getattr(self.model.draft_provider, "can_draft", None)
         if can_draft is not None and not can_draft(
@@ -13284,14 +13778,18 @@ class CompletionScheduler:
                 self.checkpoint_logits[completion.seq_id] = self.model.logits(
                     logits_indices[-1]
                 )
-            completion.pending_input_tokens = completion.pending_input_tokens[pending_count:]
+            completion.pending_input_tokens = completion.pending_input_tokens[
+                pending_count:
+            ]
             finish_reason: str = completion.pending_finish_reason
             completion.pending_finish_reason = None
             self.finish_completion(completion, finish_reason)
             return
 
         if pending_count:
-            completion.pending_input_tokens = completion.pending_input_tokens[pending_count:]
+            completion.pending_input_tokens = completion.pending_input_tokens[
+                pending_count:
+            ]
 
         decoded_draft_tokens = item.tokens[pending_count:]
         accepted_draft_count = 0
@@ -13317,8 +13815,8 @@ class CompletionScheduler:
                 rejected = max(0, len(completion.draft_tokens) - accepted_draft_count)
                 if rejected > 0:
                     self.speculative_stats["draft_tokens_rejected"] += rejected
-                self.metrics.draft_target_tokens_wasted_total += (
-                    max(0, len(decoded_draft_tokens) - accepted_draft_count - 1)
+                self.metrics.draft_target_tokens_wasted_total += max(
+                    0, len(decoded_draft_tokens) - accepted_draft_count - 1
                 )
                 keep_len = item.start_pos + pending_count + accepted_draft_count
                 self.rollback_draft_verification(
@@ -13425,7 +13923,9 @@ class CompletionScheduler:
         if self.model.store_logits and final_logits is not None:
             self.checkpoint_logits[completion.seq_id] = final_logits
         if completion.draft_tokens and next_token != completion.draft_tokens[0]:
-            self.speculative_stats["draft_tokens_rejected"] += len(completion.draft_tokens)
+            self.speculative_stats["draft_tokens_rejected"] += len(
+                completion.draft_tokens
+            )
             if not defer_draft_state:
                 self.model.truncate_draft_sequence(
                     completion.seq_id,
@@ -13532,11 +14032,16 @@ class CompletionScheduler:
         else:
             stop_sequences = [item.encode("utf-8") for item in request.payload.stop]
         logit_bias = (
-            {int(token): float(bias) for token, bias in request.payload.logit_bias.items()}
+            {
+                int(token): float(bias)
+                for token, bias in request.payload.logit_bias.items()
+            }
             if request.payload.logit_bias
             else None
         )
-        prompt_text_bytes = self.model.detokenize(prompt_tokens) if prompt_tokens else b""
+        prompt_text_bytes = (
+            self.model.detokenize(prompt_tokens) if prompt_tokens else b""
+        )
         for offset, seq_id in enumerate(request.completion_seq_ids):
             if offset > 0:
                 if prompt_length:
@@ -13577,7 +14082,10 @@ class CompletionScheduler:
                     ),
                 )
             )
-        if request.payload.max_tokens == 0 or request.effective_max_len == prompt_length:
+        if (
+            request.payload.max_tokens == 0
+            or request.effective_max_len == prompt_length
+        ):
             for completion in request.completions:
                 self.finish_completion(completion, "length")
             self.finalize_request_if_ready(request)
@@ -13745,7 +14253,9 @@ class CompletionScheduler:
                 )
 
     def finalize_request_if_ready(self, request: CompletionRequest) -> None:
-        if not request.completions or not all(completion.finished for completion in request.completions):
+        if not request.completions or not all(
+            completion.finished for completion in request.completions
+        ):
             return
         selected = request.selected_completions()
         result = self.formatter.build_completion_response(request, selected)
@@ -14050,7 +14560,9 @@ class CompletionScheduler:
             "# HELP batch_server:draft_acceptance_length_total Number of verified draft proposals by accepted-token prefix length.",
             "# TYPE batch_server:draft_acceptance_length_total counter",
         ]
-        for accepted_tokens, count in sorted(self.draft_acceptance_length_counts.items()):
+        for accepted_tokens, count in sorted(
+            self.draft_acceptance_length_counts.items()
+        ):
             lines.append(
                 f'batch_server:draft_acceptance_length_total{{accepted_tokens="{accepted_tokens}"}} {count}'
             )
@@ -14346,12 +14858,16 @@ class CompletionScheduler:
         finalized = False
         for request in list(self.pending_requests):
             if request.cancelled:
-                self.fail_request(request, CompletionRequestCancelledError("request cancelled"))
+                self.fail_request(
+                    request, CompletionRequestCancelledError("request cancelled")
+                )
                 finalized = True
         for request_id in list(self.active_request_ids):
             request = self.requests[request_id]
             if request.cancelled:
-                self.fail_request(request, CompletionRequestCancelledError("request cancelled"))
+                self.fail_request(
+                    request, CompletionRequestCancelledError("request cancelled")
+                )
                 finalized = True
         return finalized
 
@@ -14410,7 +14926,9 @@ class CompletionService:
     def run_loop(self) -> None:
         while True:
             with self.condition:
-                while not self.closed and not self.commands and self.scheduler.is_idle():
+                while (
+                    not self.closed and not self.commands and self.scheduler.is_idle()
+                ):
                     self.condition.wait()
                 if self.closed and not self.commands and self.scheduler.is_idle():
                     return
@@ -14460,6 +14978,7 @@ class CompletionService:
                 return
             cancelled.set()
             try:
+
                 def cancel_request() -> None:
                     self.scheduler.cancel(request.id)
 
@@ -14562,7 +15081,9 @@ class CompletionService:
                     "suffix is not supported with token id prompts"
                 )
             prompt_tokens = list(prompt_item)
-            prompt_text = model.detokenize(prompt_tokens).decode("utf-8", errors="ignore")
+            prompt_text = model.detokenize(prompt_tokens).decode(
+                "utf-8", errors="ignore"
+            )
         return prompt_text, PromptPlan.from_tokens(prompt_text, prompt_tokens)
 
     def prompt_visible_start(self, prompt_plan: PromptPlan) -> int:
