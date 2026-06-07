@@ -1,0 +1,30 @@
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8000
+  },
+  "model": {
+    "alias": "gpt-oss-120b",
+    "from_pretrained": {
+      "repo_id": "ggml-org/gpt-oss-120b-GGUF",
+      "filename": "gpt-oss-120b-mxfp4-00001-of-00003.gguf",
+      "additional_files": [
+        "gpt-oss-120b-mxfp4-00002-of-00003.gguf",
+        "gpt-oss-120b-mxfp4-00003-of-00003.gguf"
+      ]
+    },
+    "n_ctx": 32768,
+    "max_output_tokens": 4096,
+    "n_seq_max": 4,
+    "n_batch": 512,
+    "n_ubatch": 512,
+    "threads": 8,
+    "threads_batch": 8,
+    "kv_unified": true,
+    "store_logits": false,
+    "use_mmap": true,
+    "use_mlock": false,
+    "n_gpu_layers": -1,
+    "flash_attn": true
+  }
+}

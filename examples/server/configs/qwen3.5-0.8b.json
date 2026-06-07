@@ -4,7 +4,7 @@
     "port": 8000
   },
   "model": {
-    "alias": "gpt-4o-mini",
+    "alias": "qwen3.5-0.8b-vl",
     "from_pretrained": {
       "repo_id": "lmstudio-community/Qwen3.5-0.8B-GGUF",
       "filename": "Qwen3.5-0.8B-Q8_0.gguf"

@@ -1,0 +1,32 @@
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8000
+  },
+  "model": {
+    "alias": "qwen3.6-27b",
+    "from_pretrained": {
+      "repo_id": "unsloth/Qwen3.6-27B-GGUF",
+      "filename": "Qwen3.6-27B-Q8_0.gguf"
+    },
+    "mtmd": {
+      "mmproj_from_pretrained": {
+        "repo_id": "unsloth/Qwen3.6-27B-GGUF",
+        "filename": "mmproj-BF16.gguf"
+      }
+    },
+    "n_ctx": 32768,
+    "max_output_tokens": 4096,
+    "n_seq_max": 8,
+    "n_batch": 512,
+    "n_ubatch": 512,
+    "threads": 8,
+    "threads_batch": 8,
+    "kv_unified": true,
+    "store_logits": false,
+    "use_mmap": true,
+    "use_mlock": false,
+    "n_gpu_layers": -1,
+    "flash_attn": true
+  }
+}

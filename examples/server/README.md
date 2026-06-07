@@ -9,16 +9,16 @@ The server is a [`uv` inline script](https://docs.astral.sh/uv/guides/scripts/),
 
 ```bash
 cd examples/server
-uv run --script server.py -C config.json
+uv run --script server.py -C configs/qwen3.5-0.8b.json
 ```
 
-Use `uv run --index` to pull a pre-built `llama-cpp-python` binary wheel instead of building from source.
+Use `uv run --extra-index-url` to pull a pre-built `llama-cpp-python` binary wheel instead of building from source.
 
 ```bash
 cd examples/server
 uv run \
-  --index https://abetlen.github.io/llama-cpp-python/whl/cpu \
-  --script server.py -C config.json
+  --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu \
+  --script server.py -C configs/qwen3.5-0.8b.json
 ```
 
 Pick the wheel index that matches the backend you want.
@@ -40,6 +40,20 @@ Pick the wheel index that matches the backend you want.
 
 See the repository installation section for the full [pre-built wheel requirements](../../README.md#supported-backends).
 
+## Model Configs
+
+The smallest checked-in example uses Qwen3.5 0.8B so the server can be started on a normal development machine.
+
+| Config | Model | Notes |
+| --- | --- | --- |
+| [`configs/qwen3.5-0.8b.json`](configs/qwen3.5-0.8b.json) | [`lmstudio-community/Qwen3.5-0.8B-GGUF`](https://huggingface.co/lmstudio-community/Qwen3.5-0.8B-GGUF) | Default small multimodal example. |
+| [`configs/gemma-4-12b-it-qat.json`](configs/gemma-4-12b-it-qat.json) | [`unsloth/gemma-4-12B-it-qat-GGUF`](https://huggingface.co/unsloth/gemma-4-12B-it-qat-GGUF) | Larger Gemma 4 QAT multimodal config with projector. |
+| [`configs/qwen3.6-27b.json`](configs/qwen3.6-27b.json) | [`unsloth/Qwen3.6-27B-GGUF`](https://huggingface.co/unsloth/Qwen3.6-27B-GGUF) | Larger Qwen3.6 multimodal config. |
+| [`configs/qwen3.6-35b-a3b.json`](configs/qwen3.6-35b-a3b.json) | [`unsloth/Qwen3.6-35B-A3B-GGUF`](https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF) | Larger Qwen3.6 MoE multimodal config. |
+| [`configs/gpt-oss-120b.json`](configs/gpt-oss-120b.json) | [`ggml-org/gpt-oss-120b-GGUF`](https://huggingface.co/ggml-org/gpt-oss-120b-GGUF) | Large text-only split-GGUF config. |
+
+The larger model configs default to `n_gpu_layers: -1` and `flash_attn: true`.
+
 ## Client Examples
 
 Point an OpenAI-compatible client at the local `/v1` base URL.
@@ -52,7 +66,7 @@ from openai import OpenAI
 client = OpenAI(base_url="http://127.0.0.1:8000/v1", api_key="not-used")
 
 response = client.chat.completions.create(
-    model="gpt-4o-mini",
+    model="qwen3.5-0.8b-vl",
     messages=[{"role": "user", "content": "What is the capital of France?"}],
 )
 print(response.choices[0].message.content)
@@ -66,7 +80,7 @@ from openai import OpenAI
 client = OpenAI(base_url="http://127.0.0.1:8000/v1", api_key="not-used")
 
 response = client.responses.create(
-    model="gpt-4o-mini",
+    model="qwen3.5-0.8b-vl",
     input="Write one sentence about why prefix caching helps batched inference.",
 )
 print(response.output_text)
@@ -86,7 +100,7 @@ print(response.output_text)
 
 ## Config Overview
 
-`config.json` has three top-level sections.
+Config files have three top-level sections.
 
 ```json
 {
@@ -127,7 +141,7 @@ Load a local GGUF with `path` or download a GGUF from Hugging Face with `from_pr
 ```json
 {
   "model": {
-    "alias": "gpt-4o-mini",
+    "alias": "qwen3.5-0.8b-vl",
     "from_pretrained": {
       "repo_id": "lmstudio-community/Qwen3.5-0.8B-GGUF",
       "filename": "Qwen3.5-0.8B-Q8_0.gguf"
@@ -222,7 +236,7 @@ Use an array of strings when the template is too large to read or edit as one JS
 }
 ```
 
-The checked-in `config.json` includes a Qwen3.5 template with reasoning text, tool calls, forced tool choice, image markers, and video markers.
+The checked-in [`configs/qwen3.5-0.8b.json`](configs/qwen3.5-0.8b.json) includes a Qwen3.5 template with reasoning text, tool calls, forced tool choice, image markers, and video markers.
 
 ## Response Parsing
 
