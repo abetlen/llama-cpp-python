@@ -1,0 +1,22 @@
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8000
+  },
+  "model": {
+    "alias": "bge-small-en-v1.5",
+    "from_pretrained": {
+      "repo_id": "CompendiumLabs/bge-small-en-v1.5-gguf",
+      "filename": "bge-small-en-v1.5-q4_k_m.gguf"
+    },
+    "n_ctx": 512,
+    "n_seq_max": 16,
+    "n_batch": 512,
+    "n_ubatch": 512,
+    "threads": 4,
+    "threads_batch": 8,
+    "kv_unified": true,
+    "store_logits": false,
+    "use_mmap": true
+  }
+}
