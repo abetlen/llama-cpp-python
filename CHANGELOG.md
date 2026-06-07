@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - feat: update llama.cpp to ggml-org/llama.cpp@5a69c9743
+- feat(example): Updated server example (batch processing, `/v1/responses` api, response parsing) by @abetlen in #2174
 
 ## [0.3.26]
 
