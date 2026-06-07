@@ -3779,51 +3779,16 @@ class CompletionRequest:
     on_error: Optional[Callable[[BaseException], None]] = None
 
     @classmethod
-    def from_payload(
-        cls,
-        *,
-        model: Model,
-        payload: CreateCompletionRequest,
-        on_stream_chunk: Optional[Callable[[CompletionChunk], None]] = None,
-        on_done: Optional[Callable[[OpenAICompletion], None]] = None,
-        on_error: Optional[Callable[[BaseException], None]] = None,
-    ) -> "CompletionRequest":
-        prompts = payload.normalized_prompt()
-        if len(prompts) != 1:
-            raise CompletionRequestValidationError("multiple prompts are not supported")
-        prompt_item = prompts[0]
-        if isinstance(prompt_item, str):
-            prompt_text = prompt_item
-            try:
-                prompt_tokens = model.build_prompt_tokens(prompt_text, payload.suffix)
-            except ValueError as exc:
-                raise CompletionRequestValidationError(str(exc)) from exc
-        else:
-            if payload.suffix is not None:
-                raise CompletionRequestValidationError(
-                    "suffix is not supported with token id prompts"
-                )
-            prompt_tokens = list(prompt_item)
-            prompt_text = model.detokenize(prompt_tokens).decode("utf-8", errors="ignore")
-        return cls.from_prepared(
-            model=model,
-            payload=payload,
-            prompt_text=prompt_text,
-            prompt_tokens=prompt_tokens,
-            on_stream_chunk=on_stream_chunk,
-            on_done=on_done,
-            on_error=on_error,
-        )
-
-    @classmethod
     def from_prepared(
         cls,
         *,
-        model: Model,
         payload: CreateCompletionRequest,
         prompt_text: str,
-        prompt_tokens: List[int],
-        prompt_plan: Optional[PromptPlan] = None,
+        prompt_plan: PromptPlan,
+        max_seq_len: int,
+        max_output_tokens: Optional[int],
+        prompt_visible_start: int,
+        prompt_records: Optional[List[Token]] = None,
         grammar_text: Optional[str] = None,
         chat_tool_name: Optional[str] = None,
         request_id: Optional[str] = None,
@@ -3831,15 +3796,13 @@ class CompletionRequest:
         on_done: Optional[Callable[[OpenAICompletion], None]] = None,
         on_error: Optional[Callable[[BaseException], None]] = None,
     ) -> "CompletionRequest":
-        if prompt_plan is None:
-            prompt_plan = PromptPlan.from_tokens(prompt_text, prompt_tokens)
         prompt_tokens = list(prompt_plan.identity_tokens)
         prompt_eval_tokens = prompt_plan.eval_token_count
-        if prompt_eval_tokens > model.max_seq_len:
+        if prompt_eval_tokens > max_seq_len:
             raise CompletionRequestValidationError("prompt exceeds context window")
-        ctx_limit = prompt_plan.length + (model.max_seq_len - prompt_eval_tokens)
-        if model.max_output_tokens is not None:
-            ctx_limit = min(ctx_limit, prompt_plan.length + model.max_output_tokens)
+        ctx_limit = prompt_plan.length + (max_seq_len - prompt_eval_tokens)
+        if max_output_tokens is not None:
+            ctx_limit = min(ctx_limit, prompt_plan.length + max_output_tokens)
         if payload.max_tokens is None:
             effective_max_len = ctx_limit
         else:
@@ -3855,35 +3818,15 @@ class CompletionRequest:
             effective_max_len=effective_max_len,
             internal_completion_count=internal_completion_count,
             id=request_id or f"cmpl-{uuid.uuid4().hex}",
-            prompt_visible_start=1
-            if prompt_plan.text_tokens and prompt_plan.text_tokens[0] == model.bos_token
-            else 0,
+            prompt_visible_start=prompt_visible_start,
+            prompt_records=list(prompt_records or []),
             grammar_text=grammar_text,
             chat_tool_name=chat_tool_name,
             on_stream_chunk=on_stream_chunk,
             on_done=on_done,
             on_error=on_error,
         )
-        if payload.echo and payload.logprobs is not None:
-            request.seed_prompt_records(model)
         return request
-
-    def seed_prompt_records(self, model: Model) -> None:
-        if self.prompt_visible_start >= len(self.prompt_plan.text_tokens):
-            return
-        first_pos = self.prompt_visible_start
-        first_token = self.prompt_plan.text_tokens[first_pos]
-        self.prompt_records.append(
-            Token(
-                token=first_token,
-                text_bytes=model.token_bytes_with_prev(
-                    self.prompt_plan.text_tokens[:first_pos],
-                    first_token,
-                ),
-                token_logprob=None,
-                top_logprobs=None,
-            )
-        )
 
     def selected_completions(self) -> List[Completion]:
         completions = list(self.completions)
@@ -14351,11 +14294,109 @@ class CompletionService:
         self,
         payload: CreateCompletionRequest,
     ) -> Tuple[CompletionStream, Callable[[], None]]:
-        request = CompletionRequest.from_payload(
-            model=self.scheduler.model,
-            payload=payload,
-        )
+        request = self.request_from_payload(payload)
         return self.submit_request(request)
+
+    def request_from_payload(
+        self,
+        payload: CreateCompletionRequest,
+    ) -> CompletionRequest:
+        prompt_text, prompt_plan = self.prepare_completion_prompt(payload)
+        return self.request_from_prepared(
+            payload=payload,
+            prompt_text=prompt_text,
+            prompt_plan=prompt_plan,
+        )
+
+    def request_from_prepared(
+        self,
+        *,
+        payload: CreateCompletionRequest,
+        prompt_text: str,
+        prompt_plan: PromptPlan,
+        grammar_text: Optional[str] = None,
+        chat_tool_name: Optional[str] = None,
+        request_id: Optional[str] = None,
+        on_stream_chunk: Optional[Callable[[CompletionChunk], None]] = None,
+        on_done: Optional[Callable[[OpenAICompletion], None]] = None,
+        on_error: Optional[Callable[[BaseException], None]] = None,
+    ) -> CompletionRequest:
+        model = self.scheduler.model
+        prompt_visible_start = self.prompt_visible_start(prompt_plan)
+        return CompletionRequest.from_prepared(
+            payload=payload,
+            prompt_text=prompt_text,
+            prompt_plan=prompt_plan,
+            max_seq_len=model.max_seq_len,
+            max_output_tokens=model.max_output_tokens,
+            prompt_visible_start=prompt_visible_start,
+            prompt_records=self.initial_prompt_records(
+                payload,
+                prompt_plan,
+                prompt_visible_start,
+            ),
+            grammar_text=grammar_text,
+            chat_tool_name=chat_tool_name,
+            request_id=request_id,
+            on_stream_chunk=on_stream_chunk,
+            on_done=on_done,
+            on_error=on_error,
+        )
+
+    def prepare_completion_prompt(
+        self,
+        payload: CreateCompletionRequest,
+    ) -> Tuple[str, PromptPlan]:
+        model = self.scheduler.model
+        prompts = payload.normalized_prompt()
+        if len(prompts) != 1:
+            raise CompletionRequestValidationError("multiple prompts are not supported")
+        prompt_item = prompts[0]
+        if isinstance(prompt_item, str):
+            prompt_text = prompt_item
+            try:
+                prompt_tokens = model.build_prompt_tokens(prompt_text, payload.suffix)
+            except ValueError as exc:
+                raise CompletionRequestValidationError(str(exc)) from exc
+        else:
+            if payload.suffix is not None:
+                raise CompletionRequestValidationError(
+                    "suffix is not supported with token id prompts"
+                )
+            prompt_tokens = list(prompt_item)
+            prompt_text = model.detokenize(prompt_tokens).decode("utf-8", errors="ignore")
+        return prompt_text, PromptPlan.from_tokens(prompt_text, prompt_tokens)
+
+    def prompt_visible_start(self, prompt_plan: PromptPlan) -> int:
+        model = self.scheduler.model
+        if prompt_plan.text_tokens and prompt_plan.text_tokens[0] == model.bos_token:
+            return 1
+        return 0
+
+    def initial_prompt_records(
+        self,
+        payload: CreateCompletionRequest,
+        prompt_plan: PromptPlan,
+        prompt_visible_start: int,
+    ) -> List[Token]:
+        if not (payload.echo and payload.logprobs is not None):
+            return []
+        if prompt_visible_start >= len(prompt_plan.text_tokens):
+            return []
+        model = self.scheduler.model
+        first_pos = prompt_visible_start
+        first_token = prompt_plan.text_tokens[first_pos]
+        return [
+            Token(
+                token=first_token,
+                text_bytes=model.token_bytes_with_prev(
+                    prompt_plan.text_tokens[:first_pos],
+                    first_token,
+                ),
+                token_logprob=None,
+                top_logprobs=None,
+            )
+        ]
 
 
 def unpack_completion_request_parts(
@@ -14679,11 +14720,9 @@ def create_app() -> FastAPI:
             formatter._normalized_tools(tools=body.tools),
         )
         try:
-            request = CompletionRequest.from_prepared(
-                model=service.scheduler.model,
+            request = service.request_from_prepared(
                 payload=payload,
                 prompt_text=prompt_text,
-                prompt_tokens=prompt_plan.identity_tokens,
                 prompt_plan=prompt_plan,
                 grammar_text=grammar_text,
                 chat_tool_name=tool_name,
@@ -14757,11 +14796,9 @@ def create_app() -> FastAPI:
             formatter._normalized_tools(tools=chat_body.tools),
         )
         try:
-            request = CompletionRequest.from_prepared(
-                model=service.scheduler.model,
+            request = service.request_from_prepared(
                 payload=payload,
                 prompt_text=prompt_text,
-                prompt_tokens=prompt_plan.identity_tokens,
                 prompt_plan=prompt_plan,
                 grammar_text=grammar_text,
                 chat_tool_name=tool_name,
@@ -14912,11 +14949,9 @@ def create_app() -> FastAPI:
                         Optional[List[Dict[str, Any]]],
                         formatter._normalized_tools(tools=chat_body.tools),
                     )
-                    request = CompletionRequest.from_prepared(
-                        model=service.scheduler.model,
+                    request = service.request_from_prepared(
                         payload=completion_payload,
                         prompt_text=prompt_text,
-                        prompt_tokens=prompt_plan.identity_tokens,
                         prompt_plan=prompt_plan,
                         grammar_text=grammar_text,
                         chat_tool_name=tool_name,
