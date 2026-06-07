@@ -3633,6 +3633,16 @@ class PromptPlan:
         return self.text_tokens[: self.text_token_index_by_pos[pos]]
 
 
+@dataclass(frozen=True)
+class PreparedCompletionParts:
+    payload: CreateCompletionRequest
+    prompt_text: str
+    generation_prompt: str
+    prompt_plan: PromptPlan
+    grammar_text: Optional[str]
+    tool_name: Optional[str]
+
+
 @dataclass
 class SchedulerMetrics:
     started_at: float = field(default_factory=time.time)
@@ -7846,14 +7856,7 @@ class OpenAIFormatter:
     def completion_request_from_chat_request(
         self,
         body: CreateChatCompletionRequest,
-    ) -> Tuple[
-        CreateCompletionRequest,
-        str,
-        str,
-        PromptPlan,
-        Optional[str],
-        Optional[str],
-    ]:
+    ) -> PreparedCompletionParts:
         functions = (
             [
                 cast(
@@ -7922,7 +7925,14 @@ class OpenAIFormatter:
             n=body.n,
             user=body.user,
         )
-        return payload, prompt_text, generation_prompt, prompt_plan, grammar_text, tool_name
+        return PreparedCompletionParts(
+            payload=payload,
+            prompt_text=prompt_text,
+            generation_prompt=generation_prompt,
+            prompt_plan=prompt_plan,
+            grammar_text=grammar_text,
+            tool_name=tool_name,
+        )
 
     @staticmethod
     def _response_phase_from_message(message: Dict[str, Any]) -> Optional[str]:
@@ -14399,49 +14409,6 @@ class CompletionService:
         ]
 
 
-@dataclass(frozen=True)
-class PreparedCompletionParts:
-    payload: CreateCompletionRequest
-    prompt_text: str
-    generation_prompt: str
-    prompt_plan: PromptPlan
-    grammar_text: Optional[str]
-    tool_name: Optional[str]
-
-
-def normalize_completion_request_parts(
-    formatter_result: Tuple[Any, ...],
-) -> PreparedCompletionParts:
-    if len(formatter_result) == 6:
-        (
-            payload,
-            prompt_text,
-            generation_prompt,
-            prompt_plan,
-            grammar_text,
-            tool_name,
-        ) = formatter_result
-        return PreparedCompletionParts(
-            payload=cast(CreateCompletionRequest, payload),
-            prompt_text=cast(str, prompt_text),
-            generation_prompt=cast(str, generation_prompt),
-            prompt_plan=cast(PromptPlan, prompt_plan),
-            grammar_text=cast(Optional[str], grammar_text),
-            tool_name=cast(Optional[str], tool_name),
-        )
-    if len(formatter_result) == 5:
-        payload, prompt_text, prompt_plan, grammar_text, tool_name = formatter_result
-        return PreparedCompletionParts(
-            payload=cast(CreateCompletionRequest, payload),
-            prompt_text=cast(str, prompt_text),
-            generation_prompt="",
-            prompt_plan=cast(PromptPlan, prompt_plan),
-            grammar_text=cast(Optional[str], grammar_text),
-            tool_name=cast(Optional[str], tool_name),
-        )
-    raise CompletionRequestValidationError("unexpected chat completion formatter result")
-
-
 def create_app() -> FastAPI:
     app = FastAPI()
     app.state.service = None
@@ -14719,10 +14686,8 @@ def create_app() -> FastAPI:
         service: CompletionService = app.state.service
         formatter = service.formatter
         try:
-            parts = normalize_completion_request_parts(
-                formatter.completion_request_from_chat_request(
-                    body,
-                )
+            parts = formatter.completion_request_from_chat_request(
+                body,
             )
         except CompletionRequestValidationError as exc:
             raise bad_request(exc) from exc
@@ -14806,10 +14771,8 @@ def create_app() -> FastAPI:
         formatter = service.formatter
         try:
             chat_body = formatter.chat_request_from_responses_request(body)
-            parts = normalize_completion_request_parts(
-                formatter.completion_request_from_chat_request(
-                    chat_body,
-                )
+            parts = formatter.completion_request_from_chat_request(
+                chat_body,
             )
         except CompletionRequestValidationError as exc:
             raise bad_request(exc) from exc
@@ -14957,9 +14920,7 @@ def create_app() -> FastAPI:
                     if ws_body.generate is False:
                         body = body.model_copy(update={"max_output_tokens": 0})
                     chat_body = formatter.chat_request_from_responses_request(body)
-                    parts = normalize_completion_request_parts(
-                        formatter.completion_request_from_chat_request(chat_body)
-                    )
+                    parts = formatter.completion_request_from_chat_request(chat_body)
                     normalized_response_tools = cast(
                         Optional[List[Dict[str, Any]]],
                         formatter._normalized_tools(tools=chat_body.tools),
