@@ -2530,9 +2530,6 @@ class ChatCompletionFunctionCall(BaseModel):
     name: str
     arguments: Optional[str] = None
 
-    def __getitem__(self, key: str) -> Any:
-        return getattr(self, key)
-
 
 class ChatCompletionToolCall(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -2540,9 +2537,6 @@ class ChatCompletionToolCall(BaseModel):
     id: Optional[str] = None
     type: Literal["function"] = "function"
     function: ChatCompletionFunctionCall
-
-    def __getitem__(self, key: str) -> Any:
-        return getattr(self, key)
 
 
 class ChatCompletionRequestMessage(BaseModel):
@@ -2561,12 +2555,56 @@ class ChatCompletionRequestMessage(BaseModel):
     tool_calls: Optional[List[ChatCompletionToolCall]] = Field(default=None)
 
 
+class ChatTemplateFunctionDefinition(TypedDict, total=False):
+    name: str
+    description: Optional[str]
+    parameters: Optional[Dict[str, Any]]
+    strict: Optional[bool]
+    content_type: Optional[str]
+
+
+class ChatTemplateTool(TypedDict, total=False):
+    type: Literal["function"]
+    original_type: str
+    function: ChatTemplateFunctionDefinition
+
+
+class ChatTemplateFunctionCall(TypedDict, total=False):
+    name: str
+
+
+class ChatTemplateToolChoice(TypedDict, total=False):
+    type: Literal["function"]
+    function: ChatTemplateFunctionCall
+
+
+class ChatTemplateResponseFormatJsonSchema(TypedDict, total=False):
+    name: Optional[str]
+    description: Optional[str]
+    schema: Dict[str, Any]
+    strict: Optional[bool]
+
+
+class ChatTemplateResponseFormat(TypedDict, total=False):
+    type: Literal["text", "json_object", "json_schema"]
+    schema: Dict[str, Any]
+    json_schema: ChatTemplateResponseFormatJsonSchema
+
+
 class ChatCompletionFunctionDefinition(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     name: str
     description: Optional[str] = None
     parameters: Optional[Dict[str, Any]] = None
+
+    def to_template_function(self) -> ChatTemplateFunctionDefinition:
+        function: ChatTemplateFunctionDefinition = {"name": self.name}
+        if self.description is not None:
+            function["description"] = self.description
+        if self.parameters is not None:
+            function["parameters"] = self.parameters
+        return function
 
 
 class ChatCompletionToolFunction(BaseModel):
@@ -2577,6 +2615,16 @@ class ChatCompletionToolFunction(BaseModel):
     parameters: Optional[Dict[str, Any]] = None
     strict: Optional[bool] = None
 
+    def to_template_function(self) -> ChatTemplateFunctionDefinition:
+        function: ChatTemplateFunctionDefinition = {"name": self.name}
+        if self.description is not None:
+            function["description"] = self.description
+        if self.parameters is not None:
+            function["parameters"] = self.parameters
+        if self.strict is not None:
+            function["strict"] = self.strict
+        return function
+
 
 class ChatCompletionTool(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -2584,11 +2632,20 @@ class ChatCompletionTool(BaseModel):
     type: Literal["function"]
     function: ChatCompletionToolFunction
 
+    def to_template_tool(self) -> ChatTemplateTool:
+        return {
+            "type": self.type,
+            "function": self.function.to_template_function(),
+        }
+
 
 class ChatCompletionFunctionCallOption(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     name: str
+
+    def to_template_function_call(self) -> ChatTemplateFunctionCall:
+        return {"name": self.name}
 
 
 class ChatCompletionToolChoiceObject(BaseModel):
@@ -2596,6 +2653,12 @@ class ChatCompletionToolChoiceObject(BaseModel):
 
     type: Literal["function"]
     function: ChatCompletionFunctionCallOption
+
+    def to_template_tool_choice(self) -> ChatTemplateToolChoice:
+        return {
+            "type": self.type,
+            "function": self.function.to_template_function_call(),
+        }
 
 
 class ChatCompletionResponseFormatJsonSchema(BaseModel):
@@ -2606,6 +2669,18 @@ class ChatCompletionResponseFormatJsonSchema(BaseModel):
     schema_: Optional[Dict[str, Any]] = Field(default=None, alias="schema")
     strict: Optional[bool] = None
 
+    def to_template_json_schema(self) -> ChatTemplateResponseFormatJsonSchema:
+        json_schema: ChatTemplateResponseFormatJsonSchema = {}
+        if self.name is not None:
+            json_schema["name"] = self.name
+        if self.description is not None:
+            json_schema["description"] = self.description
+        if self.schema_ is not None:
+            json_schema["schema"] = self.schema_
+        if self.strict is not None:
+            json_schema["strict"] = self.strict
+        return json_schema
+
 
 class ChatCompletionResponseFormat(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
@@ -2613,6 +2688,14 @@ class ChatCompletionResponseFormat(BaseModel):
     type: Literal["text", "json_object", "json_schema"]
     schema_: Optional[Dict[str, Any]] = Field(default=None, alias="schema")
     json_schema: Optional[ChatCompletionResponseFormatJsonSchema] = None
+
+    def to_template_response_format(self) -> ChatTemplateResponseFormat:
+        response_format: ChatTemplateResponseFormat = {"type": self.type}
+        if self.schema_ is not None:
+            response_format["schema"] = self.schema_
+        if self.json_schema is not None:
+            response_format["json_schema"] = self.json_schema.to_template_json_schema()
+        return response_format
 
 
 class CreateChatCompletionRequest(BaseModel):
@@ -2673,6 +2756,17 @@ class ResponsesFunctionTool(BaseModel):
     parameters: Optional[Dict[str, Any]] = None
     strict: Optional[bool] = None
 
+    def to_chat_template_tool(self) -> ChatTemplateTool:
+        return {
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "description": self.description,
+                "parameters": self.parameters,
+                "strict": self.strict,
+            },
+        }
+
 
 class ResponsesCustomToolFormat(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -2689,6 +2783,54 @@ class ResponsesCustomTool(BaseModel):
     description: Optional[str] = None
     format: Optional[ResponsesCustomToolFormat] = None
     strict: Optional[bool] = None
+
+    def to_chat_template_tool(self) -> ChatTemplateTool:
+        tool_format = self.format
+        syntax = tool_format.syntax if tool_format is not None else None
+        definition = tool_format.definition if tool_format is not None else None
+        description = self.description or ""
+        text_tool_guidance = (
+            "This is a text tool. When calling it, the "
+            "`function.arguments` field itself must be the raw input string. "
+            "Do not wrap the input in JSON and do not use an object such as "
+            "'{\"input\": \"...\"}' or '{\"patch\": \"...\"}'."
+        )
+        if isinstance(syntax, str) and isinstance(definition, str):
+            if description:
+                description = (
+                    f"{description}\n\n{text_tool_guidance}\n\n"
+                    f"{syntax}:\n{definition}"
+                )
+            else:
+                description = f"{text_tool_guidance}\n\n{syntax}:\n{definition}"
+        elif description:
+            description = f"{description}\n\n{text_tool_guidance}"
+        else:
+            description = text_tool_guidance
+        return {
+            "type": "function",
+            "original_type": "custom",
+            "function": {
+                "name": self.name,
+                "description": description or None,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "input": {
+                            "type": "string",
+                            "description": (
+                                "Raw input text for this tool. "
+                                "For apply_patch, put the full patch here."
+                            ),
+                        },
+                    },
+                    "required": ["input"],
+                    "additionalProperties": False,
+                },
+                "strict": self.strict,
+                "content_type": "text",
+            },
+        }
 
 
 class ResponsesWebSearchTool(BaseModel):
@@ -2710,6 +2852,14 @@ class ResponsesToolChoiceObject(BaseModel):
     type: Literal["function", "custom"]
     name: str
 
+    def to_chat_template_tool_choice(self) -> ChatTemplateToolChoice:
+        return {
+            "type": "function",
+            "function": {
+                "name": self.name,
+            },
+        }
+
 
 ResponsesToolChoice = Union[
     Literal["auto", "none", "required"],
@@ -2722,6 +2872,9 @@ class ResponsesTextFormatJsonSchema(BaseModel):
 
     schema_: Dict[str, Any] = Field(alias="schema")
 
+    def to_template_json_schema(self) -> ChatTemplateResponseFormatJsonSchema:
+        return {"schema": self.schema_}
+
 
 class ResponsesTextFormat(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
@@ -2729,6 +2882,14 @@ class ResponsesTextFormat(BaseModel):
     type: Literal["text", "json_object", "json_schema"]
     schema_: Optional[Dict[str, Any]] = Field(default=None, alias="schema")
     json_schema: Optional[ResponsesTextFormatJsonSchema] = None
+
+    def to_chat_response_format(self) -> ChatTemplateResponseFormat:
+        response_format: ChatTemplateResponseFormat = {"type": self.type}
+        if self.schema_ is not None:
+            response_format["schema"] = self.schema_
+        if self.json_schema is not None:
+            response_format["json_schema"] = self.json_schema.to_template_json_schema()
+        return response_format
 
 
 class ResponsesTextOptions(BaseModel):
@@ -3251,10 +3412,10 @@ class Jinja2ChatFormatter:
         *,
         messages: List[ChatCompletionRequestMessage],
         media_marker: Optional[str] = None,
-        functions: Optional[List[Dict[str, Any]]] = None,
-        function_call: Optional[Union[str, Dict[str, Any]]] = None,
-        tools: Optional[List[Dict[str, Any]]] = None,
-        tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
+        functions: Optional[List[ChatTemplateFunctionDefinition]] = None,
+        function_call: Optional[Union[str, ChatTemplateFunctionCall]] = None,
+        tools: Optional[List[ChatTemplateTool]] = None,
+        tool_choice: Optional[Union[str, ChatTemplateToolChoice]] = None,
         reasoning_effort: Optional[str] = None,
         add_generation_prompt: bool,
         strftime_now: Callable[[str], str],
@@ -3284,10 +3445,10 @@ class Jinja2ChatFormatter:
         *,
         messages: List[ChatCompletionRequestMessage],
         media_marker: Optional[str] = None,
-        functions: Optional[List[Dict[str, Any]]] = None,
-        function_call: Optional[Union[str, Dict[str, Any]]] = None,
-        tools: Optional[List[Dict[str, Any]]] = None,
-        tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
+        functions: Optional[List[ChatTemplateFunctionDefinition]] = None,
+        function_call: Optional[Union[str, ChatTemplateFunctionCall]] = None,
+        tools: Optional[List[ChatTemplateTool]] = None,
+        tool_choice: Optional[Union[str, ChatTemplateToolChoice]] = None,
         reasoning_effort: Optional[str] = None,
     ) -> Tuple[str, str, List[str]]:
         render_time = datetime.now()
@@ -3638,6 +3799,23 @@ class PreparedCompletionParts:
     tool_name: Optional[str]
 
 
+@dataclass(frozen=True)
+class ResponsesChatRequestParts:
+    messages: List[ChatCompletionRequestMessage]
+    max_tokens: Optional[int]
+    temperature: float
+    top_p: float
+    stream: bool
+    logprobs: bool
+    top_logprobs: Optional[int]
+    model: Optional[str]
+    user: Optional[str]
+    tools: Optional[List[ChatTemplateTool]]
+    tool_choice: Optional[Union[Literal["auto", "none", "required"], ChatTemplateToolChoice]]
+    response_format: Optional[ChatTemplateResponseFormat]
+    reasoning_effort: Optional[str]
+
+
 @dataclass
 class SchedulerMetrics:
     started_at: float = field(default_factory=time.time)
@@ -3985,7 +4163,7 @@ class ResponseParser:
         self,
         schema: Dict[str, Any],
         *,
-        tools: Optional[List[Dict[str, Any]]] = None,
+        tools: Optional[List[ChatTemplateTool]] = None,
         completion_id: str = "",
         choice_index: int = 0,
         generation_prompt: str = "",
@@ -4596,7 +4774,7 @@ class ResponseParser:
 
     @staticmethod
     def _tool_schema_map(
-        tools: Optional[List[Dict[str, Any]]],
+        tools: Optional[List[ChatTemplateTool]],
     ) -> Dict[str, Dict[str, Any]]:
         if tools is None:
             return {}
@@ -4617,7 +4795,7 @@ class ResponseParser:
     @classmethod
     def _cached_tool_schema_map(
         cls,
-        tools: Optional[List[Dict[str, Any]]],
+        tools: Optional[List[ChatTemplateTool]],
     ) -> Dict[str, Dict[str, Any]]:
         if tools is None:
             return {}
@@ -7138,36 +7316,20 @@ class OpenAIFormatter:
                 return cast(OpenAICompletion, result)
 
     @staticmethod
-    def _modelish_to_python(value: Any) -> Any:
-        if isinstance(value, BaseModel):
-            return value.model_dump(mode="python", exclude_none=True, by_alias=True)
-        if isinstance(value, list):
-            return [OpenAIFormatter._modelish_to_python(item) for item in value]
-        return value
-
-    @staticmethod
-    def _normalized_tools(
+    def _tools_for_response_parser(
         *,
-        functions: Optional[List[Any]] = None,
-        tools: Optional[List[Any]] = None,
-    ) -> Optional[List[Dict[str, Any]]]:
+        functions: Optional[List[ChatTemplateFunctionDefinition]] = None,
+        tools: Optional[List[ChatTemplateTool]] = None,
+    ) -> Optional[List[ChatTemplateTool]]:
         if functions is not None:
             return [
                 {
                     "type": "function",
-                    "function": cast(
-                        Dict[str, Any],
-                        OpenAIFormatter._modelish_to_python(function),
-                    ),
+                    "function": function,
                 }
                 for function in functions
             ]
-        if tools is None:
-            return None
-        return [
-            cast(Dict[str, Any], OpenAIFormatter._modelish_to_python(tool))
-            for tool in tools
-        ]
+        return tools
 
     def _chat_template_text(self) -> str:
         if self.model.chat_formatter is None:
@@ -7612,100 +7774,38 @@ class OpenAIFormatter:
     def _responses_tools_to_chat_tools(
         self,
         tools: Optional[List[ResponsesToolDefinition]],
-    ) -> Optional[List[Dict[str, Any]]]:
+    ) -> Optional[List[ChatTemplateTool]]:
         if tools is None:
             return None
-        normalized_tools: List[Dict[str, Any]] = []
+        chat_tools: List[ChatTemplateTool] = []
         for tool in tools:
             if isinstance(tool, ResponsesWebSearchTool):
                 continue
             if isinstance(tool, ResponsesFunctionTool):
-                normalized_tools.append(
-                    {
-                        "type": "function",
-                        "function": {
-                            "name": tool.name,
-                            "description": tool.description,
-                            "parameters": tool.parameters,
-                            "strict": tool.strict,
-                        },
-                    }
-                )
+                chat_tools.append(tool.to_chat_template_tool())
                 continue
             if isinstance(tool, ResponsesCustomTool):
-                tool_format = tool.format
-                syntax = tool_format.syntax if tool_format is not None else None
-                definition = tool_format.definition if tool_format is not None else None
-                description = tool.description or ""
-                text_tool_guidance = (
-                    "This is a text tool. When calling it, the "
-                    "`function.arguments` field itself must be the raw input string. "
-                    "Do not wrap the input in JSON and do not use an object such as "
-                    "'{\"input\": \"...\"}' or '{\"patch\": \"...\"}'."
-                )
-                if isinstance(syntax, str) and isinstance(definition, str):
-                    if description:
-                        description = (
-                            f"{description}\n\n{text_tool_guidance}\n\n"
-                            f"{syntax}:\n{definition}"
-                        )
-                    else:
-                        description = f"{text_tool_guidance}\n\n{syntax}:\n{definition}"
-                elif description:
-                    description = f"{description}\n\n{text_tool_guidance}"
-                else:
-                    description = text_tool_guidance
-                normalized_tools.append(
-                    {
-                        "type": "function",
-                        "original_type": "custom",
-                        "function": {
-                            "name": tool.name,
-                            "description": description or None,
-                            "parameters": {
-                                "type": "object",
-                                "properties": {
-                                    "input": {
-                                        "type": "string",
-                                        "description": (
-                                            "Raw input text for this tool. "
-                                            "For apply_patch, put the full patch here."
-                                        ),
-                                    },
-                                },
-                                "required": ["input"],
-                                "additionalProperties": False,
-                            },
-                            "strict": tool.strict,
-                            "content_type": "text",
-                        },
-                    }
-                )
+                chat_tools.append(tool.to_chat_template_tool())
                 continue
             raise CompletionRequestValidationError(
                 f"unsupported responses tool type: {tool.type!r}"
             )
-        return normalized_tools
+        return chat_tools
 
     @staticmethod
     def _responses_tool_choice_to_chat_tool_choice(
         tool_choice: Optional[ResponsesToolChoice],
-    ) -> Optional[Union[str, Dict[str, Any]]]:
+    ) -> Optional[Union[Literal["auto", "none", "required"], ChatTemplateToolChoice]]:
         if tool_choice is None or isinstance(tool_choice, str):
             return tool_choice
         if tool_choice.type in {"function", "custom"}:
-            return {
-                "type": "function",
-                "function": {
-                    "name": tool_choice.name,
-                },
-            }
+            return tool_choice.to_chat_template_tool_choice()
         raise CompletionRequestValidationError(
             f"unsupported responses tool_choice type: {tool_choice.type!r}"
         )
 
     @staticmethod
-    def _response_format_type(response_format: Optional[Dict[str, Any]]) -> Optional[str]:
+    def _response_format_type(response_format: Optional[ChatTemplateResponseFormat]) -> Optional[str]:
         if response_format is None:
             return None
         format_type = response_format.get("type")
@@ -7715,7 +7815,7 @@ class OpenAIFormatter:
 
     @staticmethod
     def _grammar_for_response_format(
-        response_format: Optional[Dict[str, Any]],
+        response_format: Optional[ChatTemplateResponseFormat],
     ) -> Optional[str]:
         format_type = OpenAIFormatter._response_format_type(response_format)
         if format_type is None or format_type == "text":
@@ -7738,21 +7838,17 @@ class OpenAIFormatter:
             f"unsupported response format type: {format_type!r}"
         )
 
-    def chat_request_from_responses_request(
+    def response_request_to_chat_parts(
         self,
         body: CreateResponseRequest,
-    ) -> CreateChatCompletionRequest:
+    ) -> ResponsesChatRequestParts:
         chat_tools = self._responses_tools_to_chat_tools(body.tools)
         response_format = (
             None
             if body.text is None or body.text.format is None
-            else body.text.format.model_dump(
-                mode="python",
-                exclude_none=True,
-                by_alias=True,
-            )
+            else body.text.format.to_chat_response_format()
         )
-        return CreateChatCompletionRequest.model_construct(
+        return ResponsesChatRequestParts(
             messages=self.responses_input_to_chat_messages(body),
             max_tokens=body.max_output_tokens,
             temperature=0.8 if body.temperature is None else body.temperature,
@@ -7771,7 +7867,7 @@ class OpenAIFormatter:
     def _response_parser(
         self,
         *,
-        tools: Optional[List[Dict[str, Any]]] = None,
+        tools: Optional[List[ChatTemplateTool]] = None,
         completion_id: str = "",
         choice_index: int = 0,
         generation_prompt: str = "",
@@ -7790,7 +7886,7 @@ class OpenAIFormatter:
         self,
         response_text: str,
         *,
-        tools: Optional[List[Dict[str, Any]]] = None,
+        tools: Optional[List[ChatTemplateTool]] = None,
         partial: bool,
         generation_prompt: str = "",
     ) -> Dict[str, Any]:
@@ -7804,39 +7900,29 @@ class OpenAIFormatter:
 
     def _chat_tool_name_and_grammar(
         self,
-        body: CreateChatCompletionRequest,
+        *,
+        tools: Optional[List[ChatTemplateTool]],
+        function_call: Optional[Union[Literal["none", "auto"], ChatTemplateFunctionCall]],
+        tool_choice: Optional[Union[Literal["none", "auto", "required"], ChatTemplateToolChoice]],
+        response_format: Optional[ChatTemplateResponseFormat],
     ) -> Tuple[Optional[str], Optional[str]]:
-        tools = self._normalized_tools(functions=body.functions, tools=body.tools)
-        tool_choice: Optional[Union[str, Dict[str, Any]]] = cast(
-            Optional[Union[str, Dict[str, Any]]],
-            self._modelish_to_python(body.tool_choice),
-        )
-        if body.function_call is not None:
-            if isinstance(body.function_call, str) and body.function_call in {"none", "auto"}:
-                tool_choice = body.function_call
+        selected_tool_choice: Optional[Union[str, ChatTemplateToolChoice]] = tool_choice
+        if function_call is not None:
+            if isinstance(function_call, str):
+                selected_tool_choice = function_call
             else:
-                normalized_function_call = cast(
-                    Optional[Dict[str, Any]],
-                    self._modelish_to_python(body.function_call),
-                )
-                if isinstance(normalized_function_call, dict) and "name" in normalized_function_call:
-                    tool_choice = {
-                        "type": "function",
-                        "function": {
-                            "name": normalized_function_call["name"],
-                        },
-                    }
-        grammar_text = self._grammar_for_response_format(
-            cast(
-                Optional[Dict[str, Any]],
-                self._modelish_to_python(body.response_format),
-            )
-        )
-        if not isinstance(tool_choice, dict):
+                selected_tool_choice = {
+                    "type": "function",
+                    "function": {
+                        "name": function_call["name"],
+                    },
+                }
+        grammar_text = self._grammar_for_response_format(response_format)
+        if not isinstance(selected_tool_choice, dict):
             return None, grammar_text
         if tools is None:
             raise CompletionRequestValidationError("tool choice requires tools")
-        tool_name = tool_choice["function"]["name"]
+        tool_name = selected_tool_choice["function"]["name"]
         tool = next((tool for tool in tools if tool["function"]["name"] == tool_name), None)
         if tool is None:
             raise CompletionRequestValidationError(
@@ -7851,38 +7937,49 @@ class OpenAIFormatter:
         body: CreateChatCompletionRequest,
     ) -> PreparedCompletionParts:
         functions = (
-            [
-                cast(
-                    Dict[str, Any],
-                    self._modelish_to_python(function),
-                )
-                for function in body.functions
-            ]
+            [function.to_template_function() for function in body.functions]
             if body.functions is not None
             else None
         )
-        normalized_tools = cast(
-            Optional[List[Dict[str, Any]]],
-            self._normalized_tools(tools=body.tools),
+        tools = (
+            [tool.to_template_tool() for tool in body.tools]
+            if body.tools is not None
+            else None
         )
-        normalized_function_call = cast(
-            Optional[Union[str, Dict[str, Any]]],
-            self._modelish_to_python(body.function_call),
+        function_call = (
+            body.function_call
+            if body.function_call is None or isinstance(body.function_call, str)
+            else body.function_call.to_template_function_call()
         )
-        normalized_tool_choice = cast(
-            Optional[Union[str, Dict[str, Any]]],
-            self._modelish_to_python(body.tool_choice),
+        tool_choice = (
+            body.tool_choice
+            if body.tool_choice is None or isinstance(body.tool_choice, str)
+            else body.tool_choice.to_template_tool_choice()
+        )
+        response_format = (
+            body.response_format.to_template_response_format()
+            if body.response_format is not None
+            else None
+        )
+        parser_tools = self._tools_for_response_parser(
+            functions=functions,
+            tools=tools,
         )
         try:
             prompt_text, generation_prompt, prompt_plan, formatter_stop = self.model.build_chat_prompt(
                 body.messages,
                 functions=functions,
-                function_call=normalized_function_call,
-                tools=normalized_tools,
-                tool_choice=normalized_tool_choice,
+                function_call=function_call,
+                tools=tools,
+                tool_choice=tool_choice,
                 reasoning_effort=body.reasoning_effort,
             )
-            tool_name, grammar_text = self._chat_tool_name_and_grammar(body)
+            tool_name, grammar_text = self._chat_tool_name_and_grammar(
+                tools=parser_tools,
+                function_call=function_call,
+                tool_choice=tool_choice,
+                response_format=response_format,
+            )
         except ValueError as exc:
             raise CompletionRequestValidationError(str(exc)) from exc
         request_stop: List[str] = []
@@ -7916,6 +8013,56 @@ class OpenAIFormatter:
             seed=body.seed,
             model=body.model,
             n=body.n,
+            user=body.user,
+        )
+        return PreparedCompletionParts(
+            payload=payload,
+            prompt_text=prompt_text,
+            generation_prompt=generation_prompt,
+            prompt_plan=prompt_plan,
+            grammar_text=grammar_text,
+            tool_name=tool_name,
+        )
+
+    def completion_request_from_response_chat_parts(
+        self,
+        body: ResponsesChatRequestParts,
+    ) -> PreparedCompletionParts:
+        try:
+            prompt_text, generation_prompt, prompt_plan, formatter_stop = self.model.build_chat_prompt(
+                body.messages,
+                tools=body.tools,
+                tool_choice=body.tool_choice,
+                reasoning_effort=body.reasoning_effort,
+            )
+            tool_name, grammar_text = self._chat_tool_name_and_grammar(
+                tools=body.tools,
+                function_call=None,
+                tool_choice=body.tool_choice,
+                response_format=body.response_format,
+            )
+        except ValueError as exc:
+            raise CompletionRequestValidationError(str(exc)) from exc
+        deduped_stop: List[str] = []
+        seen_stop: set[str] = set()
+        for stop in formatter_stop:
+            if stop and stop not in seen_stop:
+                deduped_stop.append(stop)
+                seen_stop.add(stop)
+        payload = CreateCompletionRequest(
+            prompt=prompt_text,
+            max_tokens=body.max_tokens,
+            temperature=body.temperature,
+            top_p=body.top_p,
+            echo=False,
+            stop=deduped_stop or None,
+            stream=body.stream,
+            logprobs=(
+                0 if body.logprobs and body.top_logprobs is None else body.top_logprobs
+            ),
+            seed=None,
+            model=body.model,
+            n=1,
             user=body.user,
         )
         return PreparedCompletionParts(
@@ -8156,7 +8303,7 @@ class OpenAIFormatter:
         response_id: str,
         message: Dict[str, Any],
         logprobs: Optional[List[Dict[str, Any]]] = None,
-        tools: Optional[List[Dict[str, Any]]] = None,
+        tools: Optional[List[ChatTemplateTool]] = None,
     ) -> List[Dict[str, Any]]:
         items: List[Dict[str, Any]] = []
         tool_types_by_name = self._responses_tool_type_by_name(tools)
@@ -8363,7 +8510,7 @@ class OpenAIFormatter:
         body: CreateResponseRequest,
         tool_name: Optional[str] = None,
         *,
-        tools: Optional[List[Dict[str, Any]]] = None,
+        tools: Optional[List[ChatTemplateTool]] = None,
         generation_prompt: str = "",
     ) -> Dict[str, Any]:
         chat_response = self.convert_completion_response_to_chat(
@@ -9053,16 +9200,19 @@ class OpenAIFormatter:
         completion: OpenAICompletion,
         tool_name: Optional[str] = None,
         *,
-        functions: Optional[List[Dict[str, Any]]] = None,
-        tools: Optional[List[Dict[str, Any]]] = None,
+        functions: Optional[List[ChatTemplateFunctionDefinition]] = None,
+        tools: Optional[List[ChatTemplateTool]] = None,
         generation_prompt: str = "",
     ) -> ChatCompletion | Dict[str, Any]:
-        normalized_tools = self._normalized_tools(functions=functions, tools=tools)
+        parser_tools = self._tools_for_response_parser(
+            functions=functions,
+            tools=tools,
+        )
         if self.model.response_schema is not None:
             choices: List[Dict[str, Any]] = []
             for choice in completion.choices:
                 parser = self._response_parser(
-                    tools=normalized_tools,
+                    tools=parser_tools,
                     completion_id=completion.id,
                     choice_index=choice.index,
                     generation_prompt=generation_prompt,
@@ -9126,12 +9276,15 @@ class OpenAIFormatter:
         started_indices: set[int],
         tool_name: Optional[str] = None,
         *,
-        functions: Optional[List[Dict[str, Any]]] = None,
-        tools: Optional[List[Dict[str, Any]]] = None,
+        functions: Optional[List[ChatTemplateFunctionDefinition]] = None,
+        tools: Optional[List[ChatTemplateTool]] = None,
         parsed_states: Optional[Dict[int, Any]] = None,
         generation_prompt: str = "",
     ) -> List[ChatCompletionChunk | Dict[str, Any]]:
-        normalized_tools = self._normalized_tools(functions=functions, tools=tools)
+        parser_tools = self._tools_for_response_parser(
+            functions=functions,
+            tools=tools,
+        )
         if self.model.response_schema is not None:
             parsed_chunks: List[Dict[str, Any]] = []
             if parsed_states is None:
@@ -9141,7 +9294,7 @@ class OpenAIFormatter:
                 parser = parsed_states.get(index)
                 if not isinstance(parser, ResponseParser):
                     parser = self._response_parser(
-                        tools=normalized_tools,
+                        tools=parser_tools,
                         completion_id=chunk["id"],
                         choice_index=index,
                         generation_prompt=generation_prompt,
@@ -9960,10 +10113,10 @@ class MTMDProcessor:
         self,
         *,
         messages: List[ChatCompletionRequestMessage],
-        functions: Optional[List[Dict[str, Any]]] = None,
-        function_call: Optional[Union[str, Dict[str, Any]]] = None,
-        tools: Optional[List[Dict[str, Any]]] = None,
-        tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
+        functions: Optional[List[ChatTemplateFunctionDefinition]] = None,
+        function_call: Optional[Union[str, ChatTemplateFunctionCall]] = None,
+        tools: Optional[List[ChatTemplateTool]] = None,
+        tool_choice: Optional[Union[str, ChatTemplateToolChoice]] = None,
         reasoning_effort: Optional[str] = None,
     ) -> PromptPlan:
         media_inputs = Jinja2ChatFormatter.media_inputs_from_messages(messages)
@@ -9998,10 +10151,10 @@ class MTMDProcessor:
         *,
         messages: List[ChatCompletionRequestMessage],
         media_inputs: List[MediaInput],
-        functions: Optional[List[Dict[str, Any]]],
-        function_call: Optional[Union[str, Dict[str, Any]]],
-        tools: Optional[List[Dict[str, Any]]],
-        tool_choice: Optional[Union[str, Dict[str, Any]]],
+        functions: Optional[List[ChatTemplateFunctionDefinition]],
+        function_call: Optional[Union[str, ChatTemplateFunctionCall]],
+        tools: Optional[List[ChatTemplateTool]],
+        tool_choice: Optional[Union[str, ChatTemplateToolChoice]],
         reasoning_effort: Optional[str],
     ) -> PromptPlan:
         prompt, generation_prompt, _ = self.chat_formatter.format(
@@ -10827,10 +10980,10 @@ class Model:
         self,
         messages: List[ChatCompletionRequestMessage],
         *,
-        functions: Optional[List[Dict[str, Any]]] = None,
-        function_call: Optional[Union[str, Dict[str, Any]]] = None,
-        tools: Optional[List[Dict[str, Any]]] = None,
-        tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
+        functions: Optional[List[ChatTemplateFunctionDefinition]] = None,
+        function_call: Optional[Union[str, ChatTemplateFunctionCall]] = None,
+        tools: Optional[List[ChatTemplateTool]] = None,
+        tool_choice: Optional[Union[str, ChatTemplateToolChoice]] = None,
         reasoning_effort: Optional[str] = None,
     ) -> Tuple[str, str, PromptPlan, List[str]]:
         if self.chat_formatter is None:
@@ -14670,20 +14823,15 @@ def create_app() -> FastAPI:
             )
         except CompletionRequestValidationError as exc:
             raise bad_request(exc) from exc
-        normalized_functions = (
-            [
-                cast(
-                    Dict[str, Any],
-                    formatter._modelish_to_python(function),
-                )
-                for function in body.functions
-            ]
+        template_functions = (
+            [function.to_template_function() for function in body.functions]
             if body.functions is not None
             else None
         )
-        normalized_tools = cast(
-            Optional[List[Dict[str, Any]]],
-            formatter._normalized_tools(tools=body.tools),
+        template_tools = (
+            [tool.to_template_tool() for tool in body.tools]
+            if body.tools is not None
+            else None
         )
         try:
             request = service.request_from_prepared(
@@ -14706,8 +14854,8 @@ def create_app() -> FastAPI:
                     completion_chunk,
                     started_indices,
                     parts.tool_name,
-                    functions=normalized_functions,
-                    tools=normalized_tools,
+                    functions=template_functions,
+                    tools=template_tools,
                     parsed_states=parsed_states,
                     generation_prompt=parts.generation_prompt,
                 )
@@ -14731,8 +14879,8 @@ def create_app() -> FastAPI:
         chat_response = formatter.convert_completion_response_to_chat(
             completion,
             parts.tool_name,
-            functions=normalized_functions,
-            tools=normalized_tools,
+            functions=template_functions,
+            tools=template_tools,
             generation_prompt=parts.generation_prompt,
         )
         if isinstance(chat_response, BaseModel):
@@ -14749,16 +14897,11 @@ def create_app() -> FastAPI:
         service: CompletionService = app.state.service
         formatter = service.formatter
         try:
-            chat_body = formatter.chat_request_from_responses_request(body)
-            parts = formatter.completion_request_from_chat_request(
-                chat_body,
-            )
+            chat_parts = formatter.response_request_to_chat_parts(body)
+            parts = formatter.completion_request_from_response_chat_parts(chat_parts)
         except CompletionRequestValidationError as exc:
             raise bad_request(exc) from exc
-        normalized_response_tools = cast(
-            Optional[List[Dict[str, Any]]],
-            formatter._normalized_tools(tools=chat_body.tools),
-        )
+        response_tools = chat_parts.tools
         try:
             request = service.request_from_prepared(
                 payload=parts.payload,
@@ -14787,7 +14930,7 @@ def create_app() -> FastAPI:
                     completion_chunk,
                     started_indices,
                     parts.tool_name,
-                    tools=normalized_response_tools,
+                    tools=response_tools,
                     parsed_states=parsed_states,
                     generation_prompt=parts.generation_prompt,
                 )
@@ -14828,7 +14971,7 @@ def create_app() -> FastAPI:
                 completion,
                 body,
                 parts.tool_name,
-                tools=normalized_response_tools,
+                tools=response_tools,
                 generation_prompt=parts.generation_prompt,
             )
         )
@@ -14898,12 +15041,9 @@ def create_app() -> FastAPI:
                     body = websocket_request_with_ephemeral_history(ws_body)
                     if ws_body.generate is False:
                         body = body.model_copy(update={"max_output_tokens": 0})
-                    chat_body = formatter.chat_request_from_responses_request(body)
-                    parts = formatter.completion_request_from_chat_request(chat_body)
-                    normalized_response_tools = cast(
-                        Optional[List[Dict[str, Any]]],
-                        formatter._normalized_tools(tools=chat_body.tools),
-                    )
+                    chat_parts = formatter.response_request_to_chat_parts(body)
+                    parts = formatter.completion_request_from_response_chat_parts(chat_parts)
+                    response_tools = chat_parts.tools
                     request = service.request_from_prepared(
                         payload=parts.payload,
                         prompt_text=parts.prompt_text,
@@ -14932,7 +15072,7 @@ def create_app() -> FastAPI:
                         completion_chunk,
                         started_indices,
                         parts.tool_name,
-                        tools=normalized_response_tools,
+                        tools=response_tools,
                         parsed_states=parsed_states,
                         generation_prompt=parts.generation_prompt,
                     )
