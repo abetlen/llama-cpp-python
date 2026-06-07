@@ -39,6 +39,11 @@ server = [
     "starlette-context>=0.3.6,<0.4",
     "PyYAML>=5.1",
 ]
+v1 = [
+    "huggingface-hub>=0.23.0",
+    "openai>=1.0.0",
+    "pydantic>=2.0.0",
+]
 test = [
     "pytest>=7.4.0",
     "httpx>=0.24.1",
@@ -59,7 +64,7 @@ dev = [
     "httpx>=0.24.1",
 ]
 all = [
-    "llama_cpp_python[server,test,dev]",
+    "llama_cpp_python[server,v1,test,dev]",
 ]
 
 [tool.scikit-build]
