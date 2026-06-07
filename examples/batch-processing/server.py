@@ -3451,6 +3451,12 @@ class Completion:
 
 @dataclass
 class PromptSegment:
+    @dataclass
+    class Media:
+        embeddings: np.ndarray
+        positions: np.ndarray
+        non_causal: bool = False
+
     kind: Literal["text", "image", "audio"]
     start_pos: int
     n_pos: int
@@ -3458,9 +3464,7 @@ class PromptSegment:
     decode_start_pos: int
     decode_n_pos: int
     text_tokens: List[int] = field(default_factory=list)
-    embeddings: Optional[np.ndarray] = None
-    positions: Optional[np.ndarray] = None
-    non_causal: bool = False
+    media: Optional["PromptSegment.Media"] = None
 
     @property
     def end_pos(self) -> int:
@@ -3469,9 +3473,9 @@ class PromptSegment:
     @property
     def batch_rows(self) -> int:
         if self.kind != "text":
-            if self.embeddings is None:
+            if self.media is None:
                 return 0
-            return int(self.embeddings.shape[0])
+            return int(self.media.embeddings.shape[0])
         return len(self.text_tokens)
 
     @property
@@ -3494,16 +3498,16 @@ class PromptSegment:
         row_offset: int,
         row_count: int,
     ) -> Tuple[np.ndarray, np.ndarray, List[int]]:
-        if self.embeddings is None or self.positions is None:
+        if self.media is None:
             raise RuntimeError("media segment is missing embeddings or positions")
         row_start = row_offset
         row_end = row_offset + row_count
-        embeddings = self.embeddings[row_start:row_end]
-        if len(self.positions) == self.batch_rows:
-            positions = self.positions[row_start:row_end]
+        embeddings = self.media.embeddings[row_start:row_end]
+        if len(self.media.positions) == self.batch_rows:
+            positions = self.media.positions[row_start:row_end]
         else:
             positions = (
-                self.positions.reshape(4, self.batch_rows)[:, row_start:row_end]
+                self.media.positions.reshape(4, self.batch_rows)[:, row_start:row_end]
                 .reshape(-1)
             )
         return (
@@ -10187,9 +10191,11 @@ class MTMDProcessor:
                     identity_tokens=segment_identity,
                     decode_start_pos=decode_pos,
                     decode_n_pos=decode_n_pos,
-                    embeddings=embeddings,
-                    positions=positions,
-                    non_causal=non_causal,
+                    media=PromptSegment.Media(
+                        embeddings=embeddings,
+                        positions=positions,
+                        non_causal=non_causal,
+                    ),
                 )
                 if non_causal and embeddings.shape[0] > min(self.n_batch, self.n_ubatch):
                     raise CompletionRequestValidationError(
@@ -12348,12 +12354,12 @@ class CompletionScheduler:
                 if segment.kind != "text":
                     token_count = min(
                         segment.batch_rows
-                        if segment.non_causal
+                        if segment.media is not None and segment.media.non_causal
                         else self._pending_tokens_length(request),
                         self.model.n_batch,
                     )
                     if segment.batch_rows > self.model.n_batch:
-                        if segment.non_causal:
+                        if segment.media is not None and segment.media.non_causal:
                             raise RuntimeError(
                                 "non-causal media prompt segment exceeds model.n_batch; "
                                 "increase n_batch"
@@ -12562,7 +12568,7 @@ class CompletionScheduler:
             segment = self._current_prompt_segment(source)
             if segment.kind != "text":
                 segment_offset = source.prompt_cursor - segment.start_pos
-                if segment.non_causal:
+                if segment.media is not None and segment.media.non_causal:
                     if segment_offset != 0:
                         raise RuntimeError("non-causal media segment was partially scheduled")
                     return segment.batch_rows
@@ -12591,7 +12597,7 @@ class CompletionScheduler:
         if segment.kind == "text":
             remaining = self._pending_tokens_length(source) - already_allocated
             return min(remaining, capacity)
-        if segment.non_causal:
+        if segment.media is not None and segment.media.non_causal:
             if already_allocated == 0 and segment.batch_rows <= capacity:
                 return segment.batch_rows
             return 0
@@ -12660,7 +12666,8 @@ class CompletionScheduler:
             segment = self._current_prompt_segment(source)
             if segment.kind != "text":
                 segment_offset = source.prompt_cursor - segment.start_pos
-                if segment.non_causal:
+                non_causal = segment.media is not None and segment.media.non_causal
+                if non_causal:
                     if segment_offset != 0 or token_count < segment.batch_rows:
                         raise RuntimeError("non-causal media segment must be scheduled atomically")
                     row_count = segment.batch_rows
@@ -12710,7 +12717,7 @@ class CompletionScheduler:
                         position_increments=position_increments,
                         embeddings=embeddings,
                         positions=positions,
-                        non_causal=segment.non_causal,
+                        non_causal=non_causal,
                         prompt_advance_to=logical_end,
                     ),
                     output_index,
