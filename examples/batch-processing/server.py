@@ -14399,23 +14399,45 @@ class CompletionService:
         ]
 
 
-def unpack_completion_request_parts(
-    parts: Tuple[Any, ...],
-) -> Tuple[CreateCompletionRequest, str, str, PromptPlan, Optional[str], Optional[str]]:
-    if len(parts) == 6:
-        return cast(
-            Tuple[CreateCompletionRequest, str, str, PromptPlan, Optional[str], Optional[str]],
-            parts,
+@dataclass(frozen=True)
+class PreparedCompletionParts:
+    payload: CreateCompletionRequest
+    prompt_text: str
+    generation_prompt: str
+    prompt_plan: PromptPlan
+    grammar_text: Optional[str]
+    tool_name: Optional[str]
+
+
+def normalize_completion_request_parts(
+    formatter_result: Tuple[Any, ...],
+) -> PreparedCompletionParts:
+    if len(formatter_result) == 6:
+        (
+            payload,
+            prompt_text,
+            generation_prompt,
+            prompt_plan,
+            grammar_text,
+            tool_name,
+        ) = formatter_result
+        return PreparedCompletionParts(
+            payload=cast(CreateCompletionRequest, payload),
+            prompt_text=cast(str, prompt_text),
+            generation_prompt=cast(str, generation_prompt),
+            prompt_plan=cast(PromptPlan, prompt_plan),
+            grammar_text=cast(Optional[str], grammar_text),
+            tool_name=cast(Optional[str], tool_name),
         )
-    if len(parts) == 5:
-        payload, prompt_text, prompt_plan, grammar_text, tool_name = parts
-        return (
-            cast(CreateCompletionRequest, payload),
-            cast(str, prompt_text),
-            "",
-            cast(PromptPlan, prompt_plan),
-            cast(Optional[str], grammar_text),
-            cast(Optional[str], tool_name),
+    if len(formatter_result) == 5:
+        payload, prompt_text, prompt_plan, grammar_text, tool_name = formatter_result
+        return PreparedCompletionParts(
+            payload=cast(CreateCompletionRequest, payload),
+            prompt_text=cast(str, prompt_text),
+            generation_prompt="",
+            prompt_plan=cast(PromptPlan, prompt_plan),
+            grammar_text=cast(Optional[str], grammar_text),
+            tool_name=cast(Optional[str], tool_name),
         )
     raise CompletionRequestValidationError("unexpected chat completion formatter result")
 
@@ -14697,7 +14719,7 @@ def create_app() -> FastAPI:
         service: CompletionService = app.state.service
         formatter = service.formatter
         try:
-            payload, prompt_text, generation_prompt, prompt_plan, grammar_text, tool_name = unpack_completion_request_parts(
+            parts = normalize_completion_request_parts(
                 formatter.completion_request_from_chat_request(
                     body,
                 )
@@ -14721,11 +14743,11 @@ def create_app() -> FastAPI:
         )
         try:
             request = service.request_from_prepared(
-                payload=payload,
-                prompt_text=prompt_text,
-                prompt_plan=prompt_plan,
-                grammar_text=grammar_text,
-                chat_tool_name=tool_name,
+                payload=parts.payload,
+                prompt_text=parts.prompt_text,
+                prompt_plan=parts.prompt_plan,
+                grammar_text=parts.grammar_text,
+                chat_tool_name=parts.tool_name,
             )
             stream, cancel = service.submit_request(request)
         except CompletionRequestValidationError as exc:
@@ -14739,11 +14761,11 @@ def create_app() -> FastAPI:
                 return formatter.convert_completion_chunk_to_chat_chunks(
                     completion_chunk,
                     started_indices,
-                    tool_name,
+                    parts.tool_name,
                     functions=normalized_functions,
                     tools=normalized_tools,
                     parsed_states=parsed_states,
-                    generation_prompt=generation_prompt,
+                    generation_prompt=parts.generation_prompt,
                 )
 
             parsed_states: Dict[int, Dict[str, Any]] = {}
@@ -14764,10 +14786,10 @@ def create_app() -> FastAPI:
             return completion
         chat_response = formatter.convert_completion_response_to_chat(
             completion,
-            tool_name,
+            parts.tool_name,
             functions=normalized_functions,
             tools=normalized_tools,
-            generation_prompt=generation_prompt,
+            generation_prompt=parts.generation_prompt,
         )
         if isinstance(chat_response, BaseModel):
             return JSONResponse(
@@ -14784,7 +14806,7 @@ def create_app() -> FastAPI:
         formatter = service.formatter
         try:
             chat_body = formatter.chat_request_from_responses_request(body)
-            payload, prompt_text, generation_prompt, prompt_plan, grammar_text, tool_name = unpack_completion_request_parts(
+            parts = normalize_completion_request_parts(
                 formatter.completion_request_from_chat_request(
                     chat_body,
                 )
@@ -14797,11 +14819,11 @@ def create_app() -> FastAPI:
         )
         try:
             request = service.request_from_prepared(
-                payload=payload,
-                prompt_text=prompt_text,
-                prompt_plan=prompt_plan,
-                grammar_text=grammar_text,
-                chat_tool_name=tool_name,
+                payload=parts.payload,
+                prompt_text=parts.prompt_text,
+                prompt_plan=parts.prompt_plan,
+                grammar_text=parts.grammar_text,
+                chat_tool_name=parts.tool_name,
             )
             stream, cancel = service.submit_request(request)
         except CompletionRequestValidationError as exc:
@@ -14822,10 +14844,10 @@ def create_app() -> FastAPI:
                 chat_chunks = formatter.convert_completion_chunk_to_chat_chunks(
                     completion_chunk,
                     started_indices,
-                    tool_name,
+                    parts.tool_name,
                     tools=normalized_response_tools,
                     parsed_states=parsed_states,
-                    generation_prompt=generation_prompt,
+                    generation_prompt=parts.generation_prompt,
                 )
                 payloads: List[BaseModel | Dict[str, Any]] = []
                 for chat_chunk in chat_chunks:
@@ -14863,9 +14885,9 @@ def create_app() -> FastAPI:
             formatter.convert_completion_response_to_response(
                 completion,
                 body,
-                tool_name,
+                parts.tool_name,
                 tools=normalized_response_tools,
-                generation_prompt=generation_prompt,
+                generation_prompt=parts.generation_prompt,
             )
         )
 
@@ -14935,14 +14957,7 @@ def create_app() -> FastAPI:
                     if ws_body.generate is False:
                         body = body.model_copy(update={"max_output_tokens": 0})
                     chat_body = formatter.chat_request_from_responses_request(body)
-                    (
-                        completion_payload,
-                        prompt_text,
-                        generation_prompt,
-                        prompt_plan,
-                        grammar_text,
-                        tool_name,
-                    ) = unpack_completion_request_parts(
+                    parts = normalize_completion_request_parts(
                         formatter.completion_request_from_chat_request(chat_body)
                     )
                     normalized_response_tools = cast(
@@ -14950,11 +14965,11 @@ def create_app() -> FastAPI:
                         formatter._normalized_tools(tools=chat_body.tools),
                     )
                     request = service.request_from_prepared(
-                        payload=completion_payload,
-                        prompt_text=prompt_text,
-                        prompt_plan=prompt_plan,
-                        grammar_text=grammar_text,
-                        chat_tool_name=tool_name,
+                        payload=parts.payload,
+                        prompt_text=parts.prompt_text,
+                        prompt_plan=parts.prompt_plan,
+                        grammar_text=parts.grammar_text,
+                        chat_tool_name=parts.tool_name,
                     )
                     stream, cancel = service.submit_request(request)
                 except CompletionRequestValidationError as exc:
@@ -14976,10 +14991,10 @@ def create_app() -> FastAPI:
                     chat_chunks = formatter.convert_completion_chunk_to_chat_chunks(
                         completion_chunk,
                         started_indices,
-                        tool_name,
+                        parts.tool_name,
                         tools=normalized_response_tools,
                         parsed_states=parsed_states,
-                        generation_prompt=generation_prompt,
+                        generation_prompt=parts.generation_prompt,
                     )
                     payloads: List[BaseModel | Dict[str, Any]] = []
                     for chat_chunk in chat_chunks:
