@@ -1,3 +1,9 @@
+"""Experimental bindings for non-public llama.cpp APIs from `llama-ext.h`.
+
+This module is not part of the stable llama-cpp-python public API.
+Downstream code should not import or depend on it directly.
+"""
+
 from __future__ import annotations
 
 import ctypes
