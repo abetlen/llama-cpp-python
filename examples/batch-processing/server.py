@@ -39,6 +39,7 @@ import inspect
 import importlib.util
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from pathlib import Path
@@ -3164,6 +3165,8 @@ class ConfigFile(BaseModel):
         mmproj_path: Optional[str] = None
         mmproj_from_pretrained: Optional["ConfigFile.FromPretrainedOptions"] = None
         embedding_cache: Optional["ConfigFile.MTMDEmbeddingCacheOptions"] = None
+        allowed_media_domains: Optional[List[str]] = None
+        allowed_local_media_path: Optional[str] = None
         image_max_bytes: int = Field(default=20 * 1024 * 1024, ge=1)
         audio_max_bytes: int = Field(default=100 * 1024 * 1024, ge=1)
         image_timeout_seconds: float = Field(default=10.0, gt=0.0)
@@ -9947,6 +9950,8 @@ class MTMDProcessor:
         n_threads_batch: int,
         mmproj_path: str,
         embedding_cache: Optional[MTMDEmbeddingCache],
+        allowed_media_domains: Optional[List[str]],
+        allowed_local_media_path: Optional[str],
         image_max_bytes: int,
         audio_max_bytes: int,
         image_timeout_seconds: float,
@@ -9960,6 +9965,16 @@ class MTMDProcessor:
         self.embedding_cache = embedding_cache
         self.model_fingerprint = MTMDEmbeddingCache.fingerprint_file(model_path)
         self.mmproj_fingerprint = MTMDEmbeddingCache.fingerprint_file(mmproj_path)
+        self.allowed_media_domains = (
+            {domain.lower() for domain in allowed_media_domains}
+            if allowed_media_domains is not None
+            else set()
+        )
+        self.allowed_local_media_path = (
+            Path(allowed_local_media_path).expanduser().resolve()
+            if allowed_local_media_path is not None
+            else None
+        )
         self.image_max_bytes = image_max_bytes
         self.audio_max_bytes = audio_max_bytes
         self.image_timeout_seconds = image_timeout_seconds
@@ -9991,6 +10006,54 @@ class MTMDProcessor:
             return self.image_max_bytes
         return self.audio_max_bytes
 
+    def _load_media_file(self, kind: Literal["image", "audio"], media_url: str) -> bytes:
+        if self.allowed_local_media_path is None:
+            raise CompletionRequestValidationError("local media path is not allowed")
+        parsed = urllib.parse.urlsplit(media_url)
+        if parsed.netloc not in {"", "localhost"}:
+            raise CompletionRequestValidationError("local media path is not allowed")
+        path = Path(urllib.parse.unquote(parsed.path)).expanduser().resolve()
+        try:
+            path.relative_to(self.allowed_local_media_path)
+        except ValueError as exc:
+            raise CompletionRequestValidationError("local media path is not allowed") from exc
+        max_bytes = self._max_bytes_for_media(kind)
+        try:
+            if path.stat().st_size > max_bytes:
+                raise CompletionRequestValidationError(f"{kind} exceeds model.mtmd.{kind}_max_bytes")
+            data = path.read_bytes()
+        except OSError as exc:
+            raise CompletionRequestValidationError(f"failed to read local {kind}: {exc}") from exc
+        if len(data) > max_bytes:
+            raise CompletionRequestValidationError(f"{kind} exceeds model.mtmd.{kind}_max_bytes")
+        return data
+
+    def _validate_remote_media_url(self, media_url: str) -> str:
+        parsed = urllib.parse.urlsplit(media_url)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            raise CompletionRequestValidationError(
+                "only data:, file:, http:, and https: media URLs are supported"
+            )
+        if parsed.username is not None or parsed.password is not None:
+            raise CompletionRequestValidationError("remote media domain is not allowed")
+        hostname = parsed.hostname.lower()
+        if self.allowed_media_domains and hostname not in self.allowed_media_domains:
+            raise CompletionRequestValidationError("remote media domain is not allowed")
+        return urllib.parse.urlunsplit(parsed)
+
+    @staticmethod
+    def _urlopen_without_redirects(
+        request: urllib.request.Request,
+        *,
+        timeout: float,
+    ) -> Any:
+        class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]
+                return None
+
+        opener = urllib.request.build_opener(NoRedirectHandler)
+        return opener.open(request, timeout=timeout)
+
     def _load_media_url(self, kind: Literal["image", "audio"], media_url: str) -> bytes:
         max_bytes = self._max_bytes_for_media(kind)
         if media_url.startswith("data:"):
@@ -10002,16 +10065,15 @@ class MTMDProcessor:
             if len(data) > max_bytes:
                 raise CompletionRequestValidationError(f"{kind} exceeds model.mtmd.{kind}_max_bytes")
             return data
-        if not (media_url.startswith("http://") or media_url.startswith("https://")):
-            raise CompletionRequestValidationError(
-                f"only data:, http:, and https: {kind} URLs are supported"
-            )
+        if media_url.startswith("file:"):
+            return self._load_media_file(kind, media_url)
+        media_url = self._validate_remote_media_url(media_url)
         request = urllib.request.Request(
             media_url,
             headers={"User-Agent": "llama-cpp-python-batch-mtmd/0"},
         )
         try:
-            with urllib.request.urlopen(request, timeout=self.image_timeout_seconds) as response:
+            with self._urlopen_without_redirects(request, timeout=self.image_timeout_seconds) as response:
                 data = response.read(max_bytes + 1)
         except (OSError, TimeoutError, urllib.error.URLError) as exc:
             raise CompletionRequestValidationError(
@@ -15238,6 +15300,8 @@ def main() -> None:
             n_threads_batch=model.n_threads_batch,
             mmproj_path=mmproj_path,
             embedding_cache=embedding_cache,
+            allowed_media_domains=config.model.mtmd.allowed_media_domains,
+            allowed_local_media_path=config.model.mtmd.allowed_local_media_path,
             image_max_bytes=config.model.mtmd.image_max_bytes,
             audio_max_bytes=config.model.mtmd.audio_max_bytes,
             image_timeout_seconds=config.model.mtmd.image_timeout_seconds,
