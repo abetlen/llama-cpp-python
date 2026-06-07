@@ -11624,36 +11624,9 @@ class UnifiedAttentionMemoryPolicy(AttentionMemoryPolicy):
         dest_sequence_id: int,
         keep_len: int,
     ) -> None:
-        if keep_len <= 0:
-            return
-        source_length = self.scheduler.radix_trie.length(source_sequence_id)
-        keep_pos = self.scheduler.sequence_history.position_length_for_prefix(
-            source_sequence_id,
-            keep_len,
-        )
-        copy_p0 = 0
-        copy_p1 = keep_pos
-        if not self.scheduler.model.kv_unified:
-            copy_p0 = -1
-            copy_p1 = -1
-        llama_cpp.llama_memory_seq_cp(
-            self.scheduler.model.mem,
+        self.scheduler.copy_sequence_state(
             source_sequence_id,
             dest_sequence_id,
-            copy_p0,
-            copy_p1,
-        )
-        self.scheduler.model.copy_draft_sequence(
-            source_sequence_id,
-            dest_sequence_id,
-            copy_p0,
-            copy_p1,
-        )
-        self.scheduler.radix_trie.copy(source_sequence_id, dest_sequence_id, keep_len)
-        self.scheduler.sequence_history.copy(
-            source_sequence_id,
-            dest_sequence_id,
-            source_length,
             keep_len,
         )
 
@@ -11694,35 +11667,11 @@ class PartitionedAttentionMemoryPolicy(AttentionMemoryPolicy):
         dest_sequence_id: int,
         keep_len: int,
     ) -> None:
-        if keep_len <= 0:
-            return
-        source_length = self.scheduler.radix_trie.length(source_sequence_id)
-        keep_pos = self.scheduler.sequence_history.position_length_for_prefix(
+        self.scheduler.copy_sequence_state(
             source_sequence_id,
+            dest_sequence_id,
             keep_len,
-        )
-        llama_cpp.llama_memory_seq_cp(
-            self.scheduler.model.mem,
-            source_sequence_id,
-            dest_sequence_id,
-            -1,
-            -1,
-        )
-        self.scheduler.model.copy_draft_sequence(
-            source_sequence_id,
-            dest_sequence_id,
-            -1,
-            -1,
-        )
-        if source_length > keep_len:
-            llama_cpp.llama_memory_seq_rm(self.scheduler.model.mem, dest_sequence_id, keep_pos, -1)
-            self.scheduler.model.truncate_draft_sequence(dest_sequence_id, keep_pos)
-        self.scheduler.radix_trie.copy(source_sequence_id, dest_sequence_id, keep_len)
-        self.scheduler.sequence_history.copy(
-            source_sequence_id,
-            dest_sequence_id,
-            source_length,
-            keep_len,
+            copy_all_state=True,
         )
 
 
@@ -11830,36 +11779,9 @@ class CheckpointMemoryPolicy(MemoryPolicy):
         dest_sequence_id: int,
         keep_len: int,
     ) -> None:
-        if keep_len <= 0:
-            return
-        source_length = self.scheduler.radix_trie.length(source_sequence_id)
-        keep_pos = self.scheduler.sequence_history.position_length_for_prefix(
-            source_sequence_id,
-            keep_len,
-        )
-        copy_p0 = 0
-        copy_p1 = keep_pos
-        if not self.scheduler.model.kv_unified:
-            copy_p0 = -1
-            copy_p1 = -1
-        llama_cpp.llama_memory_seq_cp(
-            self.scheduler.model.mem,
+        self.scheduler.copy_sequence_state(
             source_sequence_id,
             dest_sequence_id,
-            copy_p0,
-            copy_p1,
-        )
-        self.scheduler.model.copy_draft_sequence(
-            source_sequence_id,
-            dest_sequence_id,
-            copy_p0,
-            copy_p1,
-        )
-        self.scheduler.radix_trie.copy(source_sequence_id, dest_sequence_id, keep_len)
-        self.scheduler.sequence_history.copy(
-            source_sequence_id,
-            dest_sequence_id,
-            source_length,
             keep_len,
         )
 
@@ -13375,29 +13297,9 @@ class CompletionScheduler:
         ):
             return
         checkpoint_seq_id = self.unused_sequences.pop()
-        copy_p0 = 0
-        copy_p1 = request.prompt_plan.decoder_pos_up_to(len(request.prompt_tokens))
-        if not self.model.kv_unified:
-            copy_p0 = -1
-            copy_p1 = -1
-        llama_cpp.llama_memory_seq_cp(
-            self.model.mem,
+        self.copy_sequence_state(
             request.base_seq_id,
             checkpoint_seq_id,
-            copy_p0,
-            copy_p1,
-        )
-        self.model.copy_draft_sequence(
-            request.base_seq_id,
-            checkpoint_seq_id,
-            copy_p0,
-            copy_p1,
-        )
-        self.radix_trie.copy(request.base_seq_id, checkpoint_seq_id, len(request.prompt_tokens))
-        self.sequence_history.copy(
-            request.base_seq_id,
-            checkpoint_seq_id,
-            self.radix_trie.length(request.base_seq_id),
             len(request.prompt_tokens),
         )
         self.checkpoint_logits[checkpoint_seq_id] = request.prompt_logits
@@ -13684,6 +13586,59 @@ class CompletionScheduler:
         if truncate_draft:
             self.model.truncate_draft_sequence(seq_id, keep_pos)
         self.truncate_sequence_metadata(seq_id, current_len, keep_len)
+
+    def copy_sequence_state(
+        self,
+        source_sequence_id: int,
+        dest_sequence_id: int,
+        keep_len: int,
+        *,
+        copy_all_state: bool = False,
+    ) -> None:
+        if keep_len <= 0:
+            return
+        source_length = self.radix_trie.length(source_sequence_id)
+        keep_pos = self.sequence_history.position_length_for_prefix(
+            source_sequence_id,
+            keep_len,
+        )
+        copy_p0 = 0
+        copy_p1 = keep_pos
+        if copy_all_state or not self.model.kv_unified:
+            copy_p0 = -1
+            copy_p1 = -1
+        llama_cpp.llama_memory_seq_cp(
+            self.model.mem,
+            source_sequence_id,
+            dest_sequence_id,
+            copy_p0,
+            copy_p1,
+        )
+        self.model.copy_draft_sequence(
+            source_sequence_id,
+            dest_sequence_id,
+            copy_p0,
+            copy_p1,
+        )
+        if copy_all_state and source_length > keep_len:
+            if not llama_cpp.llama_memory_seq_rm(
+                self.model.mem,
+                dest_sequence_id,
+                keep_pos,
+                -1,
+            ):
+                raise RuntimeError(
+                    f"failed to truncate copied model sequence {dest_sequence_id} "
+                    f"at position {keep_pos}"
+                )
+            self.model.truncate_draft_sequence(dest_sequence_id, keep_pos)
+        self.radix_trie.copy(source_sequence_id, dest_sequence_id, keep_len)
+        self.sequence_history.copy(
+            source_sequence_id,
+            dest_sequence_id,
+            source_length,
+            keep_len,
+        )
 
     def truncate_sequence_metadata(
         self,
