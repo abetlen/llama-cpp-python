@@ -3683,17 +3683,13 @@ class SchedulerMetrics:
         if not items:
             return
         total_tokens = sum(
-            int(item.embeddings.shape[0])
-            if getattr(item, "embeddings", None) is not None
-            else len(item.tokens)
+            item.batch_token_count
             for item in items
         )
         if total_tokens <= 0:
             return
         prompt_tokens = sum(
-            int(item.embeddings.shape[0])
-            if getattr(item, "embeddings", None) is not None
-            else len(item.tokens)
+            item.batch_token_count
             for item in items
             if getattr(item, "kind", None) == "prefill"
         )
@@ -11759,6 +11755,25 @@ class CheckpointMemoryPolicy(MemoryPolicy):
 class CompletionScheduler:
     @dataclass
     class BatchItem:
+        @dataclass
+        class Prefill:
+            embeddings: Optional[np.ndarray] = None
+            positions: Optional[np.ndarray] = None
+            non_causal: bool = False
+            prompt_advance_to: Optional[int] = None
+
+        @dataclass
+        class Decode:
+            completion_index: int
+            pending_count: int
+            accepted_draft_count: int = 0
+            sampled_pending_token: Optional[int] = None
+            rollback_keep_len: Optional[int] = None
+            rollback_accepted_draft_count: int = 0
+            rollback_draft_processed: bool = False
+            deferred_accept_draft_count: Optional[int] = None
+            deferred_truncate_draft_len: Optional[int] = None
+
         kind: Literal["prefill", "decode"]
         request_id: str
         seq_id: int
@@ -11769,19 +11784,27 @@ class CompletionScheduler:
         output_indices: List[Optional[int]]
         output_positions: List[int]
         position_increments: List[int]
-        embeddings: Optional[np.ndarray] = None
-        positions: Optional[np.ndarray] = None
-        non_causal: bool = False
-        prompt_advance_to: Optional[int] = None
-        completion_index: Optional[int] = None
-        pending_count: int = 0
-        accepted_draft_count: int = 0
-        sampled_pending_token: Optional[int] = None
-        rollback_keep_len: Optional[int] = None
-        rollback_accepted_draft_count: int = 0
-        rollback_draft_processed: bool = False
-        deferred_accept_draft_count: Optional[int] = None
-        deferred_truncate_draft_len: Optional[int] = None
+        prefill_state: Optional["CompletionScheduler.BatchItem.Prefill"] = None
+        decode_state: Optional["CompletionScheduler.BatchItem.Decode"] = None
+
+        def require_prefill(self) -> "CompletionScheduler.BatchItem.Prefill":
+            if self.prefill_state is None:
+                raise RuntimeError("batch item is not a prefill item")
+            return self.prefill_state
+
+        def require_decode(self) -> "CompletionScheduler.BatchItem.Decode":
+            if self.decode_state is None:
+                raise RuntimeError("batch item is not a decode item")
+            return self.decode_state
+
+        @property
+        def batch_token_count(self) -> int:
+            if (
+                self.prefill_state is not None
+                and self.prefill_state.embeddings is not None
+            ):
+                return int(self.prefill_state.embeddings.shape[0])
+            return len(self.tokens)
 
         @classmethod
         def prefill(
@@ -11812,10 +11835,12 @@ class CompletionScheduler:
                 output_indices=output_indices,
                 output_positions=output_positions,
                 position_increments=position_increments,
-                embeddings=embeddings,
-                positions=positions,
-                non_causal=non_causal,
-                prompt_advance_to=prompt_advance_to,
+                prefill_state=cls.Prefill(
+                    embeddings=embeddings,
+                    positions=positions,
+                    non_causal=non_causal,
+                    prompt_advance_to=prompt_advance_to,
+                ),
             )
 
         @classmethod
@@ -11845,8 +11870,10 @@ class CompletionScheduler:
                 output_indices=output_indices,
                 output_positions=output_positions,
                 position_increments=position_increments,
-                completion_index=completion_index,
-                pending_count=pending_count,
+                decode_state=cls.Decode(
+                    completion_index=completion_index,
+                    pending_count=pending_count,
+                ),
             )
 
     def __init__(
@@ -12115,13 +12142,14 @@ class CompletionScheduler:
             self.model.set_draft_processing_enabled(draft_processing_enabled)
             self.model.clear_batch()
             for item in batch_items:
-                if item.embeddings is not None:
-                    if item.positions is None:
+                prefill = item.prefill_state
+                if prefill is not None and prefill.embeddings is not None:
+                    if prefill.positions is None:
                         raise RuntimeError("embedding batch item is missing positions")
                     self.model.add_batch_embeddings(
                         seq_id=item.seq_id,
-                        embeddings=item.embeddings,
-                        positions=item.positions,
+                        embeddings=prefill.embeddings,
+                        positions=prefill.positions,
                         output_indices=item.output_indices,
                     )
                 else:
@@ -12133,7 +12161,10 @@ class CompletionScheduler:
                     )
             decode_started_at = time.perf_counter()
             try:
-                non_causal_decode = any(item.non_causal for item in batch_items)
+                non_causal_decode = any(
+                    item.prefill_state is not None and item.prefill_state.non_causal
+                    for item in batch_items
+                )
                 try:
                     if non_causal_decode:
                         llama_cpp.llama_set_causal_attn(self.model.ctx, False)
@@ -12195,9 +12226,10 @@ class CompletionScheduler:
             return False
         if item.kind == "prefill":
             return not any(segment.kind != "text" for segment in request.prompt_plan.segments)
-        if item.completion_index is None:
+        decode = item.decode_state
+        if decode is None:
             return False
-        return not request.completions[item.completion_index].multimodal_prompt
+        return not request.completions[decode.completion_index].multimodal_prompt
 
     def batch_needs_draft_processing(
         self,
@@ -12219,9 +12251,10 @@ class CompletionScheduler:
                 if self.request_needs_prompt_logits(request):
                     return True
                 continue
-            if item.completion_index is None:
+            decode = item.decode_state
+            if decode is None:
                 continue
-            completion = request.completions[item.completion_index]
+            completion = request.completions[decode.completion_index]
             if not completion.finished:
                 return True
         return False
@@ -12236,7 +12269,7 @@ class CompletionScheduler:
         draft_batch_size = sum(
             1
             for item in batch_items
-            if item.kind == "decode" and item.completion_index is not None
+            if item.kind == "decode" and item.decode_state is not None
         )
         return draft_batch_size <= max_batch_size
 
@@ -12767,8 +12800,9 @@ class CompletionScheduler:
                     if prompt_output_index is not None
                     else None
                 )
-                if item.prompt_advance_to is not None:
-                    request.prompt_cursor = item.prompt_advance_to
+                prefill = item.require_prefill()
+                if prefill.prompt_advance_to is not None:
+                    request.prompt_cursor = prefill.prompt_advance_to
                 else:
                     request.prompt_cursor += len(item.identity_tokens)
                 if request.prompt_cursor == len(request.prompt_tokens):
@@ -12782,8 +12816,8 @@ class CompletionScheduler:
                         prompt_logits=request.prompt_logits,
                     )
             else:
-                assert item.completion_index is not None
-                completion = request.completions[item.completion_index]
+                decode = item.require_decode()
+                completion = request.completions[decode.completion_index]
                 self.process_generation_item(
                     completion,
                     item,
@@ -12958,12 +12992,13 @@ class CompletionScheduler:
                 range(batch_row_offset, batch_row_offset + len(item.tokens))
             )
             batch_row_offset += len(item.tokens)
-            if item.kind != "decode" or item.completion_index is None:
+            decode = item.decode_state
+            if item.kind != "decode" or decode is None:
                 continue
             request = self.requests.get(item.request_id)
             if request is None:
                 continue
-            completion = request.completions[item.completion_index]
+            completion = request.completions[decode.completion_index]
             if completion.finished or completion.pending_finish_reason is not None:
                 continue
             remaining_tokens = completion.max_total_tokens - completion.total_tokens
@@ -12975,11 +13010,11 @@ class CompletionScheduler:
             ]
             if any(output_index is None for output_index in resolved_output_indices):
                 continue
-            sample_index = item.pending_count + item.accepted_draft_count - 1
+            sample_index = decode.pending_count + decode.accepted_draft_count - 1
             target_count = len(item.tokens)
             if sample_index < 0 or sample_index >= target_count:
                 continue
-            if item.sampled_pending_token is None:
+            if decode.sampled_pending_token is None:
                 continue
             completions.append(completion)
             update_items.append(item)
@@ -12991,7 +13026,7 @@ class CompletionScheduler:
                     row_indices=item_batch_rows,
                     target_count=target_count,
                     sample_index=sample_index,
-                    pending_token=item.sampled_pending_token,
+                    pending_token=decode.sampled_pending_token,
                     max_tokens=remaining_tokens,
                 )
             )
@@ -13003,7 +13038,7 @@ class CompletionScheduler:
         draft_started_at = time.perf_counter()
         proposed_many = process_sampled_batch(updates)
         for item in update_items:
-            item.rollback_draft_processed = True
+            item.require_decode().rollback_draft_processed = True
         draft_elapsed = time.perf_counter() - draft_started_at
         self.metrics.draft_seconds_total += draft_elapsed
         self.metrics.draft_sampled_batch_seconds_total += draft_elapsed
@@ -13030,10 +13065,11 @@ class CompletionScheduler:
         *,
         defer_draft_state: bool,
     ) -> None:
+        decode = item.require_decode()
         if defer_draft_state:
-            item.rollback_keep_len = keep_len
-            item.rollback_accepted_draft_count = accepted_draft_count
-            item.rollback_draft_processed = False
+            decode.rollback_keep_len = keep_len
+            decode.rollback_accepted_draft_count = accepted_draft_count
+            decode.rollback_draft_processed = False
             return
         self.model.accept_draft_tokens(item.seq_id, accepted_draft_count)
         self.truncate_sequence(item.seq_id, keep_len)
@@ -13043,41 +13079,45 @@ class CompletionScheduler:
         items: Sequence["CompletionScheduler.BatchItem"],
     ) -> None:
         for item in items:
-            if item.rollback_keep_len is None:
+            decode = item.require_decode()
+            rollback_keep_len = decode.rollback_keep_len
+            if rollback_keep_len is None:
+                deferred_accept_draft_count = decode.deferred_accept_draft_count
                 if (
-                    not item.rollback_draft_processed
-                    and item.deferred_accept_draft_count is not None
+                    not decode.rollback_draft_processed
+                    and deferred_accept_draft_count is not None
                 ):
                     self.model.accept_draft_tokens(
                         item.seq_id,
-                        item.deferred_accept_draft_count,
+                        deferred_accept_draft_count,
                     )
-                    if item.deferred_truncate_draft_len is not None:
+                    deferred_truncate_draft_len = decode.deferred_truncate_draft_len
+                    if deferred_truncate_draft_len is not None:
                         self.model.truncate_draft_sequence(
                             item.seq_id,
-                            item.deferred_truncate_draft_len,
+                            deferred_truncate_draft_len,
                         )
-                item.deferred_accept_draft_count = None
-                item.deferred_truncate_draft_len = None
-                item.rollback_draft_processed = False
+                decode.deferred_accept_draft_count = None
+                decode.deferred_truncate_draft_len = None
+                decode.rollback_draft_processed = False
                 continue
 
-            draft_state_needs_fallback = not item.rollback_draft_processed
+            draft_state_needs_fallback = not decode.rollback_draft_processed
             if draft_state_needs_fallback:
                 self.model.accept_draft_tokens(
                     item.seq_id,
-                    item.rollback_accepted_draft_count,
+                    decode.rollback_accepted_draft_count,
                 )
             self.truncate_sequence(
                 item.seq_id,
-                item.rollback_keep_len,
+                rollback_keep_len,
                 truncate_draft=draft_state_needs_fallback,
             )
-            item.rollback_keep_len = None
-            item.rollback_accepted_draft_count = 0
-            item.rollback_draft_processed = False
-            item.deferred_accept_draft_count = None
-            item.deferred_truncate_draft_len = None
+            decode.rollback_keep_len = None
+            decode.rollback_accepted_draft_count = 0
+            decode.rollback_draft_processed = False
+            decode.deferred_accept_draft_count = None
+            decode.deferred_truncate_draft_len = None
 
     def sample_completion_token(self, completion: Completion, output_index: int) -> int:
         sample_started_at = time.perf_counter()
@@ -13095,6 +13135,8 @@ class CompletionScheduler:
     ) -> None:
         if completion.finished:
             return
+        decode = item.require_decode()
+        pending_count = decode.pending_count
         resolved_output_indices = [
             self.output_index_to_logits_index(output_index, output_count)
             for output_index in item.output_indices
@@ -13110,26 +13152,26 @@ class CompletionScheduler:
                 self.checkpoint_logits[completion.seq_id] = self.model.logits(
                     logits_indices[-1]
                 )
-            completion.pending_input_tokens = completion.pending_input_tokens[item.pending_count :]
+            completion.pending_input_tokens = completion.pending_input_tokens[pending_count:]
             finish_reason: str = completion.pending_finish_reason
             completion.pending_finish_reason = None
             self.finish_completion(completion, finish_reason)
             return
 
-        if item.pending_count:
-            completion.pending_input_tokens = completion.pending_input_tokens[item.pending_count :]
+        if pending_count:
+            completion.pending_input_tokens = completion.pending_input_tokens[pending_count:]
 
-        decoded_draft_tokens = item.tokens[item.pending_count :]
+        decoded_draft_tokens = item.tokens[pending_count:]
         accepted_draft_count = 0
         defer_draft_state = self.defer_sampled_draft_processing
-        if decoded_draft_tokens and item.pending_count <= 0:
+        if decoded_draft_tokens and pending_count <= 0:
             raise RuntimeError("draft verification requires at least one pending token")
         if decoded_draft_tokens:
             self.metrics.draft_batches_verified_total += 1
             self.metrics.draft_target_tokens_verified_total += len(decoded_draft_tokens)
 
         for draft_index, draft_token in enumerate(decoded_draft_tokens):
-            verify_output_index = item.pending_count + draft_index - 1
+            verify_output_index = pending_count + draft_index - 1
             if verify_output_index >= len(logits_indices):
                 raise RuntimeError("missing target output for draft verification")
             logits_index = logits_indices[verify_output_index]
@@ -13146,7 +13188,7 @@ class CompletionScheduler:
                 self.metrics.draft_target_tokens_wasted_total += (
                     max(0, len(decoded_draft_tokens) - accepted_draft_count - 1)
                 )
-                keep_len = item.start_pos + item.pending_count + accepted_draft_count
+                keep_len = item.start_pos + pending_count + accepted_draft_count
                 self.rollback_draft_verification(
                     item,
                     keep_len,
@@ -13182,8 +13224,8 @@ class CompletionScheduler:
                 if mismatch_finish_reason is not None:
                     completion.pending_finish_reason = mismatch_finish_reason
                 else:
-                    item.sampled_pending_token = sampled_token
-                item.accepted_draft_count = accepted_draft_count
+                    decode.sampled_pending_token = sampled_token
+                decode.accepted_draft_count = accepted_draft_count
                 return
             prev_tokens = [*completion.prompt_tokens, *completion.completion_tokens]
             if logits is not None:
@@ -13220,7 +13262,7 @@ class CompletionScheduler:
                 self.metrics.draft_target_tokens_wasted_total += (
                     len(decoded_draft_tokens) - accepted_draft_count
                 )
-                keep_len = item.start_pos + item.pending_count + accepted_draft_count
+                keep_len = item.start_pos + pending_count + accepted_draft_count
                 self.rollback_draft_verification(
                     item,
                     keep_len,
@@ -13228,17 +13270,17 @@ class CompletionScheduler:
                     defer_draft_state=defer_draft_state,
                 )
                 completion.draft_tokens.clear()
-                item.accepted_draft_count = accepted_draft_count
+                decode.accepted_draft_count = accepted_draft_count
                 self.finish_completion(completion, accepted_finish_reason)
                 return
 
-        item.accepted_draft_count = accepted_draft_count
+        decode.accepted_draft_count = accepted_draft_count
         if decoded_draft_tokens:
             self.record_draft_acceptance_length(accepted_draft_count)
         if not defer_draft_state:
             self.model.accept_draft_tokens(completion.seq_id, accepted_draft_count)
         elif decoded_draft_tokens:
-            item.deferred_accept_draft_count = accepted_draft_count
+            decode.deferred_accept_draft_count = accepted_draft_count
         if accepted_draft_count:
             completion.draft_tokens = completion.draft_tokens[accepted_draft_count:]
 
@@ -13258,7 +13300,7 @@ class CompletionScheduler:
                     item.start_pos + len(item.tokens),
                 )
             else:
-                item.deferred_truncate_draft_len = item.start_pos + len(item.tokens)
+                decode.deferred_truncate_draft_len = item.start_pos + len(item.tokens)
             completion.draft_tokens.clear()
         elif completion.draft_tokens and next_token == completion.draft_tokens[0]:
             if getattr(self.model, "draft_target_batching", True):
@@ -13296,7 +13338,7 @@ class CompletionScheduler:
         if final_finish_reason is not None:
             completion.pending_finish_reason = final_finish_reason
         else:
-            item.sampled_pending_token = next_token
+            decode.sampled_pending_token = next_token
 
     def maybe_save_prompt_checkpoint(self, request: CompletionRequest) -> None:
         if (
