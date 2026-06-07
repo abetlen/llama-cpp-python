@@ -3489,8 +3489,6 @@ class PromptSegment:
     def rows_for_capacity(self, offset: int, capacity: int) -> int:
         if capacity <= 0:
             return 0
-        if self.kind == "text":
-            return min(capacity, self.end_pos - self.start_pos - offset)
         return min(capacity, self.end_pos - self.start_pos - offset)
 
     def media_slice(
