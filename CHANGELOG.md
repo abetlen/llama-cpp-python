@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- feat: add v1 Model API by @abetlen in #2280
+
 ## [0.3.27]
 
 - feat: update llama.cpp to ggml-org/llama.cpp@465b1f0e7
