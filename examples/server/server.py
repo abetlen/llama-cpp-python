@@ -1287,6 +1287,7 @@ class MTPDraftProvider(DraftProvider):
             raise RuntimeError("failed to create MTP draft context")
         ctx_other = llama_cpp_ext.llama_get_ctx_other(self.ctx)
         self.is_mem_shared = bool(ctx_other and ctx_other == self.target_ctx)
+        self.sampled_batch_draft = not self.is_mem_shared
         self.n_batch = int(llama_cpp.llama_n_batch(self.ctx))
         mem = llama_cpp.llama_get_memory(self.ctx)
         if mem is None:
