@@ -12382,10 +12382,9 @@ class CompletionScheduler:
         sources: Sequence[Union[CompletionRequest, Completion]],
         token_count: int,
     ) -> Dict[int, int]:
-        n_ubatch = getattr(self.model, "n_ubatch", self.model.n_batch)
         # Recurrent rollback snapshots are only valid if the whole per-sequence
         # pending+draft group fits in a single llama.cpp ubatch.
-        safe_capacity = min(self.model.n_batch, n_ubatch or self.model.n_batch)
+        safe_capacity = min(self.model.n_batch, self.model.n_ubatch)
         if token_count > safe_capacity:
             return self._allocate_recurrent_pending_only_tokens(sources, safe_capacity)
 
