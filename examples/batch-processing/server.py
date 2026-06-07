@@ -11488,35 +11488,30 @@ class AttentionMemoryPolicy(MemoryPolicy):
         reuse_len = self.reuse_len_for_request(request, match_length)
         claimable = match_seq_id in self.scheduler.free_sequences
         if request.sequence_cache_match is not None:
-            base_seq_id = self.scheduler.unused_sequences.pop()
-            self.scheduler.claimed_sequences.add(base_seq_id)
+            base_seq_id = self.scheduler.claim_unused_sequence()
             reuse_len, request.prompt_logits = self.scheduler.hydrate_sequence_cache_match(
                 request,
                 base_seq_id,
             )
         elif claimable:
-            base_seq_id = match_seq_id
-            del self.scheduler.free_sequences[base_seq_id]
-            self.scheduler.claimed_sequences.add(base_seq_id)
+            base_seq_id = self.scheduler.claim_free_sequence(match_seq_id)
             if self.scheduler.radix_trie.length(base_seq_id) > reuse_len:
                 self.scheduler.truncate_sequence(base_seq_id, reuse_len)
         else:
-            base_seq_id = self.scheduler.unused_sequences.pop()
-            self.scheduler.claimed_sequences.add(base_seq_id)
+            base_seq_id = self.scheduler.claim_unused_sequence()
             if reuse_len > 0 and match_seq_id >= 0:
                 self.copy_prompt_state(match_seq_id, base_seq_id, reuse_len)
         sibling_count = request.internal_completion_count - 1
         sibling_seq_ids: List[int] = []
         for _ in range(sibling_count):
-            seq_id = self.scheduler.unused_sequences.pop()
-            self.scheduler.claimed_sequences.add(seq_id)
+            seq_id = self.scheduler.claim_unused_sequence()
             sibling_seq_ids.append(seq_id)
-        request.base_seq_id = base_seq_id
-        request.sibling_seq_ids = sibling_seq_ids
-        request.completion_seq_ids = [base_seq_id, *sibling_seq_ids]
+        self.scheduler.activate_request(
+            request,
+            base_seq_id=base_seq_id,
+            sibling_seq_ids=sibling_seq_ids,
+        )
         request.prompt_cursor = reuse_len
-        request.admitted = True
-        self.scheduler.active_request_ids.add(request.id)
         if request.prompt_cursor == len(request.prompt_tokens):
             request.prompt_done = True
             self.scheduler.maybe_save_sequence_cache(request)
@@ -11701,34 +11696,29 @@ class CheckpointMemoryPolicy(MemoryPolicy):
         match_length = request.match_length
         claimable = match_seq_id in self.scheduler.free_sequences
         if request.sequence_cache_match is not None:
-            base_seq_id = self.scheduler.unused_sequences.pop()
-            self.scheduler.claimed_sequences.add(base_seq_id)
+            base_seq_id = self.scheduler.claim_unused_sequence()
             match_length, request.prompt_logits = self.scheduler.hydrate_sequence_cache_match(
                 request,
                 base_seq_id,
             )
         elif claimable:
-            base_seq_id = match_seq_id
-            del self.scheduler.free_sequences[base_seq_id]
-            self.scheduler.claimed_sequences.add(base_seq_id)
+            base_seq_id = self.scheduler.claim_free_sequence(match_seq_id)
             request.prompt_logits = self.scheduler.checkpoint_logits.get(base_seq_id)
             self.scheduler.metrics.checkpoint_hits_total += 1
         else:
-            base_seq_id = self.scheduler.unused_sequences.pop()
-            self.scheduler.claimed_sequences.add(base_seq_id)
+            base_seq_id = self.scheduler.claim_unused_sequence()
             request.prompt_logits = None
         sibling_count = request.internal_completion_count - 1
         sibling_seq_ids: List[int] = []
         for _ in range(sibling_count):
-            seq_id = self.scheduler.unused_sequences.pop()
-            self.scheduler.claimed_sequences.add(seq_id)
+            seq_id = self.scheduler.claim_unused_sequence()
             sibling_seq_ids.append(seq_id)
-        request.base_seq_id = base_seq_id
-        request.sibling_seq_ids = sibling_seq_ids
-        request.completion_seq_ids = [base_seq_id, *sibling_seq_ids]
+        self.scheduler.activate_request(
+            request,
+            base_seq_id=base_seq_id,
+            sibling_seq_ids=sibling_seq_ids,
+        )
         request.prompt_cursor = match_length
-        request.admitted = True
-        self.scheduler.active_request_ids.add(request.id)
         if request.prompt_cursor == len(request.prompt_tokens):
             request.prompt_done = True
             self.scheduler.maybe_save_prompt_checkpoint(request)
@@ -13716,6 +13706,29 @@ class CompletionScheduler:
         self.checkpoint_logits.pop(seq_id, None)
         self.unused_sequences.append(seq_id)
         self.metrics.checkpoint_evictions_total += 1
+
+    def claim_unused_sequence(self) -> int:
+        seq_id = self.unused_sequences.pop()
+        self.claimed_sequences.add(seq_id)
+        return seq_id
+
+    def claim_free_sequence(self, seq_id: int) -> int:
+        del self.free_sequences[seq_id]
+        self.claimed_sequences.add(seq_id)
+        return seq_id
+
+    def activate_request(
+        self,
+        request: CompletionRequest,
+        *,
+        base_seq_id: int,
+        sibling_seq_ids: List[int],
+    ) -> None:
+        request.base_seq_id = base_seq_id
+        request.sibling_seq_ids = sibling_seq_ids
+        request.completion_seq_ids = [base_seq_id, *sibling_seq_ids]
+        request.admitted = True
+        self.active_request_ids.add(request.id)
 
     def release_request(self, request: CompletionRequest) -> None:
         for completion in request.completions:
