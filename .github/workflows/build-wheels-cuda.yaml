@@ -232,6 +232,8 @@ jobs:
           if ($IsLinux) {
             $env:CMAKE_ARGS = $env:CMAKE_ARGS + ' -DGGML_OPENMP=OFF'
           }
+          # Temporary smoke branch only: skip multimodal targets to reach auditwheel quickly.
+          $env:CMAKE_ARGS = $env:CMAKE_ARGS + ' -DLLAVA_BUILD=OFF'
           python -m build --wheel
           # Publish tags that reflect the actual installed toolkit version.
           Write-Output "CUDA_VERSION=$cudaTagVersion" >> $env:GITHUB_ENV
