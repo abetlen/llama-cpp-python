@@ -4344,6 +4344,11 @@ class ResponseParser:
 
     @staticmethod
     def _regex_literal_prefix(pattern: str) -> str:
+        literal, _ = ResponseParser._regex_literal_prefix_and_remainder(pattern)
+        return literal
+
+    @staticmethod
+    def _regex_literal_prefix_and_remainder(pattern: str) -> Tuple[str, str]:
         literal: List[str] = []
         index = 0
         while index < len(pattern):
@@ -4365,7 +4370,181 @@ class ResponseParser:
                 break
             literal.append(char)
             index += 1
-        return "".join(literal)
+        return "".join(literal), pattern[index:]
+
+    @staticmethod
+    def _find_regex_group_end(pattern: str, start: int) -> int:
+        depth = 0
+        escaped = False
+        in_character_class = False
+        for index in range(start, len(pattern)):
+            char = pattern[index]
+            if escaped:
+                escaped = False
+                continue
+            if char == "\\":
+                escaped = True
+                continue
+            if char == "[":
+                in_character_class = True
+                continue
+            if char == "]" and in_character_class:
+                in_character_class = False
+                continue
+            if in_character_class:
+                continue
+            if char == "(":
+                depth += 1
+                continue
+            if char == ")":
+                depth -= 1
+                if depth == 0:
+                    return index
+        return -1
+
+    @classmethod
+    def _consume_optional_literal_prefix(
+        cls,
+        pattern: str,
+    ) -> Optional[Tuple[str, str]]:
+        if not pattern.startswith("(?:"):
+            return None
+        group_end = cls._find_regex_group_end(pattern, 0)
+        if group_end < 0 or group_end + 1 >= len(pattern) or pattern[group_end + 1] != "?":
+            return None
+        literal, remainder = cls._regex_literal_prefix_and_remainder(pattern[3:group_end])
+        if not literal or remainder:
+            return None
+        return literal, pattern[group_end + 2 :]
+
+    @staticmethod
+    def _split_regex_alternatives(pattern: str) -> List[str]:
+        alternatives: List[str] = []
+        start = 0
+        depth = 0
+        escaped = False
+        in_character_class = False
+        for index, char in enumerate(pattern):
+            if escaped:
+                escaped = False
+                continue
+            if char == "\\":
+                escaped = True
+                continue
+            if char == "[":
+                in_character_class = True
+                continue
+            if char == "]" and in_character_class:
+                in_character_class = False
+                continue
+            if in_character_class:
+                continue
+            if char == "(":
+                depth += 1
+                continue
+            if char == ")":
+                depth -= 1
+                continue
+            if char == "|" and depth == 0:
+                alternatives.append(pattern[start:index])
+                start = index + 1
+        alternatives.append(pattern[start:])
+        return alternatives
+
+    @classmethod
+    def _regex_lookahead_literal_specs(cls, pattern: str) -> List[Tuple[str, bool]]:
+        if not pattern.startswith("(?="):
+            return []
+        group_end = cls._find_regex_group_end(pattern, 0)
+        if group_end < 0:
+            return []
+        literals: List[Tuple[str, bool]] = []
+        for alternative in cls._split_regex_alternatives(pattern[3:group_end]):
+            strip_leading_whitespace = False
+            while alternative.startswith(r"\s*"):
+                strip_leading_whitespace = True
+                alternative = alternative[3:]
+            if alternative == "$":
+                continue
+            if alternative.endswith("$"):
+                alternative = alternative[:-1]
+            literal, _ = cls._regex_literal_prefix_and_remainder(alternative)
+            if literal:
+                literals.append((literal, strip_leading_whitespace))
+        return literals
+
+    @classmethod
+    def _regex_capture_parts(
+        cls,
+        pattern: str,
+    ) -> Optional[Tuple[str, str]]:
+        normalized = pattern.lstrip("^")
+        captures = [
+            (index, token)
+            for token in ("(.*?)", "(.*)")
+            if (index := normalized.find(token)) >= 0
+        ]
+        if not captures:
+            return None
+        capture_index, capture_token = min(captures, key=lambda item: item[0])
+        return normalized[:capture_index], normalized[capture_index + len(capture_token) :]
+
+    @classmethod
+    def _regex_capture_end_literal_specs(cls, pattern: str) -> List[Tuple[str, bool]]:
+        capture_parts = cls._regex_capture_parts(pattern)
+        if capture_parts is None:
+            return []
+        _, suffix_pattern = capture_parts
+        literal_specs = cls._regex_lookahead_literal_specs(suffix_pattern)
+        if literal_specs:
+            return literal_specs
+        literal, _ = cls._regex_literal_prefix_and_remainder(suffix_pattern)
+        return [(literal, False)] if literal else []
+
+    @classmethod
+    def _regex_capture_end_literals(cls, pattern: str) -> List[str]:
+        return [literal for literal, _ in cls._regex_capture_end_literal_specs(pattern)]
+
+    @classmethod
+    def _regex_leading_capture(
+        cls,
+        *,
+        field_name: str,
+        field_regex: str,
+        content_regex: Optional[str],
+    ) -> Optional[Dict[str, Any]]:
+        capture_parts = cls._regex_capture_parts(field_regex)
+        if capture_parts is None:
+            return None
+        prefix_pattern, _ = capture_parts
+        prefix_pattern = prefix_pattern.lstrip("^")
+        optional_prefix = cls._consume_optional_literal_prefix(prefix_pattern)
+        if optional_prefix is not None:
+            prefix_pattern = optional_prefix[1]
+        implicit_at_start = False
+        optional_capture_start = cls._consume_optional_literal_prefix(prefix_pattern)
+        if optional_capture_start is not None:
+            capture_start, prefix_pattern = optional_capture_start
+            implicit_at_start = True
+        else:
+            capture_start, prefix_pattern = cls._regex_literal_prefix_and_remainder(prefix_pattern)
+        if not capture_start or prefix_pattern:
+            return None
+        end_literals = cls._regex_capture_end_literals(field_regex)
+        if not end_literals:
+            return None
+        capture_end = end_literals[0]
+        strip_after = False
+        if isinstance(content_regex, str):
+            escaped_end = re.escape(capture_end)
+            strip_after = bool(re.search(escaped_end + r"\\s\*", content_regex))
+        return {
+            "field": field_name,
+            "start": capture_start,
+            "end": capture_end,
+            "strip_after": strip_after,
+            "implicit_at_start": implicit_at_start,
+        }
 
     @staticmethod
     def _literal_suffix_prefix_length(text: str, literal: str) -> int:
@@ -4702,7 +4881,14 @@ class ResponseParser:
             return None
         iterator = cls._compile_iterator_pattern(iterator_pattern)
         if iterator is None:
-            return None
+            iterator_capture = cls._compile_iterator_block_pattern(iterator_pattern)
+            if (
+                not isinstance(iterator_capture, dict)
+                or not iterator_capture["start"]
+                or iterator_capture["allow_eof"]
+            ):
+                return None
+            iterator = (iterator_capture["start"], iterator_capture["end"])
         items_schema = tool_calls_schema.get("items")
         if not isinstance(items_schema, dict):
             return None
@@ -4715,10 +4901,11 @@ class ResponseParser:
             if isinstance(content_schema, dict)
             else None
         )
-        object_regex = schema.get("x-regex") if isinstance(schema.get("x-regex"), str) else None
         assistant_prefix: Optional[str] = None
-        if isinstance(content_regex, str) and r"<\|im_start\|>assistant\n" in content_regex:
-            assistant_prefix = "<|im_start|>assistant\n"
+        if isinstance(content_regex, str):
+            optional_prefix = cls._consume_optional_literal_prefix(content_regex.lstrip("^"))
+            if optional_prefix is not None:
+                assistant_prefix = optional_prefix[0]
         leading_capture: Optional[Dict[str, Any]] = None
         for field_name, value_schema in properties.items():
             if not isinstance(value_schema, dict):
@@ -4726,43 +4913,31 @@ class ResponseParser:
             field_regex = value_schema.get("x-regex")
             if not isinstance(field_regex, str):
                 continue
-            if "<think>\\n" in field_regex and "</think>" in field_regex:
-                leading_capture = {
-                    "field": field_name,
-                    "start": "<think>\n",
-                    "end": "</think>",
-                    "strip_after": True,
-                    "implicit_at_start": "(?:<think>\\n)?" in field_regex,
-                }
+            if field_name == "content":
+                continue
+            capture = cls._regex_leading_capture(
+                field_name=field_name,
+                field_regex=field_regex,
+                content_regex=content_regex,
+            )
+            if capture is not None:
+                leading_capture = capture
                 break
-        if leading_capture is None and isinstance(object_regex, str):
-            if (
-                "(?P<thinking>" in object_regex
-                and r"<\|channel\>thought\n" in object_regex
-                and r"\<channel\|\>" in object_regex
-            ):
-                leading_capture = {
-                    "field": "thinking",
-                    "start": "<|channel>thought\n",
-                    "end": "<channel|>",
-                    "strip_after": False,
-                    "implicit_at_start": False,
-                }
         end_markers: List[str] = []
+        content_end_marker_specs: List[Tuple[str, bool]] = []
         iterator_start, iterator_end = iterator
         if "content" in properties:
             end_markers.append(iterator_start)
-        if isinstance(content_regex, str) and r"<\|im_end\|>" in content_regex:
-            end_markers.append("<|im_end|>")
-        if isinstance(object_regex, str) and r"<turn\|>" in object_regex:
-            end_markers.append("<turn|>")
+        if isinstance(content_regex, str):
+            content_end_marker_specs = cls._regex_capture_end_literal_specs(content_regex)
+            end_markers.extend(literal for literal, _ in content_end_marker_specs)
         if not end_markers and iterator_start:
             end_markers.append(iterator_start)
-        trim_before_iterator = (
-            isinstance(content_regex, str)
-            and r"\s*<tool_call>\n" in content_regex
+        deduped_end_markers = tuple(dict.fromkeys(end_markers))
+        trim_before_iterator = any(
+            literal == iterator_start and strip_leading_whitespace
+            for literal, strip_leading_whitespace in content_end_marker_specs
         )
-        end_marker_tuple = tuple(end_markers)
         direct_deltas = item_plan["kind"] == "tagged-parameters"
         direct_init = (
             (
@@ -4773,8 +4948,8 @@ class ResponseParser:
                 bool(leading_capture.get("strip_after")) if leading_capture is not None else False,
                 bool(leading_capture.get("implicit_at_start")) if leading_capture is not None else False,
                 trim_before_iterator,
-                end_marker_tuple,
-                tuple(marker for marker in end_marker_tuple if marker != iterator_start),
+                deduped_end_markers,
+                tuple(marker for marker in deduped_end_markers if marker != iterator_start),
                 iterator_start,
                 iterator_end,
                 item_plan["function_start"],
@@ -4793,9 +4968,9 @@ class ResponseParser:
             "assistant_prefix": assistant_prefix,
             "leading_capture": leading_capture,
             "content_field": "content" if "content" in properties else None,
-            "content_end_markers": end_marker_tuple,
+            "content_end_markers": deduped_end_markers,
             "trim_before_iterator": trim_before_iterator,
-            "stop_markers": tuple(marker for marker in end_marker_tuple if marker != iterator_start),
+            "stop_markers": tuple(marker for marker in deduped_end_markers if marker != iterator_start),
             "direct_init": direct_init,
             "iterator": {
                 "start": iterator_start,
@@ -7192,19 +7367,17 @@ class ResponseParser:
                             logprobs=logprobs,
                             leading_delta=role_delta,
                         )
-                    if self._stream_state_complete():
-                        return self._chunk_payloads(
-                            chunk_id=chunk_id,
-                            created=created,
-                            model=model,
-                            deltas=stream_deltas,
-                            finish_reason=(
-                                "tool_calls" if self._direct.saw_tool_calls else finish_reason
-                            ),
-                            logprobs=logprobs,
-                            leading_delta=role_delta,
-                        )
-                    self._stream_failed = True
+                    return self._chunk_payloads(
+                        chunk_id=chunk_id,
+                        created=created,
+                        model=model,
+                        deltas=stream_deltas,
+                        finish_reason=(
+                            "tool_calls" if self._direct.saw_tool_calls else finish_reason
+                        ),
+                        logprobs=logprobs,
+                        leading_delta=role_delta,
+                    )
                 elif self._stream_plan["kind"] == "segment-message":
                     if role_delta is not None:
                         stream_deltas = [role_delta, *stream_deltas]
@@ -7219,18 +7392,16 @@ class ResponseParser:
                             finish_reason=None,
                             logprobs=logprobs,
                         )
-                    if self._stream_state_complete():
-                        return self._chunk_payloads(
-                            chunk_id=chunk_id,
-                            created=created,
-                            model=model,
-                            deltas=stream_deltas,
-                            finish_reason=(
-                                "tool_calls" if self._message.get("tool_calls") else finish_reason
-                            ),
-                            logprobs=logprobs,
-                        )
-                    self._stream_failed = True
+                    return self._chunk_payloads(
+                        chunk_id=chunk_id,
+                        created=created,
+                        model=model,
+                        deltas=stream_deltas,
+                        finish_reason=(
+                            "tool_calls" if self._message.get("tool_calls") else finish_reason
+                        ),
+                        logprobs=logprobs,
+                    )
                 else:
                     previous_message = self._message
                     partial_deltas: List[Dict[str, Any]] = []
@@ -7238,7 +7409,7 @@ class ResponseParser:
                     parsed = cast(Dict[str, Any], self._stream_state.parsed)
                     message = self._parsed_chat_message(
                         parsed=parsed,
-                        partial=finish_reason is None,
+                        partial=finish_reason is None or not self._stream_state_complete(),
                     )
                     if finish_reason is None:
                         if role_delta is not None:
@@ -7253,22 +7424,20 @@ class ResponseParser:
                             finish_reason=None,
                             logprobs=logprobs,
                         )
-                    if self._stream_state_complete():
-                        if role_delta is not None:
-                            partial_deltas.append(role_delta)
-                        partial_deltas.extend(self._message_deltas(previous_message, message))
-                        self._message = message
-                        return self._chunk_payloads(
-                            chunk_id=chunk_id,
-                            created=created,
-                            model=model,
-                            deltas=partial_deltas,
-                            finish_reason=(
-                                "tool_calls" if message.get("tool_calls") else finish_reason
-                            ),
-                            logprobs=logprobs,
-                        )
-                    self._stream_failed = True
+                    if role_delta is not None:
+                        partial_deltas.append(role_delta)
+                    partial_deltas.extend(self._message_deltas(previous_message, message))
+                    self._message = message
+                    return self._chunk_payloads(
+                        chunk_id=chunk_id,
+                        created=created,
+                        model=model,
+                        deltas=partial_deltas,
+                        finish_reason=(
+                            "tool_calls" if message.get("tool_calls") else finish_reason
+                        ),
+                        logprobs=logprobs,
+                    )
             else:
                 self._stream_failed = True
 
