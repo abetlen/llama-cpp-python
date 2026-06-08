@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- fix(ci): Repair Linux accelerator wheels for manylinux publishing
+
 ## [0.3.28]
 
 - feat(example): align server MTP support with llama.cpp by @abetlen in #2283
