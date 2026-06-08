@@ -222,6 +222,8 @@ jobs:
             # CUDA 13 dropped offline compilation support for pre-Turing targets.
             $cudaArchs = "75-real;80-real;86-real;89-real;90-real;90-virtual"
           }
+          # Temporary smoke branch only: compile one target so the workflow reaches auditwheel quickly.
+          $cudaArchs = "75-real"
           # Build real cubins for the supported GPUs and keep
           # one forward-compatible PTX target instead of embedding PTX for every
           # SM. This keeps the wheel under GitHub's 2 GiB release-asset limit.
