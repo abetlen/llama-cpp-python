@@ -77,10 +77,10 @@ jobs:
             curl -L https://micro.mamba.pm/api/micromamba/linux-64/latest -o /tmp/micromamba.tar.bz2 &&
             mkdir -p /tmp/micromamba &&
             tar -xjf /tmp/micromamba.tar.bz2 -C /tmp/micromamba bin/micromamba &&
-            /tmp/micromamba/bin/micromamba create -y -p /opt/vulkan -c conda-forge shaderc vulkan-headers libvulkan-loader &&
+            /tmp/micromamba/bin/micromamba create -y -p /opt/vulkan -c conda-forge shaderc vulkan-headers libvulkan-loader spirv-headers &&
             /opt/vulkan/bin/glslc --version
           CIBW_ENVIRONMENT_LINUX: >
-            CMAKE_ARGS="-DGGML_NATIVE=off -DGGML_METAL=OFF -DGGML_OPENMP=OFF -DGGML_VULKAN=on -DVulkan_INCLUDE_DIR=/opt/vulkan/include -DVulkan_LIBRARY=/opt/vulkan/lib/libvulkan.so -DVulkan_GLSLC_EXECUTABLE=/opt/vulkan/bin/glslc"
+            CMAKE_ARGS="-DGGML_NATIVE=off -DGGML_METAL=OFF -DGGML_OPENMP=OFF -DGGML_VULKAN=on -DCMAKE_PREFIX_PATH=/opt/vulkan -DVulkan_INCLUDE_DIR=/opt/vulkan/include -DVulkan_LIBRARY=/opt/vulkan/lib/libvulkan.so -DVulkan_GLSLC_EXECUTABLE=/opt/vulkan/bin/glslc"
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: "LD_LIBRARY_PATH=/project/llama_cpp/lib:/opt/vulkan/lib auditwheel repair --exclude libvulkan.so.1 -w {dest_dir} {wheel}"
         with:
           package-dir: .
