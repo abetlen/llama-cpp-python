@@ -1,6 +1,12 @@
 name: Build Wheels (Vulkan)
 
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release tag to upload wheel assets to
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -41,23 +47,6 @@ jobs:
           cache: "pip"
 
       - name: Install Vulkan SDK
-        if: runner.os == 'Linux'
-        run: |
-          curl -fL \
-            "https://sdk.lunarg.com/sdk/download/${VULKAN_SDK_VERSION}/linux/vulkansdk-linux-x86_64-${VULKAN_SDK_VERSION}.tar.xz" \
-            -o vulkan-sdk.tar.xz
-          echo "${VULKAN_SDK_LINUX_SHA256}  vulkan-sdk.tar.xz" | sha256sum -c -
-          mkdir -p "$RUNNER_TEMP/vulkan-sdk"
-          tar -xf vulkan-sdk.tar.xz -C "$RUNNER_TEMP/vulkan-sdk"
-          source "$RUNNER_TEMP/vulkan-sdk/${VULKAN_SDK_VERSION}/setup-env.sh"
-          {
-            echo "VULKAN_SDK=$VULKAN_SDK"
-            echo "LD_LIBRARY_PATH=$VULKAN_SDK/lib:${LD_LIBRARY_PATH:-}"
-          } >> "$GITHUB_ENV"
-          echo "$VULKAN_SDK/bin" >> "$GITHUB_PATH"
-          "$VULKAN_SDK/bin/glslc" --version
-
-      - name: Install Vulkan SDK
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
@@ -71,6 +60,7 @@ jobs:
           & "$vulkanSdk\Bin\glslc.exe" --version
 
       - name: Install build dependencies
+        if: runner.os == 'Windows'
         run: |
           python -m pip install --upgrade pip
           python -m pip install build wheel
@@ -81,11 +71,29 @@ jobs:
 
       - name: Build Vulkan wheel
         if: runner.os == 'Linux'
-        run: |
-          export CMAKE_ARGS="-DGGML_NATIVE=off -DGGML_METAL=OFF -DGGML_VULKAN=on"
-          python -m build --wheel
-          mkdir -p wheelhouse
-          cp dist/*.whl wheelhouse/
+        uses: pypa/cibuildwheel@v3.4.1
+        env:
+          CIBW_BUILD: "cp38-manylinux_*"
+          CIBW_ARCHS: "auto64"
+          CIBW_MANYLINUX_X86_64_IMAGE: "manylinux2014"
+          CIBW_BEFORE_ALL_LINUX: >
+            yum install -y xz &&
+            curl -L https://micro.mamba.pm/api/micromamba/linux-64/latest -o /tmp/micromamba.tar.bz2 &&
+            mkdir -p /tmp/micromamba &&
+            tar -xjf /tmp/micromamba.tar.bz2 -C /tmp/micromamba bin/micromamba &&
+            /tmp/micromamba/bin/micromamba create -y -p /opt/shaderc -c conda-forge shaderc &&
+            /opt/shaderc/bin/glslc --version &&
+            curl -fL "https://sdk.lunarg.com/sdk/download/${{ env.VULKAN_SDK_VERSION }}/linux/vulkansdk-linux-x86_64-${{ env.VULKAN_SDK_VERSION }}.tar.xz" -o /tmp/vulkan-sdk.tar.xz &&
+            echo "${{ env.VULKAN_SDK_LINUX_SHA256 }}  /tmp/vulkan-sdk.tar.xz" | sha256sum -c - &&
+            mkdir -p /opt/vulkan-sdk &&
+            tar -xf /tmp/vulkan-sdk.tar.xz -C /opt/vulkan-sdk
+          CIBW_ENVIRONMENT_LINUX: >
+            VULKAN_SDK=/opt/vulkan-sdk/${{ env.VULKAN_SDK_VERSION }}/x86_64
+            CMAKE_ARGS="-DGGML_NATIVE=off -DGGML_METAL=OFF -DGGML_OPENMP=OFF -DGGML_VULKAN=on -DVulkan_GLSLC_EXECUTABLE=/opt/shaderc/bin/glslc"
+          CIBW_REPAIR_WHEEL_COMMAND_LINUX: "LD_LIBRARY_PATH=/project/llama_cpp/lib:/opt/vulkan-sdk/${{ env.VULKAN_SDK_VERSION }}/x86_64/lib auditwheel repair --exclude libvulkan.so.1 -w {dest_dir} {wheel}"
+        with:
+          package-dir: .
+          output-dir: wheelhouse
 
       - name: Build Vulkan wheel
         if: runner.os == 'Windows'
@@ -105,7 +113,7 @@ jobs:
   release:
     name: Release
     needs: [build_wheels]
-    if: startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
     runs-on: ubuntu-latest
 
     steps:
@@ -118,6 +126,6 @@ jobs:
         with:
           files: dist/*
           # Set release name to <tag>-vulkan.
-          tag_name: ${{ github.ref_name }}-vulkan
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}-vulkan
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
