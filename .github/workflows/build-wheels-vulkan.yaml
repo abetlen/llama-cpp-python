@@ -103,6 +103,7 @@ jobs:
           Copy-Item dist/*.whl wheelhouse/
 
       - uses: actions/upload-artifact@v7
+        if: ${{ false }}
         with:
           name: ${{ matrix.artifact }}
           path: ./wheelhouse/*.whl

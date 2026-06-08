@@ -70,6 +70,7 @@ jobs:
           output-dir: wheelhouse
 
       - uses: actions/upload-artifact@v7
+        if: ${{ false }}
         with:
           name: wheels-${{ matrix.os }}
           path: ./wheelhouse/*.whl
@@ -101,6 +102,7 @@ jobs:
           output-dir: wheelhouse
 
       - name: Upload wheels as artifacts
+        if: ${{ false }}
         uses: actions/upload-artifact@v7
         with:
           name: wheels_arm64
@@ -136,6 +138,7 @@ jobs:
           output-dir: wheelhouse
 
       - name: Upload wheels as artifacts
+        if: ${{ false }}
         uses: actions/upload-artifact@v7
         with:
           name: wheels_riscv64
@@ -180,6 +183,7 @@ jobs:
           python -m build --sdist
 
       - uses: actions/upload-artifact@v7
+        if: ${{ false }}
         with:
           name: sdist
           path: ./dist/*.tar.gz

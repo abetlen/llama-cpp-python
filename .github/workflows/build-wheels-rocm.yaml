@@ -107,6 +107,7 @@ jobs:
           python -m auditwheel show dist/*.whl
 
       - uses: actions/upload-artifact@v7
+        if: ${{ false }}
         with:
           name: wheels-rocm${{ env.ROCM_VERSION }}-${{ matrix.os }}
           path: ./wheelhouse/*.whl
@@ -239,6 +240,7 @@ jobs:
           Copy-Item dist/*.whl wheelhouse/
 
       - uses: actions/upload-artifact@v7
+        if: ${{ false }}
         with:
           name: wheels-hip-${{ matrix.name }}-windows-2022
           path: ./wheelhouse/*.whl
