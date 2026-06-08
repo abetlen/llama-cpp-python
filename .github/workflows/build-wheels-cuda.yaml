@@ -240,7 +240,7 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p wheelhouse
-          export LD_LIBRARY_PATH="${CUDA_LIBRARY_PATHS}:${LD_LIBRARY_PATH:-}"
+          export LD_LIBRARY_PATH="$PWD/llama_cpp/lib:${CUDA_LIBRARY_PATHS}:${LD_LIBRARY_PATH:-}"
           auditwheel_bin="${CONDA}/envs/llamacpp/bin/auditwheel"
           "${auditwheel_bin}" repair \
             --exclude libcuda.so \

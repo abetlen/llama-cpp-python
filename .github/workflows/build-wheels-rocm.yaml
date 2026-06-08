@@ -80,7 +80,7 @@ jobs:
       - name: Repair Linux wheel
         run: |
           export ROCM_PATH="${ROCM_PATH:-/opt/rocm}"
-          export LD_LIBRARY_PATH="$ROCM_PATH/lib:$ROCM_PATH/lib64:${LD_LIBRARY_PATH:-}"
+          export LD_LIBRARY_PATH="$PWD/llama_cpp/lib:$ROCM_PATH/lib:$ROCM_PATH/lib64:${LD_LIBRARY_PATH:-}"
           mkdir -p wheelhouse
           python -m auditwheel repair \
             --exclude libamdhip64.so \
