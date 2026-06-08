@@ -8695,7 +8695,7 @@ class OpenAIFormatter:
                 state,
                 "response.output_item.added",
                 output_index=item_state.output_index,
-                item=item,
+                item=copy.deepcopy(item),
             ),
             self._response_event(
                 state,
@@ -8703,7 +8703,7 @@ class OpenAIFormatter:
                 item_id=cast(str, item["id"]),
                 output_index=item_state.output_index,
                 content_index=0,
-                part=part,
+                part=copy.deepcopy(part),
             ),
         ], item_state
 
@@ -8727,7 +8727,7 @@ class OpenAIFormatter:
                 state,
                 "response.output_item.added",
                 output_index=item_state.output_index,
-                item=item,
+                item=copy.deepcopy(item),
             ),
             self._response_event(
                 state,
@@ -8735,7 +8735,7 @@ class OpenAIFormatter:
                 item_id=cast(str, item["id"]),
                 output_index=item_state.output_index,
                 content_index=0,
-                part=part,
+                part=copy.deepcopy(part),
             ),
         ], item_state
 
@@ -8777,7 +8777,7 @@ class OpenAIFormatter:
                 state,
                 "response.output_item.added",
                 output_index=item_state.output_index,
-                item=item,
+                item=copy.deepcopy(item),
             )
         ], item_state
 
