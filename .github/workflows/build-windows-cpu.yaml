@@ -1,0 +1,83 @@
+name: Build Windows CPU Wheel
+
+# Pipeline dedicado para gerar um wheel pré-compilado (CPU-only) para Windows x64.
+# O wheel resultante NÃO exige cmake/compilador na máquina de destino: basta
+# `pip install arquivo.whl`. Como o llama_cpp carrega as DLLs via ctypes, o wheel
+# tem a tag py3-none-win_amd64 e funciona em qualquer Python 3.x (incl. 3.10.2).
+
+on:
+  workflow_dispatch:
+    inputs:
+      llama_native:
+        description: "Otimizar para a CPU do runner (GGML_NATIVE). Deixe 'off' para máxima portabilidade entre máquinas."
+        type: choice
+        default: "off"
+        options:
+          - "off"
+          - "on"
+      create_release:
+        description: "Publicar o wheel como GitHub Release (além do artifact)."
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  build_windows_cpu_wheel:
+    name: Build Windows CPU wheel
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout (com submódulo llama.cpp)
+        uses: actions/checkout@v6
+        with:
+          submodules: "recursive"
+
+      - name: Setup Python 3.10
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+
+      - name: Instalar ferramentas de build
+        shell: cmd
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build
+
+      - name: Build do wheel (CPU)
+        shell: cmd
+        env:
+          # GGML_NATIVE=off => baseline portável: o wheel roda em qualquer CPU x64,
+          # não só na do runner. Mantenha assim para máquinas corporativas variadas.
+          CMAKE_ARGS: "-DGGML_NATIVE=${{ inputs.llama_native }} -DGGML_CUDA=off -DGGML_METAL=off -DGGML_VULKAN=off -DBUILD_SHARED_LIBS=ON"
+        run: |
+          python -m build --wheel
+
+      - name: Listar wheel gerado
+        shell: cmd
+        run: dir dist
+
+      - name: Upload do wheel como artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: llama-cpp-python-windows-cpu-wheel
+          path: ./dist/*.whl
+          if-no-files-found: error
+
+      - name: Publicar Release (opcional)
+        if: ${{ inputs.create_release }}
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: windows-cpu-${{ github.run_number }}
+          name: Windows CPU wheel (build ${{ github.run_number }})
+          body: |
+            Wheel pré-compilado (CPU-only) para Windows x64.
+
+            Instalação na máquina destino (Python 3.10.2, sem cmake):
+            ```
+            pip install llama_cpp_python-<versao>-py3-none-win_amd64.whl
+            ```
+          files: dist/*.whl
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
