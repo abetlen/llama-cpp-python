@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- feat: update llama.cpp to ggml-org/llama.cpp@8f83d6c27
 - fix(example): support multi-step Responses tool streaming by @abetlen in #2288
 - fix(ci): Repair Linux accelerator wheels for manylinux publishing
 
