@@ -1,0 +1,138 @@
+name: Build Windows CPU Wheel
+
+# Pipeline dedicado para gerar um wheel pré-compilado (CPU-only) para Windows x64.
+# O wheel resultante NÃO exige cmake/compilador na máquina de destino: basta
+# `pip install arquivo.whl`. Como o llama_cpp carrega as DLLs via ctypes, o wheel
+# tem a tag py3-none-win_amd64 e funciona em qualquer Python 3.x (incl. 3.10.2).
+
+on:
+  workflow_dispatch:
+    inputs:
+      llama_native:
+        description: "Otimizar para a CPU do runner (GGML_NATIVE). Deixe 'off' para máxima portabilidade entre máquinas."
+        type: choice
+        default: "off"
+        options:
+          - "off"
+          - "on"
+      create_release:
+        description: "Publicar o wheel como GitHub Release (além do artifact)."
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  build_windows_cpu_wheel:
+    name: Build Windows CPU wheel
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout (com submódulo llama.cpp)
+        uses: actions/checkout@v6
+        with:
+          submodules: "recursive"
+
+      - name: Setup Python 3.10
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+
+      - name: Instalar ferramentas de build
+        shell: cmd
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build
+
+      - name: Build do wheel (CPU)
+        shell: cmd
+        env:
+          # GGML_NATIVE=off => baseline portável: o wheel roda em qualquer CPU x64,
+          # não só na do runner. Mantenha assim para máquinas corporativas variadas.
+          CMAKE_ARGS: "-DGGML_NATIVE=${{ inputs.llama_native }} -DGGML_CUDA=off -DGGML_METAL=off -DGGML_VULKAN=off -DBUILD_SHARED_LIBS=ON"
+        run: |
+          python -m build --wheel
+
+      - name: Listar wheel gerado
+        shell: cmd
+        run: dir dist
+
+      # Pacote portátil "sem instalação": instala o wheel + TODAS as dependências
+      # dentro de uma pasta (--target). Na máquina destino não se roda pip nem
+      # nenhum .exe novo; basta extrair e apontar o PYTHONPATH usando o python.exe
+      # que JÁ é permitido pela política corporativa. As DLLs nativas são carregadas
+      # via ctypes dentro desse python aprovado (não lança processo novo).
+      - name: Montar pacote portátil (lib + dependências)
+        shell: cmd
+        run: |
+          for %%f in (dist\*.whl) do set WHEEL=%%f
+          python -m pip install --target bundle\llama-cpp-python "%WHEEL%" typing-extensions numpy diskcache jinja2
+          echo set PYTHONPATH=%%~dp0llama-cpp-python> bundle\ativar.cmd
+          echo @echo Pasta llama-cpp-python adicionada ao PYTHONPATH desta janela.>> bundle\ativar.cmd
+          (
+            echo Pacote portatil do llama-cpp-python ^(CPU, Windows x64^).
+            echo.
+            echo COMO USAR ^(sem instalar nada, sem rodar pip^):
+            echo   1. Extraia esta pasta em algum lugar seu, ex: C:\Users\seu_usuario\llamacpp
+            echo   2. Abra o Prompt de Comando nessa pasta e rode:  ativar.cmd
+            echo   3. Use seu Python ja aprovado:  python -c "import llama_cpp; print(llama_cpp.__version__)"
+            echo.
+            echo Nada e instalado no sistema. Apenas o seu python.exe ^(ja permitido^)
+            echo carrega as bibliotecas desta pasta. Se a politica bloquear o
+            echo carregamento de DLL ^(WDAC / regras de DLL do AppLocker^), e preciso
+            echo liberar as DLLs junto ao TI ^(whitelist por hash ou assinatura^).
+          ) > bundle\LEIA-ME.txt
+
+      - name: Gerar hashes SHA-256 das DLLs (para pedido de whitelist ao TI)
+        shell: pwsh
+        run: |
+          Get-ChildItem -Recurse bundle\llama-cpp-python\llama_cpp\lib -Filter *.dll |
+            Get-FileHash -Algorithm SHA256 |
+            Select-Object Hash, Path |
+            Format-List | Out-File -Encoding utf8 bundle\DLL-SHA256.txt
+          Get-Content bundle\DLL-SHA256.txt
+
+      - name: Compactar pacote portátil
+        shell: pwsh
+        run: Compress-Archive -Path bundle\* -DestinationPath llama-cpp-python-windows-portatil.zip
+
+      - name: Upload do wheel como artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: llama-cpp-python-windows-cpu-wheel
+          path: ./dist/*.whl
+          if-no-files-found: error
+
+      - name: Upload do pacote portátil como artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: llama-cpp-python-windows-portatil
+          path: ./llama-cpp-python-windows-portatil.zip
+          if-no-files-found: error
+
+      - name: Publicar Release (opcional)
+        if: ${{ inputs.create_release }}
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: windows-cpu-${{ github.run_number }}
+          name: Windows CPU wheel (build ${{ github.run_number }})
+          body: |
+            Wheel pré-compilado (CPU-only) para Windows x64.
+
+            Dois formatos disponíveis abaixo:
+
+            1) Wheel (`.whl`) — se puder usar pip num ambiente próprio:
+            ```
+            pip install --target C:\Users\seu_usuario\minhas_libs llama_cpp_python-<versao>-py3-none-win_amd64.whl
+            ```
+
+            2) Pacote portátil (`...-windows-portatil.zip`) — SEM instalar nada e
+            SEM rodar pip/exe novo. Extraia, rode `ativar.cmd` e use seu Python já
+            aprovado. Veja `LEIA-ME.txt` dentro do zip. Os hashes SHA-256 das DLLs
+            (`DLL-SHA256.txt`) ajudam num eventual pedido de whitelist ao TI.
+          files: |
+            dist/*.whl
+            llama-cpp-python-windows-portatil.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
