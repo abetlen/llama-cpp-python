@@ -26,9 +26,6 @@ jobs:
           - os: ubuntu-22.04
             pyver: "3.9"
             artifact: wheels-vulkan-ubuntu-22.04
-          - os: windows-2022
-            pyver: "3.9"
-            artifact: wheels-vulkan-windows-2022
 
     steps:
       - name: Set up MSVC

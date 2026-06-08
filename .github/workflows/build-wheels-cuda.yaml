@@ -26,17 +26,12 @@ jobs:
         id: set-matrix
         run: |
           $matrix = @{
-              'os' = @('ubuntu-22.04', 'windows-2022')
+              'os' = @('ubuntu-22.04')
               # wheel.py-api = "py3" makes the CUDA wheel interpreter-agnostic,
               # so one builder per toolkit version is sufficient.
               'pyver' = @("3.9")
-              'cuda' = @("11.8.0", "12.1.1", "12.2.2", "12.3.2", "12.4.1", "12.5.1", "13.0.2", "13.2.1")
+              'cuda' = @("13.2.1")
               'releasetag' = @("basic")
-              'exclude' = @(
-                @{ 'os' = 'windows-2022'; 'cuda' = '12.1.1' },
-                @{ 'os' = 'windows-2022'; 'cuda' = '12.2.2' },
-                @{ 'os' = 'windows-2022'; 'cuda' = '12.3.2' }
-              )
           }
 
           $matrixOut = ConvertTo-Json $matrix -Compress

@@ -10,7 +10,7 @@ on:
       amdgpu_targets:
         description: AMDGPU targets to compile into the Linux ROCm wheel
         required: false
-        default: gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101;gfx1102;gfx1150;gfx1151;gfx1200;gfx1201
+        default: gfx1100
       windows_amdgpu_targets:
         description: AMDGPU targets to compile into the Windows HIP Radeon wheel
         required: false
@@ -32,7 +32,7 @@ jobs:
           - os: ubuntu-22.04
             pyver: "3.9"
             rocm: "7.2.4"
-            amdgpu_targets: gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101;gfx1102;gfx1150;gfx1151;gfx1200;gfx1201
+            amdgpu_targets: gfx1100
 
     steps:
       - name: Install system dependencies
@@ -113,6 +113,7 @@ jobs:
 
   build_wheels_windows_hip:
     name: Build Wheel windows-2022 ${{ matrix.pyver }} HIP ${{ matrix.name }}
+    if: ${{ false }}
     runs-on: windows-2022
     env:
       HIPSDK_INSTALLER_VERSION: "26.Q1"

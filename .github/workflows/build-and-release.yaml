@@ -11,7 +11,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-22.04, windows-2022, macos-14, macos-15]
+        os: [ubuntu-22.04]
 
     steps:
       - uses: actions/checkout@v6
@@ -76,6 +76,7 @@ jobs:
 
   build_wheels_arm64:
     name: Build arm64 wheels
+    if: ${{ false }}
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v6
@@ -107,6 +108,7 @@ jobs:
 
   build_wheels_riscv64:
     name: Build riscv64 wheel
+    if: ${{ false }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -141,6 +143,7 @@ jobs:
 
   build_sdist:
     name: Build source distribution
+    if: ${{ false }}
     runs-on: ubuntu-latest
 
     steps:
@@ -184,7 +187,7 @@ jobs:
   release:
     name: Release
     needs: [build_wheels, build_wheels_arm64, build_wheels_riscv64, build_sdist]
-    if: startsWith(github.ref, 'refs/tags/')
+    if: ${{ false }}
     runs-on: ubuntu-latest
 
     steps:
