@@ -42,7 +42,7 @@
         },
         "tool_calls": {
           "type": "array",
-          "x-regex-iterator": "(<\\|start\\|>assistant to=functions\\.\\w+<\\|channel\\|>commentary json<\\|message\\|>.*?<\\|call\\|>)",
+          "x-regex-iterator": "(<\\|start\\|>assistant<\\|channel\\|>commentary to=functions\\.\\w+ <\\|constrain\\|>json<\\|message\\|>.*?<\\|call\\|>)",
           "items": {
             "type": "object",
             "properties": {
@@ -54,11 +54,11 @@
                 "properties": {
                   "name": {
                     "type": "string",
-                    "x-regex": "^<\\|start\\|>assistant to=functions\\.(\\w+)<\\|channel\\|>commentary json<\\|message\\|>"
+                    "x-regex": "^<\\|start\\|>assistant<\\|channel\\|>commentary to=functions\\.(\\w+) <\\|constrain\\|>json<\\|message\\|>"
                   },
                   "arguments": {
                     "type": "object",
-                    "x-regex": "^<\\|start\\|>assistant to=functions\\.\\w+<\\|channel\\|>commentary json<\\|message\\|>(.*?)<\\|call\\|>$",
+                    "x-regex": "^<\\|start\\|>assistant<\\|channel\\|>commentary to=functions\\.\\w+ <\\|constrain\\|>json<\\|message\\|>(.*?)<\\|call\\|>$",
                     "x-parser": "json",
                     "additionalProperties": true
                   }
@@ -410,7 +410,21 @@
       "\n",
       "{#- Generation prompt #}\n",
       "{%- if add_generation_prompt -%}\n",
+      "{%- set forced_tool_name = none %}\n",
+      "{%- if tool_choice is mapping %}\n",
+      "    {%- if tool_choice.function is defined and tool_choice.function.name is defined %}\n",
+      "        {%- set forced_tool_name = tool_choice.function.name %}\n",
+      "    {%- elif tool_choice.name is defined %}\n",
+      "        {%- set forced_tool_name = tool_choice.name %}\n",
+      "    {%- endif %}\n",
+      "{%- elif function_call is mapping and function_call.name is defined %}\n",
+      "    {%- set forced_tool_name = function_call.name %}\n",
+      "{%- endif %}\n",
+      "{%- if forced_tool_name %}\n",
+      "{{- \"<|start|>assistant<|channel|>commentary to=functions.\" + forced_tool_name + \" <|constrain|>json<|message|>\" }}\n",
+      "{%- else %}\n",
       "<|start|>assistant\n",
+      "{%- endif %}\n",
       "{%- endif -%}"
     ]
   }
