@@ -13,7 +13,6 @@ permissions:
 
 env:
   VULKAN_SDK_VERSION: "1.4.341.0"
-  VULKAN_SDK_LINUX_SHA256: "ed66477d587a5587dc3601b1c2cdcc1fab5529c505f53a00171876cecd9b4fbe"
 
 jobs:
   build_wheels:
@@ -78,16 +77,11 @@ jobs:
             curl -L https://micro.mamba.pm/api/micromamba/linux-64/latest -o /tmp/micromamba.tar.bz2 &&
             mkdir -p /tmp/micromamba &&
             tar -xjf /tmp/micromamba.tar.bz2 -C /tmp/micromamba bin/micromamba &&
-            /tmp/micromamba/bin/micromamba create -y -p /opt/shaderc -c conda-forge shaderc &&
-            /opt/shaderc/bin/glslc --version &&
-            curl -fL "https://sdk.lunarg.com/sdk/download/${{ env.VULKAN_SDK_VERSION }}/linux/vulkansdk-linux-x86_64-${{ env.VULKAN_SDK_VERSION }}.tar.xz" -o /tmp/vulkan-sdk.tar.xz &&
-            echo "${{ env.VULKAN_SDK_LINUX_SHA256 }}  /tmp/vulkan-sdk.tar.xz" | sha256sum -c - &&
-            mkdir -p /opt/vulkan-sdk &&
-            tar -xf /tmp/vulkan-sdk.tar.xz -C /opt/vulkan-sdk
+            /tmp/micromamba/bin/micromamba create -y -p /opt/vulkan -c conda-forge shaderc vulkan-headers vulkan-loader &&
+            /opt/vulkan/bin/glslc --version
           CIBW_ENVIRONMENT_LINUX: >
-            VULKAN_SDK=/opt/vulkan-sdk/${{ env.VULKAN_SDK_VERSION }}/x86_64
-            CMAKE_ARGS="-DGGML_NATIVE=off -DGGML_METAL=OFF -DGGML_OPENMP=OFF -DGGML_VULKAN=on -DVulkan_GLSLC_EXECUTABLE=/opt/shaderc/bin/glslc"
-          CIBW_REPAIR_WHEEL_COMMAND_LINUX: "LD_LIBRARY_PATH=/project/llama_cpp/lib:/opt/vulkan-sdk/${{ env.VULKAN_SDK_VERSION }}/x86_64/lib auditwheel repair --exclude libvulkan.so.1 -w {dest_dir} {wheel}"
+            CMAKE_ARGS="-DGGML_NATIVE=off -DGGML_METAL=OFF -DGGML_OPENMP=OFF -DGGML_VULKAN=on -DVulkan_INCLUDE_DIR=/opt/vulkan/include -DVulkan_LIBRARY=/opt/vulkan/lib/libvulkan.so -DVulkan_GLSLC_EXECUTABLE=/opt/vulkan/bin/glslc"
+          CIBW_REPAIR_WHEEL_COMMAND_LINUX: "LD_LIBRARY_PATH=/project/llama_cpp/lib:/opt/vulkan/lib auditwheel repair --exclude libvulkan.so.1 -w {dest_dir} {wheel}"
         with:
           package-dir: .
           output-dir: wheelhouse
