@@ -71,7 +71,7 @@ jobs:
 
       - name: Build Vulkan wheel
         if: runner.os == 'Linux'
-        uses: pypa/cibuildwheel@v3.4.1
+        uses: pypa/cibuildwheel@v4.0.0
         env:
           CIBW_BUILD: "cp38-manylinux_*"
           CIBW_ARCHS: "auto64"
