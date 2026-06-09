@@ -44,7 +44,7 @@
         },
         "tool_calls": {
           "type": "array",
-          "x-regex-iterator": "<\\|tool_call>(call:[^\\{]+\\{.*?\\})<tool_call\\|>",
+          "x-regex-iterator": "<\\|tool_call>(call:[^\\{\\[]+[\\{\\[].*?[\\}\\]])<tool_call\\|>",
           "items": {
             "type": "object",
             "properties": {
@@ -56,11 +56,11 @@
                 "properties": {
                   "name": {
                     "type": "string",
-                    "x-regex": "^call:(\\w+)\\{"
+                    "x-regex": "^call:(\\w+)[\\{\\[]"
                   },
                   "arguments": {
                     "type": "object",
-                    "x-regex": "^call:\\w+(\\{.*\\})$",
+                    "x-regex": "^call:\\w+(\\{.*\\}|\\[.*\\])$",
                     "x-parser": "gemma4-tool-call",
                     "additionalProperties": true
                   }

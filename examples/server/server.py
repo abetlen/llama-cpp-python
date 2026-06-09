@@ -37,6 +37,7 @@ import copy
 import shutil
 import inspect
 import sys
+import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -3224,6 +3225,7 @@ class ConfigFile(BaseModel):
         allowed_local_media_path: Optional[str] = None
         image_max_bytes: int = Field(default=20 * 1024 * 1024, ge=1)
         audio_max_bytes: int = Field(default=100 * 1024 * 1024, ge=1)
+        video_max_bytes: int = Field(default=512 * 1024 * 1024, ge=1)
         image_timeout_seconds: float = Field(default=10.0, gt=0.0)
 
         @model_validator(mode="after")
@@ -3350,7 +3352,7 @@ ConfigFile.model_rebuild()
 
 @dataclass(frozen=True)
 class MediaInput:
-    kind: Literal["image", "audio"]
+    kind: Literal["image", "audio", "video"]
     url: Optional[str] = None
     data: Optional[str] = None
     format: Optional[str] = None
@@ -3426,6 +3428,33 @@ class Jinja2ChatFormatter:
                         )
                     )
                     continue
+                if part_type in {"video_url", "input_video", "video"}:
+                    input_video = part.get("input_video")
+                    if isinstance(input_video, dict):
+                        data = input_video.get("data")
+                        video_url = input_video.get("video_url") or input_video.get("url")
+                        video_format = input_video.get("format")
+                    else:
+                        data = part.get("data")
+                        video_url = part.get("video_url") or part.get("url")
+                        video_format = part.get("format")
+                    if isinstance(video_url, dict):
+                        video_url = video_url.get("url")
+                    if isinstance(data, str):
+                        if video_format is not None and not isinstance(video_format, str):
+                            raise ValueError("input_video format must be a string")
+                        media_inputs.append(
+                            MediaInput(
+                                kind="video",
+                                data=data,
+                                format=cast(Optional[str], video_format),
+                            )
+                        )
+                    elif isinstance(video_url, str):
+                        media_inputs.append(MediaInput(kind="video", url=video_url))
+                    else:
+                        raise ValueError("video content part requires base64 data or a URL string")
+                    continue
         return media_inputs
 
     @staticmethod
@@ -3447,7 +3476,16 @@ class Jinja2ChatFormatter:
         if not isinstance(part, dict):
             raise ValueError("content parts must be strings or objects")
         part_type = part.get("type")
-        if part_type in {"image_url", "input_image", "image", "audio_url", "input_audio"}:
+        if part_type in {
+            "image_url",
+            "input_image",
+            "image",
+            "audio_url",
+            "input_audio",
+            "video_url",
+            "input_video",
+            "video",
+        }:
             if media_marker is None:
                 raise ValueError("multimodal content requires model.mtmd")
             return media_marker
@@ -3694,7 +3732,7 @@ class PromptSegment:
         positions: np.ndarray
         non_causal: bool = False
 
-    kind: Literal["text", "image", "audio"]
+    kind: Literal["text", "image", "audio", "video"]
     start_pos: int
     n_pos: int
     identity_tokens: List[int]
@@ -4351,6 +4389,9 @@ class ResponseParser:
             strings.append(match.group(1))
             return f"\x00{len(strings) - 1}\x00"
 
+        stripped = text.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            text = "{" + stripped[1:-1] + "}"
         text = re.sub(r'<\|"\|>(.*?)<\|"\|>', capture, text, flags=re.S)
         text = re.sub(r"(?<=[{,])(\w+):", r'"\1":', text)
         for index, value in enumerate(strings):
@@ -5115,6 +5156,87 @@ class ResponseParser:
                 return {argument_name: value}
             return None
         return None
+
+    def _single_string_tool_argument_name(self, tool_name: str) -> Optional[str]:
+        if self._tools is None:
+            return None
+        for tool in self._tools:
+            if tool.get("type") != "function":
+                continue
+            function = tool.get("function", {})
+            if function.get("name") != tool_name:
+                continue
+            parameters = function.get("parameters")
+            if not isinstance(parameters, dict):
+                return None
+            required = parameters.get("required")
+            if not isinstance(required, list) or len(required) != 1:
+                return None
+            argument_name = required[0]
+            if not isinstance(argument_name, str):
+                return None
+            properties = parameters.get("properties")
+            if not isinstance(properties, dict):
+                return None
+            argument_schema = properties.get(argument_name)
+            if not isinstance(argument_schema, dict):
+                return None
+            argument_type = argument_schema.get("type")
+            if argument_type == "string" or (
+                isinstance(argument_type, list) and "string" in argument_type
+            ):
+                return argument_name
+            return None
+        return None
+
+    def _text_tool_argument_from_object(
+        self,
+        tool_name: str,
+        arguments: Dict[str, Any],
+    ) -> Optional[str]:
+        input_value = arguments.get("input")
+        if isinstance(input_value, str):
+            return input_value
+        argument_name = self._single_string_tool_argument_name(tool_name)
+        if argument_name is not None:
+            argument_value = arguments.get(argument_name)
+            if isinstance(argument_value, str):
+                return argument_value
+        if len(arguments) == 1:
+            argument_value = next(iter(arguments.values()))
+            if isinstance(argument_value, str):
+                return argument_value
+        return None
+
+    def _text_tool_arguments(
+        self,
+        tool_name: str,
+        arguments: Any,
+        *,
+        partial: bool,
+    ) -> Optional[str]:
+        if isinstance(arguments, str):
+            parsed_arguments = self._raw_object_tool_arguments(arguments)
+            if parsed_arguments is not None:
+                text = self._text_tool_argument_from_object(tool_name, parsed_arguments)
+                if text is not None:
+                    return text
+                if partial:
+                    return None
+                return json.dumps(parsed_arguments, ensure_ascii=False, separators=(",", ":"))
+            return arguments
+        if isinstance(arguments, ResponseParser.PartialJsonObject):
+            arguments = arguments.value
+        if isinstance(arguments, dict):
+            text = self._text_tool_argument_from_object(tool_name, arguments)
+            if text is not None:
+                return text
+            if partial:
+                return None
+            return json.dumps(arguments, ensure_ascii=False, separators=(",", ":"))
+        if partial:
+            return None
+        return str(arguments)
 
     @classmethod
     def _raw_object_tool_arguments(cls, value: str) -> Optional[Dict[str, Any]]:
@@ -6950,13 +7072,13 @@ class ResponseParser:
                 "tool_calls function name must be a non-empty string"
             )
         if self._tool_content_type(tool_name) == "text":
-            arguments = function.get("arguments", "")
-            if not isinstance(arguments, str):
-                if partial:
-                    return None
-                raise CompletionResponseParsingError(
-                    "tool_calls function arguments must be a string for text tools"
-                )
+            arguments = self._text_tool_arguments(
+                tool_name,
+                function.get("arguments", ""),
+                partial=partial,
+            )
+            if arguments is None:
+                return None
             return {
                 "type": tool_call.get("type", "function"),
                 "function": {
@@ -7141,12 +7263,13 @@ class ResponseParser:
             for tool_call_index, tool_call in enumerate(tool_calls):
                 function = tool_call["function"]
                 if self._tool_content_type(function["name"]) == "text":
-                    raw_arguments = function["arguments"]
-                    arguments = (
-                        raw_arguments
-                        if isinstance(raw_arguments, str)
-                        else str(raw_arguments)
+                    arguments = self._text_tool_arguments(
+                        function["name"],
+                        function["arguments"],
+                        partial=partial,
                     )
+                    if arguments is None:
+                        continue
                 else:
                     arguments = self._serialize_tool_arguments(
                         function["arguments"],
@@ -10195,7 +10318,7 @@ class MTMDEmbeddingCache:
         *,
         model_fingerprint: str,
         mmproj_fingerprint: str,
-        kind: Literal["image", "audio"],
+        kind: Literal["image", "audio", "video"],
         media_bytes: bytes,
     ) -> str:
         digest = hashlib.sha256(f"{kind}:".encode("utf-8") + media_bytes).hexdigest()
@@ -10210,7 +10333,7 @@ class MTMDEmbeddingCache:
         )
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
-    def key_for_media(self, kind: Literal["image", "audio"], media_bytes: bytes) -> str:
+    def key_for_media(self, kind: Literal["image", "audio", "video"], media_bytes: bytes) -> str:
         return self._build_key(
             model_fingerprint=self.model_fingerprint,
             mmproj_fingerprint=self.mmproj_fingerprint,
@@ -10273,6 +10396,19 @@ class MTMDEmbeddingCache:
                 continue
 
 
+@dataclass
+class MTMDLoadedMedia:
+    media: MediaInput
+    media_bytes: bytes
+    key: str
+    bitmap: Any
+    video_ctx: Optional[Any] = None
+    video_temp_path: Optional[Path] = None
+    video_callback: Optional[Any] = None
+    video_frame_count: int = 0
+    video_frames_used: int = 0
+
+
 class MTMDProcessor:
     def __init__(
         self,
@@ -10291,6 +10427,7 @@ class MTMDProcessor:
         allowed_local_media_path: Optional[str],
         image_max_bytes: int,
         audio_max_bytes: int,
+        video_max_bytes: int,
         image_timeout_seconds: float,
     ) -> None:
         self.chat_formatter = chat_formatter
@@ -10314,6 +10451,7 @@ class MTMDProcessor:
         )
         self.image_max_bytes = image_max_bytes
         self.audio_max_bytes = audio_max_bytes
+        self.video_max_bytes = video_max_bytes
         self.image_timeout_seconds = image_timeout_seconds
         self.lock = threading.Lock()
         params = mtmd_cpp.mtmd_context_params_default()
@@ -10327,23 +10465,33 @@ class MTMDProcessor:
             raise RuntimeError(f"failed to load MTMD context: {mmproj_path}")
         self.supports_vision = bool(mtmd_cpp.mtmd_support_vision(self.ctx))
         self.supports_audio = bool(mtmd_cpp.mtmd_support_audio(self.ctx))
+        self.supports_video = self.supports_vision and bool(
+            mtmd_cpp.mtmd_helper_support_video(self.ctx)
+        )
         if not self.supports_vision and not self.supports_audio:
             mtmd_cpp.mtmd_free(self.ctx)
             self.ctx = None
             raise RuntimeError(f"MTMD projector does not support image or audio input: {mmproj_path}")
-        self.media_marker = mtmd_cpp.mtmd_default_marker().decode("utf-8")
+        media_marker = mtmd_cpp.mtmd_get_marker(self.ctx)
+        if media_marker is None:
+            mtmd_cpp.mtmd_free(self.ctx)
+            self.ctx = None
+            raise RuntimeError(f"MTMD projector does not expose a media marker: {mmproj_path}")
+        self.media_marker = media_marker.decode("utf-8")
 
     def close(self) -> None:
         if self.ctx is not None:
             mtmd_cpp.mtmd_free(self.ctx)
             self.ctx = None
 
-    def _max_bytes_for_media(self, kind: Literal["image", "audio"]) -> int:
+    def _max_bytes_for_media(self, kind: Literal["image", "audio", "video"]) -> int:
         if kind == "image":
             return self.image_max_bytes
-        return self.audio_max_bytes
+        if kind == "audio":
+            return self.audio_max_bytes
+        return self.video_max_bytes
 
-    def _load_media_file(self, kind: Literal["image", "audio"], media_url: str) -> bytes:
+    def _load_media_file(self, kind: Literal["image", "audio", "video"], media_url: str) -> bytes:
         if self.allowed_local_media_path is None:
             raise CompletionRequestValidationError("local media path is not allowed")
         parsed = urllib.parse.urlsplit(media_url)
@@ -10391,7 +10539,7 @@ class MTMDProcessor:
         opener = urllib.request.build_opener(NoRedirectHandler)
         return opener.open(request, timeout=timeout)
 
-    def _load_media_url(self, kind: Literal["image", "audio"], media_url: str) -> bytes:
+    def _load_media_url(self, kind: Literal["image", "audio", "video"], media_url: str) -> bytes:
         max_bytes = self._max_bytes_for_media(kind)
         if media_url.startswith("data:"):
             try:
@@ -10423,29 +10571,134 @@ class MTMDProcessor:
     def load_media(self, media: MediaInput) -> bytes:
         if media.url is not None:
             return self._load_media_url(media.kind, media.url)
-        if media.kind != "audio" or media.data is None:
+        if media.kind not in {"audio", "video"} or media.data is None:
             raise CompletionRequestValidationError(f"{media.kind} input requires a URL")
         try:
             data = base64.b64decode(media.data, validate=False)
         except (ValueError, binascii.Error) as exc:
-            raise CompletionRequestValidationError("input_audio data must be valid base64") from exc
-        if len(data) > self.audio_max_bytes:
-            raise CompletionRequestValidationError("audio exceeds model.mtmd.audio_max_bytes")
+            raise CompletionRequestValidationError(f"input_{media.kind} data must be valid base64") from exc
+        max_bytes = self._max_bytes_for_media(media.kind)
+        if len(data) > max_bytes:
+            raise CompletionRequestValidationError(
+                f"{media.kind} exceeds model.mtmd.{media.kind}_max_bytes"
+            )
         return data
 
-    def _create_bitmap(self, media_bytes: bytes, kind: Literal["image", "audio"]) -> Any:
+    def _create_loaded_media(
+        self,
+        media: MediaInput,
+        media_bytes: bytes,
+    ) -> MTMDLoadedMedia:
+        key = (
+            self.embedding_cache.key_for_media(media.kind, media_bytes)
+            if self.embedding_cache is not None
+            else MTMDEmbeddingCache._build_key(
+                model_fingerprint=self.model_fingerprint,
+                mmproj_fingerprint=self.mmproj_fingerprint,
+                kind=media.kind,
+                media_bytes=media_bytes,
+            )
+        )
+        if media.kind == "video":
+            return self._create_loaded_video_media(media, media_bytes, key)
         buffer = (ctypes.c_uint8 * len(media_bytes)).from_buffer_copy(media_bytes)
-        bitmap = mtmd_cpp.mtmd_helper_bitmap_init_from_buf(
+        wrapper = mtmd_cpp.mtmd_helper_bitmap_init_from_buf_wrapper(
             self.ctx,
             buffer,
             len(media_bytes),
             False,
         )
+        bitmap = wrapper.bitmap
         if bitmap is None:
-            raise CompletionRequestValidationError(f"failed to create MTMD {kind} bitmap")
-        return bitmap
+            raise CompletionRequestValidationError(f"failed to create MTMD {media.kind} bitmap")
+        mtmd_cpp.mtmd_bitmap_set_id(bitmap, key.encode("utf-8"))
+        video_frame_count = 0
+        video_ctx = wrapper.video_ctx
+        if video_ctx:
+            video_info = mtmd_cpp.mtmd_helper_video_get_info(video_ctx)
+            video_frame_count = max(0, int(video_info.n_frames))
+        return MTMDLoadedMedia(
+            media=media,
+            media_bytes=media_bytes,
+            key=key,
+            bitmap=bitmap,
+            video_ctx=video_ctx,
+            video_frame_count=video_frame_count,
+        )
 
-    def _media_identity_tokens(self, kind: Literal["image", "audio"], key: str, n_pos: int) -> List[int]:
+    @staticmethod
+    def _video_temp_suffix(media: MediaInput) -> str:
+        extension = (media.format or "mp4").lstrip(".").lower()
+        if not extension or any(not char.isalnum() for char in extension):
+            extension = "video"
+        return f".{extension}"
+
+    def _create_loaded_video_media(
+        self,
+        media: MediaInput,
+        media_bytes: bytes,
+        key: str,
+    ) -> MTMDLoadedMedia:
+        temp_file = tempfile.NamedTemporaryFile(
+            prefix="llama-cpp-python-mtmd-",
+            suffix=self._video_temp_suffix(media),
+            delete=False,
+        )
+        temp_path = Path(temp_file.name)
+        try:
+            with temp_file:
+                temp_file.write(media_bytes)
+            params = mtmd_cpp.mtmd_helper_video_init_params_default()
+            video_ctx = mtmd_cpp.mtmd_helper_video_init(
+                self.ctx,
+                str(temp_path).encode("utf-8"),
+                params,
+            )
+            if video_ctx is None:
+                raise CompletionRequestValidationError("failed to create MTMD video context")
+
+            def read_next(
+                _chunk_index: int,
+                _user_data: Any,
+                out_bitmap: Any,
+                out_text: Any,
+            ) -> int:
+                return int(mtmd_cpp.mtmd_helper_video_read_next(video_ctx, out_bitmap, out_text))
+
+            callback = mtmd_cpp.mtmd_bitmap_lazy_callback(read_next)
+            bitmap = mtmd_cpp.mtmd_bitmap_init_lazy(
+                self.ctx,
+                key.encode("utf-8"),
+                ctypes.c_void_p(),
+                callback,
+            )
+            if bitmap is None:
+                mtmd_cpp.mtmd_helper_video_free(video_ctx)
+                raise CompletionRequestValidationError("failed to create MTMD video bitmap")
+            video_info = mtmd_cpp.mtmd_helper_video_get_info(video_ctx)
+            return MTMDLoadedMedia(
+                media=media,
+                media_bytes=media_bytes,
+                key=key,
+                bitmap=bitmap,
+                video_ctx=video_ctx,
+                video_temp_path=temp_path,
+                video_callback=callback,
+                video_frame_count=max(0, int(video_info.n_frames)),
+            )
+        except Exception:
+            try:
+                temp_path.unlink()
+            except OSError:
+                pass
+            raise
+
+    def _media_identity_tokens(
+        self,
+        kind: Literal["image", "audio", "video"],
+        key: str,
+        n_pos: int,
+    ) -> List[int]:
         tokens: List[int] = []
         for index in range(n_pos):
             digest = hashlib.sha256(f"{kind}:{key}:{index}".encode("utf-8")).digest()
@@ -10455,7 +10708,7 @@ class MTMDProcessor:
     def _encode_media_chunk(
         self,
         *,
-        kind: Literal["image", "audio"],
+        kind: Literal["image", "audio", "video"],
         key: str,
         chunk: Any,
     ) -> np.ndarray:
@@ -10535,6 +10788,8 @@ class MTMDProcessor:
             raise CompletionRequestValidationError("MTMD projector does not support images")
         if any(media.kind == "audio" for media in media_inputs) and not self.supports_audio:
             raise CompletionRequestValidationError("MTMD projector does not support audio")
+        if any(media.kind == "video" for media in media_inputs) and not self.supports_video:
+            raise CompletionRequestValidationError("MTMD projector does not support video")
         with self.lock:
             return self._build_prompt_plan_locked(
                 messages=messages,
@@ -10567,13 +10822,19 @@ class MTMDProcessor:
             reasoning_effort=reasoning_effort,
         )
         media_bytes_by_index = [self.load_media(media) for media in media_inputs]
-        bitmaps: List[Any] = []
+        loaded_media: List[MTMDLoadedMedia] = []
         chunks: Optional[Any] = None
         try:
-            bitmaps = [
-                self._create_bitmap(media_bytes, media.kind)
+            loaded_media = [
+                self._create_loaded_media(media, media_bytes)
                 for media, media_bytes in zip(media_inputs, media_bytes_by_index)
             ]
+            loaded_media_by_key = {media.key: media for media in loaded_media}
+            video_media = [media for media in loaded_media if media.media.kind == "video"]
+            if len(video_media) > 1 and any(media.video_frame_count <= 0 for media in video_media):
+                raise CompletionRequestValidationError(
+                    "multiple videos require MTMD to report frame counts"
+                )
             input_text = mtmd_cpp.mtmd_input_text()
             input_text.text = prompt.encode("utf-8")
             input_text.add_special = False
@@ -10581,14 +10842,16 @@ class MTMDProcessor:
             chunks = mtmd_cpp.mtmd_input_chunks_init()
             if chunks is None:
                 raise CompletionRequestValidationError("failed to create MTMD input chunks")
-            bitmap_array = (mtmd_cpp.mtmd_bitmap_p_ctypes * len(bitmaps))(*bitmaps)
+            bitmap_array = (mtmd_cpp.mtmd_bitmap_p_ctypes * len(loaded_media))(
+                *(media.bitmap for media in loaded_media)
+            )
             result = int(
                 mtmd_cpp.mtmd_tokenize(
                     self.ctx,
                     chunks,
                     ctypes.byref(input_text),
                     bitmap_array,
-                    len(bitmaps),
+                    len(loaded_media),
                 )
             )
             if result != 0:
@@ -10601,7 +10864,8 @@ class MTMDProcessor:
             text_token_index_by_pos: Dict[int, int] = {}
             identity_pos = 0
             decode_pos = 0
-            media_index = 0
+            video_index = 0
+            used_media_keys = set()
             n_chunks = int(mtmd_cpp.mtmd_input_chunks_size(chunks))
             for chunk_index in range(n_chunks):
                 chunk = mtmd_cpp.mtmd_input_chunks_get(chunks, chunk_index)
@@ -10640,32 +10904,50 @@ class MTMDProcessor:
                         decode_pos += len(tokens)
                     continue
                 if chunk_type == mtmd_cpp.MTMD_INPUT_CHUNK_TYPE_IMAGE:
-                    kind: Literal["image", "audio"] = "image"
+                    chunk_kind: Literal["image", "audio"] = "image"
                     if not self.supports_vision:
                         raise CompletionRequestValidationError("MTMD projector does not support images")
                 elif chunk_type == mtmd_cpp.MTMD_INPUT_CHUNK_TYPE_AUDIO:
-                    kind = "audio"
+                    chunk_kind = "audio"
                     if not self.supports_audio:
                         raise CompletionRequestValidationError("MTMD projector does not support audio")
                 else:
                     raise CompletionRequestValidationError("unsupported MTMD input chunk type")
-                if media_index >= len(media_bytes_by_index):
-                    raise CompletionRequestValidationError("MTMD media chunk count mismatch")
-                media = media_inputs[media_index]
-                media_bytes = media_bytes_by_index[media_index]
-                media_index += 1
-                if media.kind != kind:
-                    raise CompletionRequestValidationError("MTMD media chunk modality mismatch")
-                key = (
-                    self.embedding_cache.key_for_media(kind, media_bytes)
-                    if self.embedding_cache is not None
-                    else MTMDEmbeddingCache._build_key(
-                        model_fingerprint=self.model_fingerprint,
-                        mmproj_fingerprint=self.mmproj_fingerprint,
-                        kind=kind,
-                        media_bytes=media_bytes,
-                    )
-                )
+                chunk_id_bytes = mtmd_cpp.mtmd_input_chunk_get_id(chunk)
+                chunk_id = chunk_id_bytes.decode("utf-8") if chunk_id_bytes else ""
+                media = loaded_media_by_key.get(chunk_id)
+                video_frame_index: Optional[int] = None
+                if media is None and chunk_kind == "image" and video_media:
+                    while (
+                        video_index < len(video_media)
+                        and video_media[video_index].video_frame_count > 0
+                        and video_media[video_index].video_frames_used
+                        >= video_media[video_index].video_frame_count
+                    ):
+                        video_index += 1
+                    if video_index >= len(video_media):
+                        raise CompletionRequestValidationError("MTMD video frame count mismatch")
+                    media = video_media[video_index]
+                    video_frame_index = media.video_frames_used
+                    media.video_frames_used += 1
+                if media is None:
+                    raise CompletionRequestValidationError("MTMD media chunk identity mismatch")
+                if media.media.kind == "video":
+                    if chunk_kind != "image":
+                        raise CompletionRequestValidationError("MTMD video chunk modality mismatch")
+                    kind: Literal["image", "audio", "video"] = "video"
+                    if video_frame_index is None:
+                        video_frame_index = media.video_frames_used
+                        media.video_frames_used += 1
+                    key = hashlib.sha256(
+                        f"{media.key}:frame:{video_frame_index}".encode("utf-8")
+                    ).hexdigest()
+                else:
+                    if media.media.kind != chunk_kind:
+                        raise CompletionRequestValidationError("MTMD media chunk modality mismatch")
+                    kind = media.media.kind
+                    key = media.key
+                used_media_keys.add(media.key)
                 decode_n_pos = int(mtmd_cpp.mtmd_input_chunk_get_n_pos(chunk))
                 if decode_n_pos <= 0:
                     raise CompletionRequestValidationError("MTMD media chunk has no decoder positions")
@@ -10698,7 +10980,7 @@ class MTMDProcessor:
                 identity_tokens.extend(segment_identity)
                 identity_pos += n_tokens
                 decode_pos += decode_n_pos
-            if media_index != len(media_bytes_by_index):
+            if used_media_keys != {media.key for media in loaded_media}:
                 raise CompletionRequestValidationError("not all media inputs were consumed by MTMD")
             return PromptPlan(
                 text=prompt,
@@ -10711,8 +10993,15 @@ class MTMDProcessor:
         finally:
             if chunks is not None:
                 mtmd_cpp.mtmd_input_chunks_free(chunks)
-            for bitmap in bitmaps:
-                mtmd_cpp.mtmd_bitmap_free(bitmap)
+            for media in loaded_media:
+                mtmd_cpp.mtmd_bitmap_free(media.bitmap)
+                if media.video_ctx:
+                    mtmd_cpp.mtmd_helper_video_free(media.video_ctx)
+                if media.video_temp_path is not None:
+                    try:
+                        media.video_temp_path.unlink()
+                    except OSError:
+                        pass
 
 
 class Model:
@@ -15927,6 +16216,7 @@ def main() -> None:
             allowed_local_media_path=config.model.mtmd.allowed_local_media_path,
             image_max_bytes=config.model.mtmd.image_max_bytes,
             audio_max_bytes=config.model.mtmd.audio_max_bytes,
+            video_max_bytes=config.model.mtmd.video_max_bytes,
             image_timeout_seconds=config.model.mtmd.image_timeout_seconds,
         )
     sequence_cache: Optional[SequenceCache] = None
