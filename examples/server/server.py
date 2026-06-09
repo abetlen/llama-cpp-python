@@ -10776,7 +10776,7 @@ class MTMDProcessor:
                     chunks,
                     ctypes.byref(input_text),
                     bitmap_array,
-                    len(bitmaps),
+                    len(loaded_media),
                 )
             )
             if result != 0:
