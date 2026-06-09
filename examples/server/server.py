@@ -4389,6 +4389,9 @@ class ResponseParser:
             strings.append(match.group(1))
             return f"\x00{len(strings) - 1}\x00"
 
+        stripped = text.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            text = "{" + stripped[1:-1] + "}"
         text = re.sub(r'<\|"\|>(.*?)<\|"\|>', capture, text, flags=re.S)
         text = re.sub(r"(?<=[{,])(\w+):", r'"\1":', text)
         for index, value in enumerate(strings):
