@@ -37,6 +37,7 @@ import copy
 import shutil
 import inspect
 import sys
+import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -10399,6 +10400,8 @@ class MTMDLoadedMedia:
     key: str
     bitmap: Any
     video_ctx: Optional[Any] = None
+    video_temp_path: Optional[Path] = None
+    video_callback: Optional[Any] = None
     video_frame_count: int = 0
     video_frames_used: int = 0
 
@@ -10593,6 +10596,8 @@ class MTMDProcessor:
                 media_bytes=media_bytes,
             )
         )
+        if media.kind == "video":
+            return self._create_loaded_video_media(media, media_bytes, key)
         buffer = (ctypes.c_uint8 * len(media_bytes)).from_buffer_copy(media_bytes)
         wrapper = mtmd_cpp.mtmd_helper_bitmap_init_from_buf_wrapper(
             self.ctx,
@@ -10617,6 +10622,73 @@ class MTMDProcessor:
             video_ctx=video_ctx,
             video_frame_count=video_frame_count,
         )
+
+    @staticmethod
+    def _video_temp_suffix(media: MediaInput) -> str:
+        extension = (media.format or "mp4").lstrip(".").lower()
+        if not extension or any(not char.isalnum() for char in extension):
+            extension = "video"
+        return f".{extension}"
+
+    def _create_loaded_video_media(
+        self,
+        media: MediaInput,
+        media_bytes: bytes,
+        key: str,
+    ) -> MTMDLoadedMedia:
+        temp_file = tempfile.NamedTemporaryFile(
+            prefix="llama-cpp-python-mtmd-",
+            suffix=self._video_temp_suffix(media),
+            delete=False,
+        )
+        temp_path = Path(temp_file.name)
+        try:
+            with temp_file:
+                temp_file.write(media_bytes)
+            params = mtmd_cpp.mtmd_helper_video_init_params_default()
+            video_ctx = mtmd_cpp.mtmd_helper_video_init(
+                self.ctx,
+                str(temp_path).encode("utf-8"),
+                params,
+            )
+            if video_ctx is None:
+                raise CompletionRequestValidationError("failed to create MTMD video context")
+
+            def read_next(
+                _chunk_index: int,
+                _user_data: Any,
+                out_bitmap: Any,
+                out_text: Any,
+            ) -> int:
+                return int(mtmd_cpp.mtmd_helper_video_read_next(video_ctx, out_bitmap, out_text))
+
+            callback = mtmd_cpp.mtmd_bitmap_lazy_callback(read_next)
+            bitmap = mtmd_cpp.mtmd_bitmap_init_lazy(
+                self.ctx,
+                key.encode("utf-8"),
+                ctypes.c_void_p(),
+                callback,
+            )
+            if bitmap is None:
+                mtmd_cpp.mtmd_helper_video_free(video_ctx)
+                raise CompletionRequestValidationError("failed to create MTMD video bitmap")
+            video_info = mtmd_cpp.mtmd_helper_video_get_info(video_ctx)
+            return MTMDLoadedMedia(
+                media=media,
+                media_bytes=media_bytes,
+                key=key,
+                bitmap=bitmap,
+                video_ctx=video_ctx,
+                video_temp_path=temp_path,
+                video_callback=callback,
+                video_frame_count=max(0, int(video_info.n_frames)),
+            )
+        except Exception:
+            try:
+                temp_path.unlink()
+            except OSError:
+                pass
+            raise
 
     def _media_identity_tokens(
         self,
@@ -10922,6 +10994,11 @@ class MTMDProcessor:
                 mtmd_cpp.mtmd_bitmap_free(media.bitmap)
                 if media.video_ctx:
                     mtmd_cpp.mtmd_helper_video_free(media.video_ctx)
+                if media.video_temp_path is not None:
+                    try:
+                        media.video_temp_path.unlink()
+                    except OSError:
+                        pass
 
 
 class Model:
