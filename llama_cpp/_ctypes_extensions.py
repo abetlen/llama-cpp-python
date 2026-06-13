@@ -54,6 +54,7 @@ def load_shared_library(lib_base_name: str, base_path: pathlib.Path):
         os.add_dll_directory(str(base_path))
         if "CUDA_PATH" in os.environ:
             os.add_dll_directory(os.path.join(os.environ["CUDA_PATH"], "bin"))
+            os.add_dll_directory(os.path.join(os.environ["CUDA_PATH"], "bin", "x64"))
             os.add_dll_directory(os.path.join(os.environ["CUDA_PATH"], "lib"))
         if "HIP_PATH" in os.environ:
             os.add_dll_directory(os.path.join(os.environ["HIP_PATH"], "bin"))
