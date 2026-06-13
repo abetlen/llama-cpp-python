@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - feat(example): support server video inputs and Gemma text tool calls by @abetlen in #2291
-- feat: update llama.cpp to ggml-org/llama.cpp@3e7bd4f39
+- feat: update llama.cpp to ggml-org/llama.cpp@f05cf4676
 - fix(example): support multi-step Responses tool streaming by @abetlen in #2288
 - fix(ci): Repair Linux accelerator wheels for manylinux publishing
 

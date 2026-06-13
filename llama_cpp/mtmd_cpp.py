@@ -76,6 +76,9 @@ mtmd_input_chunk_p_ctypes = c_void_p
 mtmd_input_chunks_p = NewType("mtmd_input_chunks_p", int)
 mtmd_input_chunks_p_ctypes = c_void_p
 
+mtmd_batch_p = NewType("mtmd_batch_p", int)
+mtmd_batch_p_ctypes = c_void_p
+
 # Enums
 MTMD_INPUT_CHUNK_TYPE_TEXT = 0
 MTMD_INPUT_CHUNK_TYPE_IMAGE = 1
@@ -102,6 +105,7 @@ class mtmd_context_params(Structure):
         image_max_tokens: int
         cb_eval: llama_cpp.ggml_backend_sched_eval_callback
         cb_eval_user_data: c_void_p
+        batch_max_tokens: int
 
     _fields_ = [
         ("use_gpu", c_bool),
@@ -115,6 +119,7 @@ class mtmd_context_params(Structure):
         ("image_max_tokens", c_int),
         ("cb_eval", llama_cpp.ggml_backend_sched_eval_callback),
         ("cb_eval_user_data", c_void_p),
+        ("batch_max_tokens", c_int),
     ]
 
 
@@ -596,7 +601,7 @@ def mtmd_image_tokens_get_decoder_pos(
     c_int,
 )
 def mtmd_encode(ctx: mtmd_context_p, image_tokens: mtmd_image_tokens_p, /) -> int:
-    """Run an MTMD encode pass for image tokens."""
+    """Run a deprecated MTMD encode pass for image tokens."""
     ...
 
 
@@ -615,6 +620,55 @@ def mtmd_encode_chunk(ctx: mtmd_context_p, chunk: mtmd_input_chunk_p, /) -> int:
 @ctypes_function("mtmd_get_output_embd", [mtmd_context_p_ctypes], POINTER(c_float))
 def mtmd_get_output_embd(ctx: mtmd_context_p, /) -> Optional[CtypesArray[c_float]]:
     """Get output embeddings from the last encode pass."""
+    ...
+
+
+# MTMD_API mtmd_batch * mtmd_batch_init(mtmd_context * ctx);
+@ctypes_function("mtmd_batch_init", [mtmd_context_p_ctypes], mtmd_batch_p_ctypes)
+def mtmd_batch_init(ctx: mtmd_context_p, /) -> Optional[mtmd_batch_p]:
+    """Initialize an MTMD media chunk batch for a context."""
+    ...
+
+
+# MTMD_API void mtmd_batch_free(mtmd_batch * batch);
+@ctypes_function("mtmd_batch_free", [mtmd_batch_p_ctypes], None)
+def mtmd_batch_free(batch: mtmd_batch_p, /): ...
+
+
+# MTMD_API int32_t mtmd_batch_add_chunk(mtmd_batch * batch, const mtmd_input_chunk * chunk);
+@ctypes_function(
+    "mtmd_batch_add_chunk",
+    [mtmd_batch_p_ctypes, mtmd_input_chunk_p_ctypes],
+    c_int,
+)
+def mtmd_batch_add_chunk(
+    batch: mtmd_batch_p,
+    chunk: mtmd_input_chunk_p,
+    /,
+) -> int:
+    """Add a media chunk to an MTMD batch."""
+    ...
+
+
+# MTMD_API int32_t mtmd_batch_encode(mtmd_batch * batch);
+@ctypes_function("mtmd_batch_encode", [mtmd_batch_p_ctypes], c_int)
+def mtmd_batch_encode(batch: mtmd_batch_p, /) -> int:
+    """Run an MTMD encode pass for all chunks in a batch."""
+    ...
+
+
+# MTMD_API float * mtmd_batch_get_output_embd(mtmd_batch * batch, const mtmd_input_chunk * chunk);
+@ctypes_function(
+    "mtmd_batch_get_output_embd",
+    [mtmd_batch_p_ctypes, mtmd_input_chunk_p_ctypes],
+    POINTER(c_float),
+)
+def mtmd_batch_get_output_embd(
+    batch: mtmd_batch_p,
+    chunk: mtmd_input_chunk_p,
+    /,
+) -> Optional[CtypesArray[c_float]]:
+    """Get output embeddings for a chunk from the last batch encode pass."""
     ...
 
 
