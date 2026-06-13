@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.29]
+
 - feat(example): use MTMD batch encoding by @abetlen in #2301
 - feat(example): support server video inputs and Gemma text tool calls by @abetlen in #2291
 - feat: update llama.cpp to ggml-org/llama.cpp@f05cf4676
