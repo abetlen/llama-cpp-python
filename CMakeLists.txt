@@ -176,6 +176,15 @@ if (LLAMA_BUILD)
         # Building llava
         add_subdirectory(vendor/llama.cpp/tools/mtmd)
 
+        # The Python package only ships mtmd as a shared library.
+        # Upstream mtmd also defines CLI compatibility wrappers, but those are
+        # not installed here and can fail to link in minimal Docker toolchains.
+        foreach(target llama-llava-cli llama-gemma3-cli llama-minicpmv-cli llama-qwen2vl-cli llama-mtmd-debug)
+            if (TARGET ${target})
+                set_target_properties(${target} PROPERTIES EXCLUDE_FROM_ALL TRUE)
+            endif()
+        endforeach()
+
         if (WIN32)
             set_target_properties(mtmd PROPERTIES CUDA_ARCHITECTURES OFF)
         endif()
