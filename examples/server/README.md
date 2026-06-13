@@ -291,7 +291,7 @@ See [Hugging Face response parsing](https://huggingface.co/docs/transformers/cha
 
 ## Multimodal `model.mtmd`
 
-`model.mtmd` loads a llama.cpp multimodal projector and enables OpenAI-style image and audio content parts.
+`model.mtmd` loads a llama.cpp multimodal projector and enables OpenAI-style image, audio, and video content parts.
 
 ```json
 {
@@ -305,8 +305,10 @@ See [Hugging Face response parsing](https://huggingface.co/docs/transformers/cha
         "path": ".cache/mtmd-embeddings",
         "max_bytes": 1073741824
       },
+      "batch_max_tokens": 1024,
       "image_max_bytes": 20971520,
       "audio_max_bytes": 104857600,
+      "video_max_bytes": 536870912,
       "image_timeout_seconds": 10.0
     }
   }
@@ -317,11 +319,13 @@ See [Hugging Face response parsing](https://huggingface.co/docs/transformers/cha
 | --- | --- |
 | `mmproj_path` | Local multimodal projector path. |
 | `mmproj_from_pretrained` | Hugging Face projector source. |
-| `embedding_cache.path` | Directory for cached image and audio embeddings. |
+| `embedding_cache.path` | Directory for cached image, audio, and video embeddings. |
 | `embedding_cache.max_bytes` | Maximum embedding cache size. |
+| `batch_max_tokens` | Maximum number of media output tokens per MTMD projector-side encode batch. |
 | `image_max_bytes` | Maximum image payload size. |
 | `audio_max_bytes` | Maximum audio payload size. |
-| `image_timeout_seconds` | Timeout for remote image and audio URL fetches. |
+| `video_max_bytes` | Maximum video payload size. |
+| `image_timeout_seconds` | Timeout for remote image, audio, and video URL fetches. |
 
 Send image inputs with OpenAI chat content parts.
 
