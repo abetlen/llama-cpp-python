@@ -179,7 +179,7 @@ if (LLAMA_BUILD)
         # The Python package only ships mtmd as a shared library.
         # Upstream mtmd also defines CLI compatibility wrappers, but those are
         # not installed here and can fail to link in minimal Docker toolchains.
-        foreach(target llama-llava-cli llama-gemma3-cli llama-minicpmv-cli llama-qwen2vl-cli llama-mtmd-debug)
+        foreach(target llama-llava-cli llama-gemma3-cli llama-minicpmv-cli llama-qwen2vl-cli llama-mtmd-cli llama-mtmd-debug)
             if (TARGET ${target})
                 set_target_properties(${target} PROPERTIES EXCLUDE_FROM_ALL TRUE)
             endif()
