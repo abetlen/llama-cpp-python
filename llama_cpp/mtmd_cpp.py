@@ -169,6 +169,12 @@ mtmd_bitmap_lazy_callback = CFUNCTYPE(
     POINTER(c_char_p),
 )
 
+mtmd_helper_post_decode_callback = CFUNCTYPE(
+    c_int,
+    llama_cpp.llama_batch,
+    c_void_p,
+)
+
 
 class mtmd_helper_bitmap_wrapper(Structure):
     """Bitmap wrapper returned by MTMD helper media loaders."""
@@ -860,7 +866,9 @@ def mtmd_helper_eval_chunk_single(
 #                                                 llama_pos n_past,
 #                                                 llama_seq_id seq_id,
 #                                                 int32_t n_batch,
-#                                                 llama_pos * new_n_past);
+#                                                 llama_pos * new_n_past,
+#                                                 mtmd_helper_post_decode_callback callback,
+#                                                 void * user_data);
 @ctypes_function(
     "mtmd_helper_decode_image_chunk",
     [
@@ -872,6 +880,8 @@ def mtmd_helper_eval_chunk_single(
         llama_cpp.llama_seq_id,
         c_int,
         POINTER(llama_cpp.llama_pos),
+        mtmd_helper_post_decode_callback,
+        c_void_p,
     ],
     c_int,
 )
@@ -884,6 +894,8 @@ def mtmd_helper_decode_image_chunk(
     seq_id: llama_cpp.llama_seq_id,
     n_batch: Union[c_int, int],
     new_n_past: "_Pointer[llama_cpp.llama_pos]",
+    callback: Optional[mtmd_helper_post_decode_callback],
+    user_data: c_void_p,
     /,
 ) -> int:
     """Decode a pre-encoded image chunk."""
