@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.30]
+
 - feat: update llama.cpp to ggml-org/llama.cpp@e3a74b299
 - feat: add Pyodide wheel support by @abetlen in #2309
 
