@@ -159,8 +159,8 @@ jobs:
           CIBW_BUILD_VERBOSITY: "1"
           CIBW_REPAIR_WHEEL_COMMAND: ""
           CIBW_BEFORE_TEST: "curl -L --fail --retry 3 -o /tmp/stories260K.gguf https://huggingface.co/ggml-org/models/resolve/main/tinyllamas/stories260K.gguf"
-          CIBW_TEST_COMMAND: "python -c \"from llama_cpp import Llama; llm = Llama(model_path='/tmp/stories260K.gguf', n_ctx=64, n_batch=8, n_threads=1, verbose=False); print('loaded', llm.n_vocab(), llm.n_ctx()); print('generated', llm('Once upon a', max_tokens=1, temperature=0)['choices'][0]['text'])\""
-          CMAKE_ARGS: "-DLLAVA_BUILD=OFF -DLLAMA_WASM_MEM64=OFF -DEMSCRIPTEN_SYSTEM_PROCESSOR=wasm32 -DGGML_NATIVE=OFF -DGGML_OPENMP=OFF -DGGML_METAL=OFF -DGGML_BLAS=OFF -DGGML_CUDA=OFF -DGGML_HIP=OFF -DGGML_VULKAN=OFF -DGGML_OPENCL=OFF -DGGML_RPC=OFF -DLLAMA_CURL=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_TOOLS=OFF -DLLAMA_BUILD_SERVER=OFF"
+          CIBW_TEST_COMMAND: "python -c \"import llama_cpp.mtmd_cpp as mtmd; from llama_cpp import Llama; print('mtmd marker', mtmd.mtmd_default_marker().decode()); llm = Llama(model_path='/tmp/stories260K.gguf', n_ctx=64, n_batch=8, n_threads=1, verbose=False); print('loaded', llm.n_vocab(), llm.n_ctx()); print('generated', llm('Once upon a', max_tokens=1, temperature=0)['choices'][0]['text'])\""
+          CMAKE_ARGS: "-DLLAMA_WASM_MEM64=OFF -DEMSCRIPTEN_SYSTEM_PROCESSOR=wasm32 -DGGML_NATIVE=OFF -DGGML_OPENMP=OFF -DGGML_METAL=OFF -DGGML_BLAS=OFF -DGGML_CUDA=OFF -DGGML_HIP=OFF -DGGML_VULKAN=OFF -DGGML_OPENCL=OFF -DGGML_RPC=OFF -DLLAMA_CURL=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_TOOLS=OFF -DLLAMA_BUILD_SERVER=OFF"
         with:
           output-dir: wheelhouse
 

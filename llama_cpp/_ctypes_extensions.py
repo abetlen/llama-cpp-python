@@ -79,18 +79,21 @@ def load_shared_library(lib_base_name: str, base_path: pathlib.Path):
                 else f"{lib_dir}{os.pathsep}{ld_library_path}"
             )
 
-        if lib_base_name == "llama":
-            for dependency in ("ggml-base", "ggml-cpu", "ggml"):
-                dependency_path = (
-                    base_path / f"lib{dependency}{_EMSCRIPTEN_SIDE_MODULE_SUFFIX}"
-                )
-                if dependency_path.exists():
-                    try:
-                        ctypes.CDLL(str(dependency_path), **cdll_args)  # type: ignore
-                    except Exception as e:
-                        raise RuntimeError(
-                            f"Failed to load shared library '{dependency_path}': {e}"
-                        )
+        emscripten_dependencies = {
+            "llama": ("ggml-base", "ggml-cpu", "ggml"),
+            "mtmd": ("ggml-base", "ggml-cpu", "ggml", "llama"),
+        }
+        for dependency in emscripten_dependencies.get(lib_base_name, ()):
+            dependency_path = (
+                base_path / f"lib{dependency}{_EMSCRIPTEN_SIDE_MODULE_SUFFIX}"
+            )
+            if dependency_path.exists():
+                try:
+                    ctypes.CDLL(str(dependency_path), **cdll_args)  # type: ignore
+                except Exception as e:
+                    raise RuntimeError(
+                        f"Failed to load shared library '{dependency_path}': {e}"
+                    )
 
     # Try to load the shared library, handling potential errors
     for lib_path in lib_paths:

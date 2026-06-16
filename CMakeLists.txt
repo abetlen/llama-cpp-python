@@ -80,7 +80,6 @@ if (LLAMA_BUILD)
             set(CMAKE_SYSTEM_PROCESSOR wasm32 CACHE STRING "Target processor" FORCE)
         endif()
 
-        set(LLAVA_BUILD OFF CACHE BOOL "Build llava shared library and install alongside python package" FORCE)
         set(LLAMA_WASM_MEM64 OFF CACHE BOOL "llama.cpp: enable wasm64 memory" FORCE)
         set(GGML_NATIVE OFF CACHE BOOL "ggml: enable -march=native" FORCE)
         set(GGML_OPENMP OFF CACHE BOOL "ggml: use OpenMP" FORCE)
