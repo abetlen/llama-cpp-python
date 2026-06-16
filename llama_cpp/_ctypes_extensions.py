@@ -19,6 +19,9 @@ from typing import (
 from typing_extensions import TypeAlias
 
 
+_EMSCRIPTEN_SIDE_MODULE_SUFFIX = ".cpython-00-wasm32-emscripten.so"
+
+
 # Load the library
 def load_shared_library(lib_base_name: str, base_path: pathlib.Path):
     """Platform independent shared library loader"""
@@ -26,7 +29,12 @@ def load_shared_library(lib_base_name: str, base_path: pathlib.Path):
     # for llamacpp) and "llama" (default name for this repo)
     lib_paths: List[pathlib.Path] = []
     # Determine the file extension based on the platform
-    if sys.platform.startswith("linux") or sys.platform.startswith("freebsd"):
+    if sys.platform == "emscripten":
+        # Use a CPython-style tag that Pyodide skips during package auto-load.
+        lib_paths += [
+            base_path / f"lib{lib_base_name}{_EMSCRIPTEN_SIDE_MODULE_SUFFIX}",
+        ]
+    elif sys.platform.startswith("linux") or sys.platform.startswith("freebsd"):
         lib_paths += [
             base_path / f"lib{lib_base_name}.so",
         ]
@@ -59,6 +67,33 @@ def load_shared_library(lib_base_name: str, base_path: pathlib.Path):
             os.add_dll_directory(os.path.join(os.environ["HIP_PATH"], "bin"))
             os.add_dll_directory(os.path.join(os.environ["HIP_PATH"], "lib"))
         cdll_args["winmode"] = ctypes.RTLD_GLOBAL
+
+    if sys.platform == "emscripten":
+        cdll_args["mode"] = ctypes.RTLD_GLOBAL
+        lib_dir = str(base_path)
+        ld_library_path = os.environ.get("LD_LIBRARY_PATH", "")
+        if lib_dir not in ld_library_path.split(os.pathsep):
+            os.environ["LD_LIBRARY_PATH"] = (
+                lib_dir
+                if not ld_library_path
+                else f"{lib_dir}{os.pathsep}{ld_library_path}"
+            )
+
+        emscripten_dependencies = {
+            "llama": ("ggml-base", "ggml-cpu", "ggml"),
+            "mtmd": ("ggml-base", "ggml-cpu", "ggml", "llama"),
+        }
+        for dependency in emscripten_dependencies.get(lib_base_name, ()):
+            dependency_path = (
+                base_path / f"lib{dependency}{_EMSCRIPTEN_SIDE_MODULE_SUFFIX}"
+            )
+            if dependency_path.exists():
+                try:
+                    ctypes.CDLL(str(dependency_path), **cdll_args)  # type: ignore
+                except Exception as e:
+                    raise RuntimeError(
+                        f"Failed to load shared library '{dependency_path}': {e}"
+                    )
 
     # Try to load the shared library, handling potential errors
     for lib_path in lib_paths:
