@@ -10,14 +10,22 @@ function(llama_cpp_python_install_target target)
         return()
     endif()
 
-    install(
-        TARGETS ${target}
-        LIBRARY DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/lib
-        RUNTIME DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/lib
-        ARCHIVE DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/lib
-        FRAMEWORK DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/lib
-        RESOURCE DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/lib
-    )
+    if(EMSCRIPTEN)
+        set_target_properties(${target} PROPERTIES
+            OUTPUT_NAME "${target}.cpython-00-wasm32-emscripten"
+        )
+    endif()
+
+    if(NOT EMSCRIPTEN)
+        install(
+            TARGETS ${target}
+            LIBRARY DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/lib
+            RUNTIME DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/lib
+            ARCHIVE DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/lib
+            FRAMEWORK DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/lib
+            RESOURCE DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/lib
+        )
+    endif()
     install(
         TARGETS ${target}
         LIBRARY DESTINATION ${SKBUILD_PLATLIB_DIR}/llama_cpp/lib
@@ -64,6 +72,33 @@ if (LLAMA_BUILD)
 
     # Disable building curl support
     set(LLAMA_CURL OFF CACHE BOOL "llama.cpp: enable curl" FORCE)
+
+    if (EMSCRIPTEN)
+        if (DEFINED EMSCRIPTEN_SYSTEM_PROCESSOR)
+            set(CMAKE_SYSTEM_PROCESSOR ${EMSCRIPTEN_SYSTEM_PROCESSOR} CACHE STRING "Target processor" FORCE)
+        else()
+            set(CMAKE_SYSTEM_PROCESSOR wasm32 CACHE STRING "Target processor" FORCE)
+        endif()
+
+        set(LLAVA_BUILD OFF CACHE BOOL "Build llava shared library and install alongside python package" FORCE)
+        set(LLAMA_WASM_MEM64 OFF CACHE BOOL "llama.cpp: enable wasm64 memory" FORCE)
+        set(GGML_NATIVE OFF CACHE BOOL "ggml: enable -march=native" FORCE)
+        set(GGML_OPENMP OFF CACHE BOOL "ggml: use OpenMP" FORCE)
+        set(GGML_METAL OFF CACHE BOOL "ggml: use Metal" FORCE)
+        set(GGML_BLAS OFF CACHE BOOL "ggml: use BLAS" FORCE)
+        set(GGML_CUDA OFF CACHE BOOL "ggml: use CUDA" FORCE)
+        set(GGML_HIP OFF CACHE BOOL "ggml: use HIP" FORCE)
+        set(GGML_VULKAN OFF CACHE BOOL "ggml: use Vulkan" FORCE)
+        set(GGML_OPENCL OFF CACHE BOOL "ggml: use OpenCL" FORCE)
+        set(GGML_RPC OFF CACHE BOOL "ggml: use RPC" FORCE)
+
+        # Pyodide auto-loads side modules from top-level site-packages/lib
+        # before Python imports run, so keep upstream installs package-local.
+        set(CMAKE_INSTALL_BINDIR llama_cpp/lib CACHE PATH "Install binaries" FORCE)
+        set(CMAKE_INSTALL_INCLUDEDIR llama_cpp/include CACHE PATH "Install headers" FORCE)
+        set(CMAKE_INSTALL_LIBDIR llama_cpp/lib CACHE PATH "Install libraries" FORCE)
+        set(LLAMA_BUILD_COMMON OFF CACHE BOOL "Build llama.cpp common library" FORCE)
+    endif()
 
     # Architecture detection and settings for Apple platforms
     if (APPLE)
