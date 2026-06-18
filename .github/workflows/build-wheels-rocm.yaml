@@ -40,7 +40,7 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends git cmake lsb-release ninja-build patchelf
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           submodules: "recursive"
 
@@ -125,7 +125,7 @@ jobs:
             amdgpu_targets: gfx1150;gfx1151;gfx1200;gfx1201;gfx1100;gfx1101;gfx1102;gfx1030;gfx1031;gfx1032
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           submodules: "recursive"
 
