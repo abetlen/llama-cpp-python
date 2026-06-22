@@ -1,4 +1,5 @@
 import ctypes
+import itertools
 import multiprocessing
 
 import numpy as np
@@ -60,6 +61,14 @@ def test_llama_cpp_tokenization():
 def llama_cpp_model_path():
     repo_id = "lmstudio-community/Qwen3.5-0.8B-GGUF"
     filename = "Qwen3.5-0.8B-Q8_0.gguf"
+    model_path = hf_hub_download(repo_id, filename)
+    return model_path
+
+
+@pytest.fixture
+def llama_cpp_transformer_model_path():
+    repo_id = "ggml-org/models"
+    filename = "tinyllamas/stories15M-q4_0.gguf"
     model_path = hf_hub_download(repo_id, filename)
     return model_path
 
@@ -336,6 +345,285 @@ def test_hybrid_model_prompt_cache_reset(llama_cpp_hybrid_model_path):
         llama_cpp_hybrid_model_path,
         is_recurrent=False,
         is_hybrid=True,
+    )
+
+
+def _create_test_model(model_path):
+    return llama_cpp.Llama(
+        model_path,
+        n_ctx=64,
+        n_batch=64,
+        n_ubatch=64,
+        n_threads=multiprocessing.cpu_count(),
+        n_threads_batch=multiprocessing.cpu_count(),
+        logits_all=False,
+        verbose=False,
+    )
+
+
+def _generate_test_tokens(model, tokens, max_tokens=3):
+    return list(
+        itertools.islice(
+            model.generate(
+                tokens,
+                temp=0.0,
+            ),
+            max_tokens,
+        )
+    )
+
+
+MODEL_CACHE_CASES = (
+    ("llama_cpp_transformer_model_path", False, False),
+    ("llama_cpp_recurrent_model_path", True, False),
+    ("llama_cpp_hybrid_model_path", False, True),
+)
+
+RESTORED_CACHE_CASES = MODEL_CACHE_CASES
+
+
+def _eval_alternate_same_length_prompt(model, tokens, expected_next_token):
+    replacement_tokens = (
+        model.token_eos(),
+        model.token_nl(),
+        0,
+        1,
+        2,
+        model.n_vocab() - 1,
+    )
+
+    for replacement_token in replacement_tokens:
+        alternate_tokens = list(tokens)
+        alternate_tokens[-1] = replacement_token
+        if alternate_tokens == tokens:
+            continue
+
+        model.reset()
+        model.eval(alternate_tokens)
+        if model.sample(temp=0.0, idx=len(tokens) - 1) != expected_next_token:
+            return
+
+    raise AssertionError("failed to find an alternate same-length prompt")
+
+
+def _assert_exact_cached_prompt_reuse_matches_fresh(
+    model_path,
+    *,
+    is_recurrent: bool,
+    is_hybrid: bool,
+):
+    prompt = "The quick brown fox"
+    fresh = _create_test_model(model_path)
+    tokens = fresh.tokenize(prompt.encode(), add_bos=True, special=True)
+
+    assert fresh._is_recurrent is is_recurrent
+    assert fresh._is_hybrid is is_hybrid
+
+    expected_tokens = _generate_test_tokens(fresh, tokens)
+
+    cached = _create_test_model(model_path)
+    assert cached._is_recurrent is is_recurrent
+    assert cached._is_hybrid is is_hybrid
+
+    cached.eval(tokens)
+    assert cached.n_tokens == len(tokens)
+    assert cached.input_ids[: cached.n_tokens].tolist() == tokens
+    assert cached.sample(temp=0.0, idx=len(tokens) - 1) == expected_tokens[0]
+
+    reset_calls = 0
+    original_reset = cached.reset
+
+    def reset_tracker():
+        nonlocal reset_calls
+        reset_calls += 1
+        original_reset()
+
+    cached.reset = reset_tracker
+
+    cached_tokens = _generate_test_tokens(cached, tokens)
+    assert reset_calls == 0
+    assert cached_tokens == expected_tokens
+    assert cached.n_tokens == len(tokens) + len(cached_tokens) - 1
+
+
+def _assert_loaded_exact_cached_prompt_reuse_matches_fresh(
+    model_path,
+    *,
+    is_recurrent: bool,
+    is_hybrid: bool,
+):
+    prompt = "The quick brown fox"
+    fresh = _create_test_model(model_path)
+    tokens = fresh.tokenize(prompt.encode(), add_bos=True, special=True)
+    expected_tokens = _generate_test_tokens(fresh, tokens)
+
+    source = _create_test_model(model_path)
+    assert source._is_recurrent is is_recurrent
+    assert source._is_hybrid is is_hybrid
+
+    source.eval(tokens)
+    state = source.save_state()
+
+    loaded = _create_test_model(model_path)
+    assert loaded._is_recurrent is is_recurrent
+    assert loaded._is_hybrid is is_hybrid
+
+    _eval_alternate_same_length_prompt(
+        loaded,
+        tokens,
+        expected_tokens[0],
+    )
+    loaded.load_state(state)
+
+    assert loaded.n_tokens == len(tokens)
+    assert loaded.input_ids[: loaded.n_tokens].tolist() == tokens
+
+    loaded_tokens = _generate_test_tokens(loaded, tokens)
+    assert loaded_tokens == expected_tokens
+    assert loaded.n_tokens == len(tokens) + len(loaded_tokens) - 1
+
+
+def _assert_ram_cache_exact_prompt_hit_matches_fresh(
+    model_path,
+    *,
+    is_recurrent: bool,
+    is_hybrid: bool,
+):
+    prompt = "The quick brown fox"
+    fresh = _create_test_model(model_path)
+    tokens = fresh.tokenize(prompt.encode(), add_bos=True, special=True)
+    expected = fresh.create_completion(
+        tokens,
+        max_tokens=1,
+        temperature=0.0,
+        seed=1337,
+    )
+
+    cache = llama_cpp.LlamaRAMCache()
+    writer = _create_test_model(model_path)
+    writer.set_cache(cache)
+    writer.create_completion(
+        tokens,
+        max_tokens=1,
+        temperature=0.0,
+        seed=1337,
+    )
+
+    cached = _create_test_model(model_path)
+    assert cached._is_recurrent is is_recurrent
+    assert cached._is_hybrid is is_hybrid
+    cached.set_cache(cache)
+
+    load_state_calls = 0
+    original_load_state = cached.load_state
+
+    def load_state_tracker(state):
+        nonlocal load_state_calls
+        load_state_calls += 1
+        original_load_state(state)
+
+    cached.load_state = load_state_tracker
+
+    actual = cached.create_completion(
+        tokens,
+        max_tokens=1,
+        temperature=0.0,
+        seed=1337,
+    )
+
+    assert load_state_calls == 1
+    assert actual["choices"][0]["text"] == expected["choices"][0]["text"]
+    assert (
+        actual["usage"]["completion_tokens"] == expected["usage"]["completion_tokens"]
+    )
+
+
+def _assert_shorter_prompt_prefix_reuse_matches_fresh(
+    model_path,
+    *,
+    is_recurrent: bool,
+    is_hybrid: bool,
+):
+    prompt = "The quick brown fox"
+    history = " jumps over the lazy dog"
+    fresh = _create_test_model(model_path)
+    tokens = fresh.tokenize(prompt.encode(), add_bos=True, special=True)
+    history_tokens = fresh.tokenize(history.encode(), add_bos=False, special=True)
+    expected_tokens = _generate_test_tokens(fresh, tokens)
+
+    cached = _create_test_model(model_path)
+    assert cached._is_recurrent is is_recurrent
+    assert cached._is_hybrid is is_hybrid
+
+    cached.eval(tokens + history_tokens)
+    assert cached.n_tokens > len(tokens)
+    assert cached.input_ids[: len(tokens)].tolist() == tokens
+
+    cached_tokens = _generate_test_tokens(cached, tokens)
+    assert cached_tokens == expected_tokens
+
+
+@pytest.mark.parametrize(
+    ("model_path_fixture", "is_recurrent", "is_hybrid"), MODEL_CACHE_CASES
+)
+def test_exact_cached_prompt_reuse_matches_fresh(
+    request,
+    model_path_fixture,
+    is_recurrent,
+    is_hybrid,
+):
+    _assert_exact_cached_prompt_reuse_matches_fresh(
+        request.getfixturevalue(model_path_fixture),
+        is_recurrent=is_recurrent,
+        is_hybrid=is_hybrid,
+    )
+
+
+@pytest.mark.parametrize(
+    ("model_path_fixture", "is_recurrent", "is_hybrid"), RESTORED_CACHE_CASES
+)
+def test_loaded_exact_cached_prompt_reuse_matches_fresh(
+    request,
+    model_path_fixture,
+    is_recurrent,
+    is_hybrid,
+):
+    _assert_loaded_exact_cached_prompt_reuse_matches_fresh(
+        request.getfixturevalue(model_path_fixture),
+        is_recurrent=is_recurrent,
+        is_hybrid=is_hybrid,
+    )
+
+
+@pytest.mark.parametrize(
+    ("model_path_fixture", "is_recurrent", "is_hybrid"), RESTORED_CACHE_CASES
+)
+def test_ram_cache_exact_prompt_hit_matches_fresh(
+    request,
+    model_path_fixture,
+    is_recurrent,
+    is_hybrid,
+):
+    _assert_ram_cache_exact_prompt_hit_matches_fresh(
+        request.getfixturevalue(model_path_fixture),
+        is_recurrent=is_recurrent,
+        is_hybrid=is_hybrid,
+    )
+
+
+@pytest.mark.parametrize(
+    ("model_path_fixture", "is_recurrent", "is_hybrid"), MODEL_CACHE_CASES
+)
+def test_shorter_prompt_prefix_reuse_matches_fresh(
+    request,
+    model_path_fixture,
+    is_recurrent,
+    is_hybrid,
+):
+    _assert_shorter_prompt_prefix_reuse_matches_fresh(
+        request.getfixturevalue(model_path_fixture),
+        is_recurrent=is_recurrent,
+        is_hybrid=is_hybrid,
     )
 
 
