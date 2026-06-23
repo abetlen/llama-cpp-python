@@ -62,6 +62,25 @@ def llama_set_embeddings_nextn(
     ...
 
 
+# LLAMA_API void llama_set_nextn_layer_offset(struct llama_context * ctx, int32_t offset);
+@_ctypes_function_from_names(
+    (
+        "llama_set_nextn_layer_offset",
+        "_Z28llama_set_nextn_layer_offsetP13llama_contexti",
+        "?llama_set_nextn_layer_offset@@YAXPEAUllama_context@@H@Z",
+    ),
+    [llama_cpp.llama_context_p_ctypes, ctypes.c_int32],
+    None,
+)
+def llama_set_nextn_layer_offset(
+    ctx: llama_cpp.llama_context_p,
+    offset: Union[ctypes.c_int32, int],
+    /,
+):
+    """Select which appended NextN block the decoder MTP graph runs."""
+    ...
+
+
 # LLAMA_API float * llama_get_embeddings_nextn(struct llama_context * ctx);
 @_ctypes_function_from_names(
     (

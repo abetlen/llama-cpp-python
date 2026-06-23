@@ -20,6 +20,7 @@ from ctypes import (
 )
 import pathlib
 from typing import (
+    Callable,
     Union,
     NewType,
     Optional,
@@ -84,6 +85,8 @@ MTMD_INPUT_CHUNK_TYPE_TEXT = 0
 MTMD_INPUT_CHUNK_TYPE_IMAGE = 1
 MTMD_INPUT_CHUNK_TYPE_AUDIO = 2
 
+mtmd_progress_callback = CFUNCTYPE(c_bool, c_float, c_void_p)
+
 
 # Structures
 class mtmd_context_params(Structure):
@@ -106,6 +109,8 @@ class mtmd_context_params(Structure):
         cb_eval: llama_cpp.ggml_backend_sched_eval_callback
         cb_eval_user_data: c_void_p
         batch_max_tokens: int
+        progress_callback: Callable[[float, c_void_p], bool]
+        progress_callback_user_data: c_void_p
 
     _fields_ = [
         ("use_gpu", c_bool),
@@ -120,6 +125,8 @@ class mtmd_context_params(Structure):
         ("cb_eval", llama_cpp.ggml_backend_sched_eval_callback),
         ("cb_eval_user_data", c_void_p),
         ("batch_max_tokens", c_int),
+        ("progress_callback", mtmd_progress_callback),
+        ("progress_callback_user_data", c_void_p),
     ]
 
 
