@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- feat(example): support chained NextN heads for server MTP drafting
 - feat: update llama.cpp to ggml-org/llama.cpp@92e854ab8
 - fix: preserve recurrent/hybrid model state when the full prompt is already cached by @allthatido and @abetlen in #2306
 
