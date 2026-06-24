@@ -1,0 +1,36 @@
+image:
+  registry: ghcr.io
+  repository: abetlen/llama-cpp-python
+  tag: latest
+
+ports:
+  - name: http
+    containerPort: 8000
+    protocol: TCP
+
+extraVolumes:
+- name: "models"
+  persistentVolumeClaim:
+    claimName: "{{ .Release.Name }}-llama-cpp-python-models"
+
+extraVolumeMounts:
+- name: "models"
+  mountPath: "/models"
+
+envVars:
+- name: MODEL
+  value: "/models/codellama-34b.Q5_K_M.gguf"
+
+initContainers:
+  - name: model-downloader
+    image: netdata/wget
+    command: ["wget"]
+    args: 
+      - https://huggingface.co/TheBloke/CodeLlama-34B-GGUF/resolve/main/codellama-34b.Q5_K_M.gguf
+      - -c
+      - -nc
+      - -P
+      - /models
+    volumeMounts:
+        - name: models
+          mountPath: /models
