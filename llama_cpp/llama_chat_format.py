@@ -3368,10 +3368,19 @@ class MTMDChatHandler:
         message_dict = dict(message)
         content = message_dict.get("content")
         if isinstance(content, list):
-            message_dict["content"] = [
+            converted = [
                 cls._convert_content_part_for_template(part, media_marker)
                 for part in content
             ]
+            if all(
+                isinstance(p, dict) and p.get("type") == "text"
+                for p in converted
+            ):
+                message_dict["content"] = "".join(
+                    p.get("text", "") for p in converted
+                )
+            else:
+                message_dict["content"] = converted
         return message_dict
 
     @staticmethod
