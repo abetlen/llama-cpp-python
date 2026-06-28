@@ -117,6 +117,8 @@ class Llama:
         # Misc
         spm_infill: bool = False,
         verbose: bool = True,
+        cpu_moe: bool = False,
+        n_cpu_moe: int = -1,
         # Extra Params
         **kwargs,  # type: ignore
     ):
