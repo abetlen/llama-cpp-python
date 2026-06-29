@@ -47,6 +47,7 @@ watch:
 nav:
   - "Getting Started": "index.md"
   - "Installation Guides":
+    - "GPU Backends & Build Options": "install/gpu.md"
     - "macOS (Metal)": "install/macos.md"
   - "API Reference": "api-reference.md"
   - "OpenAI Compatible Web Server": "server.md"
