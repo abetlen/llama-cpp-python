@@ -1276,8 +1276,7 @@ def llama_flash_attn_type_name(flash_attn_type: int, /) -> Optional[bytes]:
 # LLAMA_API const char * llama_ftype_name(enum llama_ftype ftype);
 @ctypes_function("llama_ftype_name", [ctypes.c_int], ctypes.c_char_p)
 def llama_ftype_name(ftype: int, /) -> Optional[bytes]:
-    """Get the model file type (quantization) as a string, e.g. "Q8_0" or "Q4_K - Medium"
-    """
+    '''Get the model file type (quantization) as a string, e.g. "Q8_0" or "Q4_K - Medium"'''
     ...
 
 
