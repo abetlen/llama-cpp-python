@@ -1272,6 +1272,14 @@ def llama_flash_attn_type_name(flash_attn_type: int, /) -> Optional[bytes]:
     ...
 
 
+# // Get the model file type (quantization) as a string, e.g. "Q8_0" or "Q4_K - Medium"
+# LLAMA_API const char * llama_ftype_name(enum llama_ftype ftype);
+@ctypes_function("llama_ftype_name", [ctypes.c_int], ctypes.c_char_p)
+def llama_ftype_name(ftype: int, /) -> Optional[bytes]:
+    """Get the model file type as a string."""
+    ...
+
+
 # // Initialize the llama + ggml backend
 # // If numa is true, use NUMA optimizations
 # // Call once at the start of the program
@@ -1907,6 +1915,14 @@ def llama_model_desc(
     /,
 ) -> int:
     """Get a string describing the model type"""
+    ...
+
+
+# // Get the model file type (quantization), e.g. LLAMA_FTYPE_MOSTLY_Q8_0
+# LLAMA_API enum llama_ftype llama_model_ftype(const struct llama_model * model);
+@ctypes_function("llama_model_ftype", [llama_model_p_ctypes], ctypes.c_int)
+def llama_model_ftype(model: llama_model_p, /) -> int:
+    """Get the model file type."""
     ...
 
 
