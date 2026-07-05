@@ -1853,7 +1853,7 @@ def llama_model_meta_count(model: llama_model_p, /) -> int:
 # LLAMA_API const char * llama_model_meta_key_str(enum llama_model_meta_key key);
 @ctypes_function("llama_model_meta_key_str", [ctypes.c_int], ctypes.c_char_p)
 def llama_model_meta_key_str(key: int, /) -> Optional[bytes]:
-    """Get sampling metadata key name. Returns nullptr if the key is invalid"""
+    """Get sampling metadata key name. Returns None if the key is invalid"""
     ...
 
 
