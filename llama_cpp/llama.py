@@ -374,7 +374,10 @@ class Llama:
         self.spm_infill = spm_infill
 
         if not os.path.exists(model_path):
-            raise ValueError(f"Model path does not exist: {model_path}")
+            raise ValueError(
+                f"Model path does not exist: {model_path}. "
+                f"Please verify the path is correct and the GGUF model file is accessible."
+            )
 
         self._model = self._stack.enter_context(
             contextlib.closing(
