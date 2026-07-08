@@ -312,7 +312,7 @@ class Llama:
         self.context_params = llama_cpp.llama_context_default_params()
         self.context_params.n_ctx = n_ctx
         self.context_params.n_batch = self.n_batch
-        self.context_params.n_ubatch = min(self.n_batch, n_ubatch)
+        self.context_params.n_ubatch = n_ubatch
         self.context_params.n_threads = self.n_threads
         self.context_params.n_threads_batch = self.n_threads_batch
         self.context_params.rope_scaling_type = (
@@ -395,7 +395,7 @@ class Llama:
             self.n_batch = min(n_ctx, n_batch)
             self.context_params.n_ctx = self._model.n_ctx_train()
             self.context_params.n_batch = self.n_batch
-            self.context_params.n_ubatch = min(self.n_batch, n_ubatch)
+            self.context_params.n_ubatch = n_ubatch
 
         if embedding:
             self.context_params.n_seq_max = min(
