@@ -311,7 +311,11 @@ class Llama:
         # Context Params
         self.context_params = llama_cpp.llama_context_default_params()
         self.context_params.n_ctx = n_ctx
+        # Fix for issue #1762: ensure n_ubatch is at least n_batch for embedding
+        # When n_batch > 512, n_ubatch must also be increased to avoid crashes
         self.context_params.n_batch = self.n_batch
+        if self.context_params.n_ubatch < n_batch:
+            self.set_n_ubatch(n_batch)
         self.context_params.n_ubatch = min(self.n_batch, n_ubatch)
         self.context_params.n_threads = self.n_threads
         self.context_params.n_threads_batch = self.n_threads_batch
