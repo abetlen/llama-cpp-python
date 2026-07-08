@@ -858,3 +858,12 @@ Any contributions and changes to this package will be made with these goals in m
 ## License
 
 This project is licensed under the terms of the MIT license.
+
+
+## Known Issues and Workarounds
+
+The maintainers are aware of the following issues:
+
+- Issue mentioned in the bug tracker
+- Users should follow the recommended practices
+- See the documentation for more details
