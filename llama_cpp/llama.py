@@ -1098,7 +1098,7 @@ class Llama:
 
         if self.context_params.embeddings is False:
             raise RuntimeError(
-                "Llama model must be created with embedding=True to call this method"
+                "Llama model must be created with embeddings=True to call this method"
             )
 
         if self.verbose:
@@ -2173,7 +2173,7 @@ class Llama:
             yarn_beta_slow=self.context_params.yarn_beta_slow,
             yarn_orig_ctx=self.context_params.yarn_orig_ctx,
             logits_all=self._logits_all,
-            embedding=self.context_params.embeddings,
+            embeddings=self.context_params.embeddings,
             offload_kqv=self.context_params.offload_kqv,
             flash_attn=(
                 self.context_params.flash_attn_type
