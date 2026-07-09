@@ -211,17 +211,6 @@ class Llama:
             embedding = kwargs.pop('embedding')
 
         self._stack = contextlib.ExitStack()
-
-        # Handle deprecated 'embedding' kwarg (singular) as alias for 'embeddings' (plural)
-        if 'embedding' in kwargs:
-            warnings.warn(
-                "The 'embedding' parameter is deprecated. Use 'embeddings' instead. "
-                "Support for 'embedding' will be removed in a future version.",
-                DeprecationWarning,
-                stacklevel=2
-            )
-            embedding = kwargs.pop('embedding')
-
         set_verbose(verbose)
 
         if not Llama.__backend_initialized:
