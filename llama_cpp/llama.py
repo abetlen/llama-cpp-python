@@ -90,7 +90,7 @@ class Llama:
         yarn_beta_slow: float = 1.0,
         yarn_orig_ctx: int = 0,
         logits_all: bool = False,
-        embedding: bool = False,
+        embeddings: bool = False,
         offload_kqv: bool = True,
         flash_attn: bool = False,
         op_offload: Optional[bool] = None,
@@ -208,7 +208,7 @@ class Llama:
                 DeprecationWarning,
                 stacklevel=2
             )
-            embedding = kwargs.pop('embedding')
+            embeddings = kwargs.pop('embedding')
 
         self._stack = contextlib.ExitStack()
         set_verbose(verbose)
@@ -352,7 +352,7 @@ class Llama:
         )
         self.context_params.yarn_orig_ctx = yarn_orig_ctx if yarn_orig_ctx != 0 else 0
         self._logits_all = logits_all if draft_model is None else True
-        self.context_params.embeddings = embedding  # TODO: Rename to embeddings
+        self.context_params.embeddings = embeddings
         self.context_params.offload_kqv = offload_kqv
         self.context_params.flash_attn_type = (
             llama_cpp.LLAMA_FLASH_ATTN_TYPE_ENABLED
@@ -407,7 +407,7 @@ class Llama:
             self.context_params.n_batch = self.n_batch
             self.context_params.n_ubatch = min(self.n_batch, n_ubatch)
 
-        if embedding:
+        if embeddings:
             self.context_params.n_seq_max = min(
                 self.n_batch,
                 llama_cpp.llama_max_parallel_sequences(),
