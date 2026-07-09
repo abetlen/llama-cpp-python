@@ -173,7 +173,7 @@ class Llama:
             yarn_beta_slow: YaRN high correction dim
             yarn_orig_ctx: YaRN original context size
             logits_all: Return logits for all tokens, not just the last token. Must be True for completion to return logprobs.
-            embedding: Embedding mode only.
+            embeddings: Embedding mode only. Must be set to True when using create_embedding() or embed() methods.
             offload_kqv: Offload K, Q, V to GPU.
             flash_attn: Use flash attention.
             op_offload: offload host tensor operations to device
@@ -193,11 +193,22 @@ class Llama:
             spm_infill: Use Suffix/Prefix/Middle pattern for infill (instead of Prefix/Suffix/Middle) as some models prefer this.
 
         Raises:
-            ValueError: If the model path does not exist.
+            ValueError: If model_path is empty/None, or if n_ctx <= 0.
+            TypeError: If model_path is not a string.
 
         Returns:
             A Llama instance.
         """
+        # Parameter validation
+        if not model_path:
+            raise ValueError("model_path cannot be empty or None")
+
+        if not isinstance(model_path, str):
+            raise TypeError("model_path must be a string")
+
+        if n_ctx <= 0:
+            raise ValueError(f"n_ctx must be > 0, got {n_ctx}")
+
         self.verbose = verbose
 
         # Handle deprecated 'embedding' kwarg (singular) as alias for 'embeddings' (plural)
@@ -613,11 +624,16 @@ class Llama:
             special: Whether to tokenize special tokens.
 
         Raises:
+            TypeError: If text is not str or bytes.
             RuntimeError: If the tokenization failed.
 
         Returns:
             A list of tokens.
         """
+        # Type validation
+        if not isinstance(text, (str, bytes)):
+            raise TypeError(f"text must be str or bytes, got {type(text).__name__}")
+
         return self.tokenizer_.tokenize(text, add_bos, special)
 
     def detokenize(
@@ -636,6 +652,13 @@ class Llama:
         Returns:
             The detokenized string.
         """
+        # Type validation
+        if not isinstance(tokens, list):
+            raise TypeError(f"tokens must be a list, got {type(tokens).__name__}")
+
+        if not all(isinstance(t, int) for t in tokens):
+            raise TypeError("all elements in tokens must be integers")
+
         return self.tokenizer_.detokenize(
             tokens, prev_tokens=prev_tokens, special=special
         )
@@ -1873,12 +1896,22 @@ class Llama:
             logit_bias: A logit bias to use.
 
         Raises:
-            ValueError: If the requested tokens exceed the context window.
+            ValueError: If temperature < 0.0, top_p not in [0.0, 1.0], top_k < 0, or if the requested tokens exceed the context window.
             RuntimeError: If the prompt fails to tokenize or the model fails to evaluate the prompt.
 
         Returns:
             Response object containing the generated text.
         """
+        # Parameter validation
+        if temperature < 0.0:
+            raise ValueError(f"temperature must be >= 0.0, got {temperature}")
+
+        if not 0.0 <= top_p <= 1.0:
+            raise ValueError(f"top_p must be in [0.0, 1.0], got {top_p}")
+
+        if top_k < 0:
+            raise ValueError(f"top_k must be >= 0, got {top_k}")
+
         completion_or_chunks = self._create_completion(
             prompt=prompt,
             suffix=suffix,
