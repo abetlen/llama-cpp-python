@@ -3,7 +3,7 @@ name: Wheels Index
 on:
   # Trigger on new release
   workflow_run:
-    workflows: ["Release", "Build Wheels (CUDA)", "Build Wheels (Metal)", "Build Wheels (Vulkan)", "Build Wheels (ROCm)"]
+    workflows: ["Build Release", "Build Wheels (CUDA)", "Build Wheels (Metal)", "Build Wheels (Vulkan)", "Build Wheels (ROCm)"]
     types:
       - completed
 
