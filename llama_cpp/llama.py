@@ -463,6 +463,16 @@ class Llama:
 
         self.chat_format = chat_format
         self.chat_handler = chat_handler
+        # A vision chat handler builds its mtmd/clip context from this model, so
+        # that context must be released before the model itself is freed.  The
+        # handler object can outlive the Llama (callers commonly reuse a single
+        # handler across loads), and it skips re-initialization while mtmd_ctx
+        # is set -- leaving a context bound to an already-freed model behind.
+        # `_stack` unwinds LIFO, so this runs before the model teardown that was
+        # registered earlier in __init__.
+        handler_stack = getattr(chat_handler, "_exit_stack", None)
+        if handler_stack is not None:
+            self._stack.callback(handler_stack.close)
         self._chat_handlers: Dict[
             str, llama_chat_format.LlamaChatCompletionHandler
         ] = {}
