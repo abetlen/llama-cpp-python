@@ -91,6 +91,7 @@ class Llama:
         yarn_orig_ctx: int = 0,
         logits_all: bool = False,
         embedding: bool = False,
+        embeddings: Optional[bool] = None,
         offload_kqv: bool = True,
         flash_attn: bool = False,
         op_offload: Optional[bool] = None,
@@ -173,7 +174,9 @@ class Llama:
             yarn_beta_slow: YaRN high correction dim
             yarn_orig_ctx: YaRN original context size
             logits_all: Return logits for all tokens, not just the last token. Must be True for completion to return logprobs.
-            embedding: Embedding mode only.
+            embedding: Embedding mode only (historical name).
+            embeddings: Alias of ``embedding``. Prefer this spelling; if both are
+                provided they must agree.
             offload_kqv: Offload K, Q, V to GPU.
             flash_attn: Use flash attention.
             op_offload: offload host tensor operations to device
@@ -202,6 +205,34 @@ class Llama:
         self._stack = contextlib.ExitStack()
 
         set_verbose(verbose)
+
+        # Resolve embedding / embeddings. Historical name is ``embedding``;
+        # ``embeddings`` is accepted as an alias. The bare ``**kwargs`` sink
+        # previously swallowed the plural form so failures only appeared later
+        # inside embed() (issue #2210).
+        if embeddings is not None:
+            if not isinstance(embeddings, bool):
+                raise TypeError(
+                    f"embeddings must be a bool, got {type(embeddings).__name__}"
+                )
+            if embedding is True and embeddings is False:
+                raise ValueError(
+                    "Conflicting values for embedding=True and embeddings=False"
+                )
+            # When embeddings is provided, it is authoritative for the plural alias.
+            # If embedding was left at the default False, adopt embeddings.
+            # If embedding is True, require embeddings to also be True (checked above).
+            embedding = embeddings
+
+        if kwargs:
+            unknown = ", ".join(sorted(str(k) for k in kwargs))
+            warnings.warn(
+                f"Llama() got unexpected keyword argument(s): {unknown}. "
+                "These were ignored. If you meant embedding mode, pass "
+                "embedding=True (or embeddings=True).",
+                UserWarning,
+                stacklevel=2,
+            )
 
         if not Llama.__backend_initialized:
             with suppress_stdout_stderr(disable=verbose):
@@ -1088,7 +1119,7 @@ class Llama:
 
         if self.context_params.embeddings is False:
             raise RuntimeError(
-                "Llama model must be created with embedding=True to call this method"
+                "Llama model must be created with embedding=True (or embeddings=True) to call this method"
             )
 
         if self.verbose:

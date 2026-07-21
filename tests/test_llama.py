@@ -653,3 +653,28 @@ def test_real_llama_embeddings(llama_cpp_embedding_model_path):
     repeated_embeddings = model.embed(list(reversed(prompts)))
     assert len(repeated_embeddings) == len(prompts)
     assert all(len(repeated) == len(embedding) for repeated in repeated_embeddings)
+
+
+def test_embeddings_kwarg_alias_and_unknown_kwargs():
+    """embeddings= is accepted; unknown kwargs warn; conflicts raise (issue #2210)."""
+    import warnings
+
+    missing = "/nonexistent/path/to/model.gguf"
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        try:
+            llama_cpp.Llama(model_path=missing, embeddings=True, not_a_real_flag=1)
+        except ValueError as exc:
+            assert "does not exist" in str(exc)
+        else:
+            raise AssertionError("expected ValueError for missing model path")
+        assert any(issubclass(w.category, UserWarning) for w in caught)
+        assert any("not_a_real_flag" in str(w.message) for w in caught)
+
+    try:
+        llama_cpp.Llama(model_path=missing, embedding=True, embeddings=False)
+        raise AssertionError("expected conflicting embedding kwargs ValueError")
+    except ValueError as exc:
+        assert "Conflicting" in str(exc)
+
