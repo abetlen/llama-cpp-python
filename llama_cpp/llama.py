@@ -114,6 +114,9 @@ class Llama:
         # KV cache quantization
         type_k: Optional[int] = None,
         type_v: Optional[int] = None,
+        # Progress callback
+        progress_callback: Optional[Callable[[float, Any], bool]] = None,
+        progress_callback_user_data: Optional[Any] = None,
         # Misc
         spm_infill: bool = False,
         verbose: bool = True,
@@ -190,6 +193,8 @@ class Llama:
             verbose: Print verbose output to stderr.
             type_k: KV cache data type for K (default: f16)
             type_v: KV cache data type for V (default: f16)
+            progress_callback: Optional callback invoked during model loading. Signature: callback(progress: float, user_data: Any) -> bool, progress is a value between 0.0 and 1.0. Returning False aborts model loading
+            progress_callback_user_data: Optional context pointer passed to progress_callback.
             spm_infill: Use Suffix/Prefix/Middle pattern for infill (instead of Prefix/Suffix/Middle) as some models prefer this.
 
         Raises:
@@ -246,6 +251,17 @@ class Llama:
         self.model_params.vocab_only = vocab_only
         self.model_params.use_mmap = use_mmap if lora_path is None else False
         self.model_params.use_mlock = use_mlock
+
+        # Progress callback
+        if progress_callback is not None:
+            self._progress_callback = llama_cpp.llama_progress_callback(
+                progress_callback
+            )
+            self.model_params.progress_callback = self._progress_callback
+        if progress_callback_user_data is not None:
+            self.model_params.progress_callback_user_data = (
+                progress_callback_user_data
+            )
 
         # kv_overrides is the original python dict
         self.kv_overrides = kv_overrides
