@@ -103,8 +103,12 @@ def test_real_model(llama_cpp_model_path):
     assert os.path.exists(llama_cpp_model_path)
 
     params = llama_cpp.llama_model_default_params()
-    params.use_mmap = llama_cpp.llama_supports_mmap()
-    params.use_mlock = llama_cpp.llama_supports_mlock()
+    if llama_cpp.llama_supports_mlock():
+        params.load_mode = llama_cpp.LLAMA_LOAD_MODE_MLOCK
+    elif llama_cpp.llama_supports_mmap():
+        params.load_mode = llama_cpp.LLAMA_LOAD_MODE_MMAP
+    else:
+        params.load_mode = llama_cpp.LLAMA_LOAD_MODE_NONE
     params.check_tensors = False
 
     model = internals.LlamaModel(path_model=llama_cpp_model_path, params=params)

@@ -11030,7 +11030,9 @@ class MTMDProcessor:
                     "multiple videos require MTMD to report frame counts"
                 )
             input_text = mtmd_cpp.mtmd_input_text()
-            input_text.text = prompt.encode("utf-8")
+            input_text_bytes = prompt.encode("utf-8")
+            input_text.text = input_text_bytes
+            input_text.text_len = len(input_text_bytes)
             input_text.add_special = False
             input_text.parse_special = True
             chunks = mtmd_cpp.mtmd_input_chunks_init()
@@ -11609,10 +11611,14 @@ class Model:
             model_params.tensor_split = tensor_split_ref
         if vocab_only is not None:
             model_params.vocab_only = vocab_only
-        if use_mmap is not None:
-            model_params.use_mmap = use_mmap
-        if use_mlock is not None:
-            model_params.use_mlock = use_mlock
+        if use_mlock:
+            model_params.load_mode = llama_cpp.LLAMA_LOAD_MODE_MLOCK
+        elif use_mmap is not None:
+            model_params.load_mode = (
+                llama_cpp.LLAMA_LOAD_MODE_MMAP
+                if use_mmap
+                else llama_cpp.LLAMA_LOAD_MODE_NONE
+            )
 
         kv_overrides_ref = None
         if kv_overrides is not None:

@@ -133,8 +133,15 @@ class mtmd_context_params(Structure):
 class mtmd_input_text(Structure):
     """Text input passed to `mtmd_tokenize`."""
 
+    if TYPE_CHECKING:
+        text: Optional[bytes]
+        text_len: int
+        add_special: bool
+        parse_special: bool
+
     _fields_ = [
         ("text", c_char_p),
+        ("text_len", c_size_t),
         ("add_special", c_bool),
         ("parse_special", c_bool),
     ]
