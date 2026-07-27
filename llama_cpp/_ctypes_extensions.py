@@ -60,12 +60,14 @@ def load_shared_library(lib_base_name: str, base_path: pathlib.Path):
 
     if sys.platform == "win32" and sys.version_info >= (3, 8):
         os.add_dll_directory(str(base_path))
-        if "CUDA_PATH" in os.environ:
-            os.add_dll_directory(os.path.join(os.environ["CUDA_PATH"], "bin"))
-            os.add_dll_directory(os.path.join(os.environ["CUDA_PATH"], "lib"))
-        if "HIP_PATH" in os.environ:
-            os.add_dll_directory(os.path.join(os.environ["HIP_PATH"], "bin"))
-            os.add_dll_directory(os.path.join(os.environ["HIP_PATH"], "lib"))
+        for toolkit_env_var in ("CUDA_PATH", "HIP_PATH"):
+            toolkit_path = os.environ.get(toolkit_env_var)
+            if toolkit_path is None:
+                continue
+            for sub_dir in ("bin", "lib"):
+                full_path = os.path.join(toolkit_path, sub_dir)
+                if os.path.exists(full_path):
+                    os.add_dll_directory(full_path)
         cdll_args["winmode"] = ctypes.RTLD_GLOBAL
 
     if sys.platform == "emscripten":
