@@ -2279,6 +2279,12 @@ class Llama:
 
     def close(self) -> None:
         """Explicitly free the model from memory."""
+        # Clean up chat handler resources (e.g. vision encoder contexts)
+        if self.chat_handler is not None:
+            if hasattr(self.chat_handler, "_exit_stack"):
+                self.chat_handler._exit_stack.close()
+            elif hasattr(self.chat_handler, "close"):
+                self.chat_handler.close()
         self._stack.close()
 
     def __del__(self) -> None:
