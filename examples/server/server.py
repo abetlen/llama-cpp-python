@@ -11312,6 +11312,7 @@ class Model:
                 vocab_only=vocab_only,
                 use_mmap=use_mmap,
                 use_mlock=use_mlock,
+                load_mtp=draft_model == "draft-mtp",
                 kv_overrides=kv_overrides,
             )
         )
@@ -11590,6 +11591,7 @@ class Model:
         vocab_only: Optional[bool],
         use_mmap: Optional[bool],
         use_mlock: Optional[bool],
+        load_mtp: bool,
         kv_overrides: Optional[Dict[str, Union[bool, int, float, str]]],
     ) -> Tuple[Any, Optional[Any], Optional[Any]]:
         model_params = llama_cpp.llama_model_default_params()
@@ -11611,7 +11613,10 @@ class Model:
             model_params.tensor_split = tensor_split_ref
         if vocab_only is not None:
             model_params.vocab_only = vocab_only
-        if use_mlock:
+        model_params.load_mtp = load_mtp
+        if use_mlock and use_mmap is not False:
+            model_params.load_mode = llama_cpp.LLAMA_LOAD_MODE_MMAP_MLOCK
+        elif use_mlock:
             model_params.load_mode = llama_cpp.LLAMA_LOAD_MODE_MLOCK
         elif use_mmap is not None:
             model_params.load_mode = (

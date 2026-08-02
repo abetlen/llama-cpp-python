@@ -521,15 +521,17 @@ LLAMA_SPLIT_MODE_TENSOR = 3
 
 
 # enum llama_load_mode {
-#     LLAMA_LOAD_MODE_NONE      = 0, // no special loading mode
-#     LLAMA_LOAD_MODE_MMAP      = 1, // memory map the model
-#     LLAMA_LOAD_MODE_MLOCK     = 2, // mmap + force system to keep model in RAM rather than swapping or compressing
-#     LLAMA_LOAD_MODE_DIRECT_IO = 3, // use direct I/O if available
+#     LLAMA_LOAD_MODE_NONE       = 0, // no special loading mode
+#     LLAMA_LOAD_MODE_MMAP       = 1, // memory map the model
+#     LLAMA_LOAD_MODE_MLOCK      = 2, // force system to keep model in RAM rather than swapping or compressing
+#     LLAMA_LOAD_MODE_MMAP_MLOCK = 3, // mmap + force system to keep model in RAM rather than swapping or compressing
+#     LLAMA_LOAD_MODE_DIRECT_IO  = 4, // use direct I/O if available
 # };
 LLAMA_LOAD_MODE_NONE = 0
 LLAMA_LOAD_MODE_MMAP = 1
 LLAMA_LOAD_MODE_MLOCK = 2
-LLAMA_LOAD_MODE_DIRECT_IO = 3
+LLAMA_LOAD_MODE_MMAP_MLOCK = 3
+LLAMA_LOAD_MODE_DIRECT_IO = 4
 
 
 # enum llama_context_type {
@@ -829,6 +831,7 @@ class llama_model_imatrix_data(ctypes.Structure):
 #     bool use_extra_bufts; // use extra buffer types (used for weight repacking)
 #     bool no_host;         // bypass host buffer allowing extra buffers to be used
 #     bool no_alloc;        // only load metadata and simulate memory allocations
+#     bool load_mtp;        // whether to load MTP layers
 # };
 class llama_model_params(ctypes.Structure):
     """Parameters for llama_model
@@ -848,7 +851,8 @@ class llama_model_params(ctypes.Structure):
         check_tensors (bool): validate model tensor data
         use_extra_bufts (bool): use extra buffer types (used for weight repacking)
         no_host (bool): bypass host buffer allowing extra buffers to be used
-        no_alloc (bool): only load metadata and simulate memory allocations"""
+        no_alloc (bool): only load metadata and simulate memory allocations
+        load_mtp (bool): whether to load MTP layers"""
 
     if TYPE_CHECKING:
         devices: CtypesArray[ctypes.c_void_p]  # NOTE: unused
@@ -868,6 +872,7 @@ class llama_model_params(ctypes.Structure):
         use_extra_bufts: bool
         no_host: bool
         no_alloc: bool
+        load_mtp: bool
 
     _fields_ = [
         ("devices", ctypes.c_void_p),  # NOTE: unnused
@@ -885,6 +890,7 @@ class llama_model_params(ctypes.Structure):
         ("use_extra_bufts", ctypes.c_bool),
         ("no_host", ctypes.c_bool),
         ("no_alloc", ctypes.c_bool),
+        ("load_mtp", ctypes.c_bool),
     ]
 
 
@@ -3547,6 +3553,20 @@ def llama_vocab_get_add_eos(vocab: llama_vocab_p, /) -> bool: ...
     ctypes.c_bool,
 )
 def llama_vocab_get_add_sep(vocab: llama_vocab_p, /) -> bool: ...
+
+
+# // model-specific suppress tokens (gguf key: tokenizer.ggml.suppress_tokens)
+# LLAMA_API const llama_token * llama_vocab_get_suppress_tokens(const struct llama_vocab * vocab, int32_t * n_suppress_tokens);
+@ctypes_function(
+    "llama_vocab_get_suppress_tokens",
+    [llama_vocab_p_ctypes, ctypes.POINTER(ctypes.c_int32)],
+    ctypes.POINTER(llama_token),
+)
+def llama_vocab_get_suppress_tokens(
+    vocab: llama_vocab_p,
+    n_suppress_tokens: CtypesPointer[ctypes.c_int32],
+    /,
+) -> Optional[CtypesPointer[llama_token]]: ...
 
 
 # LLAMA_API llama_token llama_vocab_fim_pre(const struct llama_vocab * vocab);

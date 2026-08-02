@@ -76,7 +76,9 @@ specified) expect poor results""",
         self.lparams.n_parts = self.params.n_parts
         self.lparams.seed = self.params.seed
         self.lparams.memory_f16 = self.params.memory_f16
-        if self.params.use_mlock:
+        if self.params.use_mmap and self.params.use_mlock:
+            self.lparams.load_mode = llama_cpp.LLAMA_LOAD_MODE_MMAP_MLOCK
+        elif self.params.use_mlock:
             self.lparams.load_mode = llama_cpp.LLAMA_LOAD_MODE_MLOCK
         elif self.params.use_mmap:
             self.lparams.load_mode = llama_cpp.LLAMA_LOAD_MODE_MMAP

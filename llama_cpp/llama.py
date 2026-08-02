@@ -244,8 +244,9 @@ class Llama:
             )  # keep a reference to the array so it is not gc'd
             self.model_params.tensor_split = self._c_tensor_split
         self.model_params.vocab_only = vocab_only
-        if lora_path is not None:
-            self.model_params.load_mode = llama_cpp.LLAMA_LOAD_MODE_NONE
+        use_mmap = use_mmap and lora_path is None
+        if use_mmap and use_mlock:
+            self.model_params.load_mode = llama_cpp.LLAMA_LOAD_MODE_MMAP_MLOCK
         elif use_mlock:
             self.model_params.load_mode = llama_cpp.LLAMA_LOAD_MODE_MLOCK
         elif use_mmap:
@@ -2149,8 +2150,15 @@ class Llama:
             tensor_split=self.tensor_split,
             vocab_only=self.model_params.vocab_only,
             use_mmap=self.model_params.load_mode
-            in (llama_cpp.LLAMA_LOAD_MODE_MMAP, llama_cpp.LLAMA_LOAD_MODE_MLOCK),
-            use_mlock=self.model_params.load_mode == llama_cpp.LLAMA_LOAD_MODE_MLOCK,
+            in (
+                llama_cpp.LLAMA_LOAD_MODE_MMAP,
+                llama_cpp.LLAMA_LOAD_MODE_MMAP_MLOCK,
+            ),
+            use_mlock=self.model_params.load_mode
+            in (
+                llama_cpp.LLAMA_LOAD_MODE_MLOCK,
+                llama_cpp.LLAMA_LOAD_MODE_MMAP_MLOCK,
+            ),
             kv_overrides=self.kv_overrides,
             # Context Params
             seed=self._seed,

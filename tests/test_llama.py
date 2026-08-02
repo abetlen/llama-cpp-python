@@ -103,7 +103,9 @@ def test_real_model(llama_cpp_model_path):
     assert os.path.exists(llama_cpp_model_path)
 
     params = llama_cpp.llama_model_default_params()
-    if llama_cpp.llama_supports_mlock():
+    if llama_cpp.llama_supports_mmap() and llama_cpp.llama_supports_mlock():
+        params.load_mode = llama_cpp.LLAMA_LOAD_MODE_MMAP_MLOCK
+    elif llama_cpp.llama_supports_mlock():
         params.load_mode = llama_cpp.LLAMA_LOAD_MODE_MLOCK
     elif llama_cpp.llama_supports_mmap():
         params.load_mode = llama_cpp.LLAMA_LOAD_MODE_MMAP
