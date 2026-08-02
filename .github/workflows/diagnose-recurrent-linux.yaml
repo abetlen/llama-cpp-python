@@ -9,17 +9,6 @@ on:
 jobs:
   diagnose:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: native-repack
-            cmake-args: -DGGML_NATIVE=ON -DGGML_CPU_REPACK=ON
-          - name: generic-repack
-            cmake-args: -DGGML_NATIVE=OFF -DGGML_CPU_REPACK=ON
-          - name: native-no-repack
-            cmake-args: -DGGML_NATIVE=ON -DGGML_CPU_REPACK=OFF
-    name: ${{ matrix.name }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -39,22 +28,60 @@ jobs:
           sudo apt-get install --yes gdb
 
       - name: Build package
-        env:
-          CMAKE_ARGS: ${{ matrix.cmake-args }}
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
           python -m uv pip install -e '.[all]' --verbose
 
-      - name: Reproduce with native diagnostics
+      - name: Recurrent test alone
         continue-on-error: true
-        run: python tests/diagnose_recurrent_context.py
+        run: |
+          python -m pytest -vv -s \
+            tests/test_llama.py::test_recurrent_model_prompt_cache_reset
 
-      - name: Capture native backtrace
+      - name: Recurrent test after low-level model
+        continue-on-error: true
+        run: |
+          python -m pytest -vv -s \
+            tests/test_llama.py::test_real_model \
+            tests/test_llama.py::test_recurrent_model_prompt_cache_reset
+
+      - name: Recurrent test after high-level model
+        continue-on-error: true
+        run: |
+          python -m pytest -vv -s \
+            tests/test_llama.py::test_real_llama \
+            tests/test_llama.py::test_recurrent_model_prompt_cache_reset
+
+      - name: Recurrent test after repeated-prompt model
+        continue-on-error: true
+        run: |
+          python -m pytest -vv -s \
+            tests/test_llama.py::test_real_llama_repeated_prompt_cache \
+            tests/test_llama.py::test_recurrent_model_prompt_cache_reset
+
+      - name: Reproduce original test sequence
+        continue-on-error: true
+        run: |
+          python -m pytest -vv -s \
+            tests/test_llama.py::test_llama_cpp_version \
+            tests/test_llama.py::test_llama_cpp_tokenization \
+            tests/test_llama.py::test_real_model \
+            tests/test_llama.py::test_real_llama \
+            tests/test_llama.py::test_real_llama_repeated_prompt_cache \
+            tests/test_llama.py::test_recurrent_model_prompt_cache_reset
+
+      - name: Capture original-sequence backtrace
         continue-on-error: true
         run: |
           gdb --batch \
             -ex "set pagination off" \
             -ex run \
             -ex "thread apply all bt" \
-            --args python tests/diagnose_recurrent_context.py
+            --args python -m pytest -vv -s \
+              tests/test_llama.py::test_llama_cpp_version \
+              tests/test_llama.py::test_llama_cpp_tokenization \
+              tests/test_llama.py::test_real_model \
+              tests/test_llama.py::test_real_llama \
+              tests/test_llama.py::test_real_llama_repeated_prompt_cache \
+              tests/test_llama.py::test_recurrent_model_prompt_cache_reset
