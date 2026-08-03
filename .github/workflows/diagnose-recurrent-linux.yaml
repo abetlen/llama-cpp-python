@@ -15,8 +15,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        attempt: [1, 2, 3, 4]
-    name: attempt-${{ matrix.attempt }}
+        include:
+          - name: baseline
+            install_debugger: false
+          - name: baseline-gdb
+            install_debugger: true
+    name: ${{ matrix.name }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -36,10 +40,16 @@ jobs:
       - name: Show runner CPU
         run: lscpu
 
-      - name: Install debugger
+      - name: Show glibc before package installation
+        run: ldd --version
+
+      - name: Install debugger without upgrading installed packages
+        if: matrix.install_debugger
         run: |
-          sudo apt-get update
-          sudo apt-get install --yes gdb
+          sudo apt-get install --yes --no-upgrade gdb
+
+      - name: Show glibc after package installation
+        run: ldd --version
 
       - name: Build package
         run: |
@@ -52,6 +62,7 @@ jobs:
         run: python -m pytest
 
       - name: Capture full-suite backtrace
+        if: matrix.install_debugger
         continue-on-error: true
         run: |
           gdb --batch \
