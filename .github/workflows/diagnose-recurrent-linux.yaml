@@ -11,12 +11,13 @@ env:
 
 jobs:
   diagnose:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        attempt: [1, 2, 3, 4, 5, 6, 7, 8]
-    name: attempt-${{ matrix.attempt }}
+        os: [ubuntu-22.04, ubuntu-24.04]
+        attempt: [1, 2, 3, 4]
+    name: ${{ matrix.os }}-${{ matrix.attempt }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -26,6 +27,7 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
+          cache: pip
 
       - name: Restore model cache
         uses: actions/cache@v5
@@ -36,14 +38,7 @@ jobs:
       - name: Show runner CPU
         run: lscpu
 
-      - name: Show glibc before package installation
-        run: ldd --version
-
-      - name: Install debugger without upgrading installed packages
-        run: |
-          sudo apt-get install --yes --no-install-recommends --no-upgrade gdb
-
-      - name: Show glibc after package installation
+      - name: Show glibc
         run: ldd --version
 
       - name: Build package
@@ -52,17 +47,36 @@ jobs:
           python -m pip install uv
           python -m uv pip install -e '.[all]' --verbose
 
+      - name: Reproduce recurrent context construction
+        id: recurrent
+        continue-on-error: true
+        env:
+          VERBOSE: "1"
+        run: python tests/diagnose_recurrent_context.py
+
       - name: Reproduce full test suite
-        id: reproduce
+        id: suite
         continue-on-error: true
         run: python -m pytest
 
-      - name: Capture full-suite backtrace
-        if: steps.reproduce.outcome == 'failure'
+      - name: Install debugger after failure
+        if: steps.recurrent.outcome == 'failure' || steps.suite.outcome == 'failure'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends --no-upgrade gdb
+
+      - name: Capture recurrent constructor backtrace
+        if: steps.recurrent.outcome == 'failure' || steps.suite.outcome == 'failure'
         continue-on-error: true
+        env:
+          VERBOSE: "1"
         run: |
           gdb --batch \
             -ex "set pagination off" \
             -ex run \
             -ex "thread apply all bt" \
-            --args python -m pytest
+            --args python tests/diagnose_recurrent_context.py
+
+      - name: Fail when a reproduction failed
+        if: steps.recurrent.outcome == 'failure' || steps.suite.outcome == 'failure'
+        run: exit 1
