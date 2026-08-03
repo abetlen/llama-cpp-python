@@ -12,6 +12,11 @@ env:
 jobs:
   diagnose:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        attempt: [1, 2, 3, 4]
+    name: attempt-${{ matrix.attempt }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -42,31 +47,15 @@ jobs:
           python -m pip install uv
           python -m uv pip install -e '.[all]' --verbose
 
-      - name: Construct recurrent context with verbose disabled
+      - name: Reproduce full test suite
         continue-on-error: true
-        env:
-          VERBOSE: "0"
-        run: python tests/diagnose_recurrent_context.py
+        run: python -m pytest
 
-      - name: Construct recurrent context with verbose enabled
+      - name: Capture full-suite backtrace
         continue-on-error: true
-        env:
-          VERBOSE: "1"
-        run: python tests/diagnose_recurrent_context.py
-
-      - name: Run original recurrent test
-        continue-on-error: true
-        run: |
-          python -m pytest -vv -s \
-            tests/test_llama.py::test_recurrent_model_prompt_cache_reset
-
-      - name: Capture verbose-disabled backtrace
-        continue-on-error: true
-        env:
-          VERBOSE: "0"
         run: |
           gdb --batch \
             -ex "set pagination off" \
             -ex run \
             -ex "thread apply all bt" \
-            --args python tests/diagnose_recurrent_context.py
+            --args python -m pytest
