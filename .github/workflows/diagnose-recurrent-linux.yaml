@@ -6,6 +6,9 @@ on:
     branches:
       - test/diagnose-linux-recurrent-abort
 
+env:
+  MODEL_CACHE_KEY: qwen35-q8-mamba130m-q2-falconh1tiny-q2-bge-small-q4
+
 jobs:
   diagnose:
     runs-on: ubuntu-latest
@@ -18,6 +21,12 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
+
+      - name: Restore model cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/huggingface/hub
+          key: ${{ runner.os }}-model-${{ env.MODEL_CACHE_KEY }}
 
       - name: Show runner CPU
         run: lscpu
