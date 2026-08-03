@@ -15,12 +15,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - name: baseline
-            install_debugger: false
-          - name: baseline-gdb
-            install_debugger: true
-    name: ${{ matrix.name }}
+        attempt: [1, 2, 3, 4, 5, 6, 7, 8]
+    name: attempt-${{ matrix.attempt }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -44,9 +40,8 @@ jobs:
         run: ldd --version
 
       - name: Install debugger without upgrading installed packages
-        if: matrix.install_debugger
         run: |
-          sudo apt-get install --yes --no-upgrade gdb
+          sudo apt-get install --yes --no-install-recommends --no-upgrade gdb
 
       - name: Show glibc after package installation
         run: ldd --version
@@ -58,11 +53,12 @@ jobs:
           python -m uv pip install -e '.[all]' --verbose
 
       - name: Reproduce full test suite
+        id: reproduce
         continue-on-error: true
         run: python -m pytest
 
       - name: Capture full-suite backtrace
-        if: matrix.install_debugger
+        if: steps.reproduce.outcome == 'failure'
         continue-on-error: true
         run: |
           gdb --batch \
