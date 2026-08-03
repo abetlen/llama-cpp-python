@@ -309,7 +309,7 @@ def _assert_prompt_cache_reset_handles_history_edit(
         n_threads=multiprocessing.cpu_count(),
         n_threads_batch=multiprocessing.cpu_count(),
         logits_all=False,
-        verbose=True,
+        verbose=False,
     )
 
     assert model._is_recurrent is is_recurrent

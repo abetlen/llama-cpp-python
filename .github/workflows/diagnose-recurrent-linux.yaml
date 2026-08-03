@@ -42,55 +42,31 @@ jobs:
           python -m pip install uv
           python -m uv pip install -e '.[all]' --verbose
 
-      - name: Recurrent test alone
+      - name: Construct recurrent context with verbose disabled
+        continue-on-error: true
+        env:
+          VERBOSE: "0"
+        run: python tests/diagnose_recurrent_context.py
+
+      - name: Construct recurrent context with verbose enabled
+        continue-on-error: true
+        env:
+          VERBOSE: "1"
+        run: python tests/diagnose_recurrent_context.py
+
+      - name: Run original recurrent test
         continue-on-error: true
         run: |
           python -m pytest -vv -s \
             tests/test_llama.py::test_recurrent_model_prompt_cache_reset
 
-      - name: Recurrent test after low-level model
+      - name: Capture verbose-disabled backtrace
         continue-on-error: true
-        run: |
-          python -m pytest -vv -s \
-            tests/test_llama.py::test_real_model \
-            tests/test_llama.py::test_recurrent_model_prompt_cache_reset
-
-      - name: Recurrent test after high-level model
-        continue-on-error: true
-        run: |
-          python -m pytest -vv -s \
-            tests/test_llama.py::test_real_llama \
-            tests/test_llama.py::test_recurrent_model_prompt_cache_reset
-
-      - name: Recurrent test after repeated-prompt model
-        continue-on-error: true
-        run: |
-          python -m pytest -vv -s \
-            tests/test_llama.py::test_real_llama_repeated_prompt_cache \
-            tests/test_llama.py::test_recurrent_model_prompt_cache_reset
-
-      - name: Reproduce original test sequence
-        continue-on-error: true
-        run: |
-          python -m pytest -vv -s \
-            tests/test_llama.py::test_llama_cpp_version \
-            tests/test_llama.py::test_llama_cpp_tokenization \
-            tests/test_llama.py::test_real_model \
-            tests/test_llama.py::test_real_llama \
-            tests/test_llama.py::test_real_llama_repeated_prompt_cache \
-            tests/test_llama.py::test_recurrent_model_prompt_cache_reset
-
-      - name: Capture original-sequence backtrace
-        continue-on-error: true
+        env:
+          VERBOSE: "0"
         run: |
           gdb --batch \
             -ex "set pagination off" \
             -ex run \
             -ex "thread apply all bt" \
-            --args python -m pytest -vv -s \
-              tests/test_llama.py::test_llama_cpp_version \
-              tests/test_llama.py::test_llama_cpp_tokenization \
-              tests/test_llama.py::test_real_model \
-              tests/test_llama.py::test_real_llama \
-              tests/test_llama.py::test_real_llama_repeated_prompt_cache \
-              tests/test_llama.py::test_recurrent_model_prompt_cache_reset
+            --args python tests/diagnose_recurrent_context.py
