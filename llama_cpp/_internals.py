@@ -276,6 +276,8 @@ class LlamaContext:
             self.ctx = None
 
         self._exit_stack.callback(free_ctx)
+        # The native context must be freed before its model.
+        self.model._exit_stack.callback(self.close)
 
     def close(self):
         self._exit_stack.close()

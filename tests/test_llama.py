@@ -161,6 +161,9 @@ def test_real_model(llama_cpp_model_path):
     assert len(output) == 4
     assert output_text
 
+    model.close()
+    assert context.ctx is None
+
 
 def test_real_llama(llama_cpp_model_path):
     model = llama_cpp.Llama(
