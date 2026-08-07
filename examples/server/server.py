@@ -10299,6 +10299,7 @@ class Sampler:
             llama_cpp.llama_sampler_chain_add(
                 self._sampler,
                 llama_cpp.llama_sampler_init_penalties(
+                    n_vocab,
                     64,
                     1.0,
                     frequency_penalty,

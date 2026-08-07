@@ -744,7 +744,7 @@ class Llama:
             sampler.add_custom(apply_func)
 
         sampler.add_penalties(
-            # n_vocab=self._n_vocab,
+            n_vocab=self._n_vocab,
             # special_eos_id=self._token_eos,
             # linefeed_id=self._token_nl,
             penalty_last_n=self.last_n_tokens_size,
