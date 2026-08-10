@@ -10299,6 +10299,7 @@ class Sampler:
             llama_cpp.llama_sampler_chain_add(
                 self._sampler,
                 llama_cpp.llama_sampler_init_penalties(
+                    n_vocab,
                     64,
                     1.0,
                     frequency_penalty,
@@ -11030,7 +11031,9 @@ class MTMDProcessor:
                     "multiple videos require MTMD to report frame counts"
                 )
             input_text = mtmd_cpp.mtmd_input_text()
-            input_text.text = prompt.encode("utf-8")
+            input_text_bytes = prompt.encode("utf-8")
+            input_text.text = input_text_bytes
+            input_text.text_len = len(input_text_bytes)
             input_text.add_special = False
             input_text.parse_special = True
             chunks = mtmd_cpp.mtmd_input_chunks_init()
@@ -11310,6 +11313,7 @@ class Model:
                 vocab_only=vocab_only,
                 use_mmap=use_mmap,
                 use_mlock=use_mlock,
+                load_mtp=draft_model == "draft-mtp",
                 kv_overrides=kv_overrides,
             )
         )
@@ -11588,6 +11592,7 @@ class Model:
         vocab_only: Optional[bool],
         use_mmap: Optional[bool],
         use_mlock: Optional[bool],
+        load_mtp: bool,
         kv_overrides: Optional[Dict[str, Union[bool, int, float, str]]],
     ) -> Tuple[Any, Optional[Any], Optional[Any]]:
         model_params = llama_cpp.llama_model_default_params()
@@ -11609,10 +11614,17 @@ class Model:
             model_params.tensor_split = tensor_split_ref
         if vocab_only is not None:
             model_params.vocab_only = vocab_only
-        if use_mmap is not None:
-            model_params.use_mmap = use_mmap
-        if use_mlock is not None:
-            model_params.use_mlock = use_mlock
+        model_params.load_mtp = load_mtp
+        if use_mlock and use_mmap is not False:
+            model_params.load_mode = llama_cpp.LLAMA_LOAD_MODE_MMAP_MLOCK
+        elif use_mlock:
+            model_params.load_mode = llama_cpp.LLAMA_LOAD_MODE_MLOCK
+        elif use_mmap is not None:
+            model_params.load_mode = (
+                llama_cpp.LLAMA_LOAD_MODE_MMAP
+                if use_mmap
+                else llama_cpp.LLAMA_LOAD_MODE_NONE
+            )
 
         kv_overrides_ref = None
         if kv_overrides is not None:

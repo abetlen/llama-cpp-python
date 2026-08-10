@@ -276,6 +276,8 @@ class LlamaContext:
             self.ctx = None
 
         self._exit_stack.callback(free_ctx)
+        # The native context must be freed before its model.
+        self.model._exit_stack.callback(self.close)
 
     def close(self):
         self._exit_stack.close()
@@ -784,12 +786,14 @@ class LlamaSampler:
 
     def add_penalties(
         self,
+        n_vocab: int,
         penalty_last_n: int,
         penalty_repeat: float,
         penalty_freq: float,
         penalty_present: float,
     ):
         sampler = llama_cpp.llama_sampler_init_penalties(
+            n_vocab,
             penalty_last_n,
             penalty_repeat,
             penalty_freq,
@@ -800,7 +804,6 @@ class LlamaSampler:
     def add_dry(
         self,
         model: LlamaModel,
-        n_ctx_train: int,
         dry_multiplier: float,
         dry_base: float,
         dry_allowed_length: int,
@@ -814,7 +817,6 @@ class LlamaSampler:
 
         sampler = llama_cpp.llama_sampler_init_dry(
             model.vocab,
-            n_ctx_train,
             dry_multiplier,
             dry_base,
             dry_allowed_length,

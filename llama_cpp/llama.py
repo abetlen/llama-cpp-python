@@ -244,8 +244,15 @@ class Llama:
             )  # keep a reference to the array so it is not gc'd
             self.model_params.tensor_split = self._c_tensor_split
         self.model_params.vocab_only = vocab_only
-        self.model_params.use_mmap = use_mmap if lora_path is None else False
-        self.model_params.use_mlock = use_mlock
+        use_mmap = use_mmap and lora_path is None
+        if use_mmap and use_mlock:
+            self.model_params.load_mode = llama_cpp.LLAMA_LOAD_MODE_MMAP_MLOCK
+        elif use_mlock:
+            self.model_params.load_mode = llama_cpp.LLAMA_LOAD_MODE_MLOCK
+        elif use_mmap:
+            self.model_params.load_mode = llama_cpp.LLAMA_LOAD_MODE_MMAP
+        else:
+            self.model_params.load_mode = llama_cpp.LLAMA_LOAD_MODE_NONE
 
         # kv_overrides is the original python dict
         self.kv_overrides = kv_overrides
@@ -737,7 +744,7 @@ class Llama:
             sampler.add_custom(apply_func)
 
         sampler.add_penalties(
-            # n_vocab=self._n_vocab,
+            n_vocab=self._n_vocab,
             # special_eos_id=self._token_eos,
             # linefeed_id=self._token_nl,
             penalty_last_n=self.last_n_tokens_size,
@@ -2142,8 +2149,16 @@ class Llama:
             main_gpu=self.model_params.main_gpu,
             tensor_split=self.tensor_split,
             vocab_only=self.model_params.vocab_only,
-            use_mmap=self.model_params.use_mmap,
-            use_mlock=self.model_params.use_mlock,
+            use_mmap=self.model_params.load_mode
+            in (
+                llama_cpp.LLAMA_LOAD_MODE_MMAP,
+                llama_cpp.LLAMA_LOAD_MODE_MMAP_MLOCK,
+            ),
+            use_mlock=self.model_params.load_mode
+            in (
+                llama_cpp.LLAMA_LOAD_MODE_MLOCK,
+                llama_cpp.LLAMA_LOAD_MODE_MMAP_MLOCK,
+            ),
             kv_overrides=self.kv_overrides,
             # Context Params
             seed=self._seed,

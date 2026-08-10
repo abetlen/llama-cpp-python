@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- feat: update llama.cpp to ggml-org/llama.cpp@936918514
+
 ## [0.3.34]
 
 - feat: update llama.cpp to ggml-org/llama.cpp@e3546c794

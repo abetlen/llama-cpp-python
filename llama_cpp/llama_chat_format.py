@@ -2936,7 +2936,9 @@ class Llava15ChatHandler:
 
             # Create input text structure
             input_text = self._mtmd_cpp.mtmd_input_text()
-            input_text.text = text.encode("utf-8")
+            input_text_bytes = text.encode("utf-8")
+            input_text.text = input_text_bytes
+            input_text.text_len = len(input_text_bytes)
             input_text.add_special = True
             input_text.parse_special = True
 
@@ -3485,7 +3487,9 @@ class MTMDChatHandler:
                 bitmap_cleanup.append(bitmap)
 
             input_text = self._mtmd_cpp.mtmd_input_text()
-            input_text.text = text.encode("utf-8")
+            input_text_bytes = text.encode("utf-8")
+            input_text.text = input_text_bytes
+            input_text.text_len = len(input_text_bytes)
             input_text.add_special = True
             input_text.parse_special = True
 
