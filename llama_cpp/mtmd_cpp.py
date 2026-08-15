@@ -93,6 +93,7 @@ MTMD_INPUT_CHUNK_TYPE_COUNT = 3
 
 MTMD_GEN_AUDIO_TYPE_NONE = 0
 MTMD_GEN_AUDIO_TYPE_QWEN3TTS = 1
+MTMD_GEN_AUDIO_TYPE_POCKETTTS = 2
 
 MTMD_GEN_PROCESS_TYPE_GEN_CODE = 0
 MTMD_GEN_PROCESS_TYPE_GEN_WAV = 1
@@ -193,15 +194,18 @@ class mtmd_caps(Structure):
 # struct mtmd_gen_audio_info {
 #     enum mtmd_gen_audio_type type;
 #     int32_t sample_rate; // in Hz, for example 24000 for qwen3tts
+#     const char * model_variant; // name of the weight variant, can be None if not applicable
 # };
 class mtmd_gen_audio_info(Structure):
     if TYPE_CHECKING:
         type: int
         sample_rate: int
+        model_variant: Optional[bytes]
 
     _fields_ = [
         ("type", c_int),
         ("sample_rate", c_int32),
+        ("model_variant", c_char_p),
     ]
 
 
@@ -213,10 +217,15 @@ class mtmd_gen_audio_info(Structure):
 #     float * embd;   // the hidden state from backbone, must have n_text_embd elements
 #     int32_t top_k;
 #     float   top_p;
+#     uint32_t seed; // UINT32_MAX for random
+#     float    temp; // sampling temperature, or noise scale for flow-matching decoders
 #
 #     // for MTMD_GEN_PROCESS_TYPE_GEN_WAV
+#     // pass either codes (discrete) or feats (continuous), depending on the pipeline
 #     int32_t * codes;
 #     size_t    n_codes;
+#     const float * feats;
+#     size_t        n_feats;
 #     const char * state_data;
 #     size_t       state_size;
 # };
@@ -227,8 +236,12 @@ class mtmd_gen_inp(Structure):
         embd: Optional["_Pointer[c_float]"]
         top_k: int
         top_p: float
+        seed: int
+        temp: float
         codes: Optional["_Pointer[c_int32]"]
         n_codes: int
+        feats: Optional["_Pointer[c_float]"]
+        n_feats: int
         state_data: Optional["_Pointer[c_char]"]
         state_size: int
 
@@ -238,8 +251,12 @@ class mtmd_gen_inp(Structure):
         ("embd", POINTER(c_float)),
         ("top_k", c_int32),
         ("top_p", c_float),
+        ("seed", c_uint32),
+        ("temp", c_float),
         ("codes", POINTER(c_int32)),
         ("n_codes", c_size_t),
+        ("feats", POINTER(c_float)),
+        ("n_feats", c_size_t),
         ("state_data", POINTER(c_char)),
         ("state_size", c_size_t),
     ]
@@ -250,9 +267,12 @@ class mtmd_gen_inp(Structure):
 #
 #     // for MTMD_GEN_PROCESS_TYPE_GEN_CODE
 #     const int32_t * codes;
-#     size_t n_codes;
+#     size_t          n_codes;
+#     const float * feats; // continuous counterpart of codes
+#     size_t        n_feats;
 #     const float * embd; // the generated hidden state, to be fed back to backbone
 #                         // it must have n_text_embd elements
+#     bool is_eos; // only set by pipelines having the EOS head inside mmproj
 #
 #     // for MTMD_GEN_PROCESS_TYPE_GEN_WAV
 #     const float * audio;
@@ -264,7 +284,10 @@ class mtmd_gen_out(Structure):
     if TYPE_CHECKING:
         codes: Optional["_Pointer[c_int32]"]
         n_codes: int
+        feats: Optional["_Pointer[c_float]"]
+        n_feats: int
         embd: Optional["_Pointer[c_float]"]
+        is_eos: bool
         audio: Optional["_Pointer[c_float]"]
         n_samples: int
         state_data: Optional["_Pointer[c_char]"]
@@ -273,7 +296,10 @@ class mtmd_gen_out(Structure):
     _fields_ = [
         ("codes", POINTER(c_int32)),
         ("n_codes", c_size_t),
+        ("feats", POINTER(c_float)),
+        ("n_feats", c_size_t),
         ("embd", POINTER(c_float)),
+        ("is_eos", c_bool),
         ("audio", POINTER(c_float)),
         ("n_samples", c_size_t),
         ("state_data", POINTER(c_char)),
@@ -350,8 +376,9 @@ class mtmd_helper_video_init_params(Structure):
 #     mtmd_bitmap * speaker_ref; // optional, can be NULL
 #     const char * lang; // optional, can be NULL
 #
-#     int32_t top_k;
-#     float   top_p;
+#     int32_t  top_k;
+#     float    top_p;
+#     uint32_t seed; // UINT32_MAX for random (default: random)
 #
 #     enum mtmd_helper_gen_audio_outtype out_type;
 # };
@@ -364,6 +391,7 @@ class mtmd_helper_gen_audio_inp(Structure):
         lang: Optional[bytes]
         top_k: int
         top_p: float
+        seed: int
         out_type: int
 
     _fields_ = [
@@ -374,6 +402,7 @@ class mtmd_helper_gen_audio_inp(Structure):
         ("lang", c_char_p),
         ("top_k", c_int32),
         ("top_p", c_float),
+        ("seed", c_uint32),
         ("out_type", c_int),
     ]
 
@@ -891,6 +920,18 @@ def mtmd_gen_audio_get_info(ctx: mtmd_context_p, /) -> mtmd_gen_audio_info:
     ...
 
 
+# // defaults tuned for the loaded pipeline, callers override only what they care about
+# MTMD_API struct mtmd_gen_inp mtmd_gen_inp_default(const mtmd_context * ctx);
+@ctypes_function(
+    "mtmd_gen_inp_default",
+    [mtmd_context_p_ctypes],
+    mtmd_gen_inp,
+)
+def mtmd_gen_inp_default(ctx: mtmd_context_p, /) -> mtmd_gen_inp:
+    """Get default audio generation input parameters for an MTMD context."""
+    ...
+
+
 # // note: this API is stateless, caller must handle state management and audio frame accumulation
 # MTMD_API int32_t mtmd_gen_audio_process(mtmd_context * ctx,
 #                                 const struct mtmd_gen_inp * inp,
@@ -1303,12 +1344,15 @@ def mtmd_helper_gen_audio_step_prompt(
 
 
 # // generates one frame; must only be called after step_prompt() has returned 0
-# // h_state_out is valid until next step_gen() or reset() call
+# // sampled can be LLAMA_TOKEN_NULL for pipelines with no discrete backbone token
+# // out_stop (optional) is set on end-of-speech, the caller must then stop the loop
+# // h_state_out is valid until next step_gen() or reset() call, None if no frame is generated
 # MTMD_API int32_t mtmd_helper_gen_audio_step_gen(
 #                         mtmd_helper_gen_audio * ctx,
 #                         llama_token sampled,
 #                         const float *  h_state_in,
-#                         const float ** h_state_out);
+#                         const float ** h_state_out,
+#                         bool * out_stop);
 @ctypes_function(
     "mtmd_helper_gen_audio_step_gen",
     [
@@ -1316,6 +1360,7 @@ def mtmd_helper_gen_audio_step_prompt(
         llama_cpp.llama_token,
         POINTER(c_float),
         POINTER(POINTER(c_float)),
+        POINTER(c_bool),
     ],
     c_int32,
 )
@@ -1324,6 +1369,7 @@ def mtmd_helper_gen_audio_step_gen(
     sampled: llama_cpp.llama_token,
     h_state_in: Optional["_Pointer[c_float]"],
     h_state_out: "_Pointer[_Pointer[c_float]]",
+    out_stop: Optional["_Pointer[c_bool]"],
     /,
 ) -> int:
     """Generate one audio frame."""
