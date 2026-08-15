@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- fix(example): retain recurrent state for server MTP rollback
 - feat: update llama.cpp to ggml-org/llama.cpp@adb55e514
 
 ## [0.3.34]
