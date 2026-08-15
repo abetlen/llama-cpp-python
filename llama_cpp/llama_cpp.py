@@ -521,12 +521,14 @@ LLAMA_SPLIT_MODE_TENSOR = 3
 
 
 # enum llama_load_mode {
-#     LLAMA_LOAD_MODE_NONE       = 0, // no special loading mode
-#     LLAMA_LOAD_MODE_MMAP       = 1, // memory map the model
-#     LLAMA_LOAD_MODE_MLOCK      = 2, // force system to keep model in RAM rather than swapping or compressing
-#     LLAMA_LOAD_MODE_MMAP_MLOCK = 3, // mmap + force system to keep model in RAM rather than swapping or compressing
-#     LLAMA_LOAD_MODE_DIRECT_IO  = 4, // use direct I/O if available
+#     LLAMA_LOAD_MODE_AUTO       = -1, // auto-detect based on device capabilities
+#     LLAMA_LOAD_MODE_NONE       =  0, // no special loading mode
+#     LLAMA_LOAD_MODE_MMAP       =  1, // memory map the model
+#     LLAMA_LOAD_MODE_MLOCK      =  2, // force system to keep model in RAM rather than swapping or compressing
+#     LLAMA_LOAD_MODE_MMAP_MLOCK =  3, // mmap + force system to keep model in RAM rather than swapping or compressing
+#     LLAMA_LOAD_MODE_DIRECT_IO  =  4, // use direct I/O if available
 # };
+LLAMA_LOAD_MODE_AUTO = -1
 LLAMA_LOAD_MODE_NONE = 0
 LLAMA_LOAD_MODE_MMAP = 1
 LLAMA_LOAD_MODE_MLOCK = 2
@@ -912,14 +914,15 @@ class llama_sampler_seq_config(ctypes.Structure):
 # // NOTE: changing the default values of parameters marked as [EXPERIMENTAL] may cause crashes or incorrect results in certain configurations
 # //       https://github.com/ggml-org/llama.cpp/pull/7544
 # struct llama_context_params {
-#     uint32_t n_ctx;             // text context, 0 = from model
-#     uint32_t n_batch;           // logical maximum batch size that can be submitted to llama_decode
-#     uint32_t n_ubatch;          // physical maximum batch size
-#     uint32_t n_seq_max;         // max number of sequences (i.e. distinct states for recurrent models)
-#     uint32_t n_rs_seq;          // number of recurrent-state snapshots per seq for rollback (0 = no rollback) [EXPERIMENTAL]
-#     uint32_t n_outputs_max;     // max outputs in a ubatch (0 = n_batch)
-#     int32_t  n_threads;         // number of threads to use for generation
-#     int32_t  n_threads_batch;   // number of threads to use for batch processing
+#     uint32_t n_ctx;                 // text context, 0 = from model
+#     uint32_t n_batch;               // logical maximum batch size that can be submitted to llama_decode
+#     uint32_t n_ubatch;              // physical maximum batch size
+#     uint32_t n_seq_max;             // max number of sequences (i.e. distinct states for recurrent models)
+#     uint32_t n_rs_seq;              // number of recurrent-state snapshots per seq for rollback (0 = no rollback) [EXPERIMENTAL]
+#     uint32_t n_outputs_max;         // max outputs in a ubatch (0 = n_batch)
+#     uint32_t n_outputs_max_per_seq; // max outputs per sequence (0 = n_outputs_max)
+#     int32_t  n_threads;             // number of threads to use for generation
+#     int32_t  n_threads_batch;       // number of threads to use for batch processing
 
 #     enum llama_context_type      ctx_type;          // set the context type (e.g. MTP)
 #     enum llama_rope_scaling_type rope_scaling_type; // RoPE scaling type, from `enum llama_rope_scaling_type`
@@ -978,6 +981,7 @@ class llama_context_params(ctypes.Structure):
         n_seq_max (int): max number of sequences (i.e. distinct states for recurrent models)
         n_rs_seq (int): number of recurrent-state snapshots per sequence for rollback
         n_outputs_max (int): max outputs in a ubatch, 0 = n_batch
+        n_outputs_max_per_seq (int): max outputs per sequence, 0 = n_outputs_max
         n_threads (int): number of threads to use for generation
         n_threads_batch (int): number of threads to use for batch processing
         ctx_type (int): context type, from `enum llama_context_type`
@@ -1017,6 +1021,7 @@ class llama_context_params(ctypes.Structure):
         n_seq_max: int
         n_rs_seq: int
         n_outputs_max: int
+        n_outputs_max_per_seq: int
         n_threads: int
         n_threads_batch: int
         ctx_type: int
@@ -1055,6 +1060,7 @@ class llama_context_params(ctypes.Structure):
         ("n_seq_max", ctypes.c_uint32),
         ("n_rs_seq", ctypes.c_uint32),
         ("n_outputs_max", ctypes.c_uint32),
+        ("n_outputs_max_per_seq", ctypes.c_uint32),
         ("n_threads", ctypes.c_int32),
         ("n_threads_batch", ctypes.c_int32),
         ("ctx_type", ctypes.c_int),
@@ -1232,6 +1238,13 @@ class llama_chat_message(ctypes.Structure):
 # struct llama_adapter_lora;
 llama_adapter_lora_p = ctypes.c_void_p
 llama_adapter_lora_p_ctypes = ctypes.POINTER(ctypes.c_void_p)
+
+
+# LLAMA_API const char * llama_version(void);
+@ctypes_function("llama_version", [], ctypes.c_char_p)
+def llama_version() -> bytes:
+    """Get the llama.cpp version."""
+    ...
 
 
 # // Helpers for getting default parameters
@@ -2891,6 +2904,7 @@ def llama_state_seq_save_file(
 ) -> int: ...
 
 
+# // If tokens_out is None, only the token count is reported through n_token_count_out and no state is loaded
 # LLAMA_API size_t llama_state_seq_load_file(
 #         struct llama_context * ctx,
 #                   const char * filepath,
@@ -3331,6 +3345,9 @@ def llama_get_embeddings_seq(
 
 
 # // Get the backend sampled token for the ith token.
+# // With multiple outputs, sampler state advances when the token is accepted,
+# // not when it is read through this function.
+# // When accepting multiple outputs, accept a contiguous prefix in output order.
 # // Returns LLAMA_TOKEN_NULL if no token was sampled.
 # LLAMA_API llama_token llama_get_sampled_token_ith(struct llama_context * ctx, int32_t i);
 @ctypes_function(
@@ -4317,7 +4334,7 @@ llama_sampler_i_reset = ctypes.CFUNCTYPE(None, llama_sampler_p_ctypes)
 llama_sampler_i_clone = ctypes.CFUNCTYPE(llama_sampler_p_ctypes, llama_sampler_p_ctypes)
 llama_sampler_i_free = ctypes.CFUNCTYPE(None, llama_sampler_p_ctypes)
 llama_sampler_i_backend_init = ctypes.CFUNCTYPE(
-    ctypes.c_bool, llama_sampler_p_ctypes, ctypes.c_void_p
+    ctypes.c_bool, llama_sampler_p_ctypes, ctypes.c_void_p, ctypes.c_uint32
 )
 llama_sampler_i_backend_accept = ctypes.CFUNCTYPE(
     None,
@@ -4334,6 +4351,10 @@ llama_sampler_i_backend_apply = ctypes.CFUNCTYPE(
     ctypes.POINTER(llama_sampler_data),
 )
 llama_sampler_i_backend_set_input = ctypes.CFUNCTYPE(None, llama_sampler_p_ctypes)
+llama_sampler_i_backend_reset = ctypes.CFUNCTYPE(None, llama_sampler_p_ctypes)
+llama_sampler_i_copy_state = ctypes.CFUNCTYPE(
+    None, llama_sampler_p_ctypes, llama_sampler_p_ctypes
+)
 
 llama_sampler_i._fields_ = [
     ("name", llama_sampler_i_name),
@@ -4346,6 +4367,8 @@ llama_sampler_i._fields_ = [
     ("backend_accept", llama_sampler_i_backend_accept),
     ("backend_apply", llama_sampler_i_backend_apply),
     ("backend_set_input", llama_sampler_i_backend_set_input),
+    ("backend_reset", llama_sampler_i_backend_reset),
+    ("copy_state", llama_sampler_i_copy_state),
 ]
 
 
@@ -4420,6 +4443,15 @@ def llama_sampler_reset(smpl: llama_sampler_p, /): ...
     llama_sampler_p_ctypes,
 )
 def llama_sampler_clone(smpl: llama_sampler_p, /) -> llama_sampler_p: ...
+
+
+# LLAMA_API void                   llama_sampler_copy  (const struct llama_sampler * src, struct llama_sampler * dst);
+@ctypes_function(
+    "llama_sampler_copy",
+    [llama_sampler_p_ctypes, llama_sampler_p_ctypes],
+    None,
+)
+def llama_sampler_copy(src: llama_sampler_p, dst: llama_sampler_p, /): ...
 
 
 # // important: do not free if the sampler has been added to a llama_sampler_chain (via llama_sampler_chain_add)
@@ -4835,6 +4867,7 @@ def llama_sampler_get_seed(smpl: llama_sampler_p, /) -> int: ...
 
 
 # /// @details Sample and accept a token from the idx-th output of the last evaluation
+# // For multiple outputs from one sampler, call this function in output order without gaps.
 # LLAMA_API llama_token llama_sampler_sample(struct llama_sampler * smpl, struct llama_context * ctx, int32_t idx);
 @ctypes_function(
     "llama_sampler_sample",
