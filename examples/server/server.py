@@ -11362,6 +11362,11 @@ class Model:
                 "speculative decoding is only supported for attention models"
             )
         n_ctx_train = int(llama_cpp.llama_model_n_ctx_train(llama_model))
+        target_n_rs_seq = (
+            max(1, draft_model_num_pred_tokens)
+            if normalized_draft_model == "draft-mtp"
+            else None
+        )
 
         context_params = self.build_context_params(
             n_ctx=n_ctx if n_ctx is not None else n_ctx_train,
@@ -11389,7 +11394,7 @@ class Model:
             type_k=type_k,
             type_v=type_v,
             kv_unified=kv_unified,
-            n_rs_seq=None,
+            n_rs_seq=target_n_rs_seq,
             ctx_type=None,
         )
         ctx = llama_cpp.llama_init_from_model(llama_model, context_params)
@@ -11418,6 +11423,15 @@ class Model:
             raise RuntimeError(
                 "MTP requires runtime n_batch to fit the pending token plus draft tokens "
                 f"(required {required_mtp_batch}, got {self.n_batch})"
+            )
+        if (
+            target_n_rs_seq is not None
+            and self.exact_checkpoints_only
+            and self.n_rs_seq < target_n_rs_seq
+        ):
+            raise RuntimeError(
+                "MTP requires retained recurrent-state slots for rollback "
+                f"(required {target_n_rs_seq}, got {self.n_rs_seq})"
             )
         self.n_ctx_train = n_ctx_train
         self.n_vocab = int(llama_cpp.llama_vocab_n_tokens(self.vocab))
