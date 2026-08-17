@@ -9,7 +9,6 @@ import random
 import string
 
 from datetime import datetime
-from contextlib import ExitStack
 from typing import (
     Any,
     Dict,
@@ -2779,7 +2778,6 @@ class Llava15ChatHandler:
         self.clip_model_path = clip_model_path
         self.verbose = verbose
         self._mtmd_cpp = mtmd_cpp
-        self._exit_stack = ExitStack()
         self.mtmd_ctx: Optional[mtmd_cpp.mtmd_context_p] = None
 
         if not os.path.exists(clip_model_path):
@@ -2825,7 +2823,7 @@ class Llava15ChatHandler:
                         self._mtmd_cpp.mtmd_free(self.mtmd_ctx)
                         self.mtmd_ctx = None
 
-            self._exit_stack.callback(mtmd_free)
+            llama_model._stack.callback(mtmd_free)
 
     def load_image(self, image_url: str) -> bytes:
         return self._load_image(image_url)
@@ -3278,7 +3276,6 @@ class MTMDChatHandler:
         self.verbose = verbose
         self.use_gpu = use_gpu
         self._mtmd_cpp = mtmd_cpp
-        self._exit_stack = ExitStack()
         self.mtmd_ctx: Optional[mtmd_cpp.mtmd_context_p] = None
 
         if not os.path.exists(clip_model_path):
@@ -3321,7 +3318,7 @@ class MTMDChatHandler:
                         self._mtmd_cpp.mtmd_free(self.mtmd_ctx)
                         self.mtmd_ctx = None
 
-            self._exit_stack.callback(mtmd_free)
+            llama_model._stack.callback(mtmd_free)
 
     def load_image(self, image_url: str) -> bytes:
         return self._load_image(image_url)
