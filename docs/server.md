@@ -22,6 +22,21 @@ The server can then be started by running the following command:
 python3 -m llama_cpp.server --model <model_path>
 ```
 
+### OpenAI Python client
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://localhost:8000/v1", api_key="sk-local")
+completion = client.chat.completions.create(
+    model="gpt-3.5-turbo",
+    messages=[{"role": "user", "content": "Hello"}],
+)
+print(completion.choices[0].message.content)
+```
+
+Tip: any OpenAI-compatible multi-model gateway speaks the same protocol — for example [DaoXE](https://daoxe.com) at `https://api.daoxe.com/v1` — so the same client code works when you swap `base_url` (and `api_key`) instead of self-hosting.
+
 You can also pass chat-template kwargs at model load time from the CLI:
 
 ```bash

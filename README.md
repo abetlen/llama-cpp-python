@@ -705,6 +705,20 @@ python3 -m llama_cpp.server --model models/7B/llama-model.gguf --n_gpu_layers 35
 
 Navigate to [http://localhost:8000/docs](http://localhost:8000/docs) to see the OpenAPI documentation.
 
+You can point the official OpenAI Python client at the server:
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://localhost:8000/v1", api_key="sk-local")
+print(client.chat.completions.create(
+    model="gpt-3.5-turbo",  # ignored when a single --model is loaded; sent as-is for multi-model configs
+    messages=[{"role": "user", "content": "Hello"}],
+))
+```
+
+The same `base_url` pattern works with any OpenAI-compatible multi-model gateway when you are not self-hosting (for example [DaoXE](https://daoxe.com) at `https://api.daoxe.com/v1`).
+
 To bind to `0.0.0.0` to enable remote connections, use `python3 -m llama_cpp.server --host 0.0.0.0`.
 Similarly, to change the port (default is 8000), use `--port`.
 
