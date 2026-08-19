@@ -32,6 +32,7 @@ from pathlib import Path
 
 from .llama_types import *
 from .llama_grammar import LlamaGrammar
+from .llama_grammar import json_schema_to_gbnf
 from .llama_cache import (
     BaseLlamaCache,
     LlamaCache,  # type: ignore
