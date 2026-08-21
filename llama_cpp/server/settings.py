@@ -84,17 +84,30 @@ class ModelSettings(BaseSettings):
         description="The number of threads to use when batch processing. Use -1 for max cpu threads",
     )
     rope_scaling_type: int = Field(
-        default=llama_cpp.LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED
+        default=llama_cpp.LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED,
+        description="RoPE frequency scaling method. Defaults to the type defined by the model (unspecified).",
     )
     rope_freq_base: float = Field(default=0.0, description="RoPE base frequency")
     rope_freq_scale: float = Field(
         default=0.0, description="RoPE frequency scaling factor"
     )
-    yarn_ext_factor: float = Field(default=-1.0)
-    yarn_attn_factor: float = Field(default=1.0)
-    yarn_beta_fast: float = Field(default=32.0)
-    yarn_beta_slow: float = Field(default=1.0)
-    yarn_orig_ctx: int = Field(default=0)
+    yarn_ext_factor: float = Field(
+        default=-1.0,
+        description="YaRN extrapolation mix factor. -1.0 uses the value from the model.",
+    )
+    yarn_attn_factor: float = Field(
+        default=1.0, description="YaRN magnitude scaling factor for attention."
+    )
+    yarn_beta_fast: float = Field(
+        default=32.0, description="YaRN low correction dim (beta fast)."
+    )
+    yarn_beta_slow: float = Field(
+        default=1.0, description="YaRN high correction dim (beta slow)."
+    )
+    yarn_orig_ctx: int = Field(
+        default=0,
+        description="YaRN original context size of the model. 0 uses the model's training context size.",
+    )
     mul_mat_q: bool = Field(
         default=True, description="if true, use experimental mul_mat_q kernels"
     )
