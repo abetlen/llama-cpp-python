@@ -3122,6 +3122,47 @@ class Llava15ChatHandler:
         return _convert_completion_to_chat(completion_or_chunks, stream=stream)
 
     @staticmethod
+    def _validate_image_url(url: str) -> None:
+        """Block requests to private/reserved IP ranges (SSRF prevention)."""
+        import ipaddress
+        import socket
+        from urllib.parse import urlparse
+
+        _BLOCKED_NETWORKS = [
+            ipaddress.ip_network("127.0.0.0/8"),
+            ipaddress.ip_network("10.0.0.0/8"),
+            ipaddress.ip_network("172.16.0.0/12"),
+            ipaddress.ip_network("192.168.0.0/16"),
+            ipaddress.ip_network("169.254.0.0/16"),  # cloud metadata
+            ipaddress.ip_network("100.64.0.0/10"),
+            ipaddress.ip_network("0.0.0.0/8"),
+        ]
+        _BLOCKED_IPV6 = [
+            ipaddress.ip_network("::1/128"),
+            ipaddress.ip_network("fc00::/7"),
+            ipaddress.ip_network("fe80::/10"),
+        ]
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            raise ValueError(f"Unsupported URL scheme for image: {parsed.scheme!r}")
+        if not parsed.hostname:
+            raise ValueError("Image URL has no hostname")
+        try:
+            infos = socket.getaddrinfo(parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80))
+        except socket.gaierror as exc:
+            raise ValueError(f"Cannot resolve image URL hostname {parsed.hostname!r}") from exc
+        for _family, _, _, _, sockaddr in infos:
+            try:
+                addr = ipaddress.ip_address(sockaddr[0])
+                if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped:
+                    addr = addr.ipv4_mapped
+                nets = _BLOCKED_NETWORKS if isinstance(addr, ipaddress.IPv4Address) else _BLOCKED_IPV6
+                if any(addr in net for net in nets):
+                    raise ValueError(f"Image URL resolves to private/reserved address {addr}")
+            except ValueError:
+                raise
+
+    @staticmethod
     def _load_image(image_url: str) -> bytes:
         # TODO: Add Pillow support for other image formats beyond (jpg, png)
         if image_url.startswith("data:"):
@@ -3132,7 +3173,18 @@ class Llava15ChatHandler:
         else:
             import urllib.request
 
-            with urllib.request.urlopen(image_url) as f:
+            Llava15ChatHandler._validate_image_url(image_url)
+            # follow_redirects is True by default in urlopen; use a no-redirect
+            # opener so redirect targets are validated before following.
+            opener = urllib.request.build_opener(urllib.request.HTTPRedirectHandler)
+
+            class _ValidatingRedirectHandler(urllib.request.HTTPRedirectHandler):
+                def redirect_request(self, req, fp, code, msg, headers, newurl):
+                    Llava15ChatHandler._validate_image_url(newurl)
+                    return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+            opener = urllib.request.build_opener(_ValidatingRedirectHandler)
+            with opener.open(image_url) as f:
                 image_bytes = f.read()
                 return image_bytes
 
