@@ -84,7 +84,7 @@ def add_args_from_model(parser: argparse.ArgumentParser, model: Type[BaseModel])
 
     for name, field in model.model_fields.items():
         description = field.description
-        if field.default and description and not field.is_required():
+        if description and not field.is_required() and field.default is not None:
             description += f" (default: {field.default})"
         base_type = (
             _get_base_type(field.annotation) if field.annotation is not None else str

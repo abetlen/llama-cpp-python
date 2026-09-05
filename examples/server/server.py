@@ -10299,6 +10299,7 @@ class Sampler:
             llama_cpp.llama_sampler_chain_add(
                 self._sampler,
                 llama_cpp.llama_sampler_init_penalties(
+                    n_vocab,
                     64,
                     1.0,
                     frequency_penalty,
@@ -11030,7 +11031,9 @@ class MTMDProcessor:
                     "multiple videos require MTMD to report frame counts"
                 )
             input_text = mtmd_cpp.mtmd_input_text()
-            input_text.text = prompt.encode("utf-8")
+            input_text_bytes = prompt.encode("utf-8")
+            input_text.text = input_text_bytes
+            input_text.text_len = len(input_text_bytes)
             input_text.add_special = False
             input_text.parse_special = True
             chunks = mtmd_cpp.mtmd_input_chunks_init()
@@ -11310,6 +11313,7 @@ class Model:
                 vocab_only=vocab_only,
                 use_mmap=use_mmap,
                 use_mlock=use_mlock,
+                load_mtp=draft_model == "draft-mtp",
                 kv_overrides=kv_overrides,
             )
         )
@@ -11358,6 +11362,11 @@ class Model:
                 "speculative decoding is only supported for attention models"
             )
         n_ctx_train = int(llama_cpp.llama_model_n_ctx_train(llama_model))
+        target_n_rs_seq = (
+            max(1, draft_model_num_pred_tokens)
+            if normalized_draft_model == "draft-mtp"
+            else None
+        )
 
         context_params = self.build_context_params(
             n_ctx=n_ctx if n_ctx is not None else n_ctx_train,
@@ -11385,7 +11394,7 @@ class Model:
             type_k=type_k,
             type_v=type_v,
             kv_unified=kv_unified,
-            n_rs_seq=None,
+            n_rs_seq=target_n_rs_seq,
             ctx_type=None,
         )
         ctx = llama_cpp.llama_init_from_model(llama_model, context_params)
@@ -11414,6 +11423,15 @@ class Model:
             raise RuntimeError(
                 "MTP requires runtime n_batch to fit the pending token plus draft tokens "
                 f"(required {required_mtp_batch}, got {self.n_batch})"
+            )
+        if (
+            target_n_rs_seq is not None
+            and self.exact_checkpoints_only
+            and self.n_rs_seq < target_n_rs_seq
+        ):
+            raise RuntimeError(
+                "MTP requires retained recurrent-state slots for rollback "
+                f"(required {target_n_rs_seq}, got {self.n_rs_seq})"
             )
         self.n_ctx_train = n_ctx_train
         self.n_vocab = int(llama_cpp.llama_vocab_n_tokens(self.vocab))
@@ -11588,6 +11606,7 @@ class Model:
         vocab_only: Optional[bool],
         use_mmap: Optional[bool],
         use_mlock: Optional[bool],
+        load_mtp: bool,
         kv_overrides: Optional[Dict[str, Union[bool, int, float, str]]],
     ) -> Tuple[Any, Optional[Any], Optional[Any]]:
         model_params = llama_cpp.llama_model_default_params()
@@ -11609,10 +11628,17 @@ class Model:
             model_params.tensor_split = tensor_split_ref
         if vocab_only is not None:
             model_params.vocab_only = vocab_only
-        if use_mmap is not None:
-            model_params.use_mmap = use_mmap
-        if use_mlock is not None:
-            model_params.use_mlock = use_mlock
+        model_params.load_mtp = load_mtp
+        if use_mlock and use_mmap is not False:
+            model_params.load_mode = llama_cpp.LLAMA_LOAD_MODE_MMAP_MLOCK
+        elif use_mlock:
+            model_params.load_mode = llama_cpp.LLAMA_LOAD_MODE_MLOCK
+        elif use_mmap is not None:
+            model_params.load_mode = (
+                llama_cpp.LLAMA_LOAD_MODE_MMAP
+                if use_mmap
+                else llama_cpp.LLAMA_LOAD_MODE_NONE
+            )
 
         kv_overrides_ref = None
         if kv_overrides is not None:

@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - feat: exposes progress_callback and progress_callback_user_data through the high-level Llama constructor
 
+## [0.3.35]
+
+- feat: update llama.cpp to ggml-org/llama.cpp@4df29be4f
+- fix(example): retain recurrent state for server MTP rollback
+- feat: update llama.cpp to ggml-org/llama.cpp@adb55e514
+- fix(server): show falsey defaults in CLI help by @cupkk in #2355
+- fix: release multimodal contexts when closing Llama by @Anai-Guo in #2343
+
 ## [0.3.34]
 
 - feat: update llama.cpp to ggml-org/llama.cpp@e3546c794
