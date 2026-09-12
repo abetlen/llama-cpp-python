@@ -12,9 +12,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        native: ["ON", "OFF"]
+        trial: [1, 2, 3, 4]
     env:
-      CMAKE_ARGS: -DGGML_NATIVE=${{ matrix.native }}
+      CMAKE_ARGS: -DGGML_NATIVE=ON
     steps:
       - uses: actions/checkout@v6
         with:
@@ -32,5 +32,5 @@ jobs:
         run: |
           python -m pip install uv
           python -m uv pip install --system -e '.[all]' --verbose
-      - name: Test without native stderr capture
-        run: python -m pytest -s -v -x
+      - name: Test with abort diagnostics
+        run: python .github/scripts/diagnose-recurrent.py
