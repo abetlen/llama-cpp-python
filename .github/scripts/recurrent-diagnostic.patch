@@ -1,0 +1,20 @@
+diff --git a/ggml/src/ggml-backend.cpp b/ggml/src/ggml-backend.cpp
+index 6862128e6..6e130c76d 100644
+--- a/ggml/src/ggml-backend.cpp
++++ b/ggml/src/ggml-backend.cpp
+@@ -1291,7 +1291,14 @@ void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct ggml_cgra
+         for (int b = 0; b < sched->n_backends && *cur_backend_id == -1; b++) {
+             ggml_backend_sched_set_if_supported(sched, node, b, cur_backend_id);
+         }
+-        GGML_ASSERT(*cur_backend_id != -1);
++        if (*cur_backend_id == -1) {
++            GGML_ABORT("no backend for %s (%s); src0=%s buffer=%s; src1=%s contiguous=%d",
++                    node->name, ggml_op_name(node->op),
++                    node->src[0] ? node->src[0]->name : "none",
++                    node->src[0] && node->src[0]->buffer ? ggml_backend_buffer_name(node->src[0]->buffer) : "none",
++                    node->src[1] ? node->src[1]->name : "none",
++                    node->src[1] ? ggml_is_contiguous(node->src[1]) : 0);
++        }
+     }
+ 
+     // pass 5: split graph, find tensors that need to be copied

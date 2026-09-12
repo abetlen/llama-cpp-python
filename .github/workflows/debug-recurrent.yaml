@@ -28,9 +28,18 @@ jobs:
           key: ${{ runner.os }}-model-qwen35-q8-mamba130m-q2-falconh1tiny-q2-bge-small-q4
       - name: CPU details
         run: lscpu
+      - name: Add native diagnostics
+        run: git -C vendor/llama.cpp apply "$GITHUB_WORKSPACE/.github/scripts/recurrent-diagnostic.patch"
       - name: Build
         run: |
           python -m pip install uv
-          python -m uv pip install --system -e '.[all]' --verbose
+          python -m uv pip install --system -e '.[all]' --verbose --config-settings=build-dir=build-diagnostic
       - name: Test with abort diagnostics
+        continue-on-error: true
+        run: python .github/scripts/diagnose-recurrent.py
+      - name: Test contiguous projection input fix
+        run: |
+          git -C vendor/llama.cpp apply "$GITHUB_WORKSPACE/.github/scripts/mamba-contiguous.patch"
+          python -m uv pip install --system --reinstall-package llama-cpp-python -e '.[all]' --verbose --config-settings=build-dir=build-diagnostic
+      - name: Verify fixed model
         run: python .github/scripts/diagnose-recurrent.py
