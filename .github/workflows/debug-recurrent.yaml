@@ -1,0 +1,36 @@
+name: Diagnose recurrent context abort
+on:
+  push:
+    branches: [fix/linux-recurrent-context-abort]
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        native: ["ON", "OFF"]
+    env:
+      CMAKE_ARGS: -DGGML_NATIVE=${{ matrix.native }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v5
+        with:
+          path: ~/.cache/huggingface/hub
+          key: ${{ runner.os }}-model-qwen35-q8-mamba130m-q2-falconh1tiny-q2-bge-small-q4
+      - name: CPU details
+        run: lscpu
+      - name: Build
+        run: |
+          python -m pip install uv
+          python -m uv pip install --system -e '.[all]' --verbose
+      - name: Test without native stderr capture
+        run: python -m pytest -s -v -x
