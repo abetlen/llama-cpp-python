@@ -1,0 +1,3 @@
+# file: templates/app.yaml
+
+{{ include "helmet.app" . }}
