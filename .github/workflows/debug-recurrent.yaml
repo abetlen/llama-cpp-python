@@ -12,34 +12,47 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        trial: [1, 2, 3, 4]
+        trial: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
     env:
       CMAKE_ARGS: -DGGML_NATIVE=ON
     steps:
+      - name: Detect AMX host
+        id: amx
+        run: |
+          lscpu
+          if grep -qw amx_int8 /proc/cpuinfo; then
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/checkout@v6
+        if: steps.amx.outputs.available == 'true'
         with:
           submodules: recursive
       - uses: actions/setup-python@v6
+        if: steps.amx.outputs.available == 'true'
         with:
           python-version: "3.12"
       - uses: actions/cache@v5
+        if: steps.amx.outputs.available == 'true'
         with:
           path: ~/.cache/huggingface/hub
           key: ${{ runner.os }}-model-qwen35-q8-mamba130m-q2-falconh1tiny-q2-bge-small-q4
-      - name: CPU details
-        run: lscpu
       - name: Add native diagnostics
+        if: steps.amx.outputs.available == 'true'
         run: git -C vendor/llama.cpp apply "$GITHUB_WORKSPACE/.github/scripts/recurrent-diagnostic.patch"
       - name: Build
+        if: steps.amx.outputs.available == 'true'
         run: |
           python -m pip install uv
           python -m uv pip install --system -e '.[all]' --verbose --config-settings=build-dir=build-diagnostic
       - name: Test with abort diagnostics
+        if: steps.amx.outputs.available == 'true'
         continue-on-error: true
         run: python .github/scripts/diagnose-recurrent.py
       - name: Test contiguous projection input fix
+        if: steps.amx.outputs.available == 'true'
         run: |
           git -C vendor/llama.cpp apply "$GITHUB_WORKSPACE/.github/scripts/mamba-contiguous.patch"
           python -m uv pip install --system --reinstall-package llama-cpp-python -e '.[all]' --verbose --config-settings=build-dir=build-diagnostic
       - name: Verify fixed model
+        if: steps.amx.outputs.available == 'true'
         run: python .github/scripts/diagnose-recurrent.py
