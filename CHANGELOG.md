@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- feat: exposes progress_callback and progress_callback_user_data through the high-level Llama constructor
 - feat: update llama.cpp to ggml-org/llama.cpp@v0.4.0
 
 ## [0.3.35]
