@@ -162,13 +162,13 @@ LLAMA_FILE_MAGIC_GGSQ = 0x67677371
 
 # define LLAMA_SESSION_MAGIC   LLAMA_FILE_MAGIC_GGSN
 LLAMA_SESSION_MAGIC = LLAMA_FILE_MAGIC_GGSN
-# define LLAMA_SESSION_VERSION 9
-LLAMA_SESSION_VERSION = 9
+# define LLAMA_SESSION_VERSION 10
+LLAMA_SESSION_VERSION = 10
 
 # define LLAMA_STATE_SEQ_MAGIC   LLAMA_FILE_MAGIC_GGSQ
 LLAMA_STATE_SEQ_MAGIC = LLAMA_FILE_MAGIC_GGSQ
-# define LLAMA_STATE_SEQ_VERSION 2
-LLAMA_STATE_SEQ_VERSION = 2
+# define LLAMA_STATE_SEQ_VERSION 3
+LLAMA_STATE_SEQ_VERSION = 3
 
 # struct llama_vocab;
 llama_vocab_p = NewType("llama_vocab_p", int)
@@ -536,6 +536,16 @@ LLAMA_LOAD_MODE_MMAP_MLOCK = 3
 LLAMA_LOAD_MODE_DIRECT_IO = 4
 
 
+# enum llama_lazy_mode {
+#     LLAMA_LAZY_MODE_OFF  = 0, // always read the whole tensor up front
+#     LLAMA_LAZY_MODE_AUTO = 1, // lazy only for marked tensors larger than 4 GiB (requires mmap)
+#     LLAMA_LAZY_MODE_ON   = 2, // read the rows of tensors marked by the arch on demand (requires mmap)
+# };
+LLAMA_LAZY_MODE_OFF = 0
+LLAMA_LAZY_MODE_AUTO = 1
+LLAMA_LAZY_MODE_ON = 2
+
+
 # enum llama_context_type {
 #     LLAMA_CONTEXT_TYPE_DEFAULT = 0,
 #     LLAMA_CONTEXT_TYPE_MTP     = 1,
@@ -809,6 +819,8 @@ class llama_model_imatrix_data(ctypes.Structure):
 #     enum llama_split_mode split_mode; // how to split the model across multiple GPUs
 #     enum llama_load_mode  load_mode;  // how to load the model
 
+#     enum llama_lazy_mode lazy_mode; // on-demand reading of tensors marked by the arch
+
 #     // the GPU that is used for the entire model when split_mode is LLAMA_SPLIT_MODE_NONE
 #     int32_t main_gpu;
 
@@ -844,6 +856,7 @@ class llama_model_params(ctypes.Structure):
         n_gpu_layers (int): number of layers to store in VRAM, a negative value means all layers
         split_mode (int): how to split the model across multiple GPUs
         load_mode (int): how to load the model
+        lazy_mode (int): on-demand reading of tensors marked by the arch
         main_gpu (int): the GPU that is used for the entire model when split_mode is LLAMA_SPLIT_MODE_NONE
         tensor_split (ctypes.Array[ctypes.ctypes.c_float]): proportion of the model (layers or rows) to offload to each GPU, size: llama_max_devices()
         progress_callback (llama_progress_callback): called with a progress value between 0.0 and 1.0. Pass NULL to disable. If the provided progress_callback returns true, model loading continues. If it returns false, model loading is immediately aborted.
@@ -864,6 +877,7 @@ class llama_model_params(ctypes.Structure):
         n_gpu_layers: int
         split_mode: int
         load_mode: int
+        lazy_mode: int
         main_gpu: int
         tensor_split: CtypesArray[ctypes.c_float]
         progress_callback: Callable[[float, ctypes.c_void_p], bool]
@@ -882,6 +896,7 @@ class llama_model_params(ctypes.Structure):
         ("n_gpu_layers", ctypes.c_int32),
         ("split_mode", ctypes.c_int),
         ("load_mode", ctypes.c_int),
+        ("lazy_mode", ctypes.c_int),
         ("main_gpu", ctypes.c_int32),
         ("tensor_split", ctypes.POINTER(ctypes.c_float)),
         ("progress_callback", llama_progress_callback),
@@ -1126,6 +1141,7 @@ It might not exist for progress report where '.' is output repeatedly."""
 #     const struct llama_model_kv_override * kv_overrides;     // pointer to kv overrides
 #     const struct llama_model_tensor_override * tt_overrides; // pointer to tensor overrides
 #     const int32_t * prune_layers;                            // pointer to layer indices to prune
+#     size_t max_buf_size;                                     // max bytes of tensor rows kept in memory at once, 0 = default (8 GiB)
 # } llama_model_quantize_params;
 class llama_model_quantize_params(ctypes.Structure):
     """Parameters for llama_model_quantize
@@ -1145,6 +1161,7 @@ class llama_model_quantize_params(ctypes.Structure):
         kv_overrides (ctypes.Array[llama_model_kv_override]): pointer to kv overrides
         tt_overrides (ctypes.Array[llama_model_tensor_override]): pointer to tensor overrides
         prune_layers (ctypes.Array[ctypes.c_int32]): pointer to layer indices to prune
+        max_buf_size (int): max bytes of tensor rows kept in memory at once, 0 = default (8 GiB)
     """
 
     if TYPE_CHECKING:
@@ -1162,6 +1179,7 @@ class llama_model_quantize_params(ctypes.Structure):
         kv_overrides: CtypesPointer[llama_model_kv_override]
         tt_overrides: CtypesPointer[llama_model_tensor_override]
         prune_layers: CtypesPointer[ctypes.c_int32]
+        max_buf_size: int
 
     _fields_ = [
         ("nthread", ctypes.c_int32),
@@ -1178,6 +1196,7 @@ class llama_model_quantize_params(ctypes.Structure):
         ("kv_overrides", ctypes.POINTER(llama_model_kv_override)),
         ("tt_overrides", ctypes.POINTER(llama_model_tensor_override)),
         ("prune_layers", ctypes.POINTER(ctypes.c_int32)),
+        ("max_buf_size", ctypes.c_size_t),
     ]
 
 

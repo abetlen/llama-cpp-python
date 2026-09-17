@@ -114,6 +114,7 @@ class mtmd_context_params(Structure):
 
     if TYPE_CHECKING:
         use_gpu: bool
+        device: c_void_p
         print_timings: bool
         n_threads: int
         image_marker: Optional[bytes]
@@ -130,6 +131,7 @@ class mtmd_context_params(Structure):
 
     _fields_ = [
         ("use_gpu", c_bool),
+        ("device", c_void_p),
         ("print_timings", c_bool),
         ("n_threads", c_int),
         ("image_marker", c_char_p),
@@ -160,6 +162,24 @@ class mtmd_input_text(Structure):
         ("text_len", c_size_t),
         ("add_special", c_bool),
         ("parse_special", c_bool),
+    ]
+
+
+# struct mtmd_input_part {
+#     // only text or bitmap can be set, not both
+#     const struct mtmd_input_text * text;
+#     const struct mtmd_bitmap * bitmap;
+# };
+class mtmd_input_part(Structure):
+    """An input part with only text or bitmap set, not both."""
+
+    if TYPE_CHECKING:
+        text: _Pointer[mtmd_input_text]
+        bitmap: Optional[mtmd_bitmap_p]
+
+    _fields_ = [
+        ("text", POINTER(mtmd_input_text)),
+        ("bitmap", mtmd_bitmap_p_ctypes),
     ]
 
 
@@ -365,6 +385,17 @@ class mtmd_helper_video_init_params(Structure):
         ("ffmpeg_bin_dir", c_char_p),
         ("timestamp_interval_ms", c_int64),
     ]
+
+
+# // opt for mtmd_helper_bitmap_init_from_*()
+# struct mtmd_helper_init_opt {
+#     struct mtmd_helper_video_init_params video_params;
+# };
+class mtmd_helper_init_opt(Structure):
+    if TYPE_CHECKING:
+        video_params: mtmd_helper_video_init_params
+
+    _fields_ = [("video_params", mtmd_helper_video_init_params)]
 
 
 # struct mtmd_helper_gen_audio_inp {
@@ -588,7 +619,15 @@ def mtmd_bitmap_set_id(bitmap: mtmd_bitmap_p, id: Optional[bytes], /):
     ...
 
 
-# MTMD_API mtmd_bitmap * mtmd_bitmap_init_lazy(mtmd_context * ctx,
+# // if true, this bitmap can be merged (temporal merge) with an adjacent mergeable bitmap by certain video input models
+# MTMD_API void mtmd_bitmap_set_mergeable(mtmd_bitmap * bitmap, bool mergeable);
+@ctypes_function("mtmd_bitmap_set_mergeable", [mtmd_bitmap_p_ctypes, c_bool], None)
+def mtmd_bitmap_set_mergeable(bitmap: mtmd_bitmap_p, mergeable: bool, /):
+    """Allow temporal merging with an adjacent mergeable bitmap."""
+    ...
+
+
+# MTMD_API mtmd_bitmap * mtmd_bitmap_init_lazy(const mtmd_context * ctx,
 #                                              const char * id,
 #                                              void * user_data,
 #                                              mtmd_bitmap_lazy_callback callback);
@@ -634,10 +673,10 @@ def mtmd_input_chunks_get(
 ) -> Optional[mtmd_input_chunk_p]: ...
 
 
-# MTMD_API int32_t mtmd_tokenize(mtmd_context * ctx,
+# MTMD_API int32_t mtmd_tokenize(const mtmd_context * ctx,
 #                                mtmd_input_chunks * output,
 #                                const mtmd_input_text * text,
-#                                const mtmd_bitmap ** bitmaps,
+#                                const mtmd_bitmap * const * bitmaps,
 #                                size_t n_bitmaps);
 @ctypes_function(
     "mtmd_tokenize",
@@ -658,6 +697,40 @@ def mtmd_tokenize(
     n_bitmaps: Union[c_size_t, int],
     /,
 ) -> int: ...
+
+
+# // same as mtmd_tokenize(), but takes an array of mtmd_input_part
+# // use cases:
+# // - when you don't want to use media markers (they will be tokenized as normal text)
+# // - when you want to control parse_special for each text part
+# // note: per-part add_special will be ignored
+# // return 1 if a part has both text and bitmap set (or neither)
+# MTMD_API int32_t mtmd_tokenize_from_parts(const mtmd_context * ctx,
+#                                          mtmd_input_chunks * output,
+#                                          const mtmd_input_part * const * parts,
+#                                          size_t n_parts,
+#                                          bool add_special);
+@ctypes_function(
+    "mtmd_tokenize_from_parts",
+    [
+        mtmd_context_p_ctypes,
+        mtmd_input_chunks_p_ctypes,
+        POINTER(POINTER(mtmd_input_part)),
+        c_size_t,
+        c_bool,
+    ],
+    c_int32,
+)
+def mtmd_tokenize_from_parts(
+    ctx: mtmd_context_p,
+    output: mtmd_input_chunks_p,
+    parts: CtypesArray[POINTER(mtmd_input_part)],
+    n_parts: Union[c_size_t, int],
+    add_special: bool,
+    /,
+) -> int:
+    """Tokenize text and bitmap parts without substituting media markers."""
+    ...
 
 
 # MTMD_API size_t mtmd_input_chunk_get_n_tokens(const mtmd_input_chunk * chunk);
@@ -723,6 +796,20 @@ def mtmd_input_chunk_copy(chunk: mtmd_input_chunk_p, /) -> Optional[mtmd_input_c
 @ctypes_function("mtmd_input_chunk_free", [mtmd_input_chunk_p_ctypes], None)
 def mtmd_input_chunk_free(chunk: mtmd_input_chunk_p, /):
     """Free an owned input chunk."""
+    ...
+
+
+# // similar to mtmd_input_chunk_copy, but returns a placeholder chunk
+# MTMD_API mtmd_input_chunk * mtmd_input_chunk_get_placeholder(const mtmd_input_chunk * chunk);
+@ctypes_function(
+    "mtmd_input_chunk_get_placeholder",
+    [mtmd_input_chunk_p_ctypes],
+    mtmd_input_chunk_p_ctypes,
+)
+def mtmd_input_chunk_get_placeholder(
+    chunk: mtmd_input_chunk_p, /
+) -> Optional[mtmd_input_chunk_p]:
+    """Like mtmd_input_chunk_copy, but returns a placeholder chunk."""
     ...
 
 
@@ -963,7 +1050,7 @@ def mtmd_test_create_input_chunks() -> Optional[mtmd_input_chunks_p]:
 ################################################
 
 
-# MTMD_API bool mtmd_helper_support_video(mtmd_context * ctx);
+# MTMD_API bool mtmd_helper_support_video(const mtmd_context * ctx);
 @ctypes_function(
     "mtmd_helper_support_video",
     [mtmd_context_p_ctypes],
@@ -974,30 +1061,57 @@ def mtmd_helper_support_video(ctx: mtmd_context_p, /) -> bool:
     ...
 
 
-# MTMD_API struct mtmd_helper_bitmap_wrapper mtmd_helper_bitmap_init_from_file(mtmd_context * ctx, const char * fname, bool placeholder);
+# MTMD_API struct mtmd_helper_init_opt mtmd_helper_init_opt_default(void);
+@ctypes_function("mtmd_helper_init_opt_default", [], mtmd_helper_init_opt)
+def mtmd_helper_init_opt_default() -> mtmd_helper_init_opt:
+    """Get default options for initializing media from files or buffers."""
+    ...
+
+
+# MTMD_API struct mtmd_helper_bitmap_wrapper mtmd_helper_bitmap_init_from_file(
+#                     const mtmd_context * ctx,
+#                     const char * fname,
+#                     bool placeholder,
+#                     struct mtmd_helper_init_opt opt);
 @ctypes_function(
     "mtmd_helper_bitmap_init_from_file",
-    [mtmd_context_p_ctypes, c_char_p, c_bool],
+    [mtmd_context_p_ctypes, c_char_p, c_bool, mtmd_helper_init_opt],
     mtmd_helper_bitmap_wrapper,
 )
 def mtmd_helper_bitmap_init_from_file_wrapper(
-    ctx: mtmd_context_p, fname: bytes, placeholder: Union[c_bool, bool], /
+    ctx: mtmd_context_p,
+    fname: bytes,
+    placeholder: Union[c_bool, bool],
+    opt: mtmd_helper_init_opt,
+    /,
 ) -> mtmd_helper_bitmap_wrapper:
     """Initialize an MTMD bitmap wrapper from a file."""
     ...
 
 
 def mtmd_helper_bitmap_init_from_file(
-    ctx: mtmd_context_p, fname: bytes, placeholder: Union[c_bool, bool], /
+    ctx: mtmd_context_p,
+    fname: bytes,
+    placeholder: Union[c_bool, bool],
+    opt: Optional[mtmd_helper_init_opt] = None,
+    /,
 ) -> Optional[mtmd_bitmap_p]:
     """Initialize an MTMD bitmap from a file."""
-    return mtmd_helper_bitmap_init_from_file_wrapper(ctx, fname, placeholder).bitmap
+    if opt is None:
+        opt = mtmd_helper_init_opt_default()
+    return mtmd_helper_bitmap_init_from_file_wrapper(
+        ctx, fname, placeholder, opt
+    ).bitmap
 
 
-# MTMD_API struct mtmd_helper_bitmap_wrapper mtmd_helper_bitmap_init_from_buf(mtmd_context * ctx, const unsigned char * buf, size_t len, bool placeholder);
+# MTMD_API struct mtmd_helper_bitmap_wrapper mtmd_helper_bitmap_init_from_buf(
+#                     const mtmd_context * ctx,
+#                     const unsigned char * buf, size_t len,
+#                     bool placeholder,
+#                     struct mtmd_helper_init_opt opt);
 @ctypes_function(
     "mtmd_helper_bitmap_init_from_buf",
-    [mtmd_context_p_ctypes, POINTER(c_uint8), c_size_t, c_bool],
+    [mtmd_context_p_ctypes, POINTER(c_uint8), c_size_t, c_bool, mtmd_helper_init_opt],
     mtmd_helper_bitmap_wrapper,
 )
 def mtmd_helper_bitmap_init_from_buf_wrapper(
@@ -1005,6 +1119,7 @@ def mtmd_helper_bitmap_init_from_buf_wrapper(
     buf: CtypesArray[c_uint8],
     length: Union[c_size_t, int],
     placeholder: Union[c_bool, bool],
+    opt: mtmd_helper_init_opt,
     /,
 ) -> mtmd_helper_bitmap_wrapper: ...
 
@@ -1014,11 +1129,14 @@ def mtmd_helper_bitmap_init_from_buf(
     buf: CtypesArray[c_uint8],
     length: Union[c_size_t, int],
     placeholder: Union[c_bool, bool],
+    opt: Optional[mtmd_helper_init_opt] = None,
     /,
 ) -> Optional[mtmd_bitmap_p]:
     """Initialize an MTMD bitmap from a buffer."""
+    if opt is None:
+        opt = mtmd_helper_init_opt_default()
     return mtmd_helper_bitmap_init_from_buf_wrapper(
-        ctx, buf, length, placeholder
+        ctx, buf, length, placeholder, opt
     ).bitmap
 
 
@@ -1178,7 +1296,7 @@ def mtmd_helper_video_init_params_default() -> mtmd_helper_video_init_params:
 
 
 # MTMD_API mtmd_helper_video * mtmd_helper_video_init(
-#                     struct mtmd_context * mctx,
+#                     const struct mtmd_context * mctx,
 #                     const char * path,
 #                     struct mtmd_helper_video_init_params params);
 @ctypes_function(
@@ -1197,7 +1315,7 @@ def mtmd_helper_video_init(
 
 
 # MTMD_API mtmd_helper_video * mtmd_helper_video_init_from_buf(
-#                     struct mtmd_context * mctx,
+#                     const struct mtmd_context * mctx,
 #                     const unsigned char * buf, size_t len,
 #                     struct mtmd_helper_video_init_params params);
 @ctypes_function(
@@ -1257,7 +1375,7 @@ def mtmd_helper_video_read_next(
 
 
 # // return true if model can be used for chat
-# MTMD_API bool mtmd_helper_model_can_chat(struct llama_context * lctx, struct mtmd_context * mctx);
+# MTMD_API bool mtmd_helper_model_can_chat(const struct llama_context * lctx, const struct mtmd_context * mctx);
 @ctypes_function(
     "mtmd_helper_model_can_chat",
     [llama_cpp.llama_context_p_ctypes, mtmd_context_p_ctypes],

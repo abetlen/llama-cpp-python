@@ -10748,6 +10748,7 @@ class MTMDProcessor:
             buffer,
             len(media_bytes),
             False,
+            mtmd_cpp.mtmd_helper_init_opt_default(),
         )
         bitmap = wrapper.bitmap
         if bitmap is None:
