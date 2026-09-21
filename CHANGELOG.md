@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- fix(grammar): decode JSON Pointer escapes in schema references by @YaoxinHuang
 - feat: update llama.cpp to ggml-org/llama.cpp@v0.4.0
 
 ## [0.3.35]
