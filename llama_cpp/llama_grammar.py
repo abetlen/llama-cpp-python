@@ -475,6 +475,7 @@ class SchemaConverter:
                         raise ValueError(f"Unsupported ref {ref}")
 
                     for sel in ref.split("#")[-1].split("/")[1:]:
+                        sel = sel.replace("~1", "/").replace("~0", "~")
                         assert target is not None and sel in target, (
                             f"Error resolving ref {ref}: {sel} not in {target}"
                         )
