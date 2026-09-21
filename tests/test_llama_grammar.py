@@ -1,5 +1,6 @@
 import llama_cpp
 import json
+import pytest
 
 tree = """
 leaf ::= "."
@@ -76,3 +77,23 @@ def test_grammar_anyof():
     grammar = llama_cpp.LlamaGrammar.from_json_schema(json.dumps(sch))
 
     # assert grammar.grammar is not None
+
+
+@pytest.mark.parametrize(
+    ("definition_name", "reference_token"),
+    [
+        ("a/b", "a~1b"),
+        ("a~b", "a~0b"),
+        ("a~1b", "a~01b"),
+        ("a~/b", "a~0~1b"),
+    ],
+)
+def test_grammar_json_pointer_escapes(definition_name, reference_token):
+    schema = {
+        "$defs": {definition_name: {"const": 42}},
+        "$ref": f"#/$defs/{reference_token}",
+    }
+
+    grammar = llama_cpp.LlamaGrammar.from_json_schema(json.dumps(schema))
+
+    assert '::= "42"' in grammar._grammar
