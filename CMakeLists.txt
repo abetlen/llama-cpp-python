@@ -125,8 +125,8 @@ if (LLAMA_BUILD)
             set(GGML_F16C "OFF" CACHE BOOL "ggml: enable F16C" FORCE)
         endif()
 
-        # Metal settings (enable for both architectures)
-        set(GGML_METAL "ON" CACHE BOOL "ggml: enable Metal" FORCE)
+        # Enable Metal by default for both architectures, respecting user settings.
+        set(GGML_METAL "ON" CACHE BOOL "ggml: enable Metal")
         set(GGML_METAL_EMBED_LIBRARY "ON" CACHE BOOL "ggml: embed metal library" FORCE)
     endif()
 
