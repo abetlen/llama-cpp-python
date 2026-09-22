@@ -2031,6 +2031,9 @@ class Llama:
         logit_bias: Optional[Dict[int, float]] = None,
         logprobs: Optional[bool] = None,
         top_logprobs: Optional[int] = None,
+        reasoning_effort: Optional[
+            Literal["none", "minimal", "low", "medium", "high", "xhigh"]
+        ] = None,
     ) -> Union[
         CreateChatCompletionResponse, Iterator[CreateChatCompletionStreamResponse]
     ]:
@@ -2063,6 +2066,8 @@ class Llama:
             logits_processor: A list of logits processors to use.
             grammar: A grammar to use.
             logit_bias: A logit bias to use.
+            reasoning_effort: Optional reasoning hint forwarded to chat handlers as a
+                chat-template keyword argument.
 
         Returns:
             Generated chat completion or a stream of chat completion chunks.
@@ -2102,6 +2107,7 @@ class Llama:
             logits_processor=logits_processor,
             grammar=grammar,
             logit_bias=logit_bias,
+            reasoning_effort=reasoning_effort,
         )
 
     def create_chat_completion_openai_v1(
