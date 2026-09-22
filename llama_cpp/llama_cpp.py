@@ -4575,14 +4575,14 @@ def llama_sampler_init_greedy() -> llama_sampler_p: ...
 
 # LLAMA_API struct llama_sampler * llama_sampler_init_dist  (uint32_t seed);
 @ctypes_function("llama_sampler_init_dist", [ctypes.c_uint32], llama_sampler_p_ctypes)
-def llama_sampler_init_dist(seed: int) -> llama_sampler_p: ...
+def llama_sampler_init_dist(seed: int, /) -> llama_sampler_p: ...
 
 
 # /// @details Top-K sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
 # /// Setting k <= 0 makes this a noop
 # LLAMA_API struct llama_sampler * llama_sampler_init_top_k      (int32_t k);
 @ctypes_function("llama_sampler_init_top_k", [ctypes.c_int32], llama_sampler_p_ctypes)
-def llama_sampler_init_top_k(k: int) -> llama_sampler_p: ...
+def llama_sampler_init_top_k(k: int, /) -> llama_sampler_p: ...
 
 
 # /// @details Nucleus sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
@@ -4592,7 +4592,7 @@ def llama_sampler_init_top_k(k: int) -> llama_sampler_p: ...
     [ctypes.c_float, ctypes.c_size_t],
     llama_sampler_p_ctypes,
 )
-def llama_sampler_init_top_p(p: float, min_keep: int) -> llama_sampler_p: ...
+def llama_sampler_init_top_p(p: float, min_keep: int, /) -> llama_sampler_p: ...
 
 
 # /// @details Minimum P sampling as described in https://github.com/ggml-org/llama.cpp/pull/3841
@@ -4602,7 +4602,7 @@ def llama_sampler_init_top_p(p: float, min_keep: int) -> llama_sampler_p: ...
     [ctypes.c_float, ctypes.c_size_t],
     llama_sampler_p_ctypes,
 )
-def llama_sampler_init_min_p(p: float, min_keep: int) -> llama_sampler_p: ...
+def llama_sampler_init_min_p(p: float, min_keep: int, /) -> llama_sampler_p: ...
 
 
 # /// @details Locally Typical Sampling implementation described in the paper https://arxiv.org/abs/2202.00666.
@@ -4612,13 +4612,13 @@ def llama_sampler_init_min_p(p: float, min_keep: int) -> llama_sampler_p: ...
     [ctypes.c_float, ctypes.c_size_t],
     llama_sampler_p_ctypes,
 )
-def llama_sampler_init_typical(p: float, min_keep: int) -> llama_sampler_p: ...
+def llama_sampler_init_typical(p: float, min_keep: int, /) -> llama_sampler_p: ...
 
 
 # /// #details Updates the logits l_i` = l_i/t. When t <= 0.0f, the maximum logit is kept at it's original value, the rest are set to -inf
 # LLAMA_API struct llama_sampler * llama_sampler_init_temp       (float   t);
 @ctypes_function("llama_sampler_init_temp", [ctypes.c_float], llama_sampler_p_ctypes)
-def llama_sampler_init_temp(t: float) -> llama_sampler_p: ...
+def llama_sampler_init_temp(t: float, /) -> llama_sampler_p: ...
 
 
 # /// @details Dynamic temperature implementation (a.k.a. entropy) described in the paper https://arxiv.org/abs/2309.02772.
@@ -4629,7 +4629,7 @@ def llama_sampler_init_temp(t: float) -> llama_sampler_p: ...
     llama_sampler_p_ctypes,
 )
 def llama_sampler_init_temp_ext(
-    t: float, delta: float, exponent: float
+    t: float, delta: float, exponent: float, /
 ) -> llama_sampler_p: ...
 
 
