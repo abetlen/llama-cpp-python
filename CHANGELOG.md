@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- fix: respect GGML_METAL=OFF on macOS by @provoke210 in #2370
 - feat: update llama.cpp to ggml-org/llama.cpp@v0.4.0
 
 ## [0.3.35]
