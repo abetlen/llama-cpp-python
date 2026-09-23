@@ -243,6 +243,7 @@ class ChatCompletionRequestToolMessage(TypedDict):
     role: Literal["tool"]
     content: Optional[str]
     tool_call_id: str
+    name: Optional[str]
 
 
 class ChatCompletionRequestFunctionMessage(TypedDict):
