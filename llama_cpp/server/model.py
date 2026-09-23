@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import warnings
 
 from typing import Dict, Optional, Union, List
 
@@ -252,6 +253,24 @@ class LlamaProxy:
 
         import functools
 
+        # `rpc_servers` and `mul_mat_q` are not parameters of Llama.__init__:
+        # llama_model_params no longer carries rpc_servers and mul_mat_q is long
+        # gone upstream. Passing them here only fed Llama's **kwargs sink, so a
+        # user who set them got a silent no-op. Say so instead.
+        if settings.rpc_servers:
+            warnings.warn(
+                "The `rpc_servers` server setting is no longer supported by "
+                "llama.cpp's model params and has no effect.",
+                UserWarning,
+                stacklevel=2,
+            )
+        if not settings.mul_mat_q:
+            warnings.warn(
+                "The `mul_mat_q` server setting is obsolete and has no effect.",
+                UserWarning,
+                stacklevel=2,
+            )
+
         kwargs = {}
 
         if settings.hf_model_repo_id is not None:
@@ -275,7 +294,6 @@ class LlamaProxy:
             use_mmap=settings.use_mmap,
             use_mlock=settings.use_mlock,
             kv_overrides=kv_overrides,
-            rpc_servers=settings.rpc_servers,
             # Context Params
             seed=settings.seed,
             n_ctx=settings.n_ctx,
@@ -291,7 +309,6 @@ class LlamaProxy:
             yarn_beta_fast=settings.yarn_beta_fast,
             yarn_beta_slow=settings.yarn_beta_slow,
             yarn_orig_ctx=settings.yarn_orig_ctx,
-            mul_mat_q=settings.mul_mat_q,
             logits_all=settings.logits_all,
             embedding=settings.embedding,
             offload_kqv=settings.offload_kqv,
