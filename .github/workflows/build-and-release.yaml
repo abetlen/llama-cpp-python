@@ -14,7 +14,7 @@ jobs:
         os: [ubuntu-22.04, windows-2022, macos-14, macos-15]
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           submodules: "recursive"
 
@@ -78,7 +78,7 @@ jobs:
     name: Build arm64 wheels
     runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           submodules: "recursive"
 
@@ -109,7 +109,7 @@ jobs:
     name: Build riscv64 wheel
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           submodules: "recursive"
 
@@ -143,7 +143,7 @@ jobs:
     name: Build Pyodide wheel
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           submodules: "recursive"
 
@@ -175,7 +175,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           submodules: "recursive"
 
