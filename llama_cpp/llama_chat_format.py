@@ -9,7 +9,6 @@ import random
 import string
 
 from datetime import datetime
-from contextlib import ExitStack
 from typing import (
     Any,
     Dict,
@@ -24,6 +23,7 @@ from typing import (
 )
 
 import jinja2
+from jinja2.ext import Extension
 from jinja2.sandbox import ImmutableSandboxedEnvironment
 
 import numpy as np
@@ -192,6 +192,15 @@ class ChatFormatter(Protocol):
 
 
 class Jinja2ChatFormatter(ChatFormatter):
+    class IgnoreGenerationTags(Extension):
+        """Pass-through for HuggingFace's ``{% generation %}`` chat-template tag."""
+
+        tags = {"generation"}
+
+        def parse(self, parser: jinja2.parser.Parser):
+            parser.stream.skip(1)
+            return parser.parse_statements(("name:endgeneration",), drop_needle=True)
+
     def __init__(
         self,
         template: str,
@@ -209,15 +218,41 @@ class Jinja2ChatFormatter(ChatFormatter):
             set(stop_token_ids) if stop_token_ids is not None else None
         )
 
-        self._environment = ImmutableSandboxedEnvironment(
+        environment = ImmutableSandboxedEnvironment(
             loader=jinja2.BaseLoader(),
             trim_blocks=True,
             lstrip_blocks=True,
-        ).from_string(self.template)
+            # Keep this aligned with Transformers' chat-template Jinja extensions.
+            # https://github.com/huggingface/transformers/blob/39603d0e5cdb6f00e8d473d7fcbb01032d709181/src/transformers/utils/chat_template_utils.py#L489-L490
+            extensions=[
+                Jinja2ChatFormatter.IgnoreGenerationTags,
+                jinja2.ext.loopcontrols,
+            ],
+        )
+        # Match Transformers' chat-template JSON rendering behavior.
+        # https://github.com/huggingface/transformers/blob/39603d0e5cdb6f00e8d473d7fcbb01032d709181/src/transformers/utils/chat_template_utils.py#L481-L484
+        environment.filters["tojson"] = self.tojson
+        self._environment = environment.from_string(self.template)
 
     @staticmethod
     def strftime_now(f: str) -> str:
         return datetime.now().strftime(f)
+
+    @staticmethod
+    def tojson(
+        x: Any,
+        ensure_ascii: bool = False,
+        indent: Optional[int] = None,
+        separators: Optional[Tuple[str, str]] = None,
+        sort_keys: bool = False,
+    ) -> str:
+        return json.dumps(
+            x,
+            ensure_ascii=ensure_ascii,
+            indent=indent,
+            separators=separators,
+            sort_keys=sort_keys,
+        )
 
     def __call__(
         self,
@@ -243,6 +278,7 @@ class Jinja2ChatFormatter(ChatFormatter):
             tools=tools,
             tool_choice=tool_choice,
             strftime_now=self.strftime_now,
+            **kwargs,
         )
 
         stopping_criteria = None
@@ -286,10 +322,14 @@ def _convert_text_completion_logprobs_to_chat(
                     }
                     for top_token, top_logprob in top_logprobs.items()
                 ],
-            } for (token, logprob, top_logprobs) in zip(logprobs["tokens"], logprobs["token_logprobs"], logprobs["top_logprobs"])
+            }
+            for (token, logprob, top_logprobs) in zip(
+                logprobs["tokens"], logprobs["token_logprobs"], logprobs["top_logprobs"]
+            )
         ],
         "refusal": None,
     }
+
 
 def _convert_text_completion_to_chat(
     completion: llama_types.Completion,
@@ -307,7 +347,9 @@ def _convert_text_completion_to_chat(
                     "role": "assistant",
                     "content": completion["choices"][0]["text"],
                 },
-                "logprobs": _convert_text_completion_logprobs_to_chat(completion["choices"][0]["logprobs"]),
+                "logprobs": _convert_text_completion_logprobs_to_chat(
+                    completion["choices"][0]["logprobs"]
+                ),
                 "finish_reason": completion["choices"][0]["finish_reason"],
             }
         ],
@@ -351,7 +393,9 @@ def _convert_text_completion_chunks_to_chat(
                         if chunk["choices"][0]["finish_reason"] is None
                         else {}
                     ),
-                    "logprobs": _convert_text_completion_logprobs_to_chat(chunk["choices"][0]["logprobs"]),
+                    "logprobs": _convert_text_completion_logprobs_to_chat(
+                        chunk["choices"][0]["logprobs"]
+                    ),
                     "finish_reason": chunk["choices"][0]["finish_reason"],
                 }
             ],
@@ -368,7 +412,9 @@ def _convert_completion_to_chat(
     llama_types.CreateChatCompletionResponse, Iterator[llama_types.ChatCompletionChunk]
 ]:
     if stream:
-        chunks: Iterator[llama_types.CreateCompletionStreamResponse] = completion_or_chunks  # type: ignore
+        chunks: Iterator[llama_types.CreateCompletionStreamResponse] = (
+            completion_or_chunks  # type: ignore
+        )
         return _convert_text_completion_chunks_to_chat(chunks)
     else:
         completion: llama_types.Completion = completion_or_chunks  # type: ignore
@@ -414,7 +460,9 @@ def _convert_completion_to_chat_function(
                             }
                         ],
                     },
-                    "logprobs": _convert_text_completion_logprobs_to_chat(completion["choices"][0]["logprobs"]),
+                    "logprobs": _convert_text_completion_logprobs_to_chat(
+                        completion["choices"][0]["logprobs"]
+                    ),
                     "finish_reason": "tool_calls",
                 }
             ],
@@ -422,7 +470,9 @@ def _convert_completion_to_chat_function(
         }
         return chat_completion
     else:
-        chunks: Iterator[llama_types.CreateCompletionStreamResponse] = completion_or_chunks  # type: ignore
+        chunks: Iterator[llama_types.CreateCompletionStreamResponse] = (
+            completion_or_chunks  # type: ignore
+        )
 
         def _stream_response_to_function_stream(
             chunks: Iterator[llama_types.CreateCompletionStreamResponse],
@@ -467,7 +517,9 @@ def _convert_completion_to_chat_function(
                             {
                                 "index": 0,
                                 "finish_reason": None,
-                                "logprobs": _convert_text_completion_logprobs_to_chat(chunk["choices"][0]["logprobs"]),
+                                "logprobs": _convert_text_completion_logprobs_to_chat(
+                                    chunk["choices"][0]["logprobs"]
+                                ),
                                 "delta": {
                                     "role": None,
                                     "content": None,
@@ -504,7 +556,9 @@ def _convert_completion_to_chat_function(
                         {
                             "index": 0,
                             "finish_reason": None,
-                            "logprobs": _convert_text_completion_logprobs_to_chat(chunk["choices"][0]["logprobs"]),
+                            "logprobs": _convert_text_completion_logprobs_to_chat(
+                                chunk["choices"][0]["logprobs"]
+                            ),
                             "delta": {
                                 "role": None,
                                 "content": None,
@@ -599,6 +653,7 @@ def chat_formatter_to_chat_completion_handler(
             function_call=function_call,
             tools=tools,
             tool_choice=tool_choice,
+            **kwargs,
         )
         prompt = llama.tokenize(
             result.prompt.encode("utf-8"),
@@ -702,7 +757,7 @@ def chat_formatter_to_chat_completion_handler(
 
 
 def hf_autotokenizer_to_chat_formatter(
-    pretrained_model_name_or_path: Union[str, os.PathLike[str]]
+    pretrained_model_name_or_path: Union[str, os.PathLike[str]],
 ) -> ChatFormatter:
     # https://huggingface.co/docs/transformers/main/chat_templating
     # https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.1#instruction-format
@@ -716,7 +771,9 @@ def hf_autotokenizer_to_chat_formatter(
         **kwargs: Any,
     ) -> ChatFormatterResponse:
         tokenizer.use_default_system_prompt = False  # type: ignore
-        prompt: str = tokenizer.apply_chat_template(messages, tokenize=False)  # type: ignore
+        prompt: str = tokenizer.apply_chat_template(  # type: ignore
+            messages, tokenize=False, **kwargs
+        )
         assert isinstance(prompt, str)
         # Return formatted prompt and eos token by default
         return ChatFormatterResponse(
@@ -727,7 +784,7 @@ def hf_autotokenizer_to_chat_formatter(
 
 
 def hf_autotokenizer_to_chat_completion_handler(
-    pretrained_model_name_or_path: Union[str, os.PathLike[str]]
+    pretrained_model_name_or_path: Union[str, os.PathLike[str]],
 ) -> LlamaChatCompletionHandler:
     chat_formatter = hf_autotokenizer_to_chat_formatter(pretrained_model_name_or_path)
     return chat_formatter_to_chat_completion_handler(chat_formatter)
@@ -773,6 +830,7 @@ def hf_tokenizer_config_to_chat_formatter(
             messages=messages,
             bos_token=bos_token,
             eos_token=eos_token,
+            **kwargs,
         )
         return ChatFormatterResponse(
             prompt=prompt, stop=[eos_token, bos_token], added_special=True
@@ -1552,9 +1610,9 @@ def functionary_chat_handler(
                 message["name"] = f"functions.{message['name']}"
             # Function call requests by assistant
             if "function_call" in message:
-                message["function_call"][
-                    "name"
-                ] = f"functions.{message['function_call']['name']}"
+                message["function_call"]["name"] = (
+                    f"functions.{message['function_call']['name']}"
+                )
             all_messages.append(message)
 
         all_messages.append(
@@ -1632,7 +1690,9 @@ def functionary_chat_handler(
             logits_processor=logits_processor,
             grammar=grammar,
         )
-        return _convert_completion_to_chat(completion_or_completion_chunks, stream=stream)  # type: ignore
+        return _convert_completion_to_chat(
+            completion_or_completion_chunks, stream=stream
+        )  # type: ignore
 
     if function_call is None or (
         isinstance(function_call, str) and function_call == "auto"
@@ -1748,7 +1808,9 @@ def functionary_chat_handler(
                         }
                     ],
                 },
-                "logprobs": _convert_text_completion_logprobs_to_chat(completion["choices"][0]["logprobs"]),
+                "logprobs": _convert_text_completion_logprobs_to_chat(
+                    completion["choices"][0]["logprobs"]
+                ),
                 "finish_reason": "tool_calls",
             }
         ],
@@ -1789,9 +1851,9 @@ def functionary_v1_v2_chat_handler(
     SYSTEM_MESSAGE = """A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. The assistant calls functions with appropriate input when necessary"""
 
     tokenizer = llama.tokenizer_
-    assert hasattr(
-        tokenizer, "hf_tokenizer"
-    ), "Please provide a valid hf_tokenizer_path from https://huggingface.co/meetkai when initializing the Llama class"
+    assert hasattr(tokenizer, "hf_tokenizer"), (
+        "Please provide a valid hf_tokenizer_path from https://huggingface.co/meetkai when initializing the Llama class"
+    )
     from transformers import AutoTokenizer
 
     if "<|START_OF_FUNCTION_CALL|>" in tokenizer.hf_tokenizer.additional_special_tokens:
@@ -1941,9 +2003,9 @@ def functionary_v1_v2_chat_handler(
                 message["name"] = f"functions.{message['name']}"
             # Function call requests by assistant
             if "function_call" in message:
-                message["function_call"][
-                    "name"
-                ] = f"functions.{message['function_call']['name']}"
+                message["function_call"]["name"] = (
+                    f"functions.{message['function_call']['name']}"
+                )
             all_messages.append(message)
 
         if version == "v1":
@@ -2005,7 +2067,9 @@ def functionary_v1_v2_chat_handler(
             completion_or_completion_chunks["choices"][0]["text"] = (
                 completion_or_completion_chunks["choices"][0]["text"].lstrip()
             )
-        return _convert_completion_to_chat(completion_or_completion_chunks, stream=stream)  # type: ignore
+        return _convert_completion_to_chat(
+            completion_or_completion_chunks, stream=stream
+        )  # type: ignore
 
     def get_grammar(function_call):
         function_body = None
@@ -2160,7 +2224,9 @@ def functionary_v1_v2_chat_handler(
                         choices=[
                             {
                                 "index": 0,
-                                "logprobs": _convert_text_completion_logprobs_to_chat(chunk["choices"][0]["logprobs"]),
+                                "logprobs": _convert_text_completion_logprobs_to_chat(
+                                    chunk["choices"][0]["logprobs"]
+                                ),
                                 "delta": {
                                     "role": None,
                                     "content": None,
@@ -2262,7 +2328,9 @@ def functionary_v1_v2_chat_handler(
                         choices=[
                             {
                                 "index": 0,
-                                "logprobs": _convert_text_completion_logprobs_to_chat(chunk["choices"][0]["logprobs"]),
+                                "logprobs": _convert_text_completion_logprobs_to_chat(
+                                    chunk["choices"][0]["logprobs"]
+                                ),
                                 "delta": {
                                     "role": "assistant",
                                     "content": None,
@@ -2300,7 +2368,9 @@ def functionary_v1_v2_chat_handler(
                                         choices=[
                                             {
                                                 "index": 0,
-                                                "logprobs": _convert_text_completion_logprobs_to_chat(chunk["choices"][0]["logprobs"]),
+                                                "logprobs": _convert_text_completion_logprobs_to_chat(
+                                                    chunk["choices"][0]["logprobs"]
+                                                ),
                                                 "delta": {
                                                     "role": "assistant",
                                                     "content": buffer.pop(0),
@@ -2323,7 +2393,9 @@ def functionary_v1_v2_chat_handler(
                                 choices=[
                                     {
                                         "index": 0,
-                                        "logprobs": _convert_text_completion_logprobs_to_chat(chunk["choices"][0]["logprobs"]),
+                                        "logprobs": _convert_text_completion_logprobs_to_chat(
+                                            chunk["choices"][0]["logprobs"]
+                                        ),
                                         "delta": {
                                             "role": "assistant",
                                             "content": (
@@ -2409,7 +2481,9 @@ def functionary_v1_v2_chat_handler(
                                 choices=[
                                     {
                                         "index": 0,
-                                        "logprobs": _convert_text_completion_logprobs_to_chat(chunk["choices"][0]["logprobs"]),
+                                        "logprobs": _convert_text_completion_logprobs_to_chat(
+                                            chunk["choices"][0]["logprobs"]
+                                        ),
                                         "delta": {
                                             "role": None,
                                             "content": None,
@@ -2643,7 +2717,9 @@ def functionary_v1_v2_chat_handler(
             choices=[
                 {
                     "index": 0,
-                    "logprobs": _convert_text_completion_logprobs_to_chat(completion["choices"][0]["logprobs"]),
+                    "logprobs": _convert_text_completion_logprobs_to_chat(
+                        completion["choices"][0]["logprobs"]
+                    ),
                     "message": {
                         "role": "assistant",
                         "content": None if content == "" else content,
@@ -2702,7 +2778,6 @@ class Llava15ChatHandler:
         self.clip_model_path = clip_model_path
         self.verbose = verbose
         self._mtmd_cpp = mtmd_cpp
-        self._exit_stack = ExitStack()
         self.mtmd_ctx: Optional[mtmd_cpp.mtmd_context_p] = None
 
         if not os.path.exists(clip_model_path):
@@ -2716,20 +2791,27 @@ class Llava15ChatHandler:
         with suppress_stdout_stderr(disable=self.verbose):
             # Get default parameters
             ctx_params = self._mtmd_cpp.mtmd_context_params_default()
-            ctx_params.use_gpu = True # TODO: Make this configurable
+            ctx_params.use_gpu = True  # TODO: Make this configurable
             ctx_params.print_timings = self.verbose
             ctx_params.n_threads = llama_model.n_threads
-            ctx_params.verbosity = 2 if self.verbose else 0  # GGML_LOG_LEVEL_INFO = 2
+            ctx_params.flash_attn_type = (
+                llama_cpp.LLAMA_FLASH_ATTN_TYPE_ENABLED
+                if (
+                    llama_model.context_params.flash_attn_type
+                    == llama_cpp.LLAMA_FLASH_ATTN_TYPE_ENABLED
+                )
+                else llama_cpp.LLAMA_FLASH_ATTN_TYPE_DISABLED
+            )
 
             # Initialize mtmd context
             self.mtmd_ctx = self._mtmd_cpp.mtmd_init_from_file(
-                self.clip_model_path.encode(),
-                llama_model.model,
-                ctx_params
+                self.clip_model_path.encode(), llama_model.model, ctx_params
             )
 
             if self.mtmd_ctx is None:
-                raise ValueError(f"Failed to load mtmd context from: {self.clip_model_path}")
+                raise ValueError(
+                    f"Failed to load mtmd context from: {self.clip_model_path}"
+                )
 
             # Check if vision is supported
             if not self._mtmd_cpp.mtmd_support_vision(self.mtmd_ctx):
@@ -2741,7 +2823,7 @@ class Llava15ChatHandler:
                         self._mtmd_cpp.mtmd_free(self.mtmd_ctx)
                         self.mtmd_ctx = None
 
-            self._exit_stack.callback(mtmd_free)
+            llama_model._stack.callback(mtmd_free)
 
     def load_image(self, image_url: str) -> bytes:
         return self._load_image(image_url)
@@ -2756,12 +2838,13 @@ class Llava15ChatHandler:
             bitmap = self._mtmd_cpp.mtmd_helper_bitmap_init_from_buf(
                 self.mtmd_ctx,
                 (ctypes.c_uint8 * len(image_bytes)).from_buffer(bytearray(image_bytes)),
-                len(image_bytes)
+                len(image_bytes),
+                False,
             )
-            
+
             if bitmap is None:
                 raise ValueError("Failed to create bitmap from image bytes")
-            
+
             return bitmap
 
     def __call__(
@@ -2820,10 +2903,10 @@ class Llava15ChatHandler:
             trim_blocks=True,
             lstrip_blocks=True,
         ).from_string(self.CHAT_FORMAT)
-        
+
         # Get the default media marker
-        media_marker = self._mtmd_cpp.mtmd_default_marker().decode('utf-8')
-        
+        media_marker = self._mtmd_cpp.mtmd_default_marker().decode("utf-8")
+
         # Replace image URLs with media markers in the template
         text = template.render(
             messages=messages,
@@ -2831,7 +2914,7 @@ class Llava15ChatHandler:
             eos_token=llama.detokenize([llama.token_eos()]),
             bos_token=llama.detokenize([llama.token_bos()]),
         )
-        
+
         # Replace image URLs in text with media markers
         for image_url in image_urls:
             text = text.replace(image_url, media_marker)
@@ -2851,7 +2934,9 @@ class Llava15ChatHandler:
 
             # Create input text structure
             input_text = self._mtmd_cpp.mtmd_input_text()
-            input_text.text = text.encode('utf-8')
+            input_text_bytes = text.encode("utf-8")
+            input_text.text = input_text_bytes
+            input_text.text_len = len(input_text_bytes)
             input_text.add_special = True
             input_text.parse_special = True
 
@@ -2862,13 +2947,15 @@ class Llava15ChatHandler:
 
             try:
                 # Tokenize text and images together
-                bitmap_array = (self._mtmd_cpp.mtmd_bitmap_p_ctypes * len(bitmaps))(*bitmaps)
+                bitmap_array = (self._mtmd_cpp.mtmd_bitmap_p_ctypes * len(bitmaps))(
+                    *bitmaps
+                )
                 result = self._mtmd_cpp.mtmd_tokenize(
                     self.mtmd_ctx,
                     chunks,
                     ctypes.byref(input_text),
                     bitmap_array,
-                    len(bitmaps)
+                    len(bitmaps),
                 )
 
                 if result != 0:
@@ -2881,40 +2968,45 @@ class Llava15ChatHandler:
                 # Process each chunk
                 n_past = llama_cpp.llama_pos(0)
                 n_chunks = self._mtmd_cpp.mtmd_input_chunks_size(chunks)
-                
+
                 for i in range(n_chunks):
                     chunk = self._mtmd_cpp.mtmd_input_chunks_get(chunks, i)
                     if chunk is None:
                         continue
 
                     chunk_type = self._mtmd_cpp.mtmd_input_chunk_get_type(chunk)
-                    
+
                     if chunk_type == self._mtmd_cpp.MTMD_INPUT_CHUNK_TYPE_TEXT:
                         # Handle text chunk
                         n_tokens_out = ctypes.c_size_t()
                         tokens_ptr = self._mtmd_cpp.mtmd_input_chunk_get_tokens_text(
                             chunk, ctypes.byref(n_tokens_out)
                         )
-                        
+
                         if tokens_ptr and n_tokens_out.value > 0:
                             # Convert ctypes array to Python list
                             tokens = [tokens_ptr[j] for j in range(n_tokens_out.value)]
-                            
+
                             if llama.n_tokens + len(tokens) > llama.n_ctx():
                                 raise ValueError(
                                     f"Prompt exceeds n_ctx: {llama.n_tokens + len(tokens)} > {llama.n_ctx()}"
                                 )
                             llama.eval(tokens)
-                    
-                    elif chunk_type in [self._mtmd_cpp.MTMD_INPUT_CHUNK_TYPE_IMAGE, self._mtmd_cpp.MTMD_INPUT_CHUNK_TYPE_AUDIO]:
+
+                    elif chunk_type in [
+                        self._mtmd_cpp.MTMD_INPUT_CHUNK_TYPE_IMAGE,
+                        self._mtmd_cpp.MTMD_INPUT_CHUNK_TYPE_AUDIO,
+                    ]:
                         # Handle image/audio chunk using helper
-                        chunk_n_tokens = self._mtmd_cpp.mtmd_input_chunk_get_n_tokens(chunk)
-                        
+                        chunk_n_tokens = self._mtmd_cpp.mtmd_input_chunk_get_n_tokens(
+                            chunk
+                        )
+
                         if llama.n_tokens + chunk_n_tokens > llama.n_ctx():
                             raise ValueError(
                                 f"Prompt exceeds n_ctx: {llama.n_tokens + chunk_n_tokens} > {llama.n_ctx()}"
                             )
-                        
+
                         new_n_past = llama_cpp.llama_pos(0)
                         result = self._mtmd_cpp.mtmd_helper_eval_chunk_single(
                             self.mtmd_ctx,
@@ -2924,12 +3016,14 @@ class Llava15ChatHandler:
                             llama_cpp.llama_seq_id(0),
                             llama.n_batch,
                             False,  # logits_last
-                            ctypes.byref(new_n_past)
+                            ctypes.byref(new_n_past),
                         )
-                        
+
                         if result != 0:
-                            raise ValueError(f"Failed to evaluate chunk: error code {result}")
-                        
+                            raise ValueError(
+                                f"Failed to evaluate chunk: error code {result}"
+                            )
+
                         # Update llama's token count
                         llama.n_tokens = new_n_past.value
 
@@ -3019,7 +3113,7 @@ class Llava15ChatHandler:
             grammar=grammar,
             logit_bias=logit_bias,
         )
-        
+
         if tool is not None:
             tool_name = tool["function"]["name"]
             return _convert_completion_to_chat_function(
@@ -3032,10 +3126,12 @@ class Llava15ChatHandler:
         # TODO: Add Pillow support for other image formats beyond (jpg, png)
         if image_url.startswith("data:"):
             import base64
+
             image_bytes = base64.b64decode(image_url.split(",")[1])
             return image_bytes
         else:
             import urllib.request
+
             with urllib.request.urlopen(image_url) as f:
                 image_bytes = f.read()
                 return image_bytes
@@ -3062,6 +3158,7 @@ class Llava15ChatHandler:
     @staticmethod
     def split_text_on_image_urls(text: str, image_urls: List[str]):
         """This method is no longer used in the new implementation."""
+
         def find_first(s: str, substrs: List[str]):
             for i, substr in enumerate(substrs):
                 pos = s.find(substr)
@@ -3169,9 +3266,519 @@ class Llava15ChatHandler:
         )
 
 
+class MTMDChatHandler:
+    def __init__(
+        self, clip_model_path: str, verbose: bool = True, use_gpu: bool = True
+    ):
+        import llama_cpp.mtmd_cpp as mtmd_cpp
+
+        self.clip_model_path = clip_model_path
+        self.verbose = verbose
+        self.use_gpu = use_gpu
+        self._mtmd_cpp = mtmd_cpp
+        self.mtmd_ctx: Optional[mtmd_cpp.mtmd_context_p] = None
+
+        if not os.path.exists(clip_model_path):
+            raise ValueError(f"Clip model path does not exist: {clip_model_path}")
+
+    def _init_mtmd_context(self, llama_model: llama.Llama):
+        self.verbose = llama_model.verbose
+        if self.mtmd_ctx is not None:
+            return
+
+        with suppress_stdout_stderr(disable=self.verbose):
+            ctx_params = self._mtmd_cpp.mtmd_context_params_default()
+            ctx_params.use_gpu = self.use_gpu
+            ctx_params.print_timings = self.verbose
+            ctx_params.n_threads = llama_model.n_threads
+            ctx_params.flash_attn_type = (
+                llama_cpp.LLAMA_FLASH_ATTN_TYPE_ENABLED
+                if (
+                    llama_model.context_params.flash_attn_type
+                    == llama_cpp.LLAMA_FLASH_ATTN_TYPE_ENABLED
+                )
+                else llama_cpp.LLAMA_FLASH_ATTN_TYPE_DISABLED
+            )
+
+            self.mtmd_ctx = self._mtmd_cpp.mtmd_init_from_file(
+                self.clip_model_path.encode(), llama_model.model, ctx_params
+            )
+
+            if self.mtmd_ctx is None:
+                raise ValueError(
+                    f"Failed to load mtmd context from: {self.clip_model_path}"
+                )
+
+            if not self._mtmd_cpp.mtmd_support_vision(self.mtmd_ctx):
+                raise ValueError("Vision is not supported by this model")
+
+            def mtmd_free():
+                with suppress_stdout_stderr(disable=self.verbose):
+                    if self.mtmd_ctx is not None:
+                        self._mtmd_cpp.mtmd_free(self.mtmd_ctx)
+                        self.mtmd_ctx = None
+
+            llama_model._stack.callback(mtmd_free)
+
+    def load_image(self, image_url: str) -> bytes:
+        return self._load_image(image_url)
+
+    def _create_bitmap_from_bytes(self, image_bytes: bytes):
+        if self.mtmd_ctx is None:
+            raise ValueError("mtmd context not initialized")
+
+        with suppress_stdout_stderr(disable=self.verbose):
+            bitmap = self._mtmd_cpp.mtmd_helper_bitmap_init_from_buf(
+                self.mtmd_ctx,
+                (ctypes.c_uint8 * len(image_bytes)).from_buffer(bytearray(image_bytes)),
+                len(image_bytes),
+                False,
+            )
+
+            if bitmap is None:
+                raise ValueError("Failed to create bitmap from image bytes")
+
+            return bitmap
+
+    def _get_chat_template(self, llama_model: llama.Llama) -> str:
+        chat_template = llama_model.metadata.get("tokenizer.chat_template")
+        if not isinstance(chat_template, str) or chat_template == "":
+            raise ValueError(
+                f"{self.__class__.__name__} requires tokenizer.chat_template metadata"
+            )
+        return chat_template
+
+    def _get_template_messages(
+        self,
+        messages: List[llama_types.ChatCompletionRequestMessage],
+        media_marker: str,
+    ) -> List[Any]:
+        return [
+            self._convert_message_for_template(message, media_marker)
+            for message in messages
+        ]
+
+    @classmethod
+    def _convert_message_for_template(
+        cls,
+        message: llama_types.ChatCompletionRequestMessage,
+        media_marker: str,
+    ) -> Dict[str, Any]:
+        message_dict = dict(message)
+        content = message_dict.get("content")
+        if isinstance(content, list):
+            message_dict["content"] = [
+                cls._convert_content_part_for_template(part, media_marker)
+                for part in content
+            ]
+        return message_dict
+
+    @staticmethod
+    def _convert_content_part_for_template(
+        part: Any,
+        media_marker: str,
+    ) -> Any:
+        if isinstance(part, dict) and part.get("type") == "image_url":
+            return {"type": "text", "text": media_marker}
+        return part
+
+    @staticmethod
+    def _decode_token_piece(piece: Any) -> str:
+        if isinstance(piece, bytes):
+            return piece.decode("utf-8", errors="ignore")
+        return str(piece)
+
+    def _postprocess_template_text(
+        self,
+        text: str,
+        image_urls: List[str],
+        media_marker: str,
+    ) -> str:
+        for image_url in image_urls:
+            text = text.replace(image_url, media_marker)
+        return text
+
+    def __call__(
+        self,
+        *,
+        llama: llama.Llama,
+        messages: List[llama_types.ChatCompletionRequestMessage],
+        functions: Optional[List[llama_types.ChatCompletionFunction]] = None,
+        function_call: Optional[llama_types.ChatCompletionRequestFunctionCall] = None,
+        tools: Optional[List[llama_types.ChatCompletionTool]] = None,
+        tool_choice: Optional[llama_types.ChatCompletionToolChoiceOption] = None,
+        temperature: float = 0.2,
+        top_p: float = 0.95,
+        top_k: int = 40,
+        min_p: float = 0.05,
+        typical_p: float = 1.0,
+        stream: bool = False,
+        stop: Optional[Union[str, List[str]]] = [],
+        seed: Optional[int] = None,
+        response_format: Optional[
+            llama_types.ChatCompletionRequestResponseFormat
+        ] = None,
+        max_tokens: Optional[int] = None,
+        presence_penalty: float = 0.0,
+        frequency_penalty: float = 0.0,
+        repeat_penalty: float = 1.1,
+        tfs_z: float = 1.0,
+        mirostat_mode: int = 0,
+        mirostat_tau: float = 5.0,
+        mirostat_eta: float = 0.1,
+        model: Optional[str] = None,
+        logits_processor: Optional[llama.LogitsProcessorList] = None,
+        grammar: Optional[llama.LlamaGrammar] = None,
+        logit_bias: Optional[Dict[str, float]] = None,
+        logprobs: Optional[bool] = None,
+        top_logprobs: Optional[int] = None,
+        **kwargs,  # type: ignore
+    ) -> Union[
+        llama_types.CreateChatCompletionResponse,
+        Iterator[llama_types.CreateChatCompletionStreamResponse],
+    ]:
+        self._init_mtmd_context(llama)
+        assert self.mtmd_ctx is not None
+
+        image_urls = self.get_image_urls(messages)
+        media_marker = self._mtmd_cpp.mtmd_default_marker().decode("utf-8")
+        template_env = ImmutableSandboxedEnvironment(
+            trim_blocks=True,
+            lstrip_blocks=True,
+            extensions=[
+                Jinja2ChatFormatter.IgnoreGenerationTags,
+                jinja2.ext.loopcontrols,
+            ],
+        )
+        template_env.filters["tojson"] = Jinja2ChatFormatter.tojson
+        template = template_env.from_string(self._get_chat_template(llama))
+
+        def raise_exception(message: str):
+            raise ValueError(message)
+
+        text = template.render(
+            messages=self._get_template_messages(messages, media_marker),
+            add_generation_prompt=True,
+            eos_token=self._decode_token_piece(llama.detokenize([llama.token_eos()])),
+            bos_token=self._decode_token_piece(llama.detokenize([llama.token_bos()])),
+            raise_exception=raise_exception,
+            functions=functions,
+            function_call=function_call,
+            tools=tools,
+            tool_choice=tool_choice,
+            strftime_now=Jinja2ChatFormatter.strftime_now,
+            **kwargs,
+        )
+        text = self._postprocess_template_text(text, image_urls, media_marker)
+
+        if self.verbose:
+            print(text, file=sys.stderr)
+
+        bitmaps = []
+        bitmap_cleanup = []
+        try:
+            for image_url in image_urls:
+                image_bytes = self.load_image(image_url)
+                bitmap = self._create_bitmap_from_bytes(image_bytes)
+                bitmaps.append(bitmap)
+                bitmap_cleanup.append(bitmap)
+
+            input_text = self._mtmd_cpp.mtmd_input_text()
+            input_text_bytes = text.encode("utf-8")
+            input_text.text = input_text_bytes
+            input_text.text_len = len(input_text_bytes)
+            input_text.add_special = True
+            input_text.parse_special = True
+
+            chunks = self._mtmd_cpp.mtmd_input_chunks_init()
+            if chunks is None:
+                raise ValueError("Failed to create input chunks")
+
+            try:
+                bitmap_array = (self._mtmd_cpp.mtmd_bitmap_p_ctypes * len(bitmaps))(
+                    *bitmaps
+                )
+                result = self._mtmd_cpp.mtmd_tokenize(
+                    self.mtmd_ctx,
+                    chunks,
+                    ctypes.byref(input_text),
+                    bitmap_array,
+                    len(bitmaps),
+                )
+
+                if result != 0:
+                    raise ValueError(f"Failed to tokenize input: error code {result}")
+
+                llama.reset()
+                llama._ctx.kv_cache_clear()
+
+                n_chunks = self._mtmd_cpp.mtmd_input_chunks_size(chunks)
+
+                for i in range(n_chunks):
+                    chunk = self._mtmd_cpp.mtmd_input_chunks_get(chunks, i)
+                    if chunk is None:
+                        continue
+
+                    chunk_type = self._mtmd_cpp.mtmd_input_chunk_get_type(chunk)
+
+                    if chunk_type == self._mtmd_cpp.MTMD_INPUT_CHUNK_TYPE_TEXT:
+                        n_tokens_out = ctypes.c_size_t()
+                        tokens_ptr = self._mtmd_cpp.mtmd_input_chunk_get_tokens_text(
+                            chunk, ctypes.byref(n_tokens_out)
+                        )
+
+                        if tokens_ptr and n_tokens_out.value > 0:
+                            tokens = [tokens_ptr[j] for j in range(n_tokens_out.value)]
+
+                            if llama.n_tokens + len(tokens) > llama.n_ctx():
+                                raise ValueError(
+                                    f"Prompt exceeds n_ctx: {llama.n_tokens + len(tokens)} > {llama.n_ctx()}"
+                                )
+                            llama.eval(tokens)
+
+                    elif chunk_type in [
+                        self._mtmd_cpp.MTMD_INPUT_CHUNK_TYPE_IMAGE,
+                        self._mtmd_cpp.MTMD_INPUT_CHUNK_TYPE_AUDIO,
+                    ]:
+                        chunk_n_tokens = self._mtmd_cpp.mtmd_input_chunk_get_n_tokens(
+                            chunk
+                        )
+
+                        if llama.n_tokens + chunk_n_tokens > llama.n_ctx():
+                            raise ValueError(
+                                f"Prompt exceeds n_ctx: {llama.n_tokens + chunk_n_tokens} > {llama.n_ctx()}"
+                            )
+
+                        new_n_past = llama_cpp.llama_pos(0)
+                        result = self._mtmd_cpp.mtmd_helper_eval_chunk_single(
+                            self.mtmd_ctx,
+                            llama._ctx.ctx,
+                            chunk,
+                            llama_cpp.llama_pos(llama.n_tokens),
+                            llama_cpp.llama_seq_id(0),
+                            llama.n_batch,
+                            False,  # logits_last
+                            ctypes.byref(new_n_past),
+                        )
+
+                        if result != 0:
+                            raise ValueError(
+                                f"Failed to evaluate chunk: error code {result}"
+                            )
+
+                        llama.n_tokens = new_n_past.value
+
+                prompt = llama.input_ids[: llama.n_tokens].tolist()
+
+            finally:
+                self._mtmd_cpp.mtmd_input_chunks_free(chunks)
+
+        finally:
+            for bitmap in bitmap_cleanup:
+                self._mtmd_cpp.mtmd_bitmap_free(bitmap)
+
+        if response_format is not None and response_format["type"] == "json_object":
+            grammar = _grammar_for_response_format(response_format)
+
+        if functions is not None:
+            tools = [
+                {
+                    "type": "function",
+                    "function": function,
+                }
+                for function in functions
+            ]
+
+        if function_call is not None:
+            if isinstance(function_call, str) and (
+                function_call == "none" or function_call == "auto"
+            ):
+                tool_choice = function_call
+            if isinstance(function_call, dict) and "name" in function_call:
+                tool_choice = {
+                    "type": "function",
+                    "function": {
+                        "name": function_call["name"],
+                    },
+                }
+
+        tool = None
+        if (
+            tool_choice is not None
+            and isinstance(tool_choice, dict)
+            and tools is not None
+        ):
+            name = tool_choice["function"]["name"]
+            tool = next((t for t in tools if t["function"]["name"] == name), None)
+            if tool is None:
+                raise ValueError(f"Tool choice '{name}' not found in tools.")
+            schema = tool["function"]["parameters"]
+            try:
+                grammar = llama_grammar.LlamaGrammar.from_json_schema(
+                    json.dumps(schema), verbose=llama.verbose
+                )
+            except Exception as e:
+                if llama.verbose:
+                    print(str(e), file=sys.stderr)
+                grammar = llama_grammar.LlamaGrammar.from_string(
+                    llama_grammar.JSON_GBNF, verbose=llama.verbose
+                )
+
+        completion_or_chunks = llama.create_completion(
+            prompt=prompt,
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            min_p=min_p,
+            typical_p=typical_p,
+            logprobs=top_logprobs if logprobs else None,
+            stream=stream,
+            stop=stop,
+            seed=seed,
+            max_tokens=max_tokens,
+            presence_penalty=presence_penalty,
+            frequency_penalty=frequency_penalty,
+            repeat_penalty=repeat_penalty,
+            tfs_z=tfs_z,
+            mirostat_mode=mirostat_mode,
+            mirostat_tau=mirostat_tau,
+            mirostat_eta=mirostat_eta,
+            model=model,
+            logits_processor=logits_processor,
+            grammar=grammar,
+            logit_bias=logit_bias,
+        )
+
+        if tool is not None:
+            tool_name = tool["function"]["name"]
+            return _convert_completion_to_chat_function(
+                tool_name, completion_or_chunks, stream
+            )
+        return _convert_completion_to_chat(completion_or_chunks, stream=stream)
+
+    @staticmethod
+    def _load_image(image_url: str) -> bytes:
+        if image_url.startswith("data:"):
+            import base64
+
+            image_bytes = base64.b64decode(image_url.split(",")[1])
+            return image_bytes
+        else:
+            import urllib.request
+
+            with urllib.request.urlopen(image_url) as f:
+                image_bytes = f.read()
+                return image_bytes
+
+    @staticmethod
+    def get_image_urls(messages: List[llama_types.ChatCompletionRequestMessage]):
+        image_urls: List[str] = []
+        for message in messages:
+            if message["role"] == "user":
+                if message["content"] is None:
+                    continue
+                for content in message["content"]:
+                    if isinstance(content, dict) and "type" in content:
+                        if content["type"] == "image_url":
+                            if (
+                                isinstance(content["image_url"], dict)
+                                and "url" in content["image_url"]
+                            ):
+                                image_urls.append(content["image_url"]["url"])
+                            else:
+                                image_urls.append(content["image_url"])
+        return image_urls
+
+    @classmethod
+    def from_pretrained(
+        cls,
+        repo_id: str,
+        filename: Optional[str],
+        local_dir: Optional[Union[str, os.PathLike[str]]] = None,
+        local_dir_use_symlinks: Union[bool, Literal["auto"]] = "auto",
+        cache_dir: Optional[Union[str, os.PathLike[str]]] = None,
+        **kwargs: Any,
+    ) -> "MTMDChatHandler":
+        import fnmatch
+        from pathlib import Path
+
+        try:
+            from huggingface_hub import hf_hub_download, HfFileSystem  # type: ignore
+            from huggingface_hub.utils import validate_repo_id  # type: ignore
+        except ImportError:
+            raise ImportError(
+                "Llama.from_pretrained requires the huggingface-hub package. "
+                "You can install it with `pip install huggingface-hub`."
+            )
+
+        validate_repo_id(repo_id)
+
+        hffs = HfFileSystem()
+
+        files = [
+            file["name"] if isinstance(file, dict) else file
+            for file in hffs.ls(repo_id)  # type: ignore
+        ]
+
+        file_list: List[str] = []
+        for file in files:
+            rel_path = Path(file).relative_to(repo_id)
+            file_list.append(str(rel_path))
+
+        matching_files = [file for file in file_list if fnmatch.fnmatch(file, filename)]  # type: ignore
+
+        if len(matching_files) == 0:
+            raise ValueError(
+                f"No file found in {repo_id} that match {filename}\n\n"
+                f"Available Files:\n{json.dumps(file_list)}"
+            )
+
+        if len(matching_files) > 1:
+            raise ValueError(
+                f"Multiple files found in {repo_id} matching {filename}\n\n"
+                f"Available Files:\n{json.dumps(files)}"
+            )
+
+        (matching_file,) = matching_files
+
+        subfolder = str(Path(matching_file).parent)
+        filename = Path(matching_file).name
+
+        hf_hub_download(
+            repo_id=repo_id,
+            filename=filename,
+            subfolder=subfolder,
+            local_dir=cast(Union[str, Path, None], local_dir),
+            local_dir_use_symlinks=local_dir_use_symlinks,
+            cache_dir=cast(Union[str, Path, None], cache_dir),
+        )
+
+        if local_dir is None:
+            model_path = hf_hub_download(
+                repo_id=repo_id,
+                filename=filename,
+                subfolder=subfolder,
+                local_dir=local_dir,
+                local_dir_use_symlinks=local_dir_use_symlinks,
+                cache_dir=cast(Union[str, Path, None], cache_dir),
+                local_files_only=True,
+            )
+        else:
+            model_path = os.path.join(local_dir, filename)
+
+        return cls(
+            clip_model_path=model_path,
+            **kwargs,
+        )
+
+
+class Gemma4ChatHandler(MTMDChatHandler):
+    pass
+
+
 class ObsidianChatHandler(Llava15ChatHandler):
     # Prompt Format
-    # The model followed ChatML format. However, with ### as the seperator
+    # The model followed ChatML format. However, with ### as the separator
 
     # <|im_start|>user
     # What is this sign about?\n<image>
@@ -3443,7 +4050,6 @@ class MiniCPMv26ChatHandler(Llava15ChatHandler):
         "{% endif %}"
         "{% endif %}"
         "{% endfor %}"
-
         "{% for content in message['content'] %}"
         "{% if content.type == 'text' %}"
         "{{ content.text }}"
@@ -3465,8 +4071,8 @@ class Qwen25VLChatHandler(Llava15ChatHandler):
     DEFAULT_SYSTEM_MESSAGE = "You are a helpful assistant."
 
     CHAT_FORMAT = (
-        #"{% set image_count = namespace(value=0) %}"
-        #"{% set video_count = namespace(value=0) %}"
+        # "{% set image_count = namespace(value=0) %}"
+        # "{% set video_count = namespace(value=0) %}"
         "{% for message in messages %}"
         "{% if loop.first and message['role'] != 'system' %}"
         "<|im_start|>system\n"
@@ -3483,7 +4089,7 @@ class Qwen25VLChatHandler(Llava15ChatHandler):
         "{% else %}"
         "{{ content.image_url.url }}"
         "{% endif %}"
-        #"{% set image_count.value = image_count.value + 1 %}"
+        # "{% set image_count.value = image_count.value + 1 %}"
         "{% elif content['type'] == 'text' %}"
         "{{ content['text'] }}"
         "{% endif %}"
@@ -3495,25 +4101,28 @@ class Qwen25VLChatHandler(Llava15ChatHandler):
     )
 
     def __call__(self, **kwargs):
-        llama = kwargs['llama']
+        llama = kwargs["llama"]
 
         # Clear state for multiple runs
         llama.reset()
         llama._ctx.kv_cache_clear()
         llama.n_tokens = 0
 
-        if hasattr(llama, 'input_ids'):
+        if hasattr(llama, "input_ids"):
             llama.input_ids.fill(0)
 
         # Clear any handler state
-        if hasattr(self, '_last_image_embed'):
+        if hasattr(self, "_last_image_embed"):
             self._last_image_embed = None
             self._last_image_hash = None
 
         if self.verbose:
-            messages = kwargs.get('messages', [])
+            messages = kwargs.get("messages", [])
             image_count = len(self.get_image_urls(messages))
-            print(f"Minimal - Cleared state, processing {image_count} images", file=sys.stderr)
+            print(
+                f"Minimal - Cleared state, processing {image_count} images",
+                file=sys.stderr,
+            )
 
         # Use parent implementation
         return super().__call__(**kwargs)
@@ -3687,7 +4296,9 @@ def chatml_function_calling(
     stop = (
         [stop, "<|im_end|>"]
         if isinstance(stop, str)
-        else stop + ["<|im_end|>"] if stop else ["<|im_end|>"]
+        else stop + ["<|im_end|>"]
+        if stop
+        else ["<|im_end|>"]
     )
 
     # Case 1: No tool choice by user
@@ -3789,7 +4400,7 @@ def chatml_function_calling(
     # Case 3: Automatic tool choice
     assert isinstance(tool_choice, str) and tool_choice == "auto"
     function_names = " | ".join(
-        [f'''"functions.{tool['function']['name']}:"''' for tool in tools]
+        [f'''"functions.{tool["function"]["name"]}:"''' for tool in tools]
     )
     initial_gbnf_tool_grammar = (
         """root   ::= functions | "message:"\n"""
@@ -3965,7 +4576,9 @@ def chatml_function_calling(
                 {
                     "finish_reason": "tool_calls",
                     "index": 0,
-                    "logprobs": _convert_text_completion_logprobs_to_chat(completion["choices"][0]["logprobs"]),
+                    "logprobs": _convert_text_completion_logprobs_to_chat(
+                        completion["choices"][0]["logprobs"]
+                    ),
                     "message": {
                         "role": "assistant",
                         "content": None,

@@ -297,7 +297,7 @@ def _build_repetition(
     if max_items is not None:
         result += opt_repetitions(max_items - min_items, prefix_with_sep=min_items > 0)
     else:
-        item_operator = f'({separator_rule + " " if separator_rule else ""}{item_rule})'
+        item_operator = f"({separator_rule + ' ' if separator_rule else ''}{item_rule})"
 
         if min_items == 0 and separator_rule:
             result = f"({item_rule} {item_operator}*)?"
@@ -450,9 +450,9 @@ class SchemaConverter:
                 ref = n.get("$ref")
                 if ref is not None and ref not in self._refs:
                     if ref.startswith("https://"):
-                        assert (
-                            self._allow_fetch
-                        ), "Fetching remote schemas is not allowed (use --allow-fetch for force)"
+                        assert self._allow_fetch, (
+                            "Fetching remote schemas is not allowed (use --allow-fetch for force)"
+                        )
                         import requests
 
                         frag_split = ref.split("#")
@@ -475,9 +475,9 @@ class SchemaConverter:
                         raise ValueError(f"Unsupported ref {ref}")
 
                     for sel in ref.split("#")[-1].split("/")[1:]:
-                        assert (
-                            target is not None and sel in target
-                        ), f"Error resolving ref {ref}: {sel} not in {target}"
+                        assert target is not None and sel in target, (
+                            f"Error resolving ref {ref}: {sel} not in {target}"
+                        )
                         target = target[sel]
 
                     self._refs[ref] = target
@@ -492,7 +492,7 @@ class SchemaConverter:
     def _generate_union_rule(self, name, alt_schemas):
         return " | ".join(
             (
-                self.visit(alt_schema, f'{name}{"-" if name else "alternative-"}{i}')
+                self.visit(alt_schema, f"{name}{'-' if name else 'alternative-'}{i}")
                 for i, alt_schema in enumerate(alt_schemas)
             )
         )
@@ -510,9 +510,9 @@ class SchemaConverter:
         we define sub-rules to keep the output lean.
         """
 
-        assert pattern.startswith("^") and pattern.endswith(
-            "$"
-        ), 'Pattern must start with "^" and end with "$"'
+        assert pattern.startswith("^") and pattern.endswith("$"), (
+            'Pattern must start with "^" and end with "$"'
+        )
         pattern = pattern[1:-1]
         sub_rule_ids = {}
 
@@ -566,15 +566,15 @@ class SchemaConverter:
                 elif c == "(":
                     i += 1
                     if i < length:
-                        assert (
-                            pattern[i] != "?"
-                        ), f'Unsupported pattern syntax "{pattern[i]}" at index {i} of /{pattern}/'
+                        assert pattern[i] != "?", (
+                            f'Unsupported pattern syntax "{pattern[i]}" at index {i} of /{pattern}/'
+                        )
                     seq.append((f"({to_rule(transform())})", False))
                 elif c == ")":
                     i += 1
-                    assert (
-                        start > 0 and pattern[start - 1] == "("
-                    ), f"Unbalanced parentheses; start = {start}, i = {i}, pattern = {pattern}"
+                    assert start > 0 and pattern[start - 1] == "(", (
+                        f"Unbalanced parentheses; start = {start}, i = {i}, pattern = {pattern}"
+                    )
                     return join_seq()
                 elif c == "[":
                     square_brackets = c
@@ -586,9 +586,9 @@ class SchemaConverter:
                         else:
                             square_brackets += pattern[i]
                             i += 1
-                    assert (
-                        i < length
-                    ), f"Unbalanced square brackets; start = {start}, i = {i}, pattern = {pattern}"
+                    assert i < length, (
+                        f"Unbalanced square brackets; start = {start}, i = {i}, pattern = {pattern}"
+                    )
                     square_brackets += "]"
                     i += 1
                     seq.append((square_brackets, False))
@@ -604,9 +604,9 @@ class SchemaConverter:
                     while i < length and pattern[i] != "}":
                         curly_brackets += pattern[i]
                         i += 1
-                    assert (
-                        i < length
-                    ), f"Unbalanced curly brackets; start = {start}, i = {i}, pattern = {pattern}"
+                    assert i < length, (
+                        f"Unbalanced curly brackets; start = {start}, i = {i}, pattern = {pattern}"
+                    )
                     curly_brackets += "}"
                     i += 1
                     nums = [s.strip() for s in curly_brackets[1:-1].split(",")]
@@ -777,13 +777,13 @@ class SchemaConverter:
                     rule_name,
                     '"[" space '
                     + ' "," space '.join(
-                        self.visit(item, f'{name}{"-" if name else ""}tuple-{i}')
+                        self.visit(item, f"{name}{'-' if name else ''}tuple-{i}")
                         for i, item in enumerate(items)
                     )
                     + ' "]" space',
                 )
             else:
-                item_rule_name = self.visit(items, f'{name}{"-" if name else ""}item')
+                item_rule_name = self.visit(items, f"{name}{'-' if name else ''}item")
                 min_items = schema.get("minItems", 0)
                 max_items = schema.get("maxItems")
                 return self._add_rule(
@@ -873,17 +873,17 @@ class SchemaConverter:
         prop_kv_rule_names = {}
         for prop_name, prop_schema in properties:
             prop_rule_name = self.visit(
-                prop_schema, f'{name}{"-" if name else ""}{prop_name}'
+                prop_schema, f"{name}{'-' if name else ''}{prop_name}"
             )
             prop_kv_rule_names[prop_name] = self._add_rule(
-                f'{name}{"-" if name else ""}{prop_name}-kv',
+                f"{name}{'-' if name else ''}{prop_name}-kv",
                 rf'{self._format_literal(json.dumps(prop_name))} space ":" space {prop_rule_name}',
             )
         required_props = [k for k in sorted_props if k in required]
         optional_props = [k for k in sorted_props if k not in required]
 
         if additional_properties == True or isinstance(additional_properties, dict):
-            sub_name = f'{name}{"-" if name else ""}additional'
+            sub_name = f"{name}{'-' if name else ''}additional"
             value_rule = self.visit(
                 {} if additional_properties == True else additional_properties,
                 f"{sub_name}-value",
@@ -908,7 +908,7 @@ class SchemaConverter:
                 kv_rule_name = prop_kv_rule_names[k]
                 if k == "*":
                     res = self._add_rule(
-                        f'{name}{"-" if name else ""}additional-kvs',
+                        f"{name}{'-' if name else ''}additional-kvs",
                         f'{kv_rule_name} ( "," space ' + kv_rule_name + " )*",
                     )
                 elif first_is_optional:
@@ -917,7 +917,7 @@ class SchemaConverter:
                     res = kv_rule_name
                 if len(rest) > 0:
                     res += " " + self._add_rule(
-                        f'{name}{"-" if name else ""}{k}-rest',
+                        f"{name}{'-' if name else ''}{k}-rest",
                         get_recursive_refs(rest, first_is_optional=True),
                     )
                 return res

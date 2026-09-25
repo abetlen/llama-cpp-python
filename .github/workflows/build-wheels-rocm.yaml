@@ -1,0 +1,283 @@
+name: Build Wheels (ROCm)
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release tag to upload wheel assets to
+        required: false
+        type: string
+      amdgpu_targets:
+        description: AMDGPU targets to compile into the Linux ROCm wheel
+        required: false
+        default: gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101;gfx1102;gfx1150;gfx1151;gfx1200;gfx1201
+      windows_amdgpu_targets:
+        description: AMDGPU targets to compile into the Windows HIP Radeon wheel
+        required: false
+        default: gfx1150;gfx1151;gfx1200;gfx1201;gfx1100;gfx1101;gfx1102;gfx1030;gfx1031;gfx1032
+
+permissions:
+  contents: write
+
+jobs:
+  build_wheels:
+    name: Build Wheel ${{ matrix.os }} ${{ matrix.pyver }} ROCm ${{ matrix.rocm }}
+    runs-on: ${{ matrix.os }}
+    container:
+      image: rocm/dev-ubuntu-22.04:${{ matrix.rocm }}-complete
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            pyver: "3.9"
+            rocm: "7.2.4"
+            amdgpu_targets: gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101;gfx1102;gfx1150;gfx1151;gfx1200;gfx1201
+
+    steps:
+      - name: Install system dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git cmake lsb-release ninja-build patchelf
+
+      - uses: actions/checkout@v6
+        with:
+          submodules: "recursive"
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.pyver }}
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install auditwheel build wheel
+
+      - name: Build ROCm wheel
+        env:
+          MATRIX_AMDGPU_TARGETS: ${{ matrix.amdgpu_targets }}
+          INPUT_AMDGPU_TARGETS: ${{ inputs.amdgpu_targets }}
+        run: |
+          export ROCM_PATH="${ROCM_PATH:-/opt/rocm}"
+          export HIP_PATH="${HIP_PATH:-$ROCM_PATH}"
+          export PATH="$ROCM_PATH/bin:$ROCM_PATH/llvm/bin:$PATH"
+          export LD_LIBRARY_PATH="$ROCM_PATH/lib:$ROCM_PATH/lib64:${LD_LIBRARY_PATH:-}"
+          export CC="$ROCM_PATH/llvm/bin/clang"
+          export CXX="$ROCM_PATH/llvm/bin/clang++"
+          export HIPCXX="$ROCM_PATH/llvm/bin/clang"
+          export CMAKE_GENERATOR=Ninja
+
+          hipconfig --version
+          hipcc --version
+
+          rocm_tag="$(hipconfig --version | sed -E 's/^([0-9]+)\.([0-9]+).*/\1\2/')"
+          echo "ROCM_VERSION=$rocm_tag" >> "$GITHUB_ENV"
+
+          amdgpu_targets="${INPUT_AMDGPU_TARGETS:-$MATRIX_AMDGPU_TARGETS}"
+          export CMAKE_ARGS="-DGGML_HIP=on -DGGML_NATIVE=off -DGGML_OPENMP=OFF -DGGML_AVX=off -DGGML_AVX2=off -DGGML_FMA=off -DGGML_F16C=off -DAMDGPU_TARGETS=$amdgpu_targets -DCMAKE_HIP_ARCHITECTURES=$amdgpu_targets"
+          python -m build --wheel
+
+      - name: Repair Linux wheel
+        run: |
+          export ROCM_PATH="${ROCM_PATH:-/opt/rocm}"
+          export LD_LIBRARY_PATH="$PWD/llama_cpp/lib:$ROCM_PATH/lib:$ROCM_PATH/lib64:${LD_LIBRARY_PATH:-}"
+          mkdir -p wheelhouse
+          python -m auditwheel repair \
+            --exclude libamdhip64.so \
+            --exclude libamdhip64.so.6 \
+            --exclude libamdhip64.so.7 \
+            --exclude libhiprtc.so \
+            --exclude libhiprtc.so.6 \
+            --exclude libhiprtc.so.7 \
+            --exclude libhipblas.so \
+            --exclude libhipblas.so.2 \
+            --exclude libhipblas.so.3 \
+            --exclude libhipblaslt.so \
+            --exclude libhipblaslt.so.0 \
+            --exclude libhipblaslt.so.1 \
+            --exclude librocblas.so \
+            --exclude librocblas.so.4 \
+            --exclude librocblas.so.5 \
+            --exclude libhsa-runtime64.so.1 \
+            --exclude libhsakmt.so.1 \
+            -w wheelhouse \
+            dist/*.whl
+          rm dist/*.whl
+          cp wheelhouse/*.whl dist/
+          python -m auditwheel show dist/*.whl
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wheels-rocm${{ env.ROCM_VERSION }}-${{ matrix.os }}
+          path: ./wheelhouse/*.whl
+
+  build_wheels_windows_hip:
+    name: Build Wheel windows-2022 ${{ matrix.pyver }} HIP ${{ matrix.name }}
+    runs-on: windows-2022
+    env:
+      HIPSDK_INSTALLER_VERSION: "26.Q1"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: radeon
+            pyver: "3.9"
+            amdgpu_targets: gfx1150;gfx1151;gfx1200;gfx1201;gfx1100;gfx1101;gfx1102;gfx1030;gfx1031;gfx1032
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: "recursive"
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.pyver }}
+          cache: "pip"
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build wheel
+
+      - name: Grab rocWMMA package
+        run: |
+          curl -o rocwmma.deb "https://repo.radeon.com/rocm/apt/7.2.1/pool/main/r/rocwmma-dev/rocwmma-dev_2.2.0.70201-81~24.04_amd64.deb"
+          7z x rocwmma.deb
+          7z x data.tar
+
+      - name: Cache ROCm installation
+        id: cache-rocm
+        uses: actions/cache@v5
+        with:
+          path: C:\Program Files\AMD\ROCm
+          key: cache-gha-rocm-${{ env.HIPSDK_INSTALLER_VERSION }}-${{ runner.os }}
+
+      - name: Install ROCm
+        if: steps.cache-rocm.outputs.cache-hit != 'true'
+        run: |
+          $ErrorActionPreference = "Stop"
+          Invoke-WebRequest `
+            -Uri "https://download.amd.com/developer/eula/rocm-hub/AMD-Software-PRO-Edition-${{ env.HIPSDK_INSTALLER_VERSION }}-Win11-For-HIP.exe" `
+            -OutFile "${env:RUNNER_TEMP}\rocm-install.exe"
+          $proc = Start-Process "${env:RUNNER_TEMP}\rocm-install.exe" -ArgumentList '-install' -NoNewWindow -PassThru
+          $completed = $proc.WaitForExit(1800000)
+          if (-not $completed) {
+            $proc.Kill()
+            throw "ROCm installation timed out after 30 minutes"
+          }
+          if ($proc.ExitCode -ne 0) {
+            throw "ROCm installation failed with exit code $($proc.ExitCode)"
+          }
+
+      - name: Verify ROCm
+        run: |
+          $clangPath = Get-ChildItem 'C:\Program Files\AMD\ROCm\*\bin\clang.exe' | Select-Object -First 1
+          if (-not $clangPath) {
+            throw "ROCm installation not found"
+          }
+          & $clangPath.FullName --version
+
+      - name: Build HIP wheel
+        env:
+          MATRIX_AMDGPU_TARGETS: ${{ matrix.amdgpu_targets }}
+          INPUT_AMDGPU_TARGETS: ${{ inputs.windows_amdgpu_targets }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $hipPath = Resolve-Path 'C:\Program Files\AMD\ROCm\*\bin\clang.exe' | Split-Path | Split-Path
+          $rocwmmaInclude = (Join-Path $PWD 'opt\rocm-7.2.1\include').Replace('\', '/')
+          $amdgpuTargets = if ($env:INPUT_AMDGPU_TARGETS) { $env:INPUT_AMDGPU_TARGETS } else { $env:MATRIX_AMDGPU_TARGETS }
+
+          $env:HIP_PATH = $hipPath
+          $env:ROCM_PATH = $hipPath
+          $env:CMAKE_PREFIX_PATH = $hipPath
+          $env:HIP_PLATFORM = 'amd'
+          $env:PATH = "$hipPath\bin;$env:PATH"
+          $env:CC = "$hipPath\bin\clang.exe"
+          $env:CXX = "$hipPath\bin\clang++.exe"
+          $env:HIPCXX = "$hipPath\bin\clang.exe"
+          $env:CMAKE_GENERATOR = 'Unix Makefiles'
+          $env:CXXFLAGS = "-I$rocwmmaInclude -Wno-ignored-attributes -Wno-nested-anon-types"
+          $env:CMAKE_ARGS = "-DGGML_HIP=ON -DGGML_HIP_ROCWMMA_FATTN=ON -DGGML_NATIVE=OFF -DGGML_AVX=OFF -DGGML_AVX2=OFF -DGGML_FMA=OFF -DGGML_F16C=OFF -DGPU_TARGETS=$amdgpuTargets"
+
+          python -m build --wheel
+
+      - name: Bundle ROCm runtime DLLs
+        run: |
+          $ErrorActionPreference = "Stop"
+          $hipPath = Resolve-Path 'C:\Program Files\AMD\ROCm\*\bin\clang.exe' | Split-Path | Split-Path
+          $wheel = Get-ChildItem dist\*.whl | Select-Object -First 1
+          python -m wheel unpack $wheel.FullName -d wheel-unpacked
+          $wheelRoot = Get-ChildItem wheel-unpacked -Directory | Select-Object -First 1
+          $libDir = Join-Path $wheelRoot.FullName 'llama_cpp\lib'
+          New-Item -ItemType Directory -Force $libDir | Out-Null
+
+          $dllPatterns = @(
+            'amdhip64.dll',
+            'hiprtc*.dll',
+            'libhipblas.dll',
+            'libhipblaslt.dll',
+            'rocblas.dll'
+          )
+          foreach ($pattern in $dllPatterns) {
+            Copy-Item (Join-Path $hipPath "bin\$pattern") $libDir -ErrorAction SilentlyContinue
+          }
+
+          New-Item -ItemType Directory -Force (Join-Path $libDir 'rocblas\library') | Out-Null
+          New-Item -ItemType Directory -Force (Join-Path $libDir 'hipblaslt\library') | Out-Null
+          Copy-Item "$hipPath\bin\rocblas\library\*" (Join-Path $libDir 'rocblas\library') -Recurse -Force
+          Copy-Item "$hipPath\bin\hipblaslt\library\*" (Join-Path $libDir 'hipblaslt\library') -Recurse -Force
+
+          Remove-Item dist\*.whl
+          python -m wheel pack $wheelRoot.FullName -d dist
+          New-Item -ItemType Directory -Force wheelhouse | Out-Null
+          Copy-Item dist/*.whl wheelhouse/
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wheels-hip-${{ matrix.name }}-windows-2022
+          path: ./wheelhouse/*.whl
+
+  release_rocm:
+    name: Release ROCm
+    needs: [build_wheels]
+    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          merge-multiple: true
+          path: dist
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: dist/*
+          # Set release name to <tag>-rocm<rocm_version>.
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}-rocm72
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  release_hip:
+    name: Release HIP
+    needs: [build_wheels_windows_hip]
+    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          merge-multiple: true
+          path: dist
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: dist/*
+          # Set release name to <tag>-hip-radeon.
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}-hip-radeon
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

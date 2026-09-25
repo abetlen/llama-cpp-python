@@ -54,8 +54,12 @@ cat << EOF > "$output_dir/llama-cpp-python/index.html"
     <h1>Links for llama-cpp-python</h1>
 EOF
 
-# Filter releases by pattern
-releases=$(grep -E "$pattern" "$current_dir/all_releases.txt")
+# Filter releases by pattern. Some backend indexes are valid even when there
+# are no matching releases yet.
+releases=$(grep -E "$pattern" "$current_dir/all_releases.txt" || true)
+if [ -z "$releases" ]; then
+    log_info "No releases found matching pattern: $pattern"
+fi
 
 # Prepare curl headers
 headers=('--header' 'Accept: application/vnd.github.v3+json')
@@ -81,15 +85,15 @@ for release in $releases; do
         continue
     fi
 
-    # Get release version from release ie v0.1.0-cu121 -> v0.1.0
-    release_version=$(echo "$release" | grep -oE "^[v]?[0-9]+\.[0-9]+\.[0-9]+")
-    echo "    <h2>$release_version</h2>" >> "$output_dir/llama-cpp-python/index.html"
-    
     wheel_urls=$(echo "$response" | jq -r '.assets[] | select(.name | endswith(".whl")) | .browser_download_url')
     if [ -z "$wheel_urls" ]; then
         log_error "No wheel files found for release $release"
         continue
     fi
+
+    # Get release version from release ie v0.1.0-cu121 -> v0.1.0
+    release_version=$(echo "$release" | grep -oE "^[v]?[0-9]+\.[0-9]+\.[0-9]+")
+    echo "    <h2>$release_version</h2>" >> "$output_dir/llama-cpp-python/index.html"
 
     echo "$wheel_urls" | while read -r asset; do
         echo "    <a href=\"$asset\">$asset</a>" >> "$output_dir/llama-cpp-python/index.html"

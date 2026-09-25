@@ -1,0 +1,130 @@
+name: Build Wheels (Vulkan)
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release tag to upload wheel assets to
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  VULKAN_SDK_VERSION: "1.4.341.0"
+  VULKAN_SDK_LINUX_SHA256: "ed66477d587a5587dc3601b1c2cdcc1fab5529c505f53a00171876cecd9b4fbe"
+
+jobs:
+  build_wheels:
+    name: Build Vulkan wheel on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            pyver: "3.9"
+            artifact: wheels-vulkan-ubuntu-22.04
+          - os: windows-2022
+            pyver: "3.9"
+            artifact: wheels-vulkan-windows-2022
+
+    steps:
+      - name: Set up MSVC
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - uses: actions/checkout@v6
+        with:
+          submodules: "recursive"
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.pyver }}
+          cache: "pip"
+
+      - name: Install Vulkan SDK
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install vulkan-sdk --version="$env:VULKAN_SDK_VERSION" --no-progress -y
+          $vulkanSdk = Join-Path 'C:\VulkanSDK' $env:VULKAN_SDK_VERSION
+          if (-not (Test-Path $vulkanSdk)) {
+            throw "Failed to find Vulkan SDK at $vulkanSdk"
+          }
+          "VULKAN_SDK=$vulkanSdk" >> $env:GITHUB_ENV
+          "$vulkanSdk\Bin" >> $env:GITHUB_PATH
+          & "$vulkanSdk\Bin\glslc.exe" --version
+
+      - name: Install build dependencies
+        if: runner.os == 'Windows'
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build wheel
+
+      - name: Install Windows build dependencies
+        if: runner.os == 'Windows'
+        run: python -m pip install ninja
+
+      - name: Build Vulkan wheel
+        if: runner.os == 'Linux'
+        uses: pypa/cibuildwheel@v3.4.1
+        env:
+          CIBW_BUILD: "cp38-manylinux_*"
+          CIBW_ARCHS: "auto64"
+          CIBW_MANYLINUX_X86_64_IMAGE: "manylinux2014"
+          CIBW_BEFORE_ALL_LINUX: >
+            yum install -y xz &&
+            curl -L https://micro.mamba.pm/api/micromamba/linux-64/latest -o /tmp/micromamba.tar.bz2 &&
+            mkdir -p /tmp/micromamba &&
+            tar -xjf /tmp/micromamba.tar.bz2 -C /tmp/micromamba bin/micromamba &&
+            /tmp/micromamba/bin/micromamba create -y -p /opt/vulkan -c conda-forge shaderc libvulkan-loader spirv-headers &&
+            /opt/vulkan/bin/glslc --version &&
+            curl -fL "https://sdk.lunarg.com/sdk/download/${{ env.VULKAN_SDK_VERSION }}/linux/vulkansdk-linux-x86_64-${{ env.VULKAN_SDK_VERSION }}.tar.xz" -o /tmp/vulkan-sdk.tar.xz &&
+            echo "${{ env.VULKAN_SDK_LINUX_SHA256 }}  /tmp/vulkan-sdk.tar.xz" | sha256sum -c - &&
+            mkdir -p /opt/vulkan-sdk &&
+            tar -xf /tmp/vulkan-sdk.tar.xz -C /opt/vulkan-sdk
+          CIBW_ENVIRONMENT_LINUX: >
+            CMAKE_ARGS="-DGGML_NATIVE=off -DGGML_METAL=OFF -DGGML_OPENMP=OFF -DGGML_VULKAN=on -DCMAKE_PREFIX_PATH=/opt/vulkan -DVulkan_INCLUDE_DIR=/opt/vulkan-sdk/${{ env.VULKAN_SDK_VERSION }}/x86_64/include -DVulkan_LIBRARY=/opt/vulkan/lib/libvulkan.so -DVulkan_GLSLC_EXECUTABLE=/opt/vulkan/bin/glslc"
+          CIBW_REPAIR_WHEEL_COMMAND_LINUX: "LD_LIBRARY_PATH=/project/llama_cpp/lib:/opt/vulkan/lib auditwheel repair --exclude libvulkan.so.1 -w {dest_dir} {wheel}"
+        with:
+          package-dir: .
+          output-dir: wheelhouse
+
+      - name: Build Vulkan wheel
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:CMAKE_GENERATOR = 'Ninja'
+          $env:CMAKE_ARGS = '-DGGML_NATIVE=off -DGGML_VULKAN=on'
+          python -m build --wheel
+          New-Item -ItemType Directory -Force wheelhouse | Out-Null
+          Copy-Item dist/*.whl wheelhouse/
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}
+          path: ./wheelhouse/*.whl
+
+  release:
+    name: Release
+    needs: [build_wheels]
+    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          merge-multiple: true
+          path: dist
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: dist/*
+          # Set release name to <tag>-vulkan.
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}-vulkan
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

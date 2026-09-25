@@ -4,7 +4,7 @@ import multiprocessing
 
 import llama_cpp
 
-llama_cpp.llama_backend_init(numa=False)
+llama_cpp.llama_backend_init()
 
 N_THREADS = multiprocessing.cpu_count()
 MODEL_PATH = os.environ.get("MODEL", "../models/7B/ggml-model.bin")
@@ -13,8 +13,9 @@ prompt = b"\n\n### Instruction:\nWhat is the capital of France?\n\n### Response:
 
 lparams = llama_cpp.llama_model_default_params()
 cparams = llama_cpp.llama_context_default_params()
-model = llama_cpp.llama_load_model_from_file(MODEL_PATH.encode("utf-8"), lparams)
-ctx = llama_cpp.llama_new_context_with_model(model, cparams)
+model = llama_cpp.llama_model_load_from_file(MODEL_PATH.encode("utf-8"), lparams)
+ctx = llama_cpp.llama_init_from_model(model, cparams)
+vocab = llama_cpp.llama_model_get_vocab(model)
 
 # determine the required inference memory per token:
 tmp = [0, 1, 2, 3]
@@ -28,13 +29,13 @@ prompt = b" " + prompt
 
 embd_inp = (llama_cpp.llama_token * (len(prompt) + 1))()
 n_of_tok = llama_cpp.llama_tokenize(
-    model=model,
-    text=bytes(str(prompt), "utf-8"),
-    text_len=len(embd_inp),
+    vocab=vocab,
+    text=prompt,
+    text_len=len(prompt),
     tokens=embd_inp,
-    n_max_tokens=len(embd_inp),
-    add_bos=False,
-    special=False,
+    n_tokens_max=len(embd_inp),
+    add_special=False,
+    parse_special=False,
 )
 embd_inp = embd_inp[:n_of_tok]
 
@@ -70,7 +71,7 @@ while remaining_tokens > 0:
     embd = []
     if len(embd_inp) <= input_consumed:
         logits = llama_cpp.llama_get_logits(ctx)
-        n_vocab = llama_cpp.llama_n_vocab(model)
+        n_vocab = llama_cpp.llama_vocab_n_tokens(vocab)
 
         _arr = (llama_cpp.llama_token_data * n_vocab)(
             *[
@@ -114,7 +115,7 @@ while remaining_tokens > 0:
             size = 32
             buffer = (ctypes.c_char * size)()
             n = llama_cpp.llama_token_to_piece(
-                model, llama_cpp.llama_token(id), buffer, size
+                vocab, llama_cpp.llama_token(id), buffer, size, 0, False
             )
             assert n <= size
             print(
@@ -123,7 +124,7 @@ while remaining_tokens > 0:
                 flush=True,
             )
 
-    if len(embd) > 0 and embd[-1] == llama_cpp.llama_token_eos(ctx):
+    if len(embd) > 0 and embd[-1] == llama_cpp.llama_vocab_eos(vocab):
         break
 
 print()
@@ -131,3 +132,4 @@ print()
 llama_cpp.llama_print_timings(ctx)
 
 llama_cpp.llama_free(ctx)
+llama_cpp.llama_model_free(model)

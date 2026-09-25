@@ -36,7 +36,7 @@ plugins:
               - typing
               - typing_extensions
               - ctypes
-          import:
+          inventories:
             - https://docs.python.org/3/objects.inv
             - https://numpy.org/doc/stable/objects.inv
 

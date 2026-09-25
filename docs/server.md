@@ -22,6 +22,15 @@ The server can then be started by running the following command:
 python3 -m llama_cpp.server --model <model_path>
 ```
 
+You can also pass chat-template kwargs at model load time from the CLI:
+
+```bash
+python3 -m llama_cpp.server \
+  --model <model_path> \
+  --chat_format chatml \
+  --chat_template_kwargs '{"enable_thinking": true}'
+```
+
 ### Server options
 
 For a full list of options, run:
@@ -146,6 +155,22 @@ Config files support all of the server and model options supported by the cli an
 The server supports routing requests to multiple models based on the `model` parameter in the request which matches against the `model_alias` in the config file.
 
 At the moment only a single model is loaded into memory at, the server will automatically load and unload models as needed.
+
+For a single-model config, `chat_template_kwargs` can be set directly on the model entry:
+
+```json
+{
+    "models": [
+        {
+            "model": "models/Qwen3.5-0.8B/qwen3.5-0.8b-q8_0.gguf",
+            "chat_format": "chatml",
+            "chat_template_kwargs": {
+                "enable_thinking": true
+            }
+        }
+    ]
+}
+```
 
 ```json
 {
