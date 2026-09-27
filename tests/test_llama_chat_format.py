@@ -92,3 +92,14 @@ def test_hf_tokenizer_config_str_to_chat_formatter():
     )
 
     assert chat_formatter_respoonse.prompt == ("<s>[INST] Hello, world! [/INST]</s>")
+
+
+def test_qwen_stops_on_im_end():
+    response = llama_chat_format.format_qwen(
+        messages=[
+            llama_types.ChatCompletionRequestUserMessage(role="user", content="hi"),
+        ],
+    )
+    stops = response.stop if isinstance(response.stop, list) else [response.stop]
+    assert "<|im_end|>" in stops
+    assert response.prompt.endswith("<|im_start|>assistant\n")

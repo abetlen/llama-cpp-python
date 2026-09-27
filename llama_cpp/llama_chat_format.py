@@ -1107,7 +1107,7 @@ def format_qwen(
     _sep = "<|im_end|>"
     _prompt = _format_chatml(system_message, _messages, _sep)
     _sep2 = "<|endoftext|>"
-    return ChatFormatterResponse(prompt=_prompt, stop=_sep2)
+    return ChatFormatterResponse(prompt=_prompt, stop=[_sep, _sep2])
 
 
 @register_chat_format("vicuna")
