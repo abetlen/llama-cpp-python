@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- fix(chat): stop Qwen generation on the turn-end token by @SashaMIT in #2374
 - feat: update llama.cpp to ggml-org/llama.cpp@fb34fc262
 
 ## [0.3.35]
