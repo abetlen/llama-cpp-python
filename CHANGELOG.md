@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- fix(grammar): preserve distinct JSON Schema reference identities by @Metis-dot
+- fix(grammar): preserve distinct JSON Schema reference identities by @Metis-dot in #2377
 
 ## [0.3.36]
 
