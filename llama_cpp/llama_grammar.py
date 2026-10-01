@@ -387,7 +387,7 @@ class SchemaConverter:
             "space": SPACE_RULE,
         }
         self._refs = {}
-        self._refs_being_resolved = set()
+        self._ref_rules = {}
 
     def _format_literal(self, literal):
         escaped = GRAMMAR_LITERAL_ESCAPE_RE.sub(
@@ -683,12 +683,24 @@ class SchemaConverter:
         )
 
     def _resolve_ref(self, ref):
-        ref_name = ref.split("/")[-1]
-        if ref_name not in self._rules and ref not in self._refs_being_resolved:
-            self._refs_being_resolved.add(ref)
-            resolved = self._refs[ref]
-            ref_name = self.visit(resolved, ref_name)
-            self._refs_being_resolved.remove(ref)
+        if ref in self._ref_rules:
+            return self._ref_rules[ref]
+
+        ref_name = INVALID_RULE_CHARS_RE.sub("-", ref.split("/")[-1]) or "ref"
+        if ref_name in RESERVED_NAMES:
+            ref_name += "-"
+        base_name = ref_name
+        i = 0
+        while ref_name in self._rules:
+            ref_name = f"{base_name}{i}"
+            i += 1
+
+        # Reserve a distinct name before visiting recursive references.
+        self._ref_rules[ref] = ref_name
+        self._rules[ref_name] = ""
+        resolved_name = self.visit(self._refs[ref], ref_name)
+        if resolved_name != ref_name:
+            self._rules[ref_name] = resolved_name
         return ref_name
 
     def _generate_constant_rule(self, value):
