@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- fix: support unconstrained array item schemas by @tuanzirwar (PR pending)
+- fix: support unconstrained array item schemas by @tuanzirwar (#2378)
 
 ## [0.3.36]
 
