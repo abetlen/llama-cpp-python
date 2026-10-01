@@ -771,7 +771,9 @@ class SchemaConverter:
         elif schema_type in (None, "array") and (
             "items" in schema or "prefixItems" in schema
         ):
-            items = schema.get("items") or schema["prefixItems"]
+            items = schema.get("items") or schema.get("prefixItems")
+            if items is None:
+                items = schema["items"]
             if isinstance(items, list):
                 return self._add_rule(
                     rule_name,
@@ -830,7 +832,10 @@ class SchemaConverter:
                 + r' "\"" space',
             )
 
-        elif (schema_type == "object") or (len(schema) == 0):
+        elif len(schema) == 0:
+            return self._add_primitive(rule_name, PRIMITIVE_RULES["value"])
+
+        elif schema_type == "object":
             return self._add_rule(
                 rule_name, self._add_primitive("object", PRIMITIVE_RULES["object"])
             )
