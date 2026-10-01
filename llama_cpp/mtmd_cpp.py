@@ -335,9 +335,41 @@ mtmd_bitmap_lazy_callback = CFUNCTYPE(
     POINTER(c_char_p),
 )
 
+
+# // one decoded sub-batch of embeddings, passed to mtmd_helper_post_decode_callback
+# struct mtmd_helper_embd_batch {
+#     int32_t n_tokens;
+#     const float     * embd;   // [n_tokens, n_embd]
+#     int32_t           n_embd;
+#     const llama_pos * pos;    // [n_pos, n_tokens], section-major
+#     int32_t           n_pos;  // 4 for M-RoPE models, 1 otherwise
+#     llama_seq_id      seq_id;
+# };
+class mtmd_helper_embd_batch(Structure):
+    """One decoded sub-batch of embeddings, passed to mtmd_helper_post_decode_callback."""
+
+    if TYPE_CHECKING:
+        n_tokens: int
+        embd: "_Pointer[c_float]"
+        n_embd: int
+        pos: "_Pointer[llama_cpp.llama_pos]"
+        n_pos: int
+        seq_id: int
+
+    _fields_ = [
+        ("n_tokens", c_int32),
+        ("embd", POINTER(c_float)),
+        ("n_embd", c_int32),
+        ("pos", POINTER(llama_cpp.llama_pos)),
+        ("n_pos", c_int32),
+        ("seq_id", llama_cpp.llama_seq_id),
+    ]
+
+
+# typedef int32_t (*mtmd_helper_post_decode_callback)(const struct mtmd_helper_embd_batch * batch, void * user_data);
 mtmd_helper_post_decode_callback = CFUNCTYPE(
-    c_int,
-    llama_cpp.llama_batch,
+    c_int32,
+    POINTER(mtmd_helper_embd_batch),
     c_void_p,
 )
 
