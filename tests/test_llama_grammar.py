@@ -76,3 +76,56 @@ def test_grammar_anyof():
     grammar = llama_cpp.LlamaGrammar.from_json_schema(json.dumps(sch))
 
     # assert grammar.grammar is not None
+
+
+def test_grammar_unconstrained_array_items():
+    schema = {"type": "array", "items": {}}
+    grammar = llama_cpp.LlamaGrammar.from_json_schema(json.dumps(schema))
+    rules = dict(line.split(" ::= ", 1) for line in grammar._grammar.splitlines())
+    assert rules["item"] == "object | array | string | number | boolean | null"
+    assert "item" in rules["root"]
+
+
+def test_grammar_unconstrained_tuple_item():
+    schema = {"type": "array", "prefixItems": [{}, {"type": "integer"}]}
+    grammar = llama_cpp.LlamaGrammar.from_json_schema(json.dumps(schema))
+    rules = dict(line.split(" ::= ", 1) for line in grammar._grammar.splitlines())
+    assert rules["tuple-0"] == "object | array | string | number | boolean | null"
+    assert "integer" in rules["root"]
+
+
+def test_grammar_empty_schema_allows_any_json_value():
+    grammar = llama_cpp.LlamaGrammar.from_json_schema("{}")
+    rules = dict(line.split(" ::= ", 1) for line in grammar._grammar.splitlines())
+    assert rules["root"] == "object | array | string | number | boolean | null"
+
+
+def test_grammar_typed_array_preserves_item_constraints():
+    grammar = llama_cpp.LlamaGrammar.from_json_schema(
+        json.dumps(
+            {
+                "type": "array",
+                "items": {"type": "integer"},
+                "minItems": 1,
+                "maxItems": 2,
+            }
+        )
+    )
+    assert (
+        "integer"
+        in dict(line.split(" ::= ", 1) for line in grammar._grammar.splitlines())[
+            "root"
+        ]
+    )
+
+
+def test_grammar_closed_tuple_preserves_prefix_items():
+    schema = {
+        "type": "array",
+        "prefixItems": [{"type": "integer"}, {"type": "string"}],
+        "items": False,
+    }
+    grammar = llama_cpp.LlamaGrammar.from_json_schema(json.dumps(schema))
+    rules = dict(line.split(" ::= ", 1) for line in grammar._grammar.splitlines())
+    assert "integer" in rules["root"]
+    assert "string" in rules["root"]
