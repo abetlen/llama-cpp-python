@@ -1733,6 +1733,7 @@ class Llama:
             token_logprobs: List[Optional[float]] = []
             tokens: List[str] = []
             top_logprobs: List[Optional[Dict[str, float]]] = []
+            top_logprob_tokens: List[Optional[Dict[int, float]]] = []
 
             if echo:
                 # Remove leading BOS token if exists
@@ -1777,8 +1778,13 @@ class Llama:
                     ): logprob
                     for logprob, i in sorted_logprobs[:logprobs]
                 }
+                top_logprob_token: Optional[Dict[int, float]] = {
+                    i: logprob for logprob, i in sorted_logprobs[:logprobs]
+                }
                 top_logprob.update({token_str: logprobs_token[int(token)]})
+                top_logprob_token.update({token: logprobs_token[int(token)]})
                 top_logprobs.append(top_logprob)
+                top_logprob_tokens.append(top_logprob_token)
             # Weird idosincracy of the OpenAI API where
             # token_logprobs and top_logprobs are null for
             # the first token.
@@ -1790,6 +1796,8 @@ class Llama:
                 "text_offset": text_offsets,
                 "token_logprobs": token_logprobs,
                 "top_logprobs": top_logprobs,
+                "top_logprob_tokens": top_logprob_tokens,
+                "all_logprobs": all_logprobs,
             }
 
         yield {
