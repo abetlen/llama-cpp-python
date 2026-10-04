@@ -7,11 +7,10 @@ permissions:
 
 jobs:
   build_wheels:
-    name: Build wheels on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [macos-14, macos-15]
+    # Two runners produced the same py3-none wheel filename, which collided
+    # when their artifacts were downloaded into one release directory.
+    name: Build wheels on macos-14
+    runs-on: macos-14
 
     steps:
       - uses: actions/checkout@v6
@@ -38,14 +37,18 @@ jobs:
           CIBW_REPAIR_WHEEL_COMMAND: ""
           CIBW_ARCHS: "arm64"
           CIBW_ENVIRONMENT: CMAKE_ARGS="-DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_APPLE_SILICON_PROCESSOR=arm64 -DGGML_METAL=on -DCMAKE_CROSSCOMPILING=ON"
-          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-*"
+          # wheel.py-api = py3 produces one wheel for all supported Python versions.
+          CIBW_BUILD: "cp39-*"
         with:
           package-dir: .
           output-dir: wheelhouse2
 
+      - name: Verify wheel archives
+        run: python3 scripts/verify-wheel-archives.py --expected-count 1 wheelhouse2/*.whl
+
       - uses: actions/upload-artifact@v7
         with:
-          name: wheels-mac_${{ matrix.os }}
+          name: wheels-mac_macos-14
           path: ./wheelhouse2/*.whl
 
   release:
@@ -54,10 +57,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
       - uses: actions/download-artifact@v8
         with:
-          merge-multiple: true
+          name: wheels-mac_macos-14
           path: dist2
+
+      - name: Verify release wheel archives
+        run: python3 scripts/verify-wheel-archives.py --expected-count 1 dist2/*.whl
 
       - uses: softprops/action-gh-release@v3
         with:
