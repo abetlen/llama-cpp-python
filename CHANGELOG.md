@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- fix(ci): prevent corrupted Metal wheel releases by @provoke210 in #2379
+
 ## [0.3.36]
 
 - feat: update llama.cpp to ggml-org/llama.cpp@0c1e57098
