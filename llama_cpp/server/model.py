@@ -236,9 +236,9 @@ class LlamaProxy:
             assert isinstance(settings.kv_overrides, list)
             kv_overrides = {}
             for kv in settings.kv_overrides:
-                key, value = kv.split("=")
+                key, value = kv.split("=", 1)
                 if ":" in value:
-                    value_type, value = value.split(":")
+                    value_type, value = value.split(":", 1)
                     if value_type == "bool":
                         kv_overrides[key] = value.lower() in ["true", "1"]
                     elif value_type == "int":
