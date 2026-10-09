@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- fix(server): preserve delimiters in string metadata overrides by @allenflux
+- fix(server): preserve delimiters in string metadata overrides by @allenflux in #2380
 
 ## [0.3.36]
 
