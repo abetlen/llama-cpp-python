@@ -67,6 +67,15 @@ class ModelSettings(BaseSettings):
         default=llama_cpp.LLAMA_DEFAULT_SEED, description="Random seed. -1 for random."
     )
     n_ctx: int = Field(default=2048, ge=0, description="The context size.")
+    n_cpu_moe: int = Field(
+        default=0,
+        ge=0,
+        description="The number of Mixture of Experts (MoE) layers to offload to the CPU. If greater than 0, the first n_cpu_moe MoE layers will be offloaded to the CPU.",
+    )
+    cpu_moe: bool = Field(
+        default=False,
+        description="Whether to offload all Mixture of Experts (MoE) layers to the CPU. Overrides n_cpu_moe if both are set.",
+    )
     n_batch: int = Field(
         default=512, ge=1, description="The batch size to use per eval."
     )

@@ -12,6 +12,7 @@ import fnmatch
 import warnings
 import contextlib
 import multiprocessing
+import pathlib
 
 from typing import (
     Any,
@@ -117,6 +118,8 @@ class Llama:
         # Misc
         spm_infill: bool = False,
         verbose: bool = True,
+        cpu_moe: bool = False,
+        n_cpu_moe: int = 0,
         # Extra Params
         **kwargs,  # type: ignore
     ):
@@ -149,6 +152,8 @@ class Llama:
         Args:
             model_path: Path to the model.
             n_gpu_layers: Number of layers to offload to GPU (-ngl). If -1, all layers are offloaded.
+            cpu_moe: Whether to offload all Mixture of Experts (MoE) layers to the CPU. Overrides n_cpu_moe if both are set.
+            n_cpu_moe: Number of MoE layers to offload to the CPU. If greater than 0, the first n_cpu_moe MoE layers will be offloaded to the CPU.
             split_mode: How to split the model across GPUs. See llama_cpp.LLAMA_SPLIT_* for options.
             main_gpu: main_gpu interpretation depends on split_mode: LLAMA_SPLIT_MODE_NONE: the GPU that is used for the entire model. LLAMA_SPLIT_MODE_ROW: the GPU that is used for small tensors and intermediate results. LLAMA_SPLIT_MODE_LAYER: ignored
             tensor_split: How split tensors should be distributed across GPUs. If None, the model is not split.
@@ -253,6 +258,27 @@ class Llama:
             self.model_params.load_mode = llama_cpp.LLAMA_LOAD_MODE_MMAP
         else:
             self.model_params.load_mode = llama_cpp.LLAMA_LOAD_MODE_NONE
+
+        self._cpu_moe_tensor_buft_overrides = None
+        self._cpu_moe_tensor_patterns = None
+        cpu_moe_patterns = _build_cpu_moe_patterns(cpu_moe=cpu_moe, n_cpu_moe=n_cpu_moe)
+        if cpu_moe_patterns:
+            buft = _cpu_backend_buffer_type()
+            override_type = llama_model_tensor_buft_override
+            overrides = (override_type * (len(cpu_moe_patterns) + 1))()
+            pattern_refs = list(cpu_moe_patterns)
+
+            for i, pattern in enumerate(pattern_refs):
+                overrides[i].pattern = pattern
+                overrides[i].buft = buft
+
+            overrides[-1].pattern = None
+            overrides[-1].buft = None
+            self.model_params.tensor_buft_overrides = ctypes.cast(
+                overrides, ctypes.c_void_p
+            )
+            self._cpu_moe_tensor_buft_overrides = overrides
+            self._cpu_moe_tensor_patterns = pattern_refs
 
         # kv_overrides is the original python dict
         self.kv_overrides = kv_overrides
@@ -2518,3 +2544,85 @@ class MinTokensLogitsProcessor(LogitsProcessor):
         if len(input_ids) - self.prompt_tokens < self.min_tokens:
             scores[self.token_eos] = -np.inf
         return scores
+
+
+class llama_model_tensor_buft_override(ctypes.Structure):
+    _fields_ = [
+        ("pattern", ctypes.c_char_p),
+        ("buft", ctypes.c_void_p),
+    ]
+
+
+_LLM_FFN_EXPS_REGEX = rb"\.ffn_(up|down|gate|gate_up)_(ch|)exps"
+
+
+def _load_ggml_library(name: str, lib_dir: pathlib.Path) -> ctypes.CDLL:
+    lib_path = lib_dir / name
+    return ctypes.CDLL(str(lib_path) if lib_path.exists() else name)
+
+
+def _resolve_ggml_symbol(name: str):
+    libraries = [llama_cpp._lib]
+    lib_dir = pathlib.Path(llama_cpp._lib._name).parent
+
+    if sys.platform == "win32":
+        candidates = ["ggml-cpu.dll", "ggml-base.dll"]
+    elif sys.platform == "darwin":
+        candidates = ["libggml-cpu.dylib", "libggml-base.dylib"]
+    else:
+        candidates = ["libggml-cpu.so", "libggml-base.so"]
+
+    for candidate in candidates:
+        try:
+            libraries.append(_load_ggml_library(candidate, lib_dir))
+        except Exception:
+            pass
+
+    for lib in libraries:
+        if hasattr(lib, name):
+            fn = getattr(lib, name)
+            fn.restype = ctypes.c_void_p
+            return fn
+
+    return None
+
+
+def _cpu_backend_buffer_type() -> int:
+    fn = _resolve_ggml_symbol("ggml_backend_cpu_buffer_type")
+    if fn is not None:
+        fn.argtypes = []
+        buft = fn()
+        if not buft:
+            raise RuntimeError("ggml_backend_cpu_buffer_type() returned NULL")
+        return buft
+
+    reg_by_name = _resolve_ggml_symbol("ggml_backend_dev_by_name")
+    if reg_by_name is None:
+        reg_by_name = _resolve_ggml_symbol("ggml_backend_reg_by_name")
+    dev_buft = _resolve_ggml_symbol("ggml_backend_dev_buffer_type")
+
+    if reg_by_name is None or dev_buft is None:
+        raise RuntimeError(
+            "Could not resolve CPU ggml buffer type for cpu_moe/n_cpu_moe"
+        )
+
+    reg_by_name.argtypes = [ctypes.c_char_p]
+    dev_buft.argtypes = [ctypes.c_void_p]
+
+    device = reg_by_name(b"CPU")
+    if not device:
+        raise RuntimeError("ggml backend registry has no 'CPU' device")
+
+    buft = dev_buft(device)
+    if not buft:
+        raise RuntimeError("ggml_backend_dev_buffer_type(CPU) returned NULL")
+    return buft
+
+
+def _build_cpu_moe_patterns(cpu_moe: bool, n_cpu_moe: int):
+    if cpu_moe:
+        return [_LLM_FFN_EXPS_REGEX]
+    if n_cpu_moe > 0:
+        suffix = _LLM_FFN_EXPS_REGEX.decode()
+        return [rf"blk\.{i}{suffix}".encode() for i in range(n_cpu_moe)]
+    return []

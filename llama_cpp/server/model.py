@@ -278,6 +278,8 @@ class LlamaProxy:
             rpc_servers=settings.rpc_servers,
             # Context Params
             seed=settings.seed,
+            n_cpu_moe=settings.n_cpu_moe,
+            cpu_moe=settings.cpu_moe,
             n_ctx=settings.n_ctx,
             n_batch=settings.n_batch,
             n_ubatch=settings.n_ubatch,

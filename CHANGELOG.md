@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- feat(llama): add CPU MoE offloading support via cpu_moe and n_cpu_moe parameters (high-level API and server)
+
 ## [0.3.36]
 
 - feat: update llama.cpp to ggml-org/llama.cpp@0c1e57098
