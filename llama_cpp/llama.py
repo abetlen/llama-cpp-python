@@ -152,6 +152,8 @@ class Llama:
         Args:
             model_path: Path to the model.
             n_gpu_layers: Number of layers to offload to GPU (-ngl). If -1, all layers are offloaded.
+            cpu_moe: Whether to offload all Mixture of Experts (MoE) layers to the CPU. Overrides n_cpu_moe if both are set.
+            n_cpu_moe: Number of MoE layers to offload to the CPU. If greater than 0, the first n_cpu_moe MoE layers will be offloaded to the CPU.
             split_mode: How to split the model across GPUs. See llama_cpp.LLAMA_SPLIT_* for options.
             main_gpu: main_gpu interpretation depends on split_mode: LLAMA_SPLIT_MODE_NONE: the GPU that is used for the entire model. LLAMA_SPLIT_MODE_ROW: the GPU that is used for small tensors and intermediate results. LLAMA_SPLIT_MODE_LAYER: ignored
             tensor_split: How split tensors should be distributed across GPUs. If None, the model is not split.
