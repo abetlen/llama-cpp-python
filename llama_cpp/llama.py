@@ -1305,6 +1305,7 @@ class Llama:
         )
         text: bytes = b""
         returned_tokens: int = 0
+        eog_logprobs: Optional[CompletionLogprobs] = None
         stop = (
             stop if isinstance(stop, list) else [stop] if isinstance(stop, str) else []
         )
@@ -1411,6 +1412,34 @@ class Llama:
         ):
             if llama_cpp.llama_vocab_is_eog(self._model.vocab, token):
                 text = self.detokenize(completion_tokens, prev_tokens=prompt_tokens)
+                if logprobs is not None:
+                    token_offset = len(prompt_tokens) + len(completion_tokens) - 1
+                    probabilities = Llama.logits_to_logprobs(
+                        self._scores[token_offset, :]
+                    ).tolist()
+                    token_str = self.detokenize([token], special=True).decode(
+                        "utf-8", errors="ignore"
+                    )
+                    top_tokens = sorted(
+                        range(len(probabilities)),
+                        key=probabilities.__getitem__,
+                        reverse=True,
+                    )[:logprobs]
+                    top_logprob = {
+                        self.detokenize([i], special=True).decode(
+                            "utf-8", errors="ignore"
+                        ): probabilities[i]
+                        for i in top_tokens
+                    }
+                    top_logprob[token_str] = probabilities[token]
+                    eog_logprobs = {
+                        "tokens": [token_str],
+                        "text_offset": [
+                            len(prompt) + len(text.decode("utf-8", errors="ignore"))
+                        ],
+                        "token_logprobs": [probabilities[token]],
+                        "top_logprobs": [top_logprob],
+                    }
                 finish_reason = "stop"
                 break
 
@@ -1699,7 +1728,7 @@ class Llama:
                     {
                         "text": "",
                         "index": 0,
-                        "logprobs": None,
+                        "logprobs": eog_logprobs,
                         "finish_reason": finish_reason,
                     }
                 ],
@@ -1791,6 +1820,11 @@ class Llama:
                 "token_logprobs": token_logprobs,
                 "top_logprobs": top_logprobs,
             }
+            if eog_logprobs is not None:
+                tokens.extend(eog_logprobs["tokens"])
+                text_offsets.extend(eog_logprobs["text_offset"])
+                token_logprobs.extend(eog_logprobs["token_logprobs"])
+                top_logprobs.extend(eog_logprobs["top_logprobs"])
 
         yield {
             "id": completion_id,
@@ -1851,6 +1885,9 @@ class Llama:
             min_p: The min-p value to use for minimum p sampling. Minimum P sampling as described in https://github.com/ggerganov/llama.cpp/pull/3841
             typical_p: The typical-p value to use for sampling. Locally Typical Sampling implementation described in the paper https://arxiv.org/abs/2202.00666.
             logprobs: The number of logprobs to return. If None, no logprobs are returned.
+                Includes the sampled end-of-generation token in probability metadata,
+                without adding it to completion text or usage. When streaming, its
+                logprobs are returned in the final chunk.
             echo: Whether to echo the prompt.
             stop: A list of strings to stop generation when encountered.
             frequency_penalty: The penalty to apply to tokens based on their frequency in the prompt.

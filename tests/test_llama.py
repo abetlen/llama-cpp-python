@@ -16,6 +16,71 @@ import llama_cpp._internals as internals
 MODEL = "./vendor/llama.cpp/models/ggml-vocab-llama-spm.gguf"
 
 
+@pytest.mark.parametrize("stream", [False, True])
+@pytest.mark.parametrize("echo", [False, True])
+@pytest.mark.parametrize("prefix", [[], [15043]])
+@pytest.mark.parametrize("requested_logprobs", [None, 0, 3])
+def test_completion_eos_logprobs(monkeypatch, stream, echo, prefix, requested_logprobs):
+    model = llama_cpp.Llama(
+        model_path=MODEL,
+        vocab_only=True,
+        verbose=False,
+        logits_all=True,
+        n_ctx=32,
+    )
+    eos = model.token_eos()
+    expected_logits = np.arange(model.n_vocab(), dtype=np.float32) / 1000
+
+    def generate(tokens, **kwargs):
+        model.n_tokens = len(tokens)
+        model.scores[: model.n_tokens] = 0
+        for token in prefix + [eos]:
+            model.scores[model.n_tokens - 1] = expected_logits if token == eos else 0
+            yield token
+            model.n_tokens += 1
+
+    monkeypatch.setattr(model, "generate", generate)
+    try:
+        output = model.create_completion(
+            "Hi",
+            max_tokens=8,
+            stream=stream,
+            echo=echo,
+            logprobs=requested_logprobs,
+        )
+        # Streaming completions currently do not echo the prompt.
+        expected_text = ("Hi" if echo and not stream else "") + model.detokenize(
+            prefix
+        ).decode()
+        if stream:
+            chunks = list(output)
+            assert "".join(c["choices"][0]["text"] for c in chunks) == expected_text
+            final = chunks[-1]["choices"][0]
+        else:
+            final = output["choices"][0]
+            assert final["text"] == expected_text
+            assert output["usage"]["completion_tokens"] == len(prefix)
+        assert final["finish_reason"] == "stop"
+        probabilities = final["logprobs"]
+        if requested_logprobs is None:
+            assert probabilities is None
+        else:
+            eos_text = model.detokenize([eos], special=True).decode()
+            expected_probability = log_softmax(expected_logits)[eos]
+            assert probabilities["tokens"][-1] == eos_text
+            assert probabilities["token_logprobs"][-1] == pytest.approx(
+                expected_probability
+            )
+            assert probabilities["top_logprobs"][-1][eos_text] == pytest.approx(
+                expected_probability
+            )
+            assert probabilities["text_offset"][-1] == len("Hi") + len(
+                model.detokenize(prefix).decode()
+            )
+    finally:
+        model.close()
+
+
 def test_llama_cpp_version():
     assert llama_cpp.__version__
 
