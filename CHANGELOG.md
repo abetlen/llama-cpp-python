@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- fix: size `Llama.scores` from `self._logits_all` instead of the raw `logits_all` argument, so passing `draft_model` without also explicitly passing `logits_all=True` no longer crashes generation past `n_batch` tokens with `ValueError: could not broadcast input array ... into shape (0,)` by @yadukpb
+
 ## [0.3.36]
 
 - feat: update llama.cpp to ggml-org/llama.cpp@0c1e57098

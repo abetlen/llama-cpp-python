@@ -267,6 +267,35 @@ root ::= "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10"
     assert number_1 == number_3
 
 
+def test_draft_model_scores_buffer_sized_for_n_ctx(llama_cpp_transformer_model_path):
+    # Llama.__init__ sets self._logits_all = True whenever draft_model is
+    # given (see the `logits_all if draft_model is None else True` line),
+    # regardless of whether the caller also passed logits_all=True -- but
+    # self.scores used to be allocated from the raw logits_all argument
+    # instead of self._logits_all, so it came out n_batch-sized instead of
+    # n_ctx-sized. eval() writes into self.scores using self._logits_all,
+    # so generation crashed with "could not broadcast input array ...
+    # into shape (0,)" as soon as n_past exceeded n_batch.
+    from llama_cpp.llama_speculative import LlamaPromptLookupDecoding
+
+    llm = llama_cpp.Llama(
+        model_path=llama_cpp_transformer_model_path,
+        n_ctx=128,
+        n_batch=16,
+        draft_model=LlamaPromptLookupDecoding(max_ngram_size=2, num_pred_tokens=4),
+        verbose=False,
+        # Deliberately not passing logits_all=True: draft_model alone
+        # should be enough, per self._logits_all's own logic above.
+    )
+
+    assert llm.scores.shape[0] >= llm.n_batch
+
+    # More tokens than n_batch so eval() must cross that boundary at least
+    # once; this is what used to raise ValueError before the fix.
+    output = llm.create_completion("Once upon a time", max_tokens=30)
+    assert output["choices"][0]["text"]
+
+
 def test_real_llama_repeated_prompt_cache(llama_cpp_model_path):
     model = llama_cpp.Llama(
         llama_cpp_model_path,
