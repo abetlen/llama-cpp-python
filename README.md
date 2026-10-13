@@ -232,6 +232,19 @@ To install with SYCL support, set the `GGML_SYCL=on` environment variable before
 source /opt/intel/oneapi/setvars.sh   
 CMAKE_ARGS="-DGGML_SYCL=on -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx" pip install llama-cpp-python
 ```
+
+On Windows, run the install from an Intel oneAPI command prompt, install Ninja if needed, and select the Ninja generator explicitly:
+
+```powershell
+$env:CMAKE_ARGS = "-DGGML_SYCL=on -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icx -G Ninja"
+python -m pip install llama-cpp-python
+```
+
+If you have multiple oneAPI devices, select the Level Zero GPU at runtime:
+
+```powershell
+$env:ONEAPI_DEVICE_SELECTOR = "level_zero:gpu"
+```
 </details>
 
 <details>
