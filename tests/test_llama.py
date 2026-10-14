@@ -20,6 +20,14 @@ def test_llama_cpp_version():
     assert llama_cpp.__version__
 
 
+def test_llama_default_threads_use_usable_cpu_count(monkeypatch):
+    monkeypatch.setattr(llama_cpp.llama, "default_cpu_count", lambda: 6)
+    llama = llama_cpp.Llama(model_path=MODEL, vocab_only=True, verbose=False)
+
+    assert llama.n_threads == 3
+    assert llama.n_threads_batch == 6
+
+
 def test_llama_cpp_tokenization():
     llama = llama_cpp.Llama(model_path=MODEL, vocab_only=True, verbose=False)
 

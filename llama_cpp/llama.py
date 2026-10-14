@@ -11,7 +11,6 @@ import random
 import fnmatch
 import warnings
 import contextlib
-import multiprocessing
 
 from typing import (
     Any,
@@ -49,7 +48,7 @@ import numpy.typing as npt
 
 import llama_cpp._internals as internals
 from ._logger import set_verbose
-from ._utils import suppress_stdout_stderr
+from ._utils import suppress_stdout_stderr, default_cpu_count
 
 
 class Llama:
@@ -309,8 +308,8 @@ class Llama:
             self.model_params.kv_overrides = self._kv_overrides_array
 
         self.n_batch = min(n_ctx, n_batch)  # ???
-        self.n_threads = n_threads or max(multiprocessing.cpu_count() // 2, 1)
-        self.n_threads_batch = n_threads_batch or multiprocessing.cpu_count()
+        self.n_threads = n_threads or max(default_cpu_count() // 2, 1)
+        self.n_threads_batch = n_threads_batch or default_cpu_count()
 
         # Used by the sampler
         self._seed = seed or llama_cpp.LLAMA_DEFAULT_SEED
