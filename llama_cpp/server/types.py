@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import List, Optional, Union, Dict
 from typing_extensions import TypedDict, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 import llama_cpp
 
@@ -212,6 +212,7 @@ class CreateChatCompletionRequest(BaseModel):
     )  # TODO: verify
     max_tokens: Optional[int] = Field(
         default=None,
+        validation_alias=AliasChoices("max_tokens", "max_completion_tokens"),
         description="The maximum number of tokens to generate. Defaults to inf",
     )
     min_tokens: int = min_tokens_field
