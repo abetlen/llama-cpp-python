@@ -196,7 +196,14 @@ class LlamaModel:
             n = llama_cpp.llama_token_to_piece(
                 self.vocab, llama_cpp.llama_token(token), buffer, size, 0, special
             )
-            assert n <= size
+            if n < 0:
+                size = -n
+                buffer = (ctypes.c_char * size)()
+                n = llama_cpp.llama_token_to_piece(
+                    self.vocab, llama_cpp.llama_token(token), buffer, size, 0, special
+                )
+            if n < 0 or n > size:
+                raise RuntimeError("Token decoding failed after resizing buffer")
             output += bytes(buffer[:n])
         # NOTE: Llama1 models automatically added a space at the start of the prompt
         # this line removes a leading space if the first token is a beginning of sentence token
