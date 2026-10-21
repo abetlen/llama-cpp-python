@@ -81,9 +81,22 @@ class LlamaHFTokenizer(BaseLlamaTokenizer):
     def tokenize(
         self, text: bytes, add_bos: bool = True, special: bool = True
     ) -> List[int]:
-        return self.hf_tokenizer.encode(
-            text.decode("utf-8", errors="ignore"), add_special_tokens=special
-        )
+        text = text.decode("utf-8", errors="ignore")
+        tokens = self.hf_tokenizer.encode(text, add_special_tokens=special)
+        bos_token_id = getattr(self.hf_tokenizer, "bos_token_id", None)
+        if bos_token_id is None:
+            return tokens
+
+        if add_bos:
+            if not tokens or tokens[0] != bos_token_id:
+                tokens.insert(0, bos_token_id)
+        elif special and tokens and tokens[0] == bos_token_id:
+            raw_tokens = self.hf_tokenizer.encode(text, add_special_tokens=False)
+            # Preserve a BOS token from the input; remove only a prefixed one.
+            if tokens[1 : len(raw_tokens) + 1] == raw_tokens:
+                tokens = tokens[1:]
+
+        return tokens
 
     def detokenize(
         self,
