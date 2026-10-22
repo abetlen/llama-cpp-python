@@ -21,6 +21,16 @@ class LlamaGrammar:
         self._grammar = _grammar
         self._root = LLAMA_GRAMMAR_DEFAULT_ROOT
 
+    @property
+    def grammar(self) -> str:
+        """Return the GBNF grammar string."""
+        return self._grammar
+
+    @property
+    def root(self) -> str:
+        """Return the root rule name."""
+        return self._root
+
     @classmethod
     def from_string(cls, grammar: str, verbose: bool = True) -> "LlamaGrammar":
         return cls(_grammar=grammar)
@@ -39,7 +49,7 @@ class LlamaGrammar:
             return cls.from_string(grammar, verbose=verbose)
 
         raise ValueError(
-            f"{cls.from_file.__name__}: error parsing grammar file: params_grammer is empty"
+            f"{cls.from_file.__name__}: error parsing grammar file: params_grammar is empty"
         )
 
     @classmethod

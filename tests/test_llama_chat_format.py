@@ -92,3 +92,64 @@ def test_hf_tokenizer_config_str_to_chat_formatter():
     )
 
     assert chat_formatter_respoonse.prompt == ("<s>[INST] Hello, world! [/INST]</s>")
+
+
+def test_format_llama3():
+    messages = [
+        llama_types.ChatCompletionRequestSystemMessage(
+            role="system", content="You are a helpful assistant."
+        ),
+        llama_types.ChatCompletionRequestUserMessage(
+            role="user", content="Hello Llama 3"
+        ),
+    ]
+    response = llama_chat_format.format_llama3(messages=messages)
+    expected_prompt = (
+        "<|start_header_id|>system<|end_header_id|>\n\n"
+        "You are a helpful assistant.<|eot_id|>"
+        "<|start_header_id|>user<|end_header_id|>\n\n"
+        "Hello Llama 3<|eot_id|>"
+        "<|start_header_id|>assistant<|end_header_id|>\n\n"
+    )
+    assert response.prompt == expected_prompt
+    assert response.stop == "<|eot_id|>"
+
+
+def test_format_alpaca():
+    messages = [
+        llama_types.ChatCompletionRequestUserMessage(
+            role="user", content="Summarize this text."
+        ),
+    ]
+    response = llama_chat_format.format_alpaca(messages=messages)
+    assert "### Instruction: Summarize this text." in response.prompt
+
+
+def test_format_qwen():
+    messages = [
+        llama_types.ChatCompletionRequestUserMessage(
+            role="user", content="Hello Qwen"
+        ),
+    ]
+    response = llama_chat_format.format_qwen(messages=messages)
+    assert "<|im_start|>system\nYou are a helpful assistant.<|im_end|>" in response.prompt
+    assert "<|im_start|>user\nHello Qwen<|im_end|>" in response.prompt
+    assert "<|im_start|>assistant\n" in response.prompt
+    assert response.stop == "<|endoftext|>"
+
+
+def test_format_chatml():
+    messages = [
+        llama_types.ChatCompletionRequestSystemMessage(
+            role="system", content="System instruction"
+        ),
+        llama_types.ChatCompletionRequestUserMessage(
+            role="user", content="User message"
+        ),
+    ]
+    response = llama_chat_format.format_chatml(messages=messages)
+    assert "<|im_start|>system\nSystem instruction<|im_end|>" in response.prompt
+    assert "<|im_start|>user\nUser message<|im_end|>" in response.prompt
+    assert "<|im_start|>assistant\n" in response.prompt
+    assert response.stop == "<|im_end|>"
+

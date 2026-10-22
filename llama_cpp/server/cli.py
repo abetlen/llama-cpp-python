@@ -98,20 +98,20 @@ def add_args_from_model(parser: argparse.ArgumentParser, model: Type[BaseModel])
                 type=_parse_json_object_arg,
                 help=description,
             )
-        elif base_type is not bool:
+        elif base_type is bool:
+            parser.add_argument(
+                f"--{name}",
+                dest=name,
+                type=_parse_bool_arg,
+                help=f"{description}",
+            )
+        else:
             parser.add_argument(
                 f"--{name}",
                 dest=name,
                 nargs="*" if list_type else None,
                 type=base_type,
                 help=description,
-            )
-        if base_type is bool:
-            parser.add_argument(
-                f"--{name}",
-                dest=name,
-                type=_parse_bool_arg,
-                help=f"{description}",
             )
 
 

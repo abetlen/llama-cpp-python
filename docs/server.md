@@ -46,6 +46,19 @@ CLI arguments and environment variables are available for all of the fields defi
 
 Additionally the server supports configuration check out the [configuration section](#configuration-and-multi-model-support) for more information and examples.
 
+### Supported Endpoints
+
+The server exposes standard OpenAI-compatible and helper endpoints:
+
+- `GET /v1/models` - List all configured models.
+- `GET /v1/models/{model}` - Retrieve metadata for a specific model by alias/ID.
+- `POST /v1/completions` - Text completions (supports streaming).
+- `POST /v1/chat/completions` - Chat completions (supports streaming, tools, and JSON mode).
+- `POST /v1/embeddings` - Embedding creation.
+- `POST /extras/tokenize` - Tokenize text into token IDs.
+- `POST /extras/tokenize/count` - Count tokens for input.
+- `POST /extras/detokenize` - Detokenize token IDs to text.
+
 
 ## Guides
 

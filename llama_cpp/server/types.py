@@ -181,7 +181,7 @@ class CreateEmbeddingRequest(BaseModel):
 
 
 class ChatCompletionRequestMessage(BaseModel):
-    role: Literal["system", "user", "assistant", "function"] = Field(
+    role: Literal["system", "user", "assistant", "tool", "function"] = Field(
         default="user", description="The role of the message."
     )
     content: Optional[str] = Field(
@@ -303,7 +303,7 @@ class TokenizeInputCountResponse(BaseModel):
 
 class DetokenizeInputRequest(BaseModel):
     model: Optional[str] = model_field
-    tokens: List[int] = Field(description="A list of toekns to detokenize.")
+    tokens: List[int] = Field(description="A list of tokens to detokenize.")
 
     model_config = {"json_schema_extra": {"example": [{"tokens": [123, 321, 222]}]}}
 

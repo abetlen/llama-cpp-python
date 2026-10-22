@@ -8,7 +8,6 @@ from typing import (
 )
 
 import llama_cpp
-from llama_cpp.llama_types import List
 
 
 class BaseLlamaTokenizer(abc.ABC):

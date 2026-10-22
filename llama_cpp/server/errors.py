@@ -178,25 +178,27 @@ class RouteErrorHandler(APIRoute):
                 # api key check failed
                 raise unauthorized
             except Exception as exc:
-                json_body = await request.json()
+                body: Optional[
+                    Union[
+                        CreateChatCompletionRequest,
+                        CreateCompletionRequest,
+                        CreateEmbeddingRequest,
+                    ]
+                ] = None
                 try:
-                    if "messages" in json_body:
-                        # Chat completion
-                        body: Optional[
-                            Union[
-                                CreateChatCompletionRequest,
-                                CreateCompletionRequest,
-                                CreateEmbeddingRequest,
-                            ]
-                        ] = CreateChatCompletionRequest(**json_body)
-                    elif "prompt" in json_body:
-                        # Text completion
-                        body = CreateCompletionRequest(**json_body)
-                    else:
-                        # Embedding
-                        body = CreateEmbeddingRequest(**json_body)
+                    json_body = await request.json()
+                    if isinstance(json_body, dict):
+                        if "messages" in json_body:
+                            # Chat completion
+                            body = CreateChatCompletionRequest(**json_body)
+                        elif "prompt" in json_body:
+                            # Text completion
+                            body = CreateCompletionRequest(**json_body)
+                        else:
+                            # Embedding
+                            body = CreateEmbeddingRequest(**json_body)
                 except Exception:
-                    # Invalid request body
+                    # Invalid or unreadable request body (e.g. GET request or non-JSON)
                     body = None
 
                 # Get proper error message from the exception

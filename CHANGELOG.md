@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- feat: add context manager support to Llama
+- feat(server): add get model by id endpoint and container methods to llamaproxy
+- feat(grammar): expose grammar and root properties on LlamaGrammar
+- fix(windows): safely check directory existence before calling add_dll_directory
+- fix(server): safely handle non-json and get requests in route error handler
+- fix(types): allow tool role in chat request message and deduplicate union
+- fix(cache): remove leftover debug print statements from disk cache
+- fix(server): fix mutually exclusive argument branch in cli parser
+
+
 ## [0.3.36]
 
 - feat: update llama.cpp to ggml-org/llama.cpp@0c1e57098

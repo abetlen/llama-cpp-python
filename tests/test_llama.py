@@ -20,6 +20,16 @@ def test_llama_cpp_version():
     assert llama_cpp.__version__
 
 
+def test_llama_context_manager():
+    from unittest.mock import MagicMock
+
+    mock_llama = llama_cpp.Llama.__new__(llama_cpp.Llama)
+    mock_llama._stack = MagicMock()
+    with mock_llama as llm:
+        assert llm is mock_llama
+    mock_llama._stack.close.assert_called_once()
+
+
 def test_llama_cpp_tokenization():
     llama = llama_cpp.Llama(model_path=MODEL, vocab_only=True, verbose=False)
 

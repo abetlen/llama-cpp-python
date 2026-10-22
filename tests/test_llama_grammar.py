@@ -10,9 +10,8 @@ root ::= node
 
 def test_grammar_from_string():
     grammar = llama_cpp.LlamaGrammar.from_string(tree)
-    # assert grammar._n_rules == 3
-    # assert grammar._start_rule_index == 2
-    # assert grammar.grammar is not None
+    assert grammar.grammar == tree
+    assert grammar.root == "root"
 
 
 def test_composed_pydantic_grammar():

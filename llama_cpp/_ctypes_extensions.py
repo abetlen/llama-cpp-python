@@ -55,18 +55,19 @@ def load_shared_library(lib_base_name: str, base_path: pathlib.Path):
 
     # Add the library directory to the DLL search path on Windows (if needed)
     if sys.platform == "win32":
-        os.add_dll_directory(str(base_path))
-        os.environ["PATH"] = str(base_path) + os.pathsep + os.environ["PATH"]
+        if base_path.exists() and base_path.is_dir():
+            if sys.version_info >= (3, 8):
+                os.add_dll_directory(str(base_path))
+            os.environ["PATH"] = str(base_path) + os.pathsep + os.environ["PATH"]
 
-    if sys.platform == "win32" and sys.version_info >= (3, 8):
-        os.add_dll_directory(str(base_path))
-        if "CUDA_PATH" in os.environ:
-            os.add_dll_directory(os.path.join(os.environ["CUDA_PATH"], "bin"))
-            os.add_dll_directory(os.path.join(os.environ["CUDA_PATH"], "lib"))
-        if "HIP_PATH" in os.environ:
-            os.add_dll_directory(os.path.join(os.environ["HIP_PATH"], "bin"))
-            os.add_dll_directory(os.path.join(os.environ["HIP_PATH"], "lib"))
-        cdll_args["winmode"] = ctypes.RTLD_GLOBAL
+        if sys.version_info >= (3, 8):
+            for env_var in ("CUDA_PATH", "HIP_PATH"):
+                if env_var in os.environ:
+                    for sub in ("bin", "lib"):
+                        sub_path = os.path.join(os.environ[env_var], sub)
+                        if os.path.isdir(sub_path):
+                            os.add_dll_directory(sub_path)
+            cdll_args["winmode"] = ctypes.RTLD_GLOBAL
 
     if sys.platform == "emscripten":
         cdll_args["mode"] = ctypes.RTLD_GLOBAL

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from typing import Dict, Optional, Union, List
+from typing import Dict, Optional, Union, List, Any
 
 import llama_cpp
 import llama_cpp.llama_speculative as llama_speculative
@@ -64,6 +64,17 @@ class LlamaProxy:
     def __iter__(self):
         for model in self._model_settings_dict:
             yield model
+
+    def __contains__(self, model: str) -> bool:
+        return model in self._model_settings_dict
+
+    def __len__(self) -> int:
+        return len(self._model_settings_dict)
+
+    def get(self, model: str, default: Any = None) -> Any:
+        if model in self._model_settings_dict:
+            return self[model]
+        return default
 
     def free(self):
         if self._current_model:

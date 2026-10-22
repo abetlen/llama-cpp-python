@@ -36,6 +36,7 @@ from llama_cpp.server.types import (
     CreateEmbeddingRequest,
     CreateChatCompletionRequest,
     ModelList,
+    ModelData,
     TokenizeInputRequest,
     TokenizeInputResponse,
     TokenizeInputCountResponse,
@@ -546,6 +547,29 @@ async def get_models(
             }
             for model_alias in llama_proxy
         ],
+    }
+
+
+@router.get(
+    "/v1/models/{model:path}",
+    summary="Get Model",
+    dependencies=[Depends(authenticate)],
+    tags=[openai_v1_tag],
+)
+async def get_model(
+    model: str,
+    llama_proxy: LlamaProxy = Depends(get_llama_proxy),
+) -> ModelData:
+    if model not in llama_proxy:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Model '{model}' not found",
+        )
+    return {
+        "id": model,
+        "object": "model",
+        "owned_by": "me",
+        "permissions": [],
     }
 
 

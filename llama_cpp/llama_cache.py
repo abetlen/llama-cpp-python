@@ -142,14 +142,10 @@ class LlamaDiskCache(BaseLlamaCache):
         return self._find_longest_prefix_key(tuple(key)) is not None
 
     def __setitem__(self, key: Sequence[int], value: "llama_cpp.llama.LlamaState"):
-        print("LlamaDiskCache.__setitem__: called", file=sys.stderr)
         key = tuple(key)
         if key in self.cache:
-            print("LlamaDiskCache.__setitem__: delete", file=sys.stderr)
             del self.cache[key]
         self.cache[key] = value
-        print("LlamaDiskCache.__setitem__: set", file=sys.stderr)
         while self.cache_size > self.capacity_bytes and len(self.cache) > 0:
             key_to_remove = next(iter(self.cache))
             del self.cache[key_to_remove]
-        print("LlamaDiskCache.__setitem__: trim", file=sys.stderr)
