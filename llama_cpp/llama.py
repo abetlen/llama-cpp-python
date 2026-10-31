@@ -1131,7 +1131,7 @@ class Llama:
                             internals.normalize_embedding(e) for e in embedding
                         ]
                     data.append(embedding)
-                    pos += size
+                    pos += size * n_embd
             else:
                 for i in range(len(seq_sizes)):
                     ptr = llama_cpp.llama_get_embeddings_seq(self._ctx.ctx, i)
