@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- fix: preserve native cleanup callbacks during interpreter shutdown by @emme1t
+- fix: preserve native cleanup callbacks during interpreter shutdown by @emme1t in #2397
 
 ## [0.3.36]
 
