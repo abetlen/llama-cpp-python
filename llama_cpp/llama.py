@@ -443,10 +443,10 @@ class Llama:
                     f"Failed to initialize LoRA adapter from lora path: {self.lora_path}"
                 )
 
-            def free_lora_adapter():
+            def free_lora_adapter(adapter_free=llama_cpp.llama_adapter_lora_free):
                 if self._lora_adapter is None:
                     return
-                llama_cpp.llama_adapter_lora_free(self._lora_adapter)
+                adapter_free(self._lora_adapter)
                 self._lora_adapter = None
 
             self._stack.callback(free_lora_adapter)
