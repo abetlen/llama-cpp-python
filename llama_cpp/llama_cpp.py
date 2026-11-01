@@ -971,6 +971,8 @@ class llama_sampler_seq_config(ctypes.Structure):
 
 #     enum ggml_type type_k; // data type for K cache [EXPERIMENTAL]
 #     enum ggml_type type_v; // data type for V cache [EXPERIMENTAL]
+#
+#     size_t moe_cache_size; // device cache in bytes for the experts kept in host memory, split among the devices like the layers, 0 = disabled [EXPERIMENTAL]
 
 #     // Abort callback
 #     // if it returns true, execution of llama_decode() will be aborted
@@ -1027,6 +1029,7 @@ class llama_context_params(ctypes.Structure):
         cb_eval_user_data (ctypes.ctypes.c_void_p): user data for cb_eval
         type_k (int): data type for K cache
         type_v (int): data type for V cache
+        moe_cache_size (int): device cache in bytes for the experts kept in host memory, 0 = disabled
         abort_callback (ggml_abort_callback): abort callback if it returns true, execution of llama_decode() will be aborted
         abort_callback_data (ctypes.ctypes.c_void_p): data for abort_callback
         embeddings (bool): if true, extract embeddings (together with logits)
@@ -1067,6 +1070,7 @@ class llama_context_params(ctypes.Structure):
         cb_eval_user_data: ctypes.c_void_p
         type_k: int
         type_v: int
+        moe_cache_size: int
         abort_callback: Callable[[ctypes.c_void_p], bool]
         abort_callback_data: ctypes.c_void_p
         embeddings: bool
@@ -1106,6 +1110,7 @@ class llama_context_params(ctypes.Structure):
         ("cb_eval_user_data", ctypes.c_void_p),
         ("type_k", ctypes.c_int),
         ("type_v", ctypes.c_int),
+        ("moe_cache_size", ctypes.c_size_t),
         ("abort_callback", ggml_abort_callback),
         ("abort_callback_data", ctypes.c_void_p),
         ("embeddings", ctypes.c_bool),
@@ -5248,6 +5253,8 @@ class llama_perf_context_data(ctypes.Structure):
         ("n_p_eval", ctypes.c_int32),
         ("n_eval", ctypes.c_int32),
         ("n_reused", ctypes.c_int32),
+        ("n_reallocs_same", ctypes.c_int32),
+        ("n_reallocs_diff", ctypes.c_int32),
     ]
 
 
