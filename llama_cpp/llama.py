@@ -567,6 +567,10 @@ class Llama:
                 )
 
         self._sampler = None
+        # Absolute input_ids position whose logits are being sampled.
+        # The logits-processor callback cannot see sample()'s idx argument.
+        # None keeps the previous behavior: the full evaluated sequence.
+        self._processor_sample_idx: Optional[int] = None
 
         # Cache recurrent/hybrid model detection to avoid repeated FFI calls
         self._is_recurrent = llama_cpp.llama_model_is_recurrent(self._model.model)
@@ -738,8 +742,19 @@ class Llama:
                         data_soa_address
                     ),
                 )
+                input_ids = self._input_ids
+                prefix_len = self._logits_processor_prefix_len(
+                    self._processor_sample_idx
+                )
+                # Draft and generator-injected tokens are written into the
+                # buffer before they are accepted. Passing that suffix makes
+                # position-dependent processors disagree with greedy decoding.
+                # When nothing is unverified the slice is the whole buffer, so
+                # hand the processor that same array and avoid an extra view.
+                if prefix_len != len(input_ids):
+                    input_ids = input_ids[:prefix_len]
                 for logit_processor in logits_processor:
-                    recarray.logit[:] = logit_processor(self._input_ids, recarray.logit)
+                    recarray.logit[:] = logit_processor(input_ids, recarray.logit)
 
             sampler.add_custom(apply_func)
 
@@ -788,6 +803,25 @@ class Llama:
                 sampler.add_temp(temp)
                 sampler.add_dist(self._seed)
         return sampler
+
+    def _logits_processor_prefix_len(self, idx: Optional[int]) -> int:
+        """How many leading tokens a logits processor may see.
+
+        ``idx`` is the absolute ``input_ids`` position whose logits are being
+        sampled, the same convention as ``Llama.sample``. The processor prefix
+        is the prompt plus every token up to and including that position.
+        Tokens stored after it are still unverified, so they are excluded.
+
+        ``idx is None`` samples the last evaluated logit and the prefix is the
+        whole evaluated sequence. A negative ``idx`` is not a documented
+        position and keeps that full sequence too.
+        """
+        n_tokens = self.n_tokens
+        if idx is None or idx < 0:
+            return n_tokens
+        if idx + 1 >= n_tokens:
+            return n_tokens
+        return idx + 1
 
     def sample(
         self,
@@ -842,6 +876,9 @@ class Llama:
                 logits_processor=logits_processor,
                 grammar=grammar,
             )
+
+        # Read by the custom sampler installed in ``_init_sampler``.
+        self._processor_sample_idx = idx
 
         ridx = idx - self.n_tokens if idx is not None else -1
 
