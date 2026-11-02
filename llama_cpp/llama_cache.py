@@ -108,7 +108,9 @@ class LlamaDiskCache(BaseLlamaCache):
         self, cache_dir: str = ".cache/llama_cache", capacity_bytes: int = (2 << 30)
     ):
         super().__init__(capacity_bytes)
-        self.cache = diskcache.Cache(cache_dir)
+        # Keep trimming below in charge instead of diskcache's batch culling,
+        # which can discard recent states that would fit after one eviction.
+        self.cache = diskcache.Cache(cache_dir, size_limit=capacity_bytes, cull_limit=0)
 
     @property
     def cache_size(self):
