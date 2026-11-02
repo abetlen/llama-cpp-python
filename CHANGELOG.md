@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- fix(cache): honor configured disk cache capacity (fixes #1402)
+- fix(cache): honor configured disk cache capacity by @DiadkoShmek in #2400 (fixes #1402)
 
 ## [0.3.36]
 
