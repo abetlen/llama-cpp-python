@@ -739,7 +739,9 @@ class Llama:
                     ),
                 )
                 for logit_processor in logits_processor:
-                    recarray.logit[:] = logit_processor(self._input_ids, recarray.logit)
+                    recarray.logit[:] = logit_processor(
+                        self._input_ids[: self._sample_prefix_len], recarray.logit
+                    )
 
             sampler.add_custom(apply_func)
 
@@ -843,6 +845,7 @@ class Llama:
                 grammar=grammar,
             )
 
+        self._sample_prefix_len = idx + 1 if idx is not None else self.n_tokens
         ridx = idx - self.n_tokens if idx is not None else -1
 
         assert self.ctx is not None

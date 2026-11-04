@@ -11,6 +11,7 @@ import pytest
 
 import llama_cpp
 import llama_cpp._internals as internals
+from llama_cpp.llama_speculative import LlamaPromptLookupDecoding
 
 
 MODEL = "./vendor/llama.cpp/models/ggml-vocab-llama-spm.gguf"
@@ -662,3 +663,35 @@ def test_real_llama_embeddings(llama_cpp_embedding_model_path):
     repeated_embeddings = model.embed(list(reversed(prompts)))
     assert len(repeated_embeddings) == len(prompts)
     assert all(len(repeated) == len(embedding) for repeated in repeated_embeddings)
+
+
+def test_logits_processor_sees_only_accepted_tokens_with_draft_model(
+    llama_cpp_transformer_model_path,
+):
+    model = llama_cpp.Llama(
+        llama_cpp_transformer_model_path,
+        n_ctx=512,
+        draft_model=LlamaPromptLookupDecoding(num_pred_tokens=4),
+        verbose=False,
+    )
+    prompt = model.tokenize(b"Once upon a time, there was a little girl. " * 4)
+    generated = []
+    prefixes_match = []
+    draft_suffix_seen = []
+
+    def record_prefix(input_ids, logits):
+        prefixes_match.append(list(input_ids) == prompt + generated)
+        draft_suffix_seen.append(model.n_tokens > len(input_ids))
+        return logits
+
+    for token in model.generate(
+        prompt,
+        temp=0.0,
+        logits_processor=llama_cpp.LogitsProcessorList([record_prefix]),
+    ):
+        generated.append(token)
+        if len(generated) == 32:
+            break
+
+    assert prefixes_match == [True] * 32
+    assert any(draft_suffix_seen)
