@@ -266,20 +266,22 @@ class Jinja2ChatFormatter(ChatFormatter):
     ) -> ChatFormatterResponse:
         def raise_exception(message: str):
             raise ValueError(message)
-
-        prompt = self._environment.render(
-            messages=messages,
-            eos_token=self.eos_token,
-            bos_token=self.bos_token,
-            raise_exception=raise_exception,
-            add_generation_prompt=self.add_generation_prompt,
-            functions=functions,
-            function_call=function_call,
-            tools=tools,
-            tool_choice=tool_choice,
-            strftime_now=self.strftime_now,
-            **kwargs,
-        )
+        try:
+            prompt = self._environment.render(
+                messages=messages,
+                eos_token=self.eos_token,
+                bos_token=self.bos_token,
+                raise_exception=raise_exception,
+                add_generation_prompt=self.add_generation_prompt,
+                functions=functions,
+                function_call=function_call,
+                tools=tools,
+                tool_choice=tool_choice,
+                strftime_now=self.strftime_now,
+                **kwargs,
+            )
+        except OverflowError as e:
+            raise ValueError(str(e)) from e
 
         stopping_criteria = None
         if self.stop_token_ids is not None:
