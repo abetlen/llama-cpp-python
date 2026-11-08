@@ -198,6 +198,21 @@ class Llama:
         Returns:
             A Llama instance.
         """
+        if "embeddings" in kwargs:
+            # `embeddings` (plural) is the spelling used by llama.cpp's context
+            # params and by `Llama.__getstate__`, so it is a natural thing to
+            # pass here. Accept it as an alias instead of dropping it.
+            embedding = bool(kwargs.pop("embeddings"))
+
+        if kwargs:
+            warnings.warn(
+                "Llama.__init__ got unexpected keyword argument(s): "
+                f"{', '.join(sorted(kwargs))}. They are ignored. Pass only "
+                "arguments that appear in the Llama.__init__ signature.",
+                UserWarning,
+                stacklevel=2,
+            )
+
         self.verbose = verbose
         self._stack = contextlib.ExitStack()
 
