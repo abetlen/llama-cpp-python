@@ -196,6 +196,19 @@ class LlamaModel:
             n = llama_cpp.llama_token_to_piece(
                 self.vocab, llama_cpp.llama_token(token), buffer, size, 0, special
             )
+            if n < 0:
+                # The piece did not fit; llama_token_to_piece wrote nothing and
+                # returned -(required size). Grow the buffer and ask again. The
+                # larger buffer is kept for the remaining tokens.
+                size = -n
+                buffer = (ctypes.c_char * size)()
+                n = llama_cpp.llama_token_to_piece(
+                    self.vocab, llama_cpp.llama_token(token), buffer, size, 0, special
+                )
+                if n < 0:
+                    raise RuntimeError(
+                        f"Failed to detokenize: token={token} n={n} size={size}"
+                    )
             assert n <= size
             output += bytes(buffer[:n])
         # NOTE: Llama1 models automatically added a space at the start of the prompt
