@@ -47,6 +47,37 @@ CLI arguments and environment variables are available for all of the fields defi
 Additionally the server supports configuration check out the [configuration section](#configuration-and-multi-model-support) for more information and examples.
 
 
+### Streaming requests and interruptions
+
+By default, `interrupt_requests` is `True`.
+When another request is waiting for the model, the server can end the active streaming response early to process the waiting request.
+This also applies when the requests come from different clients.
+
+Set `interrupt_requests` to `False` to let the current stream finish before processing waiting requests:
+
+```bash
+python3 -m llama_cpp.server --model <model_path> --interrupt_requests false
+```
+
+For a JSON config file, set the option at the top level, alongside `models`:
+
+```json
+{
+    "interrupt_requests": false,
+    "models": [
+        {"model": "models/example.gguf"}
+    ]
+}
+```
+
+```bash
+python3 -m llama_cpp.server --config_file config.json
+```
+
+Requests still share a single model proxy lock, so disabling interruptions queues requests rather than enabling parallel model decoding.
+Client disconnections and other cancellation paths can still end a stream.
+
+
 ## Guides
 
 ### Code Completion
