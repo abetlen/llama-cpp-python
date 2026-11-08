@@ -1027,6 +1027,8 @@ class llama_context_params(ctypes.Structure):
         cb_eval_user_data (ctypes.ctypes.c_void_p): user data for cb_eval
         type_k (int): data type for K cache
         type_v (int): data type for V cache
+        moe_cache_size (int): device cache size in bytes for host-resident MoE experts
+        moe_cache_cpu_share (float): share of MoE cache misses computed on the CPU
         abort_callback (ggml_abort_callback): abort callback if it returns true, execution of llama_decode() will be aborted
         abort_callback_data (ctypes.ctypes.c_void_p): data for abort_callback
         embeddings (bool): if true, extract embeddings (together with logits)
@@ -1067,6 +1069,8 @@ class llama_context_params(ctypes.Structure):
         cb_eval_user_data: ctypes.c_void_p
         type_k: int
         type_v: int
+        moe_cache_size: int
+        moe_cache_cpu_share: float
         abort_callback: Callable[[ctypes.c_void_p], bool]
         abort_callback_data: ctypes.c_void_p
         embeddings: bool
@@ -1106,6 +1110,8 @@ class llama_context_params(ctypes.Structure):
         ("cb_eval_user_data", ctypes.c_void_p),
         ("type_k", ctypes.c_int),
         ("type_v", ctypes.c_int),
+        ("moe_cache_size", ctypes.c_size_t),
+        ("moe_cache_cpu_share", ctypes.c_float),
         ("abort_callback", ggml_abort_callback),
         ("abort_callback_data", ctypes.c_void_p),
         ("embeddings", ctypes.c_bool),
@@ -5238,6 +5244,8 @@ def llama_log_set(
 #     int32_t n_p_eval;
 #     int32_t n_eval;
 #     int32_t n_reused; // number of times a ggml compute graph had been reused
+#     int32_t n_reallocs_same; // reallocations with unchanged graph size
+#     int32_t n_reallocs_diff; // reallocations with changed graph size
 # };
 class llama_perf_context_data(ctypes.Structure):
     _fields_ = [
@@ -5248,6 +5256,8 @@ class llama_perf_context_data(ctypes.Structure):
         ("n_p_eval", ctypes.c_int32),
         ("n_eval", ctypes.c_int32),
         ("n_reused", ctypes.c_int32),
+        ("n_reallocs_same", ctypes.c_int32),
+        ("n_reallocs_diff", ctypes.c_int32),
     ]
 
 
