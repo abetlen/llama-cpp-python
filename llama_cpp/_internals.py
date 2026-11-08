@@ -59,7 +59,19 @@ class LlamaModel:
             )
 
         if model is None:
-            raise ValueError(f"Failed to load model from file: {path_model}")
+            try:
+                size_hint = f" (file size: {os.path.getsize(path_model) / (1024**3):.1f} GB)"
+            except OSError:
+                size_hint = ""
+            raise ValueError(
+                f"Failed to load model from file: {path_model}{size_hint}.
+"
+                "Common causes: insufficient RAM or VRAM for the model size, "
+                "unsupported quantization format, or corrupt file.
+"
+                "Tip: set verbose=True to see the full llama.cpp log, "
+                "or use n_gpu_layers=-1 to offload layers to GPU."
+            )
 
         vocab = llama_cpp.llama_model_get_vocab(model)
 
