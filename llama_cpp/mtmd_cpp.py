@@ -85,21 +85,41 @@ mtmd_input_chunks_p_ctypes = c_void_p
 mtmd_batch_p = NewType("mtmd_batch_p", int)
 mtmd_batch_p_ctypes = c_void_p
 
+mtmd_audio_stream_p = NewType("mtmd_audio_stream_p", int)
+mtmd_audio_stream_p_ctypes = c_void_p
+
+mtmd_gen_state_p = NewType("mtmd_gen_state_p", int)
+mtmd_gen_state_p_ctypes = c_void_p
+
 # Enums
 MTMD_INPUT_CHUNK_TYPE_TEXT = 0
 MTMD_INPUT_CHUNK_TYPE_IMAGE = 1
 MTMD_INPUT_CHUNK_TYPE_AUDIO = 2
 MTMD_INPUT_CHUNK_TYPE_COUNT = 3
 
+MTMD_VIDEO_TEMPLATE_DEFAULT = 0
+MTMD_VIDEO_TEMPLATE_LFM3 = 1
+MTMD_VIDEO_TEMPLATE_LFM3_OMNI = 2
+MTMD_VIDEO_TEMPLATE_QWEN3VL = 3
+
 MTMD_GEN_AUDIO_TYPE_NONE = 0
 MTMD_GEN_AUDIO_TYPE_QWEN3TTS = 1
 MTMD_GEN_AUDIO_TYPE_POCKETTTS = 2
+MTMD_GEN_AUDIO_TYPE_SOPRANO = 3
+MTMD_GEN_AUDIO_TYPE_LFM3A = 4
+MTMD_GEN_AUDIO_TYPE_CHATTERBOX = 5
+MTMD_GEN_AUDIO_TYPE_DRAMA3 = 6
 
 MTMD_GEN_PROCESS_TYPE_GEN_CODE = 0
 MTMD_GEN_PROCESS_TYPE_GEN_WAV = 1
 
 MTMD_HELPER_GEN_AUDIO_OUTTYPE_PCM = 0
 MTMD_HELPER_GEN_AUDIO_OUTTYPE_WAV = 1
+
+MTMD_HELPER_GEN_AUDIO_OUT_AUTO = 0
+MTMD_HELPER_GEN_AUDIO_OUT_TEXT = 1
+MTMD_HELPER_GEN_AUDIO_OUT_AUDIO = 2
+MTMD_HELPER_GEN_AUDIO_OUT_MIXED = 3
 
 mtmd_progress_callback = CFUNCTYPE(c_bool, c_float, c_void_p)
 
@@ -194,9 +214,52 @@ class mtmd_decoder_pos(Structure):
     ]
 
 
+# struct mtmd_video_config {
+#     enum mtmd_video_template tmpl;
+#     float fps;
+#     int32_t n_frames;
+#     int32_t frame_width;
+#     int32_t frame_height;
+# };
+class mtmd_video_config(Structure):
+    if TYPE_CHECKING:
+        tmpl: int
+        fps: float
+        n_frames: int
+        frame_width: int
+        frame_height: int
+
+    _fields_ = [
+        ("tmpl", c_int),
+        ("fps", c_float),
+        ("n_frames", c_int32),
+        ("frame_width", c_int32),
+        ("frame_height", c_int32),
+    ]
+
+
+# struct mtmd_audio_stream_params {
+#     int32_t step_ms;
+#     const llama_token * prompt;
+#     size_t n_prompt;
+# };
+class mtmd_audio_stream_params(Structure):
+    if TYPE_CHECKING:
+        step_ms: int
+        prompt: Optional["_Pointer[llama_cpp.llama_token]"]
+        n_prompt: int
+
+    _fields_ = [
+        ("step_ms", c_int32),
+        ("prompt", llama_cpp.llama_token_p),
+        ("n_prompt", c_size_t),
+    ]
+
+
 # struct mtmd_caps {
 #     bool inp_vision;
 #     bool inp_audio;
+#     bool gen_audio;
 # };
 class mtmd_caps(Structure):
     """Capabilities exposed by an mmproj file."""
@@ -204,10 +267,12 @@ class mtmd_caps(Structure):
     if TYPE_CHECKING:
         inp_vision: bool
         inp_audio: bool
+        gen_audio: bool
 
     _fields_ = [
         ("inp_vision", c_bool),
         ("inp_audio", c_bool),
+        ("gen_audio", c_bool),
     ]
 
 
@@ -215,17 +280,20 @@ class mtmd_caps(Structure):
 #     enum mtmd_gen_audio_type type;
 #     int32_t sample_rate; // in Hz, for example 24000 for qwen3tts
 #     const char * model_variant; // name of the weight variant, can be None if not applicable
+#     int32_t n_voices; // predefined voices, see mtmd_gen_audio_voice_name()
 # };
 class mtmd_gen_audio_info(Structure):
     if TYPE_CHECKING:
         type: int
         sample_rate: int
         model_variant: Optional[bytes]
+        n_voices: int
 
     _fields_ = [
         ("type", c_int),
         ("sample_rate", c_int32),
         ("model_variant", c_char_p),
+        ("n_voices", c_int32),
     ]
 
 
@@ -237,8 +305,9 @@ class mtmd_gen_audio_info(Structure):
 #     float * embd;   // the hidden state from backbone, must have n_text_embd elements
 #     int32_t top_k;
 #     float   top_p;
-#     uint32_t seed; // UINT32_MAX for random
-#     float    temp; // sampling temperature, or noise scale for flow-matching decoders
+#     float   temp; // sampling temperature, or noise scale for flow-matching decoders
+#     float   penalty_repeat; // repetition penalty of the sampled codes, <= 1 is off
+#     int32_t penalty_last_n; // frames the repetition penalty looks back on
 #
 #     // for MTMD_GEN_PROCESS_TYPE_GEN_WAV
 #     // pass either codes (discrete) or feats (continuous), depending on the pipeline
@@ -246,8 +315,6 @@ class mtmd_gen_audio_info(Structure):
 #     size_t    n_codes;
 #     const float * feats;
 #     size_t        n_feats;
-#     const char * state_data;
-#     size_t       state_size;
 # };
 class mtmd_gen_inp(Structure):
     if TYPE_CHECKING:
@@ -256,14 +323,13 @@ class mtmd_gen_inp(Structure):
         embd: Optional["_Pointer[c_float]"]
         top_k: int
         top_p: float
-        seed: int
         temp: float
+        penalty_repeat: float
+        penalty_last_n: int
         codes: Optional["_Pointer[c_int32]"]
         n_codes: int
         feats: Optional["_Pointer[c_float]"]
         n_feats: int
-        state_data: Optional["_Pointer[c_char]"]
-        state_size: int
 
     _fields_ = [
         ("type", c_int),
@@ -271,19 +337,18 @@ class mtmd_gen_inp(Structure):
         ("embd", POINTER(c_float)),
         ("top_k", c_int32),
         ("top_p", c_float),
-        ("seed", c_uint32),
         ("temp", c_float),
+        ("penalty_repeat", c_float),
+        ("penalty_last_n", c_int32),
         ("codes", POINTER(c_int32)),
         ("n_codes", c_size_t),
         ("feats", POINTER(c_float)),
         ("n_feats", c_size_t),
-        ("state_data", POINTER(c_char)),
-        ("state_size", c_size_t),
     ]
 
 
 # struct mtmd_gen_out {
-#     // note: output memory is allocated by the context, valid until next process() call
+#     // note: output memory is owned by the state, valid until the next process() call with this state
 #
 #     // for MTMD_GEN_PROCESS_TYPE_GEN_CODE
 #     const int32_t * codes;
@@ -297,8 +362,6 @@ class mtmd_gen_inp(Structure):
 #     // for MTMD_GEN_PROCESS_TYPE_GEN_WAV
 #     const float * audio;
 #     size_t        n_samples;
-#     const char * state_data;
-#     size_t       state_size;
 # };
 class mtmd_gen_out(Structure):
     if TYPE_CHECKING:
@@ -310,8 +373,6 @@ class mtmd_gen_out(Structure):
         is_eos: bool
         audio: Optional["_Pointer[c_float]"]
         n_samples: int
-        state_data: Optional["_Pointer[c_char]"]
-        state_size: int
 
     _fields_ = [
         ("codes", POINTER(c_int32)),
@@ -322,9 +383,17 @@ class mtmd_gen_out(Structure):
         ("is_eos", c_bool),
         ("audio", POINTER(c_float)),
         ("n_samples", c_size_t),
-        ("state_data", POINTER(c_char)),
-        ("state_size", c_size_t),
     ]
+
+
+# struct mtmd_gen_state_params {
+#     uint32_t seed; // UINT32_MAX for random
+# };
+class mtmd_gen_state_params(Structure):
+    if TYPE_CHECKING:
+        seed: int
+
+    _fields_ = [("seed", c_uint32)]
 
 
 mtmd_bitmap_lazy_callback = CFUNCTYPE(
@@ -411,11 +480,13 @@ class mtmd_helper_video_init_params(Structure):
         fps_target: float
         ffmpeg_bin_dir: Optional[bytes]
         timestamp_interval_ms: int
+        no_soundtrack: bool
 
     _fields_ = [
         ("fps_target", c_float),
         ("ffmpeg_bin_dir", c_char_p),
         ("timestamp_interval_ms", c_int64),
+        ("no_soundtrack", c_bool),
     ]
 
 
@@ -431,10 +502,14 @@ class mtmd_helper_init_opt(Structure):
 
 
 # struct mtmd_helper_gen_audio_inp {
+#     bool stream; // if true, output() must be called after each step_gen()
 #     llama_seq_id seq_id;
 #
 #     const char * prompt;
 #     size_t       prompt_len;
+#
+#     int32_t n_past;
+#     enum mtmd_helper_gen_audio_out_mode out_mode;
 #
 #     mtmd_bitmap * speaker_ref; // optional, can be NULL
 #     const char * lang; // optional, can be NULL
@@ -447,9 +522,12 @@ class mtmd_helper_init_opt(Structure):
 # };
 class mtmd_helper_gen_audio_inp(Structure):
     if TYPE_CHECKING:
+        stream: bool
         seq_id: int
         prompt: Optional[bytes]
         prompt_len: int
+        n_past: int
+        out_mode: int
         speaker_ref: Optional[mtmd_bitmap_p]
         lang: Optional[bytes]
         top_k: int
@@ -458,15 +536,43 @@ class mtmd_helper_gen_audio_inp(Structure):
         out_type: int
 
     _fields_ = [
+        ("stream", c_bool),
         ("seq_id", llama_cpp.llama_seq_id),
         ("prompt", c_char_p),
         ("prompt_len", c_size_t),
+        ("n_past", c_int32),
+        ("out_mode", c_int),
         ("speaker_ref", mtmd_bitmap_p_ctypes),
         ("lang", c_char_p),
         ("top_k", c_int32),
         ("top_p", c_float),
         ("seed", c_uint32),
         ("out_type", c_int),
+    ]
+
+
+class mtmd_helper_cap(Structure):
+    """Capabilities exposed by an MTMD model and its projector."""
+
+    if TYPE_CHECKING:
+        chat: bool
+        vision: bool
+        audio: bool
+        video: bool
+        audio_stream: bool
+        text_gen: bool
+        audio_gen: bool
+        audio_gen_spk_ref: bool
+
+    _fields_ = [
+        ("chat", c_bool),
+        ("vision", c_bool),
+        ("audio", c_bool),
+        ("video", c_bool),
+        ("audio_stream", c_bool),
+        ("text_gen", c_bool),
+        ("audio_gen", c_bool),
+        ("audio_gen_spk_ref", c_bool),
     ]
 
 
@@ -546,10 +652,149 @@ def mtmd_support_audio(ctx: mtmd_context_p, /) -> bool:
     ...
 
 
+# MTMD_API bool mtmd_support_audio_stream(const mtmd_context * ctx);
+@ctypes_function("mtmd_support_audio_stream", [mtmd_context_p_ctypes], c_bool)
+def mtmd_support_audio_stream(ctx: mtmd_context_p, /) -> bool:
+    """Check whether the current model supports realtime audio input."""
+    ...
+
+
 # MTMD_API int mtmd_get_audio_sample_rate(const mtmd_context * ctx);
 @ctypes_function("mtmd_get_audio_sample_rate", [mtmd_context_p_ctypes], c_int)
 def mtmd_get_audio_sample_rate(ctx: mtmd_context_p, /) -> int:
     """Get the audio sample rate in Hz. Returns -1 if audio is not supported."""
+    ...
+
+
+# MTMD_API struct mtmd_audio_stream_params mtmd_audio_stream_params_default(void);
+@ctypes_function("mtmd_audio_stream_params_default", [], mtmd_audio_stream_params)
+def mtmd_audio_stream_params_default() -> mtmd_audio_stream_params:
+    """Get default realtime audio stream parameters."""
+    ...
+
+
+# MTMD_API mtmd_audio_stream * mtmd_audio_stream_init(
+#     mtmd_context * ctx, struct mtmd_audio_stream_params params);
+@ctypes_function(
+    "mtmd_audio_stream_init",
+    [mtmd_context_p_ctypes, mtmd_audio_stream_params],
+    mtmd_audio_stream_p_ctypes,
+)
+def mtmd_audio_stream_init(
+    ctx: mtmd_context_p,
+    params: mtmd_audio_stream_params,
+    /,
+) -> Optional[mtmd_audio_stream_p]:
+    """Initialize realtime audio processing, or return None on failure."""
+    ...
+
+
+# MTMD_API void mtmd_audio_stream_free(mtmd_audio_stream * stream);
+@ctypes_function("mtmd_audio_stream_free", [mtmd_audio_stream_p_ctypes], None)
+def mtmd_audio_stream_free(stream: mtmd_audio_stream_p, /):
+    """Free a realtime audio stream."""
+    ...
+
+
+# MTMD_API int32_t mtmd_audio_stream_push(
+#     mtmd_audio_stream * stream, const float * samples, size_t n_samples);
+@ctypes_function(
+    "mtmd_audio_stream_push",
+    [mtmd_audio_stream_p_ctypes, POINTER(c_float), c_size_t],
+    c_int32,
+)
+def mtmd_audio_stream_push(
+    stream: mtmd_audio_stream_p,
+    samples: Optional[CtypesArray[c_float]],
+    n_samples: Union[c_size_t, int],
+    /,
+) -> int:
+    """Push PCM F32 samples into a realtime audio stream."""
+    ...
+
+
+# MTMD_API int32_t mtmd_audio_stream_flush(mtmd_audio_stream * stream, bool end);
+@ctypes_function(
+    "mtmd_audio_stream_flush", [mtmd_audio_stream_p_ctypes, c_bool], c_int32
+)
+def mtmd_audio_stream_flush(stream: mtmd_audio_stream_p, end: bool, /) -> int:
+    """Flush pending audio, optionally ending the stream."""
+    ...
+
+
+# MTMD_API int32_t mtmd_audio_stream_step(mtmd_audio_stream * stream, llama_token last_token);
+@ctypes_function(
+    "mtmd_audio_stream_step",
+    [mtmd_audio_stream_p_ctypes, llama_cpp.llama_token],
+    c_int32,
+)
+def mtmd_audio_stream_step(
+    stream: mtmd_audio_stream_p,
+    last_token: llama_cpp.llama_token,
+    /,
+) -> int:
+    """Produce the next decoder rows, using the previously sampled token."""
+    ...
+
+
+# MTMD_API const float * mtmd_audio_stream_get_output_embd(const mtmd_audio_stream * stream);
+@ctypes_function(
+    "mtmd_audio_stream_get_output_embd",
+    [mtmd_audio_stream_p_ctypes],
+    POINTER(c_float),
+)
+def mtmd_audio_stream_get_output_embd(
+    stream: mtmd_audio_stream_p,
+    /,
+) -> Optional[CtypesArray[c_float]]:
+    """Get decoder embedding rows produced by the last stream step."""
+    ...
+
+
+# MTMD_API bool mtmd_audio_stream_is_seq_start(const mtmd_audio_stream * stream);
+@ctypes_function(
+    "mtmd_audio_stream_is_seq_start", [mtmd_audio_stream_p_ctypes], c_bool
+)
+def mtmd_audio_stream_is_seq_start(stream: mtmd_audio_stream_p, /) -> bool:
+    """Check whether the last stream step starts a new sequence."""
+    ...
+
+
+# MTMD_API int64_t mtmd_audio_stream_get_n_rows(const mtmd_audio_stream * stream);
+@ctypes_function(
+    "mtmd_audio_stream_get_n_rows", [mtmd_audio_stream_p_ctypes], c_int64
+)
+def mtmd_audio_stream_get_n_rows(stream: mtmd_audio_stream_p, /) -> int:
+    """Get the number of audio rows whose text has been sampled."""
+    ...
+
+
+# MTMD_API int64_t mtmd_audio_stream_get_n_rows_flushed(const mtmd_audio_stream * stream);
+@ctypes_function(
+    "mtmd_audio_stream_get_n_rows_flushed", [mtmd_audio_stream_p_ctypes], c_int64
+)
+def mtmd_audio_stream_get_n_rows_flushed(stream: mtmd_audio_stream_p, /) -> int:
+    """Get the number of audio rows produced through the last flush."""
+    ...
+
+
+# MTMD_API struct mtmd_video_config mtmd_get_video_config(
+#     const mtmd_context * ctx, int32_t src_width, int32_t src_height,
+#     int32_t src_n_frames, float src_fps);
+@ctypes_function(
+    "mtmd_get_video_config",
+    [mtmd_context_p_ctypes, c_int32, c_int32, c_int32, c_float],
+    mtmd_video_config,
+)
+def mtmd_get_video_config(
+    ctx: mtmd_context_p,
+    src_width: int,
+    src_height: int,
+    src_n_frames: int,
+    src_fps: float,
+    /,
+) -> mtmd_video_config:
+    """Get recommended video sampling and frame dimensions for the current model."""
     ...
 
 
@@ -637,6 +882,13 @@ def mtmd_bitmap_is_audio(bitmap: mtmd_bitmap_p, /) -> bool:
     ...
 
 
+# MTMD_API bool mtmd_bitmap_is_voice(const mtmd_bitmap * bitmap);
+@ctypes_function("mtmd_bitmap_is_voice", [mtmd_bitmap_p_ctypes], c_bool)
+def mtmd_bitmap_is_voice(bitmap: mtmd_bitmap_p, /) -> bool:
+    """Check whether the bitmap contains a predefined voice representation."""
+    ...
+
+
 # MTMD_API const char * mtmd_bitmap_get_id(const mtmd_bitmap * bitmap);
 @ctypes_function("mtmd_bitmap_get_id", [mtmd_bitmap_p_ctypes], c_char_p)
 def mtmd_bitmap_get_id(bitmap: mtmd_bitmap_p, /) -> Optional[bytes]:
@@ -656,6 +908,13 @@ def mtmd_bitmap_set_id(bitmap: mtmd_bitmap_p, id: Optional[bytes], /):
 @ctypes_function("mtmd_bitmap_set_mergeable", [mtmd_bitmap_p_ctypes, c_bool], None)
 def mtmd_bitmap_set_mergeable(bitmap: mtmd_bitmap_p, mergeable: bool, /):
     """Allow temporal merging with an adjacent mergeable bitmap."""
+    ...
+
+
+# MTMD_API void mtmd_bitmap_set_is_video(mtmd_bitmap * bitmap, bool is_video);
+@ctypes_function("mtmd_bitmap_set_is_video", [mtmd_bitmap_p_ctypes, c_bool], None)
+def mtmd_bitmap_set_is_video(bitmap: mtmd_bitmap_p, is_video: bool, /):
+    """Mark a bitmap or lazy bitmap as part of a video input."""
     ...
 
 
@@ -1039,6 +1298,105 @@ def mtmd_gen_audio_get_info(ctx: mtmd_context_p, /) -> mtmd_gen_audio_info:
     ...
 
 
+# MTMD_API size_t mtmd_gen_audio_read_tensor(
+#     mtmd_context * ctx, const char * name, float * out, size_t n_max);
+@ctypes_function(
+    "mtmd_gen_audio_read_tensor",
+    [mtmd_context_p_ctypes, c_char_p, POINTER(c_float), c_size_t],
+    c_size_t,
+)
+def mtmd_gen_audio_read_tensor(
+    ctx: mtmd_context_p,
+    name: bytes,
+    out: Optional[CtypesArray[c_float]],
+    n_max: Union[c_size_t, int],
+    /,
+) -> int:
+    """Read a named audio-generation tensor as F32 and return its element count."""
+    ...
+
+
+# MTMD_API const char * mtmd_gen_audio_voice_name(const mtmd_context * ctx, int32_t idx);
+@ctypes_function(
+    "mtmd_gen_audio_voice_name",
+    [mtmd_context_p_ctypes, c_int32],
+    c_char_p,
+)
+def mtmd_gen_audio_voice_name(
+    ctx: mtmd_context_p,
+    idx: int,
+    /,
+) -> Optional[bytes]:
+    """Get the name of a predefined voice by index."""
+    ...
+
+
+# MTMD_API mtmd_bitmap * mtmd_gen_audio_get_voice(const mtmd_context * ctx, const char * name);
+@ctypes_function(
+    "mtmd_gen_audio_get_voice",
+    [mtmd_context_p_ctypes, c_char_p],
+    mtmd_bitmap_p_ctypes,
+)
+def mtmd_gen_audio_get_voice(
+    ctx: mtmd_context_p,
+    name: bytes,
+    /,
+) -> Optional[mtmd_bitmap_p]:
+    """Create an owned voice bitmap for a predefined voice name."""
+    ...
+
+
+# MTMD_API struct mtmd_gen_state_params mtmd_gen_state_params_default(void);
+@ctypes_function("mtmd_gen_state_params_default", [], mtmd_gen_state_params)
+def mtmd_gen_state_params_default() -> mtmd_gen_state_params:
+    """Get default audio generation state parameters."""
+    ...
+
+
+# MTMD_API mtmd_gen_state * mtmd_gen_state_init(mtmd_context * ctx, struct mtmd_gen_state_params params);
+@ctypes_function(
+    "mtmd_gen_state_init",
+    [mtmd_context_p_ctypes, mtmd_gen_state_params],
+    mtmd_gen_state_p_ctypes,
+)
+def mtmd_gen_state_init(
+    ctx: mtmd_context_p,
+    params: mtmd_gen_state_params,
+    /,
+) -> Optional[mtmd_gen_state_p]:
+    """Initialize audio generation state, or return None if unsupported."""
+    ...
+
+
+# MTMD_API void mtmd_gen_state_free(mtmd_gen_state * state);
+@ctypes_function("mtmd_gen_state_free", [mtmd_gen_state_p_ctypes], None)
+def mtmd_gen_state_free(state: mtmd_gen_state_p, /):
+    """Free audio generation state."""
+    ...
+
+
+# MTMD_API void mtmd_gen_state_reset(mtmd_gen_state * state);
+@ctypes_function("mtmd_gen_state_reset", [mtmd_gen_state_p_ctypes], None)
+def mtmd_gen_state_reset(state: mtmd_gen_state_p, /):
+    """Reset audio generation state while preserving its RNG stream."""
+    ...
+
+
+# MTMD_API int32_t mtmd_gen_state_set_ref(mtmd_context * ctx, mtmd_gen_state * state);
+@ctypes_function(
+    "mtmd_gen_state_set_ref",
+    [mtmd_context_p_ctypes, mtmd_gen_state_p_ctypes],
+    c_int32,
+)
+def mtmd_gen_state_set_ref(
+    ctx: mtmd_context_p,
+    state: mtmd_gen_state_p,
+    /,
+) -> int:
+    """Copy the most recently encoded speaker reference into generation state."""
+    ...
+
+
 # // defaults tuned for the loaded pipeline, callers override only what they care about
 # MTMD_API struct mtmd_gen_inp mtmd_gen_inp_default(const mtmd_context * ctx);
 @ctypes_function(
@@ -1051,17 +1409,24 @@ def mtmd_gen_inp_default(ctx: mtmd_context_p, /) -> mtmd_gen_inp:
     ...
 
 
-# // note: this API is stateless, caller must handle state management and audio frame accumulation
+# // run one step and update the state in place
 # MTMD_API int32_t mtmd_gen_audio_process(mtmd_context * ctx,
+#                                 mtmd_gen_state * state,
 #                                 const struct mtmd_gen_inp * inp,
 #                                 struct mtmd_gen_out * out);
 @ctypes_function(
     "mtmd_gen_audio_process",
-    [mtmd_context_p_ctypes, POINTER(mtmd_gen_inp), POINTER(mtmd_gen_out)],
+    [
+        mtmd_context_p_ctypes,
+        mtmd_gen_state_p_ctypes,
+        POINTER(mtmd_gen_inp),
+        POINTER(mtmd_gen_out),
+    ],
     c_int32,
 )
 def mtmd_gen_audio_process(
     ctx: mtmd_context_p,
+    state: mtmd_gen_state_p,
     inp: "_Pointer[mtmd_gen_inp]",
     out: "_Pointer[mtmd_gen_out]",
     /,
@@ -1422,6 +1787,33 @@ def mtmd_helper_model_can_chat(
     ...
 
 
+# MTMD_API struct mtmd_helper_cap mtmd_helper_get_capabilities(
+#     const struct llama_model * model, const struct mtmd_context * mctx);
+@ctypes_function(
+    "mtmd_helper_get_capabilities",
+    [llama_cpp.llama_model_p_ctypes, mtmd_context_p_ctypes],
+    mtmd_helper_cap,
+)
+def mtmd_helper_get_capabilities(
+    model: llama_cpp.llama_model_p,
+    mctx: Optional[mtmd_context_p],
+    /,
+) -> mtmd_helper_cap:
+    """Get model and projector capabilities."""
+    ...
+
+
+# MTMD_API struct mtmd_helper_gen_audio_inp mtmd_helper_gen_audio_inp_default(void);
+@ctypes_function(
+    "mtmd_helper_gen_audio_inp_default",
+    [],
+    mtmd_helper_gen_audio_inp,
+)
+def mtmd_helper_gen_audio_inp_default() -> mtmd_helper_gen_audio_inp:
+    """Get default audio generation helper input parameters."""
+    ...
+
+
 # MTMD_API mtmd_helper_gen_audio * mtmd_helper_gen_audio_init(
 #                                     struct llama_context * lctx,
 #                                     struct mtmd_context * mctx);
@@ -1526,6 +1918,57 @@ def mtmd_helper_gen_audio_step_gen(
     ...
 
 
+# MTMD_API bool mtmd_helper_gen_audio_next_is_text(mtmd_helper_gen_audio * ctx);
+@ctypes_function(
+    "mtmd_helper_gen_audio_next_is_text",
+    [mtmd_helper_gen_audio_p_ctypes],
+    c_bool,
+)
+def mtmd_helper_gen_audio_next_is_text(ctx: mtmd_helper_gen_audio_p, /) -> bool:
+    """Check whether the next audio generation step expects a sampled text token."""
+    ...
+
+
+# MTMD_API const llama_logit_bias * mtmd_helper_gen_audio_get_logit_bias(
+#     mtmd_helper_gen_audio * ctx, size_t * n_bias);
+@ctypes_function(
+    "mtmd_helper_gen_audio_get_logit_bias",
+    [mtmd_helper_gen_audio_p_ctypes, POINTER(c_size_t)],
+    llama_cpp.llama_logit_bias_p,
+)
+def mtmd_helper_gen_audio_get_logit_bias(
+    ctx: mtmd_helper_gen_audio_p,
+    n_bias: "_Pointer[c_size_t]",
+    /,
+) -> Optional[CtypesArray[llama_cpp.llama_logit_bias]]:
+    """Get the logit bias for tokens sampled by the audio generation helper."""
+    ...
+
+
+# MTMD_API int32_t mtmd_helper_audio_stream_get_logit_bias(
+#     const mtmd_context * mctx, const struct llama_model * model,
+#     llama_logit_bias * out, int32_t n_max);
+@ctypes_function(
+    "mtmd_helper_audio_stream_get_logit_bias",
+    [
+        mtmd_context_p_ctypes,
+        llama_cpp.llama_model_p_ctypes,
+        POINTER(llama_cpp.llama_logit_bias),
+        c_int32,
+    ],
+    c_int32,
+)
+def mtmd_helper_audio_stream_get_logit_bias(
+    mctx: mtmd_context_p,
+    model: llama_cpp.llama_model_p,
+    out: Optional[CtypesArray[llama_cpp.llama_logit_bias]],
+    n_max: int,
+    /,
+) -> int:
+    """Get token biases for text sampled while transcribing an audio stream."""
+    ...
+
+
 # // out_data valid until next get_output() or reset() call
 # // out_n_samples (optional, can be NULL) receives the number of generated PCM samples
 # MTMD_API int32_t mtmd_helper_gen_audio_get_output(
@@ -1554,6 +1997,15 @@ def mtmd_helper_gen_audio_get_output(
     /,
 ) -> int:
     """Get accumulated PCM or WAV audio output."""
+    ...
+
+
+# MTMD_API int32_t mtmd_helper_gen_audio_flush(mtmd_helper_gen_audio * ctx);
+@ctypes_function(
+    "mtmd_helper_gen_audio_flush", [mtmd_helper_gen_audio_p_ctypes], c_int32
+)
+def mtmd_helper_gen_audio_flush(ctx: mtmd_helper_gen_audio_p, /) -> int:
+    """Flush buffered audio codes through the decoder."""
     ...
 
 
