@@ -752,18 +752,14 @@ def mtmd_audio_stream_get_output_embd(
 
 
 # MTMD_API bool mtmd_audio_stream_is_seq_start(const mtmd_audio_stream * stream);
-@ctypes_function(
-    "mtmd_audio_stream_is_seq_start", [mtmd_audio_stream_p_ctypes], c_bool
-)
+@ctypes_function("mtmd_audio_stream_is_seq_start", [mtmd_audio_stream_p_ctypes], c_bool)
 def mtmd_audio_stream_is_seq_start(stream: mtmd_audio_stream_p, /) -> bool:
     """Check whether the last stream step starts a new sequence."""
     ...
 
 
 # MTMD_API int64_t mtmd_audio_stream_get_n_rows(const mtmd_audio_stream * stream);
-@ctypes_function(
-    "mtmd_audio_stream_get_n_rows", [mtmd_audio_stream_p_ctypes], c_int64
-)
+@ctypes_function("mtmd_audio_stream_get_n_rows", [mtmd_audio_stream_p_ctypes], c_int64)
 def mtmd_audio_stream_get_n_rows(stream: mtmd_audio_stream_p, /) -> int:
     """Get the number of audio rows whose text has been sampled."""
     ...
