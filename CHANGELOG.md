@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - fix(embed): respect physical batch limits for non-causal embeddings by @original4422 in #2387
+- fix(ci): use supported Python versions on Ubuntu by @abetlen in #2407
 - feat: update llama.cpp to ggml-org/llama.cpp@7d7f02875
 
 ## [0.3.36]
