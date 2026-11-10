@@ -3132,7 +3132,10 @@ class Llava15ChatHandler:
         else:
             import urllib.request
 
-            with urllib.request.urlopen(image_url) as f:
+            request = urllib.request.Request(
+                image_url, headers={"User-Agent": "llama-cpp-python"}
+            )
+            with urllib.request.urlopen(request) as f:
                 image_bytes = f.read()
                 return image_bytes
 
@@ -3666,7 +3669,10 @@ class MTMDChatHandler:
         else:
             import urllib.request
 
-            with urllib.request.urlopen(image_url) as f:
+            request = urllib.request.Request(
+                image_url, headers={"User-Agent": "llama-cpp-python"}
+            )
+            with urllib.request.urlopen(request) as f:
                 image_bytes = f.read()
                 return image_bytes
 
