@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- docs: fix LlamaIndex and llama.h documentation links by @mrhy7176
 - fix(ci): use supported Python versions on Ubuntu by @abetlen in #2407
 - feat: update llama.cpp to ggml-org/llama.cpp@7d7f02875
 
