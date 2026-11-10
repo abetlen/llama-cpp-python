@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- perf(cache): index RAM cache longest-prefix lookups by @hakarrr in #2410
+
 - fix(ci): use supported Python versions on Ubuntu by @abetlen in #2407
 - feat: update llama.cpp to ggml-org/llama.cpp@7d7f02875
 

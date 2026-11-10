@@ -1,3 +1,4 @@
+from bisect import bisect_left
 import sys
 from abc import ABC, abstractmethod
 from typing import (
@@ -46,6 +47,54 @@ class BaseLlamaCache(ABC):
         raise NotImplementedError
 
 
+class _LlamaCachePrefixIndex:
+    """Linear-storage sorted-key index with cache-order tie breaking."""
+
+    def __init__(self, cache_state):
+        self.cache_state = cache_state
+        self.order = ()
+        self.keys = []
+        self.ranks = []
+        self.clock = 0
+
+    def sync(self):
+        order = tuple(self.cache_state)
+        if order != self.order:
+            pairs = sorted((key, rank) for rank, key in enumerate(order) if key)
+            self.keys = [key for key, rank in pairs]
+            self.ranks = [rank for key, rank in pairs]
+            self.order = order
+            self.clock = len(order)
+
+    def find(self, query):
+        self.sync()
+        # A lexicographic neighbor attains the maximum shared prefix.
+        index = bisect_left(self.keys, query)
+        best = 0
+        for position in (index - 1, index):
+            if 0 <= position < len(self.keys):
+                length = 0
+                for a, b in zip(self.keys[position], query):
+                    if a != b:
+                        break
+                    length += 1
+                best = max(best, length)
+        if not best:
+            return None
+        prefix = query[:best]
+        start = bisect_left(self.keys, prefix)
+        stop = bisect_left(self.keys, prefix[:-1] + (int(prefix[-1]) + 1,))
+        # All keys in this interval tie; preserve the original LRU winner.
+        winner = min(range(start, stop), key=self.ranks.__getitem__)
+        return self.keys[winner]
+
+    def touch(self, key):
+        position = bisect_left(self.keys, key)
+        self.ranks[position] = self.clock
+        self.clock += 1
+        self.order = tuple(self.cache_state)
+
+
 class LlamaRAMCache(BaseLlamaCache):
     """Cache for a llama.cpp model using RAM."""
 
@@ -55,6 +104,7 @@ class LlamaRAMCache(BaseLlamaCache):
         self.cache_state: OrderedDict[Tuple[int, ...], "llama_cpp.llama.LlamaState"] = (
             OrderedDict()
         )
+        self._prefix_index = _LlamaCachePrefixIndex(self.cache_state)
 
     @property
     def cache_size(self):
@@ -64,17 +114,19 @@ class LlamaRAMCache(BaseLlamaCache):
         self,
         key: Tuple[int, ...],
     ) -> Optional[Tuple[int, ...]]:
-        min_len = 0
-        min_key = None
-        keys = (
-            (k, llama_cpp.llama.Llama.longest_token_prefix(k, key))
-            for k in self.cache_state.keys()
-        )
-        for k, prefix_len in keys:
-            if prefix_len > min_len:
-                min_len = prefix_len
-                min_key = k
-        return min_key
+        if len(self.cache_state) <= 1:
+            if (
+                self._prefix_index.order
+                or self._prefix_index.cache_state is not self.cache_state
+            ):
+                self._prefix_index = _LlamaCachePrefixIndex(self.cache_state)
+            for candidate in self.cache_state:
+                if llama_cpp.llama.Llama.longest_token_prefix(candidate, key):
+                    return candidate
+            return None
+        if self._prefix_index.cache_state is not self.cache_state:
+            self._prefix_index = _LlamaCachePrefixIndex(self.cache_state)
+        return self._prefix_index.find(key)
 
     def __getitem__(self, key: Sequence[int]) -> "llama_cpp.llama.LlamaState":
         key = tuple(key)
@@ -83,6 +135,8 @@ class LlamaRAMCache(BaseLlamaCache):
             raise KeyError("Key not found")
         value = self.cache_state[_key]
         self.cache_state.move_to_end(_key)
+        if len(self.cache_state) > 1:
+            self._prefix_index.touch(_key)
         return value
 
     def __contains__(self, key: Sequence[int]) -> bool:
