@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- fix(index): include available SHA256 hashes in wheel links by @hakarrr (issue #1340)
+
 - fix(ci): use supported Python versions on Ubuntu by @abetlen in #2407
 - feat: update llama.cpp to ggml-org/llama.cpp@7d7f02875
 
