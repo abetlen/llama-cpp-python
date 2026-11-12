@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- fix: raise a clear error for data URLs missing a comma and decode non-base64 payloads by @kevin9327
+- fix: raise a clear error for data URLs missing a comma and decode non-base64 payloads by @kevin9327 in #2413
 - fix(ci): use supported Python versions on Ubuntu by @abetlen in #2407
 - feat: update llama.cpp to ggml-org/llama.cpp@7d7f02875
 
