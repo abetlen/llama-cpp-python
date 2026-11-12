@@ -35,7 +35,7 @@ import llama_cpp.llama_types as llama_types
 import llama_cpp.llama_grammar as llama_grammar
 
 from ._logger import logger
-from ._utils import suppress_stdout_stderr, Singleton
+from ._utils import suppress_stdout_stderr, Singleton, _bytes_from_image_url
 
 ### Common Chat Templates and Special Tokens ###
 
@@ -3124,17 +3124,7 @@ class Llava15ChatHandler:
     @staticmethod
     def _load_image(image_url: str) -> bytes:
         # TODO: Add Pillow support for other image formats beyond (jpg, png)
-        if image_url.startswith("data:"):
-            import base64
-
-            image_bytes = base64.b64decode(image_url.split(",")[1])
-            return image_bytes
-        else:
-            import urllib.request
-
-            with urllib.request.urlopen(image_url) as f:
-                image_bytes = f.read()
-                return image_bytes
+        return _bytes_from_image_url(image_url)
 
     @staticmethod
     def get_image_urls(messages: List[llama_types.ChatCompletionRequestMessage]):
@@ -3658,17 +3648,7 @@ class MTMDChatHandler:
 
     @staticmethod
     def _load_image(image_url: str) -> bytes:
-        if image_url.startswith("data:"):
-            import base64
-
-            image_bytes = base64.b64decode(image_url.split(",")[1])
-            return image_bytes
-        else:
-            import urllib.request
-
-            with urllib.request.urlopen(image_url) as f:
-                image_bytes = f.read()
-                return image_bytes
+        return _bytes_from_image_url(image_url)
 
     @staticmethod
     def get_image_urls(messages: List[llama_types.ChatCompletionRequestMessage]):
