@@ -97,3 +97,27 @@ class Singleton(object, metaclass=MetaSingleton):
 
     def __init__(self):
         super(Singleton, self).__init__()
+
+
+def _bytes_from_image_url(image_url: str) -> bytes:
+    """Load image bytes from a data URL or an http(s) URL."""
+    if image_url.startswith("data:"):
+        import base64
+
+        if "," not in image_url:
+            raise ValueError(
+                "Invalid data URL: expected 'data:<type>[;base64],<payload>'"
+            )
+        header, data = image_url.split(",", 1)
+        if ";base64" in header.lower():
+            return base64.b64decode(data)
+        # Non-base64 data URLs (e.g. data:image/svg+xml,<svg>...) carry the payload as text.
+        from urllib.parse import unquote_to_bytes
+
+        return unquote_to_bytes(data)
+
+    import urllib.request
+
+    with urllib.request.urlopen(image_url) as f:
+        return f.read()
+
