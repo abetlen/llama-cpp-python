@@ -305,7 +305,7 @@ class mtmd_gen_audio_info(Structure):
 #     float * embd;   // the hidden state from backbone, must have n_text_embd elements
 #     int32_t top_k;
 #     float   top_p;
-#     float   temp; // sampling temperature, or noise scale for flow-matching decoders
+#     float   temp; // sampling temperature, or noise scale for flow-matching decoders (0 = no noise)
 #     float   penalty_repeat; // repetition penalty of the sampled codes, <= 1 is off
 #     int32_t penalty_last_n; // frames the repetition penalty looks back on
 #
@@ -473,6 +473,13 @@ class mtmd_helper_video_info(Structure):
     ]
 
 
+# struct mtmd_helper_video_stream_info {
+#     uint32_t width;    // as displayed (rotation and pixel aspect ratio applied)
+#     uint32_t height;
+#     float    fps;
+#     int32_t  n_frames; // -1 if unknown
+#     float    duration; // in seconds, -1 if unknown
+# };
 class mtmd_helper_video_stream_info(Structure):
     """Source video metadata, with rotation and pixel aspect ratio applied."""
 
