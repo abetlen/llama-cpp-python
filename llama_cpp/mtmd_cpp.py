@@ -473,6 +473,66 @@ class mtmd_helper_video_info(Structure):
     ]
 
 
+class mtmd_helper_video_stream_info(Structure):
+    """Source video metadata, with rotation and pixel aspect ratio applied."""
+
+    _fields_ = [
+        ("width", c_uint32),
+        ("height", c_uint32),
+        ("fps", c_float),
+        ("n_frames", c_int32),
+        ("duration", c_float),
+    ]
+
+
+# Video decoder: the built-in one runs ffmpeg/ffprobe (MTMD_VIDEO), an application can provide its own.
+# Call order: open, start, read_audio, read_frame..., close
+mtmd_helper_video_open_callback = CFUNCTYPE(
+    c_void_p,
+    c_void_p,
+    c_char_p,
+    POINTER(c_uint8),
+    c_size_t,
+    POINTER(mtmd_helper_video_stream_info),
+)
+mtmd_helper_video_start_callback = CFUNCTYPE(
+    c_bool,
+    c_void_p,
+    c_uint32,
+    c_uint32,
+    c_float,
+    POINTER(c_bool),
+)
+mtmd_helper_video_read_frame_callback = CFUNCTYPE(
+    c_bool,
+    c_void_p,
+    POINTER(c_uint8),
+    c_uint32,
+    c_uint32,
+)
+# ctypes callbacks cannot return a typed pointer; return the sample buffer's address.
+mtmd_helper_video_read_audio_callback = CFUNCTYPE(
+    c_void_p,
+    c_void_p,
+    c_int,
+    POINTER(c_size_t),
+)
+mtmd_helper_video_close_callback = CFUNCTYPE(None, c_void_p)
+
+
+class mtmd_helper_video_decoder(Structure):
+    """Keep the callbacks and their buffers alive while the decoder is in use."""
+
+    _fields_ = [
+        ("open", mtmd_helper_video_open_callback),
+        ("start", mtmd_helper_video_start_callback),
+        ("read_frame", mtmd_helper_video_read_frame_callback),
+        ("read_audio", mtmd_helper_video_read_audio_callback),
+        ("close", mtmd_helper_video_close_callback),
+        ("user_data", c_void_p),
+    ]
+
+
 class mtmd_helper_video_init_params(Structure):
     """Parameters for initializing an MTMD helper video stream."""
 
@@ -481,12 +541,14 @@ class mtmd_helper_video_init_params(Structure):
         ffmpeg_bin_dir: Optional[bytes]
         timestamp_interval_ms: int
         no_soundtrack: bool
+        decoder: "_Pointer[mtmd_helper_video_decoder]"
 
     _fields_ = [
         ("fps_target", c_float),
         ("ffmpeg_bin_dir", c_char_p),
         ("timestamp_interval_ms", c_int64),
         ("no_soundtrack", c_bool),
+        ("decoder", POINTER(mtmd_helper_video_decoder)),
     ]
 
 
@@ -516,6 +578,7 @@ class mtmd_helper_init_opt(Structure):
 #
 #     int32_t  top_k;
 #     float    top_p;
+#     float    temp; // audio frame temperature if the model supports it, < 0 = model default, 0 = greedy
 #     uint32_t seed; // UINT32_MAX for random (default: random)
 #
 #     enum mtmd_helper_gen_audio_outtype out_type;
@@ -532,6 +595,7 @@ class mtmd_helper_gen_audio_inp(Structure):
         lang: Optional[bytes]
         top_k: int
         top_p: float
+        temp: float
         seed: int
         out_type: int
 
@@ -546,6 +610,7 @@ class mtmd_helper_gen_audio_inp(Structure):
         ("lang", c_char_p),
         ("top_k", c_int32),
         ("top_p", c_float),
+        ("temp", c_float),
         ("seed", c_uint32),
         ("out_type", c_int),
     ]
@@ -1677,6 +1742,49 @@ def mtmd_helper_decode_image_chunk(
 ) -> int:
     """Decode a pre-encoded image chunk."""
     ...
+
+
+# streaming resampler for raw mono F32 PCM (e.g. realtime input), to match mtmd_get_audio_sample_rate()
+# it keeps state between calls, use one per stream
+mtmd_helper_resampler_p = NewType("mtmd_helper_resampler_p", int)
+mtmd_helper_resampler_p_ctypes = c_void_p
+
+
+# returns NULL on failure
+# MTMD_API mtmd_helper_resampler * mtmd_helper_resampler_init(int32_t rate_in, int32_t rate_out);
+@ctypes_function(
+    "mtmd_helper_resampler_init", [c_int32, c_int32], mtmd_helper_resampler_p_ctypes
+)
+def mtmd_helper_resampler_init(
+    rate_in: int, rate_out: int, /
+) -> Optional[mtmd_helper_resampler_p]: ...
+
+
+# MTMD_API void mtmd_helper_resampler_free(mtmd_helper_resampler * ctx);
+@ctypes_function("mtmd_helper_resampler_free", [mtmd_helper_resampler_p_ctypes], None)
+def mtmd_helper_resampler_free(ctx: mtmd_helper_resampler_p, /) -> None: ...
+
+
+# *out is valid until the next call
+# returns the number of output samples (can be 0), < 0 on error
+# MTMD_API int64_t mtmd_helper_resampler_process(mtmd_helper_resampler * ctx, const float * in, size_t n_in, const float ** out);
+@ctypes_function(
+    "mtmd_helper_resampler_process",
+    [
+        mtmd_helper_resampler_p_ctypes,
+        POINTER(c_float),
+        c_size_t,
+        POINTER(POINTER(c_float)),
+    ],
+    c_int64,
+)
+def mtmd_helper_resampler_process(
+    ctx: mtmd_helper_resampler_p,
+    samples: "_Pointer[c_float]",
+    n_in: int,
+    out: "_Pointer[_Pointer[c_float]]",
+    /,
+) -> int: ...
 
 
 # MTMD_API struct mtmd_helper_video_init_params mtmd_helper_video_init_params_default(void);
