@@ -558,8 +558,15 @@ LLAMA_CONTEXT_TYPE_DEFAULT = 0
 LLAMA_CONTEXT_TYPE_MTP = 1
 
 
-# the head on the block of a DFlash draft model
-LLAMA_DFLASH_VARIANT_NONE = -1  # not a DFlash draft model
+# // the head on the block of a DFlash draft model
+# enum llama_dflash_variant {
+#     LLAMA_DFLASH_VARIANT_NONE     = -1, // not a DFlash draft model
+#     LLAMA_DFLASH_VARIANT_DFLASH   = 0,
+#     LLAMA_DFLASH_VARIANT_DFLASH2  = 1,
+#     LLAMA_DFLASH_VARIANT_DSPARK   = 2,
+#     LLAMA_DFLASH_VARIANT_LILICORR = 3,
+# };
+LLAMA_DFLASH_VARIANT_NONE = -1
 LLAMA_DFLASH_VARIANT_DFLASH = 0
 LLAMA_DFLASH_VARIANT_DFLASH2 = 1
 LLAMA_DFLASH_VARIANT_DSPARK = 2
