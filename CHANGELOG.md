@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- fix(ci): remove unsupported macOS 14 release runners by @abetlen in #2416
+
 ## [0.3.37]
 
 - feat: update llama.cpp to ggml-org/llama.cpp@a956a852c
