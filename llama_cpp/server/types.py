@@ -314,3 +314,40 @@ class DetokenizeInputResponse(BaseModel):
     model_config = {
         "json_schema_extra": {"example": {"text": "How many tokens in this query?"}}
     }
+
+
+class SystemOneRequest(BaseModel):
+    model: Optional[str] = model_field
+    state: Union[str, Dict[str, Any], List[Any]] = Field(
+        description="The context or input state to evaluate."
+    )
+    questions: Dict[str, Dict[str, Any]] = Field(
+        description="Dictionary mapping question keys to typed questions."
+    )
+    temperature: Optional[float] = Field(
+        default=1.0,
+        description="Softmax temperature for scaling decision logits.",
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "state": "The user reported an error on the checkout page.",
+                "questions": {
+                    "is_bug": {
+                        "type": "noul",
+                        "instructions": "Is the user reporting a bug?",
+                    },
+                    "team": {
+                        "type": "choice",
+                        "instructions": "Which department should handle this?",
+                        "criteria": {
+                            "billing": "Payment and checkout issues",
+                            "support": "General questions",
+                        },
+                    },
+                },
+            }
+        }
+    }
+

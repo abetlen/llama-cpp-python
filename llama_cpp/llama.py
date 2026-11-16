@@ -2140,6 +2140,197 @@ class Llama:
                 "You can install it with `pip install openai`."
             )
 
+    def create_system_one(
+        self,
+        state: Union[str, Dict[str, Any], List[Any]],
+        questions: Dict[str, SystemOneQuestion],
+        temperature: float = 1.0,
+        model: Optional[str] = None,
+    ) -> SystemOneResponse:
+        """Evaluate a state and questions using a decision model in a single forward pass.
+
+        Args:
+            state: The input context or state (text string or JSON object/list).
+            questions: Dictionary mapping question names to typed question specs.
+            temperature: Softmax temperature for normalizing probabilities.
+            model: Optional model name for the response payload.
+
+        Returns:
+            A SystemOneResponse containing calibrated probabilities and choices.
+        """
+        model_name: str = model if model is not None else self.model_path
+
+        # 1. Reset context state
+        self.reset()
+
+        # 2. Format the prompt
+        systemone_template = None
+        try:
+            tmpl_bytes = llama_cpp.llama_model_chat_template(
+                self._model.model, b"systemone"
+            )
+            if tmpl_bytes:
+                systemone_template = tmpl_bytes.decode("utf-8")
+        except Exception:
+            pass
+
+        if (
+            systemone_template is None
+            and "tokenizer.chat_template.systemone" in self.metadata
+        ):
+            systemone_template = self.metadata["tokenizer.chat_template.systemone"]
+
+        formatted_prompt: str
+        if systemone_template:
+            import jinja2
+            from jinja2.sandbox import ImmutableSandboxedEnvironment
+
+            env = ImmutableSandboxedEnvironment(
+                loader=jinja2.BaseLoader(),
+                trim_blocks=True,
+                lstrip_blocks=True,
+            )
+            template = env.from_string(systemone_template)
+            formatted_prompt = template.render(state=state, questions=questions)
+        else:
+            state_str = json.dumps(state) if not isinstance(state, str) else state
+            lines = [f"State:\n{state_str}\n\nQuestions:"]
+            for q_name, q_val in questions.items():
+                q_type = q_val.get("type", "choice")
+                lines.append(f'- Question "{q_name}" (type: {q_type}):')
+                if "instructions" in q_val:
+                    lines.append(f"  Instructions: {q_val['instructions']}")
+                if "criteria" in q_val:
+                    crit = q_val["criteria"]
+                    lines.append("  Criteria:")
+                    if isinstance(crit, dict):
+                        for k, v in crit.items():
+                            lines.append(f"  * {k}: {v}")
+                    elif isinstance(crit, list):
+                        for idx, v in enumerate(crit):
+                            lines.append(f"  {idx}: {v}")
+            formatted_prompt = "\n".join(lines)
+
+        # 3. Tokenize prompt
+        tokens = self.tokenize(formatted_prompt.encode("utf-8"), add_bos=True)
+        if len(tokens) >= self.n_ctx():
+            raise ValueError(
+                f"Requested tokens ({len(tokens)}) exceed context window of {self.n_ctx()}"
+            )
+
+        # 4. Single forward pass evaluation
+        self.eval(tokens)
+
+        # 5. Extract output logits from the final token position
+        logits = llama_cpp.llama_get_logits(self._ctx.ctx)
+        n_vocab = self.n_vocab()
+        logits_arr = np.ctypeslib.as_array(logits, shape=(n_vocab,))
+
+        temp = max(temperature, 1e-4)
+        answers: Dict[str, SystemOneAnswer] = {}
+
+        for q_name, q_spec in questions.items():
+            q_type = q_spec.get("type", "choice")
+
+            if q_type == "choice":
+                criteria = q_spec.get("criteria", {})
+                choice_keys = list(criteria.keys())
+                choice_logits: List[float] = []
+
+                for k in choice_keys:
+                    toks = self.tokenize(k.encode("utf-8"), add_bos=False)
+                    if not toks:
+                        toks = self.tokenize(f" {k}".encode("utf-8"), add_bos=False)
+                    tok_id = toks[0] if toks else 0
+                    choice_logits.append(float(logits_arr[tok_id]))
+
+                max_l = max(choice_logits) if choice_logits else 0.0
+                exp_logits = [np.exp((l - max_l) / temp) for l in choice_logits]
+                sum_exp = sum(exp_logits) if sum(exp_logits) > 0 else 1.0
+                probs = {
+                    k: float(e / sum_exp) for k, e in zip(choice_keys, exp_logits)
+                }
+
+                best_choice = max(probs.items(), key=lambda x: x[1])[0] if probs else ""
+                confidence = probs.get(best_choice, 0.0)
+
+                answers[q_name] = {
+                    "type": "choice",
+                    "choice": best_choice,
+                    "confidence": confidence,
+                    "probabilities": probs,
+                }
+
+            elif q_type == "score":
+                criteria_list = q_spec.get("criteria", [])
+                n_levels = len(criteria_list)
+                score_logits: List[float] = []
+
+                for idx in range(n_levels):
+                    toks = self.tokenize(str(idx).encode("utf-8"), add_bos=False)
+                    if not toks:
+                        toks = self.tokenize(f" {idx}".encode("utf-8"), add_bos=False)
+                    tok_id = toks[0] if toks else 0
+                    score_logits.append(float(logits_arr[tok_id]))
+
+                max_l = max(score_logits) if score_logits else 0.0
+                exp_logits = [np.exp((l - max_l) / temp) for l in score_logits]
+                sum_exp = sum(exp_logits) if sum(exp_logits) > 0 else 1.0
+                probs_dict = {
+                    str(i): float(e / sum_exp) for i, e in enumerate(exp_logits)
+                }
+
+                weighted_score = sum(
+                    i * probs_dict[str(i)] for i in range(n_levels)
+                )
+                max_conf = max(probs_dict.values()) if probs_dict else 0.0
+                legend = {str(i): crit for i, crit in enumerate(criteria_list)}
+
+                answers[q_name] = {
+                    "type": "score",
+                    "score": round(weighted_score, 4),
+                    "confidence": round(max_conf, 4),
+                    "legend": legend,
+                    "probabilities": probs_dict,
+                }
+
+            elif q_type == "noul":
+                true_toks = self.tokenize(b"true", add_bos=False)
+                false_toks = self.tokenize(b"false", add_bos=False)
+                if not true_toks:
+                    true_toks = self.tokenize(b" true", add_bos=False)
+                if not false_toks:
+                    false_toks = self.tokenize(b" false", add_bos=False)
+
+                t_id = true_toks[0] if true_toks else 0
+                f_id = false_toks[0] if false_toks else 1
+
+                l_true = float(logits_arr[t_id])
+                l_false = float(logits_arr[f_id])
+
+                max_l = max(l_true, l_false)
+                e_true = np.exp((l_true - max_l) / temp)
+                e_false = np.exp((l_false - max_l) / temp)
+                p_true = float(e_true / (e_true + e_false))
+
+                answers[q_name] = {
+                    "type": "noul",
+                    "noul": round(p_true, 4),
+                }
+
+        return {
+            "model": model_name,
+            "answers": answers,
+            "usage": {
+                "input_tokens": len(tokens),
+                "output_tokens": 0,
+            },
+        }
+
+    # Alias to match HuggingFace Transformers model.system_one(state, questions) convention
+    system_one = create_system_one
+
+
     def __getstate__(self):
         return dict(
             model_path=self.model_path,
