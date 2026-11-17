@@ -2268,7 +2268,7 @@ class Llama:
                     lines.append("\nReply with the option code only.")
                     formatted_prompt = "\n".join(lines)
 
-                tokens = self.tokenize(formatted_prompt.encode("utf-8"), add_bos=False)
+                tokens = self.tokenize(formatted_prompt.encode("utf-8"), add_bos=False, special=True)
                 total_input_tokens += len(tokens)
                 _decode_prompt(tokens)
 
@@ -2321,7 +2321,7 @@ class Llama:
                     lines.append(f"\nReply with a single digit 0-{n_levels - 1} only.")
                     formatted_prompt = "\n".join(lines)
 
-                tokens = self.tokenize(formatted_prompt.encode("utf-8"), add_bos=False)
+                tokens = self.tokenize(formatted_prompt.encode("utf-8"), add_bos=False, special=True)
                 total_input_tokens += len(tokens)
                 _decode_prompt(tokens)
 
@@ -2334,17 +2334,26 @@ class Llama:
                 sum_exp = sum(exp_logits) if sum(exp_logits) > 0 else 1.0
                 probs_dict = {str(i): float(e / sum_exp) for i, e in enumerate(exp_logits)}
 
-                weighted_score = sum(i * probs_dict[str(i)] for i in range(n_levels))
+                # Calculate median score level matching Liquid AI / server-decision spec
+                total_prob = sum(probs_dict.values()) or 1.0
+                mass = 0.0
+                median_idx = n_levels - 1
+                for i in range(n_levels):
+                    mass += probs_dict[str(i)] / total_prob
+                    if mass >= 0.5:
+                        median_idx = i
+                        break
+
                 max_conf = max(probs_dict.values()) if probs_dict else 0.0
                 top_idx_str = max(probs_dict.items(), key=lambda x: x[1])[0] if probs_dict else "0"
                 top_idx = int(top_idx_str)
-                top_label = criteria_list[top_idx] if top_idx < len(criteria_list) else ""
+                top_label = criteria_list[median_idx] if median_idx < len(criteria_list) else ""
                 legend = {str(i): crit for i, crit in enumerate(criteria_list)}
 
                 answers[q_name] = {
                     "type": "score",
-                    "score": round(weighted_score, 4),
-                    "level": top_idx,
+                    "score": float(median_idx),
+                    "level": median_idx,
                     "label": top_label,
                     "confidence": round(max_conf, 4),
                     "legend": legend,
@@ -2370,7 +2379,7 @@ class Llama:
                     lines = [f"State:\n{state}\n\nQuestion:\n{q_spec.get('instructions', '')}\n\nReply with yes or no only."]
                     formatted_prompt = "\n".join(lines)
 
-                tokens = self.tokenize(formatted_prompt.encode("utf-8"), add_bos=False)
+                tokens = self.tokenize(formatted_prompt.encode("utf-8"), add_bos=False, special=True)
                 total_input_tokens += len(tokens)
                 _decode_prompt(tokens)
 
