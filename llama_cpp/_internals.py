@@ -298,20 +298,24 @@ class LlamaContext:
         llama_cpp.llama_memory_clear(self.memory, True)
 
     def kv_cache_seq_rm(self, seq_id: int, p0: int, p1: int) -> bool:
-        assert self.memory is not None, "Memory is not initialized"
+        if self.memory is None:
+            return True
         seq_id = seq_id if seq_id >= 0 else 0
         return llama_cpp.llama_memory_seq_rm(self.memory, seq_id, p0, p1)
 
     def kv_cache_seq_cp(self, seq_id_src: int, seq_id_dst: int, p0: int, p1: int):
-        assert self.memory is not None, "Memory is not initialized"
+        if self.memory is None:
+            return
         llama_cpp.llama_memory_seq_cp(self.memory, seq_id_src, seq_id_dst, p0, p1)
 
     def kv_cache_seq_keep(self, seq_id: int):
-        assert self.memory is not None, "Memory is not initialized"
+        if self.memory is None:
+            return
         llama_cpp.llama_memory_seq_keep(self.memory, seq_id)
 
     def kv_cache_seq_shift(self, seq_id: int, p0: int, p1: int, shift: int):
-        assert self.memory is not None, "Memory is not initialized"
+        if self.memory is None:
+            return
         llama_cpp.llama_memory_seq_add(self.memory, seq_id, p0, p1, shift)
 
     def get_state_size(self) -> int:

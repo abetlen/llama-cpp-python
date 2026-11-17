@@ -2140,6 +2140,278 @@ class Llama:
                 "You can install it with `pip install openai`."
             )
 
+    def create_system_one(
+        self,
+        state: Union[str, Dict[str, Any], List[Any]],
+        questions: Dict[str, SystemOneQuestion],
+        temperature: Optional[float] = None,
+        model: Optional[str] = None,
+    ) -> SystemOneResponse:
+        """Evaluate a state and questions using a decision model in a single forward pass.
+
+        Args:
+            state: The input context or state (text string or JSON object/list).
+            questions: Dictionary mapping question names to typed question specs.
+            temperature: Softmax temperature for normalizing probabilities. If None,
+                         uses calibrated temperature from model metadata if available.
+            model: Optional model name for the response payload.
+
+        Returns:
+            A SystemOneResponse containing calibrated probabilities and choices.
+        """
+        model_name: str = model if model is not None else self.model_path
+
+        # 1. Look for a "systemone" chat template in model metadata
+        systemone_template = None
+        try:
+            tmpl_bytes = llama_cpp.llama_model_chat_template(
+                self._model.model, b"systemone"
+            )
+            if tmpl_bytes:
+                systemone_template = tmpl_bytes.decode("utf-8")
+        except Exception:
+            pass
+
+        if (
+            systemone_template is None
+            and "tokenizer.chat_template.systemone" in self.metadata
+        ):
+            systemone_template = self.metadata["tokenizer.chat_template.systemone"]
+
+        jinja_template = None
+        if systemone_template:
+            import jinja2
+            from jinja2.sandbox import ImmutableSandboxedEnvironment
+
+            def _tojson(val: Any, indent: Optional[int] = None) -> str:
+                return json.dumps(val, indent=indent)
+
+            env = ImmutableSandboxedEnvironment(
+                loader=jinja2.BaseLoader(),
+                trim_blocks=True,
+                lstrip_blocks=True,
+            )
+            env.filters["tojson"] = _tojson
+            jinja_template = env.from_string(systemone_template)
+
+        total_input_tokens = 0
+        answers: Dict[str, SystemOneAnswer] = {}
+
+        def _get_candidate_logits(logits_arr: np.ndarray, candidates: List[str]) -> List[float]:
+            bare_list: List[float] = []
+            space_list: List[float] = []
+            for c in candidates:
+                b_tok = self.tokenize(c.encode("utf-8"), add_bos=False)
+                s_tok = self.tokenize(f" {c}".encode("utf-8"), add_bos=False)
+                bare_list.append(float(logits_arr[b_tok[0]]) if b_tok else float("-inf"))
+                space_list.append(float(logits_arr[s_tok[0]]) if s_tok else float("-inf"))
+
+            # Use the token format (bare vs space-prefixed) that has higher overall probability mass
+            valid_bare = [x for x in bare_list if x != float("-inf")]
+            valid_space = [x for x in space_list if x != float("-inf")]
+            mean_bare = sum(valid_bare) / len(valid_bare) if valid_bare else float("-inf")
+            mean_space = sum(valid_space) / len(valid_space) if valid_space else float("-inf")
+            return space_list if mean_space > mean_bare else bare_list
+
+        def _get_candidate_logit(logits_arr: np.ndarray, text: str) -> float:
+            cand_logits = []
+            bare_toks = self.tokenize(text.encode("utf-8"), add_bos=False)
+            if bare_toks:
+                cand_logits.append(float(logits_arr[bare_toks[0]]))
+            space_toks = self.tokenize(f" {text}".encode("utf-8"), add_bos=False)
+            if space_toks:
+                cand_logits.append(float(logits_arr[space_toks[0]]))
+            return max(cand_logits) if cand_logits else float("-inf")
+
+        def _decode_prompt(tokens: Sequence[int]):
+            self._ctx.kv_cache_clear()
+            self._batch.reset()
+            self._batch.set_batch(
+                batch=tokens,
+                n_past=0,
+                logits_all=False,
+            )
+            self._ctx.decode(self._batch)
+
+        for q_name, q_spec in questions.items():
+            q_type = q_spec.get("type", "choice")
+
+            # Determine temperature
+            if temperature is not None:
+                temp = max(temperature, 1e-4)
+            else:
+                meta_temp = self.metadata.get(f"lfm3.decision.temperature.{q_type}") or self.metadata.get(f"decision.temperature.{q_type}")
+                temp = float(meta_temp) if meta_temp is not None else 1.0
+                temp = max(temp, 1e-4)
+
+            if q_type == "choice":
+                criteria = q_spec.get("criteria", {})
+                choice_keys = list(criteria.keys())
+                options = []
+                for idx, k in enumerate(choice_keys):
+                    label = chr(65 + idx) if idx < 26 else str(idx)
+                    desc = criteria[k]
+                    options.append({"label": label, "key": k, "description": desc})
+
+                if jinja_template is not None:
+                    formatted_prompt = jinja_template.render(
+                        images=[],
+                        state=state,
+                        instructions=q_spec.get("instructions", ""),
+                        type="choice",
+                        options=options,
+                    )
+                else:
+                    lines = [f"State:\n{state}\n\nQuestion:\n{q_spec.get('instructions', '')}\n\nOptions:"]
+                    for o in options:
+                        lines.append(f"{o['label']} {o['description']}")
+                    lines.append("\nReply with the option code only.")
+                    formatted_prompt = "\n".join(lines)
+
+                tokens = self.tokenize(formatted_prompt.encode("utf-8"), add_bos=False, special=True)
+                total_input_tokens += len(tokens)
+                _decode_prompt(tokens)
+
+                logits = llama_cpp.llama_get_logits(self._ctx.ctx)
+                logits_arr = np.ctypeslib.as_array(logits, shape=(self.n_vocab(),))
+
+                label_logits = _get_candidate_logits(logits_arr, [o["label"] for o in options])
+                max_l = max(label_logits) if label_logits else 0.0
+                exp_logits = [np.exp((l - max_l) / temp) for l in label_logits]
+                sum_exp = sum(exp_logits) if sum(exp_logits) > 0 else 1.0
+                probs = {o["key"]: float(e / sum_exp) for o, e in zip(options, exp_logits)}
+
+                best_choice = max(probs.items(), key=lambda x: x[1])[0] if probs else ""
+                confidence = probs.get(best_choice, 0.0)
+
+                # For multi-choice, pick all options above threshold (>= 0.15)
+                is_multiple = bool(q_spec.get("multiple", False))
+                selected_choices = [k for k, p in probs.items() if p >= 0.15]
+                if not selected_choices and best_choice:
+                    selected_choices = [best_choice]
+
+                ans_dict: SystemOneChoiceAnswer = {
+                    "type": "choice",
+                    "choice": best_choice,
+                    "confidence": round(confidence, 4),
+                    "probabilities": {k: round(v, 4) for k, v in probs.items()},
+                }
+                if is_multiple:
+                    ans_dict["choices"] = selected_choices
+
+                answers[q_name] = ans_dict
+
+            elif q_type == "score":
+                criteria_list = q_spec.get("criteria", [])
+                n_levels = len(criteria_list)
+                options = [{"label": str(i), "key": str(i), "description": desc} for i, desc in enumerate(criteria_list)]
+
+                if jinja_template is not None:
+                    formatted_prompt = jinja_template.render(
+                        images=[],
+                        state=state,
+                        instructions=q_spec.get("instructions", ""),
+                        type="score",
+                        options=options,
+                    )
+                else:
+                    lines = [f"State:\n{state}\n\nQuestion:\n{q_spec.get('instructions', '')}\n\n"]
+                    for o in options:
+                        lines.append(f"{o['key']} {o['description']}")
+                    lines.append(f"\nReply with a single digit 0-{n_levels - 1} only.")
+                    formatted_prompt = "\n".join(lines)
+
+                tokens = self.tokenize(formatted_prompt.encode("utf-8"), add_bos=False, special=True)
+                total_input_tokens += len(tokens)
+                _decode_prompt(tokens)
+
+                logits = llama_cpp.llama_get_logits(self._ctx.ctx)
+                logits_arr = np.ctypeslib.as_array(logits, shape=(self.n_vocab(),))
+
+                score_logits = _get_candidate_logits(logits_arr, [str(i) for i in range(n_levels)])
+                max_l = max(score_logits) if score_logits else 0.0
+                exp_logits = [np.exp((l - max_l) / temp) for l in score_logits]
+                sum_exp = sum(exp_logits) if sum(exp_logits) > 0 else 1.0
+                probs_dict = {str(i): float(e / sum_exp) for i, e in enumerate(exp_logits)}
+
+                # Calculate median score level matching Liquid AI / server-decision spec
+                total_prob = sum(probs_dict.values()) or 1.0
+                mass = 0.0
+                median_idx = n_levels - 1
+                for i in range(n_levels):
+                    mass += probs_dict[str(i)] / total_prob
+                    if mass >= 0.5:
+                        median_idx = i
+                        break
+
+                max_conf = max(probs_dict.values()) if probs_dict else 0.0
+                top_idx_str = max(probs_dict.items(), key=lambda x: x[1])[0] if probs_dict else "0"
+                top_idx = int(top_idx_str)
+                top_label = criteria_list[median_idx] if median_idx < len(criteria_list) else ""
+                legend = {str(i): crit for i, crit in enumerate(criteria_list)}
+
+                answers[q_name] = {
+                    "type": "score",
+                    "score": float(median_idx),
+                    "level": median_idx,
+                    "label": top_label,
+                    "confidence": round(max_conf, 4),
+                    "legend": legend,
+                    "probabilities": {k: round(v, 4) for k, v in probs_dict.items()},
+                }
+
+            elif q_type == "noul":
+                criteria = q_spec.get("criteria", {})
+                options = [
+                    {"label": "true", "key": "true", "description": criteria.get("true", None)},
+                    {"label": "false", "key": "false", "description": criteria.get("false", None)},
+                ]
+
+                if jinja_template is not None:
+                    formatted_prompt = jinja_template.render(
+                        images=[],
+                        state=state,
+                        instructions=q_spec.get("instructions", ""),
+                        type="noul",
+                        options=options,
+                    )
+                else:
+                    lines = [f"State:\n{state}\n\nQuestion:\n{q_spec.get('instructions', '')}\n\nReply with yes or no only."]
+                    formatted_prompt = "\n".join(lines)
+
+                tokens = self.tokenize(formatted_prompt.encode("utf-8"), add_bos=False, special=True)
+                total_input_tokens += len(tokens)
+                _decode_prompt(tokens)
+
+                logits = llama_cpp.llama_get_logits(self._ctx.ctx)
+                logits_arr = np.ctypeslib.as_array(logits, shape=(self.n_vocab(),))
+
+                l_yes = max(_get_candidate_logit(logits_arr, "yes"), _get_candidate_logit(logits_arr, "Yes"))
+                l_no = max(_get_candidate_logit(logits_arr, "no"), _get_candidate_logit(logits_arr, "No"))
+
+                max_l = max(l_yes, l_no)
+                e_yes = np.exp((l_yes - max_l) / temp)
+                e_no = np.exp((l_no - max_l) / temp)
+                p_yes = float(e_yes / (e_yes + e_no))
+
+                answers[q_name] = {
+                    "type": "noul",
+                    "noul": round(p_yes, 4),
+                }
+
+        return {
+            "model": model_name,
+            "answers": answers,
+            "usage": {
+                "input_tokens": total_input_tokens,
+                "output_tokens": 0,
+            },
+        }
+
+    # Alias to match HuggingFace Transformers model.system_one(state, questions) convention
+    system_one = create_system_one
+
+
     def __getstate__(self):
         return dict(
             model_path=self.model_path,

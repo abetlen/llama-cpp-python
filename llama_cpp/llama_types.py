@@ -314,3 +314,70 @@ ChatCompletionChunk = CreateChatCompletionStreamResponse
 ChatCompletionStreamResponse = CreateChatCompletionStreamResponse
 ChatCompletionResponseFunction = ChatCompletionFunction
 ChatCompletionFunctionCall = ChatCompletionResponseFunctionCall
+
+
+# System One / Decision Model types
+
+
+class SystemOneChoiceQuestion(TypedDict):
+    type: Literal["choice"]
+    instructions: str
+    criteria: Dict[str, str]
+    multiple: NotRequired[bool]
+
+
+class SystemOneScoreQuestion(TypedDict):
+    type: Literal["score"]
+    instructions: str
+    criteria: List[str]
+
+
+class SystemOneNoulQuestion(TypedDict):
+    type: Literal["noul"]
+    instructions: str
+    criteria: NotRequired[Dict[str, str]]
+
+
+SystemOneQuestion = Union[
+    SystemOneChoiceQuestion, SystemOneScoreQuestion, SystemOneNoulQuestion
+]
+
+
+class SystemOneChoiceAnswer(TypedDict):
+    type: Literal["choice"]
+    choice: str
+    choices: NotRequired[List[str]]
+    confidence: float
+    probabilities: Dict[str, float]
+
+
+class SystemOneScoreAnswer(TypedDict):
+    type: Literal["score"]
+    score: float
+    level: NotRequired[int]
+    label: NotRequired[str]
+    confidence: float
+    probabilities: Dict[str, float]
+    legend: NotRequired[Dict[str, str]]
+
+
+class SystemOneNoulAnswer(TypedDict):
+    type: Literal["noul"]
+    noul: float
+
+
+SystemOneAnswer = Union[
+    SystemOneChoiceAnswer, SystemOneScoreAnswer, SystemOneNoulAnswer
+]
+
+
+class SystemOneUsage(TypedDict):
+    input_tokens: int
+    output_tokens: int
+
+
+class SystemOneResponse(TypedDict):
+    model: str
+    answers: Dict[str, SystemOneAnswer]
+    usage: SystemOneUsage
+
