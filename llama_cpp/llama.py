@@ -2320,11 +2320,16 @@ class Llama:
 
                 weighted_score = sum(i * probs_dict[str(i)] for i in range(n_levels))
                 max_conf = max(probs_dict.values()) if probs_dict else 0.0
+                top_idx_str = max(probs_dict.items(), key=lambda x: x[1])[0] if probs_dict else "0"
+                top_idx = int(top_idx_str)
+                top_label = criteria_list[top_idx] if top_idx < len(criteria_list) else ""
                 legend = {str(i): crit for i, crit in enumerate(criteria_list)}
 
                 answers[q_name] = {
                     "type": "score",
                     "score": round(weighted_score, 4),
+                    "level": top_idx,
+                    "label": top_label,
                     "confidence": round(max_conf, 4),
                     "legend": legend,
                     "probabilities": {k: round(v, 4) for k, v in probs_dict.items()},

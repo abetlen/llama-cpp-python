@@ -354,6 +354,8 @@ class SystemOneChoiceAnswer(TypedDict):
 class SystemOneScoreAnswer(TypedDict):
     type: Literal["score"]
     score: float
+    level: NotRequired[int]
+    label: NotRequired[str]
     confidence: float
     probabilities: Dict[str, float]
     legend: NotRequired[Dict[str, str]]
