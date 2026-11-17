@@ -2197,6 +2197,22 @@ class Llama:
         total_input_tokens = 0
         answers: Dict[str, SystemOneAnswer] = {}
 
+        def _get_candidate_logits(logits_arr: np.ndarray, candidates: List[str]) -> List[float]:
+            bare_list: List[float] = []
+            space_list: List[float] = []
+            for c in candidates:
+                b_tok = self.tokenize(c.encode("utf-8"), add_bos=False)
+                s_tok = self.tokenize(f" {c}".encode("utf-8"), add_bos=False)
+                bare_list.append(float(logits_arr[b_tok[0]]) if b_tok else float("-inf"))
+                space_list.append(float(logits_arr[s_tok[0]]) if s_tok else float("-inf"))
+
+            # Use the token format (bare vs space-prefixed) that has higher overall probability mass
+            valid_bare = [x for x in bare_list if x != float("-inf")]
+            valid_space = [x for x in space_list if x != float("-inf")]
+            mean_bare = sum(valid_bare) / len(valid_bare) if valid_bare else float("-inf")
+            mean_space = sum(valid_space) / len(valid_space) if valid_space else float("-inf")
+            return space_list if mean_space > mean_bare else bare_list
+
         def _get_candidate_logit(logits_arr: np.ndarray, text: str) -> float:
             cand_logits = []
             bare_toks = self.tokenize(text.encode("utf-8"), add_bos=False)
@@ -2259,7 +2275,7 @@ class Llama:
                 logits = llama_cpp.llama_get_logits(self._ctx.ctx)
                 logits_arr = np.ctypeslib.as_array(logits, shape=(self.n_vocab(),))
 
-                label_logits = [_get_candidate_logit(logits_arr, o["label"]) for o in options]
+                label_logits = _get_candidate_logits(logits_arr, [o["label"] for o in options])
                 max_l = max(label_logits) if label_logits else 0.0
                 exp_logits = [np.exp((l - max_l) / temp) for l in label_logits]
                 sum_exp = sum(exp_logits) if sum(exp_logits) > 0 else 1.0
@@ -2288,7 +2304,7 @@ class Llama:
             elif q_type == "score":
                 criteria_list = q_spec.get("criteria", [])
                 n_levels = len(criteria_list)
-                options = [{"key": str(i), "description": desc} for i, desc in enumerate(criteria_list)]
+                options = [{"label": str(i), "key": str(i), "description": desc} for i, desc in enumerate(criteria_list)]
 
                 if jinja_template is not None:
                     formatted_prompt = jinja_template.render(
@@ -2312,7 +2328,7 @@ class Llama:
                 logits = llama_cpp.llama_get_logits(self._ctx.ctx)
                 logits_arr = np.ctypeslib.as_array(logits, shape=(self.n_vocab(),))
 
-                score_logits = [_get_candidate_logit(logits_arr, str(i)) for i in range(n_levels)]
+                score_logits = _get_candidate_logits(logits_arr, [str(i) for i in range(n_levels)])
                 max_l = max(score_logits) if score_logits else 0.0
                 exp_logits = [np.exp((l - max_l) / temp) for l in score_logits]
                 sum_exp = sum(exp_logits) if sum(exp_logits) > 0 else 1.0
@@ -2338,8 +2354,8 @@ class Llama:
             elif q_type == "noul":
                 criteria = q_spec.get("criteria", {})
                 options = [
-                    {"key": "true", "description": criteria.get("true", None)},
-                    {"key": "false", "description": criteria.get("false", None)},
+                    {"label": "true", "key": "true", "description": criteria.get("true", None)},
+                    {"label": "false", "key": "false", "description": criteria.get("false", None)},
                 ]
 
                 if jinja_template is not None:
