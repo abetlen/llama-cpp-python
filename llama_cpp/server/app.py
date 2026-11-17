@@ -305,7 +305,11 @@ async def create_completion(
     body: CreateCompletionRequest,
 ) -> llama_cpp.Completion:
     if isinstance(body.prompt, list):
-        assert len(body.prompt) <= 1
+        if len(body.prompt) > 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Only a single prompt is supported.",
+            )
         body.prompt = body.prompt[0] if len(body.prompt) > 0 else ""
 
     body_model = (
