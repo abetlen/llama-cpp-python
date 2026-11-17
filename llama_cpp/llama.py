@@ -2207,6 +2207,16 @@ class Llama:
                 cand_logits.append(float(logits_arr[space_toks[0]]))
             return max(cand_logits) if cand_logits else float("-inf")
 
+        def _decode_prompt(tokens: Sequence[int]):
+            self._ctx.kv_cache_clear()
+            self._batch.reset()
+            self._batch.set_batch(
+                batch=tokens,
+                n_past=0,
+                logits_all=False,
+            )
+            self._ctx.decode(self._batch)
+
         for q_name, q_spec in questions.items():
             q_type = q_spec.get("type", "choice")
 
@@ -2244,8 +2254,7 @@ class Llama:
 
                 tokens = self.tokenize(formatted_prompt.encode("utf-8"), add_bos=False)
                 total_input_tokens += len(tokens)
-                self.reset()
-                self.eval(tokens)
+                _decode_prompt(tokens)
 
                 logits = llama_cpp.llama_get_logits(self._ctx.ctx)
                 logits_arr = np.ctypeslib.as_array(logits, shape=(self.n_vocab(),))
@@ -2288,8 +2297,7 @@ class Llama:
 
                 tokens = self.tokenize(formatted_prompt.encode("utf-8"), add_bos=False)
                 total_input_tokens += len(tokens)
-                self.reset()
-                self.eval(tokens)
+                _decode_prompt(tokens)
 
                 logits = llama_cpp.llama_get_logits(self._ctx.ctx)
                 logits_arr = np.ctypeslib.as_array(logits, shape=(self.n_vocab(),))
@@ -2333,8 +2341,7 @@ class Llama:
 
                 tokens = self.tokenize(formatted_prompt.encode("utf-8"), add_bos=False)
                 total_input_tokens += len(tokens)
-                self.reset()
-                self.eval(tokens)
+                _decode_prompt(tokens)
 
                 logits = llama_cpp.llama_get_logits(self._ctx.ctx)
                 logits_arr = np.ctypeslib.as_array(logits, shape=(self.n_vocab(),))
