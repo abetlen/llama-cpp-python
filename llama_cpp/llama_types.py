@@ -323,6 +323,7 @@ class SystemOneChoiceQuestion(TypedDict):
     type: Literal["choice"]
     instructions: str
     criteria: Dict[str, str]
+    multiple: NotRequired[bool]
 
 
 class SystemOneScoreQuestion(TypedDict):
@@ -345,6 +346,7 @@ SystemOneQuestion = Union[
 class SystemOneChoiceAnswer(TypedDict):
     type: Literal["choice"]
     choice: str
+    choices: NotRequired[List[str]]
     confidence: float
     probabilities: Dict[str, float]
 

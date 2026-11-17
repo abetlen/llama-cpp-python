@@ -2268,12 +2268,22 @@ class Llama:
                 best_choice = max(probs.items(), key=lambda x: x[1])[0] if probs else ""
                 confidence = probs.get(best_choice, 0.0)
 
-                answers[q_name] = {
+                # For multi-choice, pick all options above threshold (>= 0.15)
+                is_multiple = bool(q_spec.get("multiple", False))
+                selected_choices = [k for k, p in probs.items() if p >= 0.15]
+                if not selected_choices and best_choice:
+                    selected_choices = [best_choice]
+
+                ans_dict: SystemOneChoiceAnswer = {
                     "type": "choice",
                     "choice": best_choice,
                     "confidence": round(confidence, 4),
                     "probabilities": {k: round(v, 4) for k, v in probs.items()},
                 }
+                if is_multiple:
+                    ans_dict["choices"] = selected_choices
+
+                answers[q_name] = ans_dict
 
             elif q_type == "score":
                 criteria_list = q_spec.get("criteria", [])
