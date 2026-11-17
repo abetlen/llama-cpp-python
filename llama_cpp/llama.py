@@ -2144,7 +2144,7 @@ class Llama:
         self,
         state: Union[str, Dict[str, Any], List[Any]],
         questions: Dict[str, SystemOneQuestion],
-        temperature: float = 1.0,
+        temperature: Optional[float] = None,
         model: Optional[str] = None,
     ) -> SystemOneResponse:
         """Evaluate a state and questions using a decision model in a single forward pass.
@@ -2152,7 +2152,8 @@ class Llama:
         Args:
             state: The input context or state (text string or JSON object/list).
             questions: Dictionary mapping question names to typed question specs.
-            temperature: Softmax temperature for normalizing probabilities.
+            temperature: Softmax temperature for normalizing probabilities. If None,
+                         uses calibrated temperature from model metadata if available.
             model: Optional model name for the response payload.
 
         Returns:
@@ -2160,10 +2161,7 @@ class Llama:
         """
         model_name: str = model if model is not None else self.model_path
 
-        # 1. Reset context state
-        self.reset()
-
-        # 2. Format the prompt
+        # 1. Look for a "systemone" chat template in model metadata
         systemone_template = None
         try:
             tmpl_bytes = llama_cpp.llama_model_chat_template(
@@ -2180,76 +2178,83 @@ class Llama:
         ):
             systemone_template = self.metadata["tokenizer.chat_template.systemone"]
 
-        formatted_prompt: str
+        jinja_template = None
         if systemone_template:
             import jinja2
             from jinja2.sandbox import ImmutableSandboxedEnvironment
+
+            def _tojson(val: Any, indent: Optional[int] = None) -> str:
+                return json.dumps(val, indent=indent)
 
             env = ImmutableSandboxedEnvironment(
                 loader=jinja2.BaseLoader(),
                 trim_blocks=True,
                 lstrip_blocks=True,
             )
-            template = env.from_string(systemone_template)
-            formatted_prompt = template.render(state=state, questions=questions)
-        else:
-            state_str = json.dumps(state) if not isinstance(state, str) else state
-            lines = [f"State:\n{state_str}\n\nQuestions:"]
-            for q_name, q_val in questions.items():
-                q_type = q_val.get("type", "choice")
-                lines.append(f'- Question "{q_name}" (type: {q_type}):')
-                if "instructions" in q_val:
-                    lines.append(f"  Instructions: {q_val['instructions']}")
-                if "criteria" in q_val:
-                    crit = q_val["criteria"]
-                    lines.append("  Criteria:")
-                    if isinstance(crit, dict):
-                        for k, v in crit.items():
-                            lines.append(f"  * {k}: {v}")
-                    elif isinstance(crit, list):
-                        for idx, v in enumerate(crit):
-                            lines.append(f"  {idx}: {v}")
-            formatted_prompt = "\n".join(lines)
+            env.filters["tojson"] = _tojson
+            jinja_template = env.from_string(systemone_template)
 
-        # 3. Tokenize prompt
-        tokens = self.tokenize(formatted_prompt.encode("utf-8"), add_bos=True)
-        if len(tokens) >= self.n_ctx():
-            raise ValueError(
-                f"Requested tokens ({len(tokens)}) exceed context window of {self.n_ctx()}"
-            )
-
-        # 4. Single forward pass evaluation
-        self.eval(tokens)
-
-        # 5. Extract output logits from the final token position
-        logits = llama_cpp.llama_get_logits(self._ctx.ctx)
-        n_vocab = self.n_vocab()
-        logits_arr = np.ctypeslib.as_array(logits, shape=(n_vocab,))
-
-        temp = max(temperature, 1e-4)
+        total_input_tokens = 0
         answers: Dict[str, SystemOneAnswer] = {}
+
+        def _get_candidate_logit(logits_arr: np.ndarray, text: str) -> float:
+            cand_logits = []
+            bare_toks = self.tokenize(text.encode("utf-8"), add_bos=False)
+            if bare_toks:
+                cand_logits.append(float(logits_arr[bare_toks[0]]))
+            space_toks = self.tokenize(f" {text}".encode("utf-8"), add_bos=False)
+            if space_toks:
+                cand_logits.append(float(logits_arr[space_toks[0]]))
+            return max(cand_logits) if cand_logits else float("-inf")
 
         for q_name, q_spec in questions.items():
             q_type = q_spec.get("type", "choice")
 
+            # Determine temperature
+            if temperature is not None:
+                temp = max(temperature, 1e-4)
+            else:
+                meta_temp = self.metadata.get(f"lfm3.decision.temperature.{q_type}") or self.metadata.get(f"decision.temperature.{q_type}")
+                temp = float(meta_temp) if meta_temp is not None else 1.0
+                temp = max(temp, 1e-4)
+
             if q_type == "choice":
                 criteria = q_spec.get("criteria", {})
                 choice_keys = list(criteria.keys())
-                choice_logits: List[float] = []
+                options = []
+                for idx, k in enumerate(choice_keys):
+                    label = chr(65 + idx) if idx < 26 else str(idx)
+                    desc = criteria[k]
+                    options.append({"label": label, "key": k, "description": desc})
 
-                for k in choice_keys:
-                    toks = self.tokenize(k.encode("utf-8"), add_bos=False)
-                    if not toks:
-                        toks = self.tokenize(f" {k}".encode("utf-8"), add_bos=False)
-                    tok_id = toks[0] if toks else 0
-                    choice_logits.append(float(logits_arr[tok_id]))
+                if jinja_template is not None:
+                    formatted_prompt = jinja_template.render(
+                        images=[],
+                        state=state,
+                        instructions=q_spec.get("instructions", ""),
+                        type="choice",
+                        options=options,
+                    )
+                else:
+                    lines = [f"State:\n{state}\n\nQuestion:\n{q_spec.get('instructions', '')}\n\nOptions:"]
+                    for o in options:
+                        lines.append(f"{o['label']} {o['description']}")
+                    lines.append("\nReply with the option code only.")
+                    formatted_prompt = "\n".join(lines)
 
-                max_l = max(choice_logits) if choice_logits else 0.0
-                exp_logits = [np.exp((l - max_l) / temp) for l in choice_logits]
+                tokens = self.tokenize(formatted_prompt.encode("utf-8"), add_bos=False)
+                total_input_tokens += len(tokens)
+                self.reset()
+                self.eval(tokens)
+
+                logits = llama_cpp.llama_get_logits(self._ctx.ctx)
+                logits_arr = np.ctypeslib.as_array(logits, shape=(self.n_vocab(),))
+
+                label_logits = [_get_candidate_logit(logits_arr, o["label"]) for o in options]
+                max_l = max(label_logits) if label_logits else 0.0
+                exp_logits = [np.exp((l - max_l) / temp) for l in label_logits]
                 sum_exp = sum(exp_logits) if sum(exp_logits) > 0 else 1.0
-                probs = {
-                    k: float(e / sum_exp) for k, e in zip(choice_keys, exp_logits)
-                }
+                probs = {o["key"]: float(e / sum_exp) for o, e in zip(options, exp_logits)}
 
                 best_choice = max(probs.items(), key=lambda x: x[1])[0] if probs else ""
                 confidence = probs.get(best_choice, 0.0)
@@ -2257,32 +2262,45 @@ class Llama:
                 answers[q_name] = {
                     "type": "choice",
                     "choice": best_choice,
-                    "confidence": confidence,
-                    "probabilities": probs,
+                    "confidence": round(confidence, 4),
+                    "probabilities": {k: round(v, 4) for k, v in probs.items()},
                 }
 
             elif q_type == "score":
                 criteria_list = q_spec.get("criteria", [])
                 n_levels = len(criteria_list)
-                score_logits: List[float] = []
+                options = [{"key": str(i), "description": desc} for i, desc in enumerate(criteria_list)]
 
-                for idx in range(n_levels):
-                    toks = self.tokenize(str(idx).encode("utf-8"), add_bos=False)
-                    if not toks:
-                        toks = self.tokenize(f" {idx}".encode("utf-8"), add_bos=False)
-                    tok_id = toks[0] if toks else 0
-                    score_logits.append(float(logits_arr[tok_id]))
+                if jinja_template is not None:
+                    formatted_prompt = jinja_template.render(
+                        images=[],
+                        state=state,
+                        instructions=q_spec.get("instructions", ""),
+                        type="score",
+                        options=options,
+                    )
+                else:
+                    lines = [f"State:\n{state}\n\nQuestion:\n{q_spec.get('instructions', '')}\n\n"]
+                    for o in options:
+                        lines.append(f"{o['key']} {o['description']}")
+                    lines.append(f"\nReply with a single digit 0-{n_levels - 1} only.")
+                    formatted_prompt = "\n".join(lines)
 
+                tokens = self.tokenize(formatted_prompt.encode("utf-8"), add_bos=False)
+                total_input_tokens += len(tokens)
+                self.reset()
+                self.eval(tokens)
+
+                logits = llama_cpp.llama_get_logits(self._ctx.ctx)
+                logits_arr = np.ctypeslib.as_array(logits, shape=(self.n_vocab(),))
+
+                score_logits = [_get_candidate_logit(logits_arr, str(i)) for i in range(n_levels)]
                 max_l = max(score_logits) if score_logits else 0.0
                 exp_logits = [np.exp((l - max_l) / temp) for l in score_logits]
                 sum_exp = sum(exp_logits) if sum(exp_logits) > 0 else 1.0
-                probs_dict = {
-                    str(i): float(e / sum_exp) for i, e in enumerate(exp_logits)
-                }
+                probs_dict = {str(i): float(e / sum_exp) for i, e in enumerate(exp_logits)}
 
-                weighted_score = sum(
-                    i * probs_dict[str(i)] for i in range(n_levels)
-                )
+                weighted_score = sum(i * probs_dict[str(i)] for i in range(n_levels))
                 max_conf = max(probs_dict.values()) if probs_dict else 0.0
                 legend = {str(i): crit for i, crit in enumerate(criteria_list)}
 
@@ -2291,38 +2309,54 @@ class Llama:
                     "score": round(weighted_score, 4),
                     "confidence": round(max_conf, 4),
                     "legend": legend,
-                    "probabilities": probs_dict,
+                    "probabilities": {k: round(v, 4) for k, v in probs_dict.items()},
                 }
 
             elif q_type == "noul":
-                true_toks = self.tokenize(b"true", add_bos=False)
-                false_toks = self.tokenize(b"false", add_bos=False)
-                if not true_toks:
-                    true_toks = self.tokenize(b" true", add_bos=False)
-                if not false_toks:
-                    false_toks = self.tokenize(b" false", add_bos=False)
+                criteria = q_spec.get("criteria", {})
+                options = [
+                    {"key": "true", "description": criteria.get("true", None)},
+                    {"key": "false", "description": criteria.get("false", None)},
+                ]
 
-                t_id = true_toks[0] if true_toks else 0
-                f_id = false_toks[0] if false_toks else 1
+                if jinja_template is not None:
+                    formatted_prompt = jinja_template.render(
+                        images=[],
+                        state=state,
+                        instructions=q_spec.get("instructions", ""),
+                        type="noul",
+                        options=options,
+                    )
+                else:
+                    lines = [f"State:\n{state}\n\nQuestion:\n{q_spec.get('instructions', '')}\n\nReply with yes or no only."]
+                    formatted_prompt = "\n".join(lines)
 
-                l_true = float(logits_arr[t_id])
-                l_false = float(logits_arr[f_id])
+                tokens = self.tokenize(formatted_prompt.encode("utf-8"), add_bos=False)
+                total_input_tokens += len(tokens)
+                self.reset()
+                self.eval(tokens)
 
-                max_l = max(l_true, l_false)
-                e_true = np.exp((l_true - max_l) / temp)
-                e_false = np.exp((l_false - max_l) / temp)
-                p_true = float(e_true / (e_true + e_false))
+                logits = llama_cpp.llama_get_logits(self._ctx.ctx)
+                logits_arr = np.ctypeslib.as_array(logits, shape=(self.n_vocab(),))
+
+                l_yes = max(_get_candidate_logit(logits_arr, "yes"), _get_candidate_logit(logits_arr, "Yes"))
+                l_no = max(_get_candidate_logit(logits_arr, "no"), _get_candidate_logit(logits_arr, "No"))
+
+                max_l = max(l_yes, l_no)
+                e_yes = np.exp((l_yes - max_l) / temp)
+                e_no = np.exp((l_no - max_l) / temp)
+                p_yes = float(e_yes / (e_yes + e_no))
 
                 answers[q_name] = {
                     "type": "noul",
-                    "noul": round(p_true, 4),
+                    "noul": round(p_yes, 4),
                 }
 
         return {
             "model": model_name,
             "answers": answers,
             "usage": {
-                "input_tokens": len(tokens),
+                "input_tokens": total_input_tokens,
                 "output_tokens": 0,
             },
         }
