@@ -68,7 +68,7 @@ class LlamaProxy:
     def free(self):
         if self._current_model:
             self._current_model.close()
-            del self._current_model
+            self._current_model = None
 
     @staticmethod
     def load_llama_from_model_settings(settings: ModelSettings) -> llama_cpp.Llama:
