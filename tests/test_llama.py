@@ -662,3 +662,74 @@ def test_real_llama_embeddings(llama_cpp_embedding_model_path):
     repeated_embeddings = model.embed(list(reversed(prompts)))
     assert len(repeated_embeddings) == len(prompts)
     assert all(len(repeated) == len(embedding) for repeated in repeated_embeddings)
+
+
+@pytest.mark.parametrize("add_bos", [False, True])
+@pytest.mark.parametrize("prompt", ["The quick brown fox", "Hello"])
+def test_echo_logprobs_match_next_token_predictions(
+    llama_cpp_transformer_model_path, add_bos, prompt
+):
+    model = llama_cpp.Llama(
+        llama_cpp_transformer_model_path,
+        n_ctx=32,
+        n_batch=32,
+        n_ubatch=32,
+        n_threads=4,
+        logits_all=True,
+        kv_overrides={"tokenizer.ggml.add_bos_token": add_bos},
+        verbose=False,
+    )
+    try:
+        prompt_tokens = model.tokenize(prompt.encode())
+        assert (prompt_tokens[0] == model.token_bos()) is add_bos
+        model.eval(prompt_tokens)
+        next_token = model.sample(temp=0.0)
+        predictions = log_softmax(model.scores[: len(prompt_tokens)], axis=-1)
+        visible_tokens = prompt_tokens[1:] if add_bos else prompt_tokens
+        visible_tokens = visible_tokens + [next_token]
+        first_position = 1 if add_bos else 0
+        expected = [
+            predictions[position - 1, token]
+            for position, token in enumerate(visible_tokens, start=first_position)
+            if position > first_position
+        ]
+
+        output = model.create_completion(
+            prompt, max_tokens=1, temperature=0.0, echo=True, logprobs=3
+        )
+        logprobs = output["choices"][0]["logprobs"]
+        assert logprobs is not None
+        assert len(logprobs["tokens"]) == len(visible_tokens)
+        assert logprobs["token_logprobs"][0] is None
+        assert logprobs["top_logprobs"][0] is None
+        np.testing.assert_allclose(logprobs["token_logprobs"][1:], expected, atol=1e-5)
+        for token, top_logprobs, expected_logprob in zip(
+            logprobs["tokens"][1:], logprobs["top_logprobs"][1:], expected
+        ):
+            assert top_logprobs[token] == pytest.approx(expected_logprob, abs=1e-5)
+
+        completion = model.create_completion(
+            prompt, max_tokens=1, temperature=0.0, logprobs=3
+        )
+        completion_logprobs = completion["choices"][0]["logprobs"]
+        np.testing.assert_allclose(
+            completion_logprobs["token_logprobs"], expected[-1:], atol=1e-5
+        )
+        chunks = list(
+            model.create_completion(
+                prompt, max_tokens=1, temperature=0.0, stream=True, logprobs=3
+            )
+        )
+        streamed_logprobs = [
+            value
+            for chunk in chunks
+            if chunk["choices"][0]["logprobs"] is not None
+            for value in chunk["choices"][0]["logprobs"]["token_logprobs"]
+        ]
+        np.testing.assert_allclose(streamed_logprobs, expected[-1:], atol=1e-5)
+        assert (
+            "".join(chunk["choices"][0]["text"] for chunk in chunks)
+            == (completion["choices"][0]["text"])
+        )
+    finally:
+        model.close()
