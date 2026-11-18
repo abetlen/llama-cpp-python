@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- fix(server): close tokenizer config files after reading by @cloudgpuapp in #2422
+
 - fix(ci): remove unsupported macOS 14 release runners by @abetlen in #2416
 
 ## [0.3.37]
