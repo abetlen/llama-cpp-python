@@ -132,10 +132,7 @@ class LlamaDiskCache(BaseLlamaCache):
         _key = self._find_longest_prefix_key(key)
         if _key is None:
             raise KeyError("Key not found")
-        value: "llama_cpp.llama.LlamaState" = self.cache.pop(_key)  # type: ignore
-        # NOTE: This puts an integer as key in cache, which breaks,
-        # Llama.longest_token_prefix(k, key) above since k is not a tuple of ints/tokens
-        # self.cache.push(_key, side="front")  # type: ignore
+        value: "llama_cpp.llama.LlamaState" = self.cache[_key]  # type: ignore
         return value
 
     def __contains__(self, key: Sequence[int]) -> bool:
