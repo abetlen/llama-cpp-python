@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- fix(ci): remove unsupported macOS 14 release runners by @abetlen in #2416
 - fix: preserve sequence offsets in unpooled batched embeddings by @linjiaye929 in #2395
+
+## [0.3.37]
+
+- feat: update llama.cpp to ggml-org/llama.cpp@a956a852c
+- fix(ci): use supported Python versions on Ubuntu by @abetlen in #2407
 
 ## [0.3.36]
 
