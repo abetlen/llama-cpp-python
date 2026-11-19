@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- fix(cache): preserve disk cache entries on lookup by @remote-controlled-man
+- fix(cache): preserve disk cache entries on lookup by @remote-controlled-man in #2423
 - fix(ci): remove unsupported macOS 14 release runners by @abetlen in #2416
 
 ## [0.3.37]
