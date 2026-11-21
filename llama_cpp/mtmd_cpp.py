@@ -114,6 +114,7 @@ MTMD_VIDEO_TEMPLATE_QWEN3VL = 3
 #     MTMD_GEN_AUDIO_TYPE_YUE2,
 #     MTMD_GEN_AUDIO_TYPE_MINIMAX_MUSIC3,
 #     MTMD_GEN_AUDIO_TYPE_FISH_S2,
+#     MTMD_GEN_AUDIO_TYPE_MOSHI,
 #     MTMD_GEN_AUDIO_TYPE_KOKORO,
 #     MTMD_GEN_AUDIO_TYPE_TINY_VOCA,
 #     MTMD_GEN_AUDIO_TYPE_VOXCPM2,
@@ -129,9 +130,10 @@ MTMD_GEN_AUDIO_TYPE_ZONOS3 = 7
 MTMD_GEN_AUDIO_TYPE_YUE2 = 8
 MTMD_GEN_AUDIO_TYPE_MINIMAX_MUSIC3 = 9
 MTMD_GEN_AUDIO_TYPE_FISH_S2 = 10
-MTMD_GEN_AUDIO_TYPE_KOKORO = 11
-MTMD_GEN_AUDIO_TYPE_TINY_VOCA = 12
-MTMD_GEN_AUDIO_TYPE_VOXCPM2 = 13
+MTMD_GEN_AUDIO_TYPE_MOSHI = 11
+MTMD_GEN_AUDIO_TYPE_KOKORO = 12
+MTMD_GEN_AUDIO_TYPE_TINY_VOCA = 13
+MTMD_GEN_AUDIO_TYPE_VOXCPM2 = 14
 
 MTMD_GEN_PROCESS_TYPE_GEN_CODE = 0
 MTMD_GEN_PROCESS_TYPE_GEN_WAV = 1
@@ -342,6 +344,7 @@ class mtmd_gen_audio_info(Structure):
 #     // for MTMD_GEN_PROCESS_TYPE_GEN_WAV
 #     // pass either codes (discrete) or feats (continuous), depending on the pipeline
 #     // lfm3a GEN_CODE also takes codes: the codes revealed so far, -1 for a masked codebook
+#     // moshi GEN_CODE: code0 is the sampled text token; with codes (all of the frame), only their backbone embedding is built
 #     // zonos3 GEN_WAV: -1 for a residual code not known yet, the frame is decoded without it
 #     // kokoro GEN_WAV takes both: codes are the phoneme tokens, feats is the voice row (256 values) then the backbone state of each token
 #     int32_t * codes;
@@ -750,6 +753,24 @@ class mtmd_helper_gen_audio_inp(Structure):
     ]
 
 
+# struct mtmd_helper_cap {
+#     bool chat; // false for tts-only models (no chat template) and realtime transcription models (token delay)
+#
+#     // input capabilities
+#     bool vision;
+#     bool audio;
+#     bool video; // built-in decoder only (MTMD_VIDEO), a custom decoder is not counted
+#
+#     // realtime capabilities
+#     bool audio_stream; // realtime transcription, see mtmd_audio_stream_init()
+#     bool audio_duplex; // full duplex (e.g. Hibiki): the model speaks while it listens, see the moshi pipeline of mtmd_helper_gen_audio
+#
+#     // output capabilities
+#     bool text_gen; // false for an audio-only model (tts-only, no chat template)
+#     bool audio_gen;
+#     bool audio_gen_spk_ref; // accepts a speaker reference audio for voice cloning
+# };
+# typedef struct mtmd_helper_cap mtmd_helper_cap;
 class mtmd_helper_cap(Structure):
     """Capabilities exposed by an MTMD model and its projector."""
 
@@ -759,6 +780,7 @@ class mtmd_helper_cap(Structure):
         audio: bool
         video: bool
         audio_stream: bool
+        audio_duplex: bool
         text_gen: bool
         audio_gen: bool
         audio_gen_spk_ref: bool
@@ -769,6 +791,7 @@ class mtmd_helper_cap(Structure):
         ("audio", c_bool),
         ("video", c_bool),
         ("audio_stream", c_bool),
+        ("audio_duplex", c_bool),
         ("text_gen", c_bool),
         ("audio_gen", c_bool),
         ("audio_gen_spk_ref", c_bool),
