@@ -60,7 +60,7 @@ class ModelSettings(BaseSettings):
     )
     rpc_servers: Optional[str] = Field(
         default=None,
-        description="comma separated list of rpc servers for offloading",
+        description="Deprecated and ignored: llama.cpp's model params no longer accept a list of rpc servers.",
     )
     # Context Params
     seed: int = Field(
@@ -96,7 +96,8 @@ class ModelSettings(BaseSettings):
     yarn_beta_slow: float = Field(default=1.0)
     yarn_orig_ctx: int = Field(default=0)
     mul_mat_q: bool = Field(
-        default=True, description="if true, use experimental mul_mat_q kernels"
+        default=True,
+        description="Deprecated and ignored: the experimental mul_mat_q kernels were removed upstream.",
     )
     logits_all: bool = Field(default=True, description="Whether to return logits.")
     embedding: bool = Field(default=False, description="Whether to use embeddings.")
