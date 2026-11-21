@@ -74,7 +74,7 @@ class Llama:
         seed: int = llama_cpp.LLAMA_DEFAULT_SEED,
         n_ctx: int = 512,
         n_batch: int = 512,
-        n_ubatch: int = 512,
+        n_ubatch: Optional[int] = None,
         n_threads: Optional[int] = None,
         n_threads_batch: Optional[int] = None,
         rope_scaling_type: Optional[
@@ -159,7 +159,7 @@ class Llama:
             seed: RNG seed, -1 for random
             n_ctx: Text context, 0 = from model
             n_batch: Prompt processing maximum batch size
-            n_ubatch: Physical batch size
+            n_ubatch: Physical batch size. Defaults to n_batch in embedding mode and 512 otherwise.
             n_threads: Number of threads to use for generation
             n_threads_batch: Number of threads to use for batch processing
             rope_scaling_type: RoPE scaling type, from `enum llama_rope_scaling_type`. ref: https://github.com/ggerganov/llama.cpp/pull/2054
@@ -308,6 +308,8 @@ class Llama:
             ].key = b"\0"  # ensure sentinel element is zeroed
             self.model_params.kv_overrides = self._kv_overrides_array
 
+        if n_ubatch is None:
+            n_ubatch = n_batch if embedding else 512
         self.n_batch = min(n_ctx, n_batch)  # ???
         self.n_threads = n_threads or max(multiprocessing.cpu_count() // 2, 1)
         self.n_threads_batch = n_threads_batch or multiprocessing.cpu_count()
@@ -1098,6 +1100,14 @@ class Llama:
                 "Llama model must be created with embedding=True to call this method"
             )
 
+        batch_capacity = n_batch
+        if not llama_cpp.llama_get_causal_attn(
+            self._ctx.ctx
+        ) or not llama_cpp.llama_get_memory(self._ctx.ctx):
+            # Non-causal sequences must fit in one physical batch. Respect an
+            # explicit microbatch limit without truncating a sequence to fit it.
+            batch_capacity = min(n_batch, llama_cpp.llama_n_ubatch(self._ctx.ctx))
+
         if self.verbose:
             llama_cpp.llama_perf_context_reset(self._ctx.ctx)
 
@@ -1160,9 +1170,14 @@ class Llama:
                 raise ValueError(
                     f"Requested tokens ({n_tokens}) exceed batch size of {n_batch}"
                 )
+            if n_tokens > batch_capacity:
+                raise ValueError(
+                    f"Requested tokens ({n_tokens}) exceed physical batch size of "
+                    f"{batch_capacity} for non-causal embeddings; increase n_ubatch"
+                )
 
             # time to eval batch
-            if t_batch + n_tokens > n_batch or p_batch >= n_seq_max:
+            if t_batch + n_tokens > batch_capacity or p_batch >= n_seq_max:
                 decode_batch(s_batch)
                 s_batch = []
                 t_batch = 0

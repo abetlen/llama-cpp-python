@@ -16,7 +16,10 @@ env:
   HYBRID_MODEL_FILE: Falcon-H1-Tiny-90M-Instruct-Q2_K.gguf
   EMBEDDING_REPO_ID: CompendiumLabs/bge-small-en-v1.5-gguf
   EMBEDDING_MODEL_FILE: bge-small-en-v1.5-q4_k_m.gguf
-  MODEL_CACHE_KEY: qwen35-q8-mamba130m-q2-falconh1tiny-q2-bge-small-q4
+  LONG_EMBEDDING_REPO_ID: lm-kit/bge-m3-gguf
+  LONG_EMBEDDING_MODEL_FILE: bge-m3-F16.gguf
+  LONG_EMBEDDING_REVISION: 9379ce497e8814b200f2dc0d18eb4045426dcb8c
+  MODEL_CACHE_KEY: qwen35-q8-mamba130m-q2-falconh1tiny-q2-bge-small-q4-bge-m3-f16
 
 jobs:
   download-model:
@@ -34,6 +37,7 @@ jobs:
           path: ~/.cache/huggingface/hub
           key: ${{ runner.os }}-model-${{ env.MODEL_CACHE_KEY }}
           restore-keys: |
+            ${{ runner.os }}-model-qwen35-q8-mamba130m-q2-falconh1tiny-q2-bge-small-q4
             ${{ runner.os }}-model-qwen35-q8-mamba130m-q2-falconh1tiny-q2
       - name: Download model
         run: |
@@ -41,6 +45,7 @@ jobs:
           hf download ${{ env.RECURRENT_REPO_ID }} ${{ env.RECURRENT_MODEL_FILE }}
           hf download ${{ env.HYBRID_REPO_ID }} ${{ env.HYBRID_MODEL_FILE }}
           hf download ${{ env.EMBEDDING_REPO_ID }} ${{ env.EMBEDDING_MODEL_FILE }}
+          hf download ${{ env.LONG_EMBEDDING_REPO_ID }} ${{ env.LONG_EMBEDDING_MODEL_FILE }} --revision ${{ env.LONG_EMBEDDING_REVISION }}
 
   build-linux:
     needs: download-model
