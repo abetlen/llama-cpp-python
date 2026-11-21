@@ -69,10 +69,11 @@ class LlamaModel:
         self.model = model
         self.vocab = vocab
 
-        def free_model():
+        # Keep the native function alive through interpreter shutdown.
+        def free_model(model_free=llama_cpp.llama_model_free):
             if self.model is None:
                 return
-            llama_cpp.llama_model_free(self.model)
+            model_free(self.model)
             self.model = None
 
         self._exit_stack.callback(free_model)
@@ -269,10 +270,10 @@ class LlamaContext:
         self.memory = llama_cpp.llama_get_memory(self.ctx)
         self.sampler = None  # LlamaContext doesn't manage samplers directly, but some cleanup code expects this attribute
 
-        def free_ctx():
+        def free_ctx(ctx_free=llama_cpp.llama_free):
             if self.ctx is None:
                 return
-            llama_cpp.llama_free(self.ctx)
+            ctx_free(self.ctx)
             self.ctx = None
 
         self._exit_stack.callback(free_ctx)
@@ -484,10 +485,10 @@ class LlamaBatch:
         self.batch = batch
         self.sampler = None  # LlamaBatch doesn't use samplers, but some cleanup code expects this attribute
 
-        def free_batch():
+        def free_batch(batch_free=llama_cpp.llama_batch_free):
             if self.batch is None:
                 return
-            llama_cpp.llama_batch_free(self.batch)
+            batch_free(self.batch)
             self.batch = None
 
         self._exit_stack.callback(free_batch)
@@ -681,12 +682,15 @@ class LlamaSampler:
         self.custom_samplers: List[Tuple[int, CustomSampler]] = []
         self._exit_stack = ExitStack()
 
-        def free_sampler():
+        def free_sampler(
+            sampler_free=llama_cpp.llama_sampler_free,
+            chain_remove=llama_cpp.llama_sampler_chain_remove,
+        ):
             if self.sampler is not None:
                 # NOTE: Must remove custom samplers before free or llama.cpp will try to free them
                 for i, _ in reversed(self.custom_samplers):
-                    llama_cpp.llama_sampler_chain_remove(self.sampler, i)
-                llama_cpp.llama_sampler_free(self.sampler)
+                    chain_remove(self.sampler, i)
+                sampler_free(self.sampler)
                 self.sampler = None
 
         self._exit_stack.callback(free_sampler)
@@ -879,9 +883,9 @@ class LlamaSampler:
         new_sampler.custom_samplers = []
         new_sampler._exit_stack = ExitStack()
 
-        def free_sampler():
+        def free_sampler(sampler_free=llama_cpp.llama_sampler_free):
             if new_sampler.sampler is not None:
-                llama_cpp.llama_sampler_free(new_sampler.sampler)
+                sampler_free(new_sampler.sampler)
                 new_sampler.sampler = None
 
         new_sampler._exit_stack.callback(free_sampler)
