@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- fix: restore Windows DLL search paths after failed loads by @remote-controlled-man in #2425
 - fix(ci): remove unsupported macOS 14 release runners by @abetlen in #2416
 
 ## [0.3.37]
