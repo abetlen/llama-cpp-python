@@ -28,30 +28,42 @@ class LlamaPromptLookupDecoding(LlamaDraftModel):
         num_pred_tokens: int,
     ):
         input_length = input_ids.shape[0]
+        use_slices = (
+            type(input_ids) is np.ndarray
+            and input_ids.ndim == 1
+            and input_ids.dtype.kind in "iu"
+            and type(num_pred_tokens) is int
+        )
+
+        native_indices = use_slices and -input_length <= num_pred_tokens <= input_length
 
         for ngram_size in range(min(max_ngram_size, input_length - 1), 0, -1):
-            # Create sliding windows of size ngram_size
-            windows = np.lib.stride_tricks.sliding_window_view(input_ids, (ngram_size,))
+            if use_slices:
+                window_count = input_length - ngram_size + 1
+                matches = input_ids[:window_count] == input_ids[-ngram_size]
+                if native_indices and ngram_size > 1 and not matches[:-1].any():
+                    continue
+                for offset in range(1, ngram_size):
+                    matches &= (
+                        input_ids[offset : offset + window_count]
+                        == input_ids[offset - ngram_size]
+                    )
+                # The suffix itself always matches for integer arrays.
+                first_match = matches.argmax()
+                match_indices = (int(first_match) if native_indices else first_match,)
+            else:
+                windows = np.lib.stride_tricks.sliding_window_view(
+                    input_ids, (ngram_size,)
+                )
+                matches = np.all(windows == input_ids[-ngram_size:], axis=1)
+                match_indices = np.nonzero(matches)[0]
 
-            # Convert ngram to an array for comparison
-            ngram_array = input_ids[-ngram_size:]
-
-            # Find where the windows match the ngram
-            matches = np.all(windows == ngram_array, axis=1)
-
-            # Get the indices of matches
-            match_indices = np.nonzero(matches)[0]
-
-            # Iterate through match indices to find a valid continuation
             for idx in match_indices:
                 start_idx = idx + ngram_size
-                end_idx = start_idx + num_pred_tokens
-                end_idx = min(end_idx, input_length)
-
+                end_idx = min(start_idx + num_pred_tokens, input_length)
                 if start_idx < end_idx:
                     return input_ids[start_idx:end_idx]
 
-        # If no match is found, return an empty array
         return np.array([], dtype=np.intc)
 
     def __call__(
