@@ -2341,6 +2341,7 @@ class Llama:
         """Create a Llama model from a pretrained model name or path.
         This method requires the huggingface-hub package.
         You can install it with `pip install huggingface-hub`.
+        With HF_HUB_OFFLINE=1, filenames are matched against cached files or a populated local_dir.
 
         Args:
             repo_id: The model repo id.
@@ -2353,7 +2354,12 @@ class Llama:
         Returns:
             A Llama model."""
         try:
-            from huggingface_hub import hf_hub_download, HfFileSystem
+            from huggingface_hub import (
+                hf_hub_download,
+                HfFileSystem,
+                snapshot_download,
+                constants,
+            )
             from huggingface_hub.utils import validate_repo_id
         except ImportError:
             raise ImportError(
@@ -2363,12 +2369,32 @@ class Llama:
 
         validate_repo_id(repo_id)
 
-        hffs = HfFileSystem()
-
-        files = [
-            file["name"] if isinstance(file, dict) else file
-            for file in hffs.ls(repo_id, recursive=True)
-        ]
+        if constants.HF_HUB_OFFLINE:
+            if (
+                local_dir is not None
+                and Path(local_dir).is_dir()
+                and any(Path(local_dir).iterdir())
+            ):
+                snapshot_path = Path(local_dir)
+            else:
+                snapshot_path = Path(
+                    snapshot_download(
+                        repo_id=repo_id,
+                        cache_dir=cache_dir,
+                        local_files_only=True,
+                    )
+                )
+            files = [
+                f"{repo_id}/{file.relative_to(snapshot_path).as_posix()}"
+                for file in snapshot_path.rglob("*")
+                if file.is_file()
+            ]
+        else:
+            hffs = HfFileSystem()
+            files = [
+                file["name"] if isinstance(file, dict) else file
+                for file in hffs.ls(repo_id, recursive=True)
+            ]
 
         # split each file into repo_id, subfolder, filename
         file_list: List[str] = []
