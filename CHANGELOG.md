@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - fix: preserve native cleanup callbacks during interpreter shutdown by @emme1t in #2397
+- fix(ci): remove unsupported macOS 14 release runners by @abetlen in #2416
+
+## [0.3.37]
+
+- feat: update llama.cpp to ggml-org/llama.cpp@a956a852c
+- fix(ci): use supported Python versions on Ubuntu by @abetlen in #2407
 
 ## [0.3.36]
 
