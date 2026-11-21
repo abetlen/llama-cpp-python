@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - fix(embed): respect physical batch limits for non-causal embeddings by @original4422 in #2387
+- feat: update llama.cpp to ggml-org/llama.cpp@46eb1742d
 - fix(ci): remove unsupported macOS 14 release runners by @abetlen in #2416
 
 ## [0.3.37]

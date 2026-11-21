@@ -102,6 +102,22 @@ MTMD_VIDEO_TEMPLATE_LFM3 = 1
 MTMD_VIDEO_TEMPLATE_LFM3_OMNI = 2
 MTMD_VIDEO_TEMPLATE_QWEN3VL = 3
 
+# enum mtmd_gen_audio_type {
+#     MTMD_GEN_AUDIO_TYPE_NONE,
+#     MTMD_GEN_AUDIO_TYPE_QWEN3TTS,
+#     MTMD_GEN_AUDIO_TYPE_POCKETTTS,
+#     MTMD_GEN_AUDIO_TYPE_SOPRANO,
+#     MTMD_GEN_AUDIO_TYPE_LFM3A,
+#     MTMD_GEN_AUDIO_TYPE_CHATTERBOX,
+#     MTMD_GEN_AUDIO_TYPE_DRAMA3,
+#     MTMD_GEN_AUDIO_TYPE_ZONOS3,
+#     MTMD_GEN_AUDIO_TYPE_YUE2,
+#     MTMD_GEN_AUDIO_TYPE_MINIMAX_MUSIC3,
+#     MTMD_GEN_AUDIO_TYPE_FISH_S2,
+#     MTMD_GEN_AUDIO_TYPE_KOKORO,
+#     MTMD_GEN_AUDIO_TYPE_TINY_VOCA,
+#     MTMD_GEN_AUDIO_TYPE_VOXCPM2,
+# };
 MTMD_GEN_AUDIO_TYPE_NONE = 0
 MTMD_GEN_AUDIO_TYPE_QWEN3TTS = 1
 MTMD_GEN_AUDIO_TYPE_POCKETTTS = 2
@@ -109,10 +125,21 @@ MTMD_GEN_AUDIO_TYPE_SOPRANO = 3
 MTMD_GEN_AUDIO_TYPE_LFM3A = 4
 MTMD_GEN_AUDIO_TYPE_CHATTERBOX = 5
 MTMD_GEN_AUDIO_TYPE_DRAMA3 = 6
+MTMD_GEN_AUDIO_TYPE_ZONOS3 = 7
+MTMD_GEN_AUDIO_TYPE_YUE2 = 8
+MTMD_GEN_AUDIO_TYPE_MINIMAX_MUSIC3 = 9
+MTMD_GEN_AUDIO_TYPE_FISH_S2 = 10
+MTMD_GEN_AUDIO_TYPE_KOKORO = 11
+MTMD_GEN_AUDIO_TYPE_TINY_VOCA = 12
+MTMD_GEN_AUDIO_TYPE_VOXCPM2 = 13
 
 MTMD_GEN_PROCESS_TYPE_GEN_CODE = 0
 MTMD_GEN_PROCESS_TYPE_GEN_WAV = 1
 
+# enum mtmd_helper_gen_audio_outtype {
+#     MTMD_HELPER_GEN_AUDIO_OUTTYPE_PCM, // raw F32 PCM, channels interleaved
+#     MTMD_HELPER_GEN_AUDIO_OUTTYPE_WAV, // WAV PCM 16-bit LE
+# };
 MTMD_HELPER_GEN_AUDIO_OUTTYPE_PCM = 0
 MTMD_HELPER_GEN_AUDIO_OUTTYPE_WAV = 1
 
@@ -279,6 +306,7 @@ class mtmd_caps(Structure):
 # struct mtmd_gen_audio_info {
 #     enum mtmd_gen_audio_type type;
 #     int32_t sample_rate; // in Hz, for example 24000 for qwen3tts
+#     int32_t n_channels;  // 1 = mono, 2 = stereo (mtmd_gen_out::audio is interleaved)
 #     const char * model_variant; // name of the weight variant, can be None if not applicable
 #     int32_t n_voices; // predefined voices, see mtmd_gen_audio_voice_name()
 # };
@@ -286,12 +314,14 @@ class mtmd_gen_audio_info(Structure):
     if TYPE_CHECKING:
         type: int
         sample_rate: int
+        n_channels: int
         model_variant: Optional[bytes]
         n_voices: int
 
     _fields_ = [
         ("type", c_int),
         ("sample_rate", c_int32),
+        ("n_channels", c_int32),
         ("model_variant", c_char_p),
         ("n_voices", c_int32),
     ]
@@ -311,10 +341,30 @@ class mtmd_gen_audio_info(Structure):
 #
 #     // for MTMD_GEN_PROCESS_TYPE_GEN_WAV
 #     // pass either codes (discrete) or feats (continuous), depending on the pipeline
+#     // lfm3a GEN_CODE also takes codes: the codes revealed so far, -1 for a masked codebook
+#     // zonos3 GEN_WAV: -1 for a residual code not known yet, the frame is decoded without it
+#     // kokoro GEN_WAV takes both: codes are the phoneme tokens, feats is the voice row (256 values) then the backbone state of each token
 #     int32_t * codes;
 #     size_t    n_codes;
 #     const float * feats;
 #     size_t        n_feats;
+#     float speed; // kokoro: speaking speed, > 0 (default: 1.0)
+#
+#     // voxcpm2 GEN_CODE: embd is the hidden state of a backbone row and feats its input row (n_text_embd elements, null for a text row)
+#     //                   code0 >= 0 makes the next frame; code0 < 0 for prompt rows, the residual LM only reads them,
+#     //                   n_codes of them (1 if 0) in embd and feats, all text rows or all audio rows
+#     // yue2 GEN_CODE: n_codes is the frame count, codes is not read (the backbone state holds them)
+#     // backbone_state: llama_state_seq_get_data() of the backbone_n_past positions (prompt, codes, end token)
+#     const uint8_t * backbone_state;
+#     size_t          backbone_state_size;
+#     int32_t         backbone_n_past;
+#
+#     // flow matching: steps of the ODE solver, <= 0 = model default (yue2 GEN_CODE: 32, minimax_music3 GEN_WAV: 30, voxcpm2 GEN_CODE: 10)
+#     int32_t n_steps;
+#
+#     // minimax_music3 GEN_CODE: feats holds the backbone hidden rows, cond then uncond with guidance
+#     // classifier-free guidance scale, <= 0 = model default (minimax_music3 residual codes: 1.5, voxcpm2 GEN_CODE: 2.0)
+#     float cfg_scale;
 # };
 class mtmd_gen_inp(Structure):
     if TYPE_CHECKING:
@@ -330,6 +380,12 @@ class mtmd_gen_inp(Structure):
         n_codes: int
         feats: Optional["_Pointer[c_float]"]
         n_feats: int
+        speed: float
+        backbone_state: Optional["_Pointer[c_uint8]"]
+        backbone_state_size: int
+        backbone_n_past: int
+        n_steps: int
+        cfg_scale: float
 
     _fields_ = [
         ("type", c_int),
@@ -344,6 +400,12 @@ class mtmd_gen_inp(Structure):
         ("n_codes", c_size_t),
         ("feats", POINTER(c_float)),
         ("n_feats", c_size_t),
+        ("speed", c_float),
+        ("backbone_state", POINTER(c_uint8)),
+        ("backbone_state_size", c_size_t),
+        ("backbone_n_past", c_int32),
+        ("n_steps", c_int32),
+        ("cfg_scale", c_float),
     ]
 
 
@@ -361,7 +423,7 @@ class mtmd_gen_inp(Structure):
 #
 #     // for MTMD_GEN_PROCESS_TYPE_GEN_WAV
 #     const float * audio;
-#     size_t        n_samples;
+#     size_t        n_samples; // total over all channels
 # };
 class mtmd_gen_out(Structure):
     if TYPE_CHECKING:
@@ -570,23 +632,78 @@ class mtmd_helper_init_opt(Structure):
     _fields_ = [("video_params", mtmd_helper_video_init_params)]
 
 
+# enum mtmd_helper_media_type {
+#     MTMD_HELPER_MEDIA_TYPE_UNKNOWN,
+#     MTMD_HELPER_MEDIA_TYPE_IMAGE,
+#     MTMD_HELPER_MEDIA_TYPE_AUDIO,
+#     MTMD_HELPER_MEDIA_TYPE_VIDEO,
+# };
+MTMD_HELPER_MEDIA_TYPE_UNKNOWN = 0
+MTMD_HELPER_MEDIA_TYPE_IMAGE = 1
+MTMD_HELPER_MEDIA_TYPE_AUDIO = 2
+MTMD_HELPER_MEDIA_TYPE_VIDEO = 3
+
+
+# struct mtmd_helper_media_meta {
+#     enum mtmd_helper_media_type type;
+#     uint32_t width;       // image, video (frame size)
+#     uint32_t height;
+#     int32_t  sample_rate; // audio, at the source rate
+#     float    duration;    // audio, video: in seconds, -1 if unknown
+#     int32_t  n_frames;    // video: -1 if unknown
+# };
+# typedef struct mtmd_helper_media_meta mtmd_helper_media_meta;
+class mtmd_helper_media_meta(Structure):
+    if TYPE_CHECKING:
+        type: int
+        width: int
+        height: int
+        sample_rate: int
+        duration: float
+        n_frames: int
+
+    _fields_ = [
+        ("type", c_int),
+        ("width", c_uint32),
+        ("height", c_uint32),
+        ("sample_rate", c_int32),
+        ("duration", c_float),
+        ("n_frames", c_int32),
+    ]
+
+
 # struct mtmd_helper_gen_audio_inp {
 #     bool stream; // if true, output() must be called after each step_gen()
 #     llama_seq_id seq_id;
 #
+#     // the text to speak; for a model with a "tts" chat template (e.g. LFM3-Audio), the prompt rendered from it
 #     const char * prompt;
 #     size_t       prompt_len;
 #
+#     // > 0: continue a sequence of n_past positions with raw text (LFM3-Audio only)
 #     int32_t n_past;
-#     enum mtmd_helper_gen_audio_out_mode out_mode;
+#     enum mtmd_helper_gen_audio_out_mode out_mode; // n_past > 0 only (default: auto)
 #
-#     mtmd_bitmap * speaker_ref; // optional, can be NULL
+#     mtmd_bitmap * speaker_ref; // optional, can be NULL: audio to clone, or a voice bitmap
+#     const char * speaker_ref_text; // optional, can be NULL: transcript of speaker_ref, for models that use it to clone the voice (e.g. Fish S2, Qwen3-TTS)
 #     const char * lang; // optional, can be NULL
 #
 #     int32_t  top_k;
 #     float    top_p;
 #     float    temp; // audio frame temperature if the model supports it, < 0 = model default, 0 = greedy
 #     uint32_t seed; // UINT32_MAX for random (default: random)
+#
+#     // delivery (only for models that support it); other models reject non-default values
+#     float speed;    // speaking speed relative to a typical pace, > 0 (default: 1.0 = the model's own pace)
+#     float loudness; // target loudness in LUFS, < 0 (default: 0.0 = the model's own loudness)
+#
+#     // classifier-free guidance scale of the audio codes, > 0, 1.0 = no guidance (only for models that support it)
+#     // default: 0.0 = the model's own; other models reject non-default values
+#     float cfg_scale;
+#
+#     // steps of the flow-matching ODE solver, fewer is faster with less accurate audio (only for models that support it)
+#     // default: 0 = the model's own; other models reject non-default values
+#     int32_t flow_steps;
 #
 #     enum mtmd_helper_gen_audio_outtype out_type;
 # };
@@ -599,11 +716,16 @@ class mtmd_helper_gen_audio_inp(Structure):
         n_past: int
         out_mode: int
         speaker_ref: Optional[mtmd_bitmap_p]
+        speaker_ref_text: Optional[bytes]
         lang: Optional[bytes]
         top_k: int
         top_p: float
         temp: float
         seed: int
+        speed: float
+        loudness: float
+        cfg_scale: float
+        flow_steps: int
         out_type: int
 
     _fields_ = [
@@ -614,11 +736,16 @@ class mtmd_helper_gen_audio_inp(Structure):
         ("n_past", c_int32),
         ("out_mode", c_int),
         ("speaker_ref", mtmd_bitmap_p_ctypes),
+        ("speaker_ref_text", c_char_p),
         ("lang", c_char_p),
         ("top_k", c_int32),
         ("top_p", c_float),
         ("temp", c_float),
         ("seed", c_uint32),
+        ("speed", c_float),
+        ("loudness", c_float),
+        ("cfg_scale", c_float),
+        ("flow_steps", c_int32),
         ("out_type", c_int),
     ]
 
@@ -984,6 +1111,14 @@ def mtmd_bitmap_set_mergeable(bitmap: mtmd_bitmap_p, mergeable: bool, /):
 def mtmd_bitmap_set_is_video(bitmap: mtmd_bitmap_p, is_video: bool, /):
     """Mark a bitmap or lazy bitmap as part of a video input."""
     ...
+
+
+# // transcript of an audio bitmap is optional, some TTS models use it to clone the speaker voice more closely (--tts-speaker-text)
+# MTMD_API void mtmd_bitmap_set_transcript(mtmd_bitmap * bitmap, const char * transcript);
+@ctypes_function("mtmd_bitmap_set_transcript", [mtmd_bitmap_p_ctypes, c_char_p], None)
+def mtmd_bitmap_set_transcript(
+    bitmap: mtmd_bitmap_p, transcript: Optional[bytes], /
+) -> None: ...
 
 
 # MTMD_API mtmd_bitmap * mtmd_bitmap_init_lazy(const mtmd_context * ctx,
@@ -1384,6 +1519,7 @@ def mtmd_gen_audio_read_tensor(
     ...
 
 
+# // name of the idx-th predefined voice, None when idx is out of range; idx 0 is the default voice
 # MTMD_API const char * mtmd_gen_audio_voice_name(const mtmd_context * ctx, int32_t idx);
 @ctypes_function(
     "mtmd_gen_audio_voice_name",
@@ -1397,6 +1533,25 @@ def mtmd_gen_audio_voice_name(
 ) -> Optional[bytes]:
     """Get the name of a predefined voice by index."""
     ...
+
+
+# // pronunciation of a word by the letter-to-sound model of the mmproj, for the tts_g2p() of the "tts" chat template
+# // (see common_chat_get_tts_prompt()); the phonemes are separated by spaces, in the notation of the model (tiny-voca: CMUdict)
+# // returns the length written to buf (NUL terminated), 0 if the model has no letter-to-sound model or no pronunciation,
+# // -1 if buf is too small; does not run a graph, can be called from any thread
+# MTMD_API int32_t mtmd_gen_audio_g2p(const mtmd_context * ctx, const char * word, char * buf, size_t buf_size);
+@ctypes_function(
+    "mtmd_gen_audio_g2p",
+    [mtmd_context_p_ctypes, c_char_p, POINTER(c_char), c_size_t],
+    c_int32,
+)
+def mtmd_gen_audio_g2p(
+    ctx: mtmd_context_p,
+    word: bytes,
+    buf: "_Pointer[c_char]",
+    buf_size: int,
+    /,
+) -> int: ...
 
 
 # MTMD_API mtmd_bitmap * mtmd_gen_audio_get_voice(const mtmd_context * ctx, const char * name);
@@ -1463,6 +1618,19 @@ def mtmd_gen_state_set_ref(
 ) -> int:
     """Copy the most recently encoded speaker reference into generation state."""
     ...
+
+
+# // codes of the reference held by the state (frame-major, e.g. drama3: 10 per frame), NULL if it has none
+# // valid until the next mtmd_gen_state_set_ref() / mtmd_gen_state_free() on this state
+# MTMD_API const int32_t * mtmd_gen_state_get_ref_codes(const mtmd_gen_state * state, size_t * n_codes);
+@ctypes_function(
+    "mtmd_gen_state_get_ref_codes",
+    [mtmd_gen_state_p_ctypes, POINTER(c_size_t)],
+    POINTER(c_int32),
+)
+def mtmd_gen_state_get_ref_codes(
+    state: mtmd_gen_state_p, n_codes: "_Pointer[c_size_t]", /
+) -> Optional["_Pointer[c_int32]"]: ...
 
 
 # // defaults tuned for the loaded pipeline, callers override only what they care about
@@ -1751,6 +1919,28 @@ def mtmd_helper_decode_image_chunk(
     ...
 
 
+# // metadata of a media file in a buffer, the same formats as mtmd_helper_bitmap_init_from_buf()
+# // only the headers are read (ffprobe or opt.video_params.decoder for video), nothing is decoded
+# // returns 0 on success, 1 if the format is not recognized
+# // this function is thread-safe
+# MTMD_API int32_t mtmd_helper_get_media_meta(
+#                     const unsigned char * buf, size_t len,
+#                     struct mtmd_helper_init_opt opt,
+#                     struct mtmd_helper_media_meta * out);
+@ctypes_function(
+    "mtmd_helper_get_media_meta",
+    [POINTER(c_uint8), c_size_t, mtmd_helper_init_opt, POINTER(mtmd_helper_media_meta)],
+    c_int32,
+)
+def mtmd_helper_get_media_meta(
+    buf: "_Pointer[c_uint8]",
+    length: int,
+    opt: mtmd_helper_init_opt,
+    out: "_Pointer[mtmd_helper_media_meta]",
+    /,
+) -> int: ...
+
+
 # streaming resampler for raw mono F32 PCM (e.g. realtime input), to match mtmd_get_audio_sample_rate()
 # it keeps state between calls, use one per stream
 mtmd_helper_resampler_p = NewType("mtmd_helper_resampler_p", int)
@@ -1925,6 +2115,7 @@ def mtmd_helper_gen_audio_inp_default() -> mtmd_helper_gen_audio_inp:
     ...
 
 
+# // returns None if the context cannot run the pipeline of the model (e.g. a context too small)
 # MTMD_API mtmd_helper_gen_audio * mtmd_helper_gen_audio_init(
 #                                     struct llama_context * lctx,
 #                                     struct mtmd_context * mctx);
@@ -1960,6 +2151,15 @@ def mtmd_helper_gen_audio_free(ctx: mtmd_helper_gen_audio_p, /): ...
 def mtmd_helper_gen_audio_reset(ctx: mtmd_helper_gen_audio_p, /): ...
 
 
+# // frame limit for a caller that has none of its own (e.g. no -n); 0 = step_gen() stops by itself
+# MTMD_API int32_t mtmd_helper_gen_audio_max_frames(const mtmd_helper_gen_audio * ctx);
+@ctypes_function(
+    "mtmd_helper_gen_audio_max_frames", [mtmd_helper_gen_audio_p_ctypes], c_int32
+)
+def mtmd_helper_gen_audio_max_frames(ctx: mtmd_helper_gen_audio_p, /) -> int: ...
+
+
+# // returns 0 on success, 2 if the input is invalid for the model (e.g. unsupported speed or loudness), 1 on other errors
 # MTMD_API int32_t mtmd_helper_gen_audio_set_input(
 #                         mtmd_helper_gen_audio * ctx,
 #                         const struct mtmd_helper_gen_audio_inp * inp);
@@ -1977,7 +2177,7 @@ def mtmd_helper_gen_audio_set_input(
     ...
 
 
-# // processes at most n_batch prompt tokens per call
+# // processes at most n_batch prompt tokens per call, n_batch must not exceed llama_n_batch() of the context
 # // returns: >0 = number of prompt tokens remaining, 0 = done, <0 = error
 # MTMD_API int32_t mtmd_helper_gen_audio_step_prompt(
 #                         mtmd_helper_gen_audio * ctx,
@@ -2081,7 +2281,7 @@ def mtmd_helper_audio_stream_get_logit_bias(
 
 
 # // out_data valid until next get_output() or reset() call
-# // out_n_samples (optional, can be NULL) receives the number of generated PCM samples
+# // out_n_samples (optional, can be NULL) receives the number of generated PCM samples per channel (see mtmd_gen_audio_info::n_channels)
 # MTMD_API int32_t mtmd_helper_gen_audio_get_output(
 #                         mtmd_helper_gen_audio * ctx,
 #                         int32_t * out_sample_rate,
