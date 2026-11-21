@@ -1,135 +1,111 @@
+import codecs
 import ctypes
 import os
-import multiprocessing
+from contextlib import ExitStack
 
 import llama_cpp
 
-llama_cpp.llama_backend_init()
+PROMPT = "\n\n### Instruction:\nWhat is the capital of France?\n\n### Response:\n"
+N_PREDICT = 20
 
-N_THREADS = multiprocessing.cpu_count()
-MODEL_PATH = os.environ.get("MODEL", "../models/7B/ggml-model.bin")
 
-prompt = b"\n\n### Instruction:\nWhat is the capital of France?\n\n### Response:\n"
+def decode(ctx, batch, tokens, start):
+    """Decode one batch from sequence zero and request logits for its last token."""
+    batch.n_tokens = len(tokens)
+    for i, token in enumerate(tokens):
+        batch.token[i] = token
+        batch.pos[i] = start + i
+        batch.n_seq_id[i] = 1
+        batch.seq_id[i][0] = 0
+        batch.logits[i] = i == len(tokens) - 1
+    status = llama_cpp.llama_decode(ctx, batch)
+    if status != 0:
+        raise RuntimeError(f"llama_decode returned {status} at position {start}")
 
-lparams = llama_cpp.llama_model_default_params()
-cparams = llama_cpp.llama_context_default_params()
-model = llama_cpp.llama_model_load_from_file(MODEL_PATH.encode("utf-8"), lparams)
-ctx = llama_cpp.llama_init_from_model(model, cparams)
-vocab = llama_cpp.llama_model_get_vocab(model)
 
-# determine the required inference memory per token:
-tmp = [0, 1, 2, 3]
-llama_cpp.llama_eval(
-    ctx=ctx, tokens=(llama_cpp.c_int * len(tmp))(*tmp), n_tokens=len(tmp), n_past=0
-)  # Deprecated
+def token_piece(vocab, token):
+    buf = ctypes.create_string_buffer(32)
+    n = llama_cpp.llama_token_to_piece(vocab, token, buf, len(buf), 0, False)
+    if n < 0:
+        buf = ctypes.create_string_buffer(-n)
+        n = llama_cpp.llama_token_to_piece(vocab, token, buf, len(buf), 0, False)
+    if n < 0:
+        raise RuntimeError(f"Could not convert token {token} to bytes")
+    return buf.raw[:n]
 
-n_past = 0
 
-prompt = b" " + prompt
+def generate(model_path, prompt, n_predict):
+    with ExitStack() as stack:
+        llama_cpp.llama_backend_init()
+        stack.callback(llama_cpp.llama_backend_free)
 
-embd_inp = (llama_cpp.llama_token * (len(prompt) + 1))()
-n_of_tok = llama_cpp.llama_tokenize(
-    vocab=vocab,
-    text=prompt,
-    text_len=len(prompt),
-    tokens=embd_inp,
-    n_tokens_max=len(embd_inp),
-    add_special=False,
-    parse_special=False,
-)
-embd_inp = embd_inp[:n_of_tok]
-
-n_ctx = llama_cpp.llama_n_ctx(ctx)
-
-n_predict = 20
-n_predict = min(n_predict, n_ctx - len(embd_inp))
-
-input_consumed = 0
-input_noecho = False
-
-remaining_tokens = n_predict
-
-embd = []
-last_n_size = 64
-last_n_tokens_data = [0] * last_n_size
-n_batch = 24
-last_n_repeat = 64
-repeat_penalty = 1
-frequency_penalty = 0.0
-presence_penalty = 0.0
-
-while remaining_tokens > 0:
-    if len(embd) > 0:
-        llama_cpp.llama_eval(
-            ctx=ctx,
-            tokens=(llama_cpp.c_int * len(embd))(*embd),
-            n_tokens=len(embd),
-            n_past=n_past,
-        )  # Deprecated
-
-    n_past += len(embd)
-    embd = []
-    if len(embd_inp) <= input_consumed:
-        logits = llama_cpp.llama_get_logits(ctx)
-        n_vocab = llama_cpp.llama_vocab_n_tokens(vocab)
-
-        _arr = (llama_cpp.llama_token_data * n_vocab)(
-            *[
-                llama_cpp.llama_token_data(token_id, logits[token_id], 0.0)
-                for token_id in range(n_vocab)
-            ]
+        model = llama_cpp.llama_model_load_from_file(
+            os.fsencode(model_path), llama_cpp.llama_model_default_params()
         )
-        candidates_p = llama_cpp.ctypes.pointer(
-            llama_cpp.llama_token_data_array(_arr, len(_arr), False)
-        )
+        if not model:
+            raise RuntimeError(f"Could not load model: {model_path}")
+        stack.callback(llama_cpp.llama_model_free, model)
+        vocab = llama_cpp.llama_model_get_vocab(model)
 
-        _arr = (llama_cpp.c_int * len(last_n_tokens_data))(*last_n_tokens_data)
-        llama_cpp.llama_sample_repetition_penalties(
-            ctx,
-            candidates_p,
-            _arr,
-            penalty_last_n=last_n_repeat,
-            penalty_repeat=repeat_penalty,
-            penalty_freq=frequency_penalty,
-            penalty_present=presence_penalty,
+        params = llama_cpp.llama_context_default_params()
+        params.n_ctx = 512
+        params.n_batch = 24
+        params.no_perf = False
+        ctx = llama_cpp.llama_init_from_model(model, params)
+        if not ctx:
+            raise RuntimeError("Could not create the model context")
+        stack.callback(llama_cpp.llama_free, ctx)
+
+        n_ctx = llama_cpp.llama_n_ctx(ctx)
+        prompt_bytes = prompt.encode("utf-8")
+        tokens = (llama_cpp.llama_token * n_ctx)()
+        n_tokens = llama_cpp.llama_tokenize(
+            vocab, prompt_bytes, len(prompt_bytes), tokens, n_ctx, True, False
+        )
+        if n_tokens < 0 or n_tokens >= n_ctx:
+            raise ValueError(
+                f"The {abs(n_tokens)}-token prompt must leave room for generation "
+                f"in the {n_ctx}-token context"
+            )
+        if n_tokens == 0:
+            raise ValueError("The prompt produced no tokens")
+
+        n_batch = llama_cpp.llama_n_batch(ctx)
+        batch = llama_cpp.llama_batch_init(n_batch, 0, 1)
+        stack.callback(llama_cpp.llama_batch_free, batch)
+        for start in range(0, n_tokens, n_batch):
+            decode(ctx, batch, tokens[start : min(start + n_batch, n_tokens)], start)
+
+        sampler = llama_cpp.llama_sampler_chain_init(
+            llama_cpp.llama_sampler_chain_default_params()
+        )
+        stack.callback(llama_cpp.llama_sampler_free, sampler)
+        llama_cpp.llama_sampler_chain_add(
+            sampler, llama_cpp.llama_sampler_init_top_k(40)
+        )
+        llama_cpp.llama_sampler_chain_add(
+            sampler, llama_cpp.llama_sampler_init_top_p(0.8, 1)
+        )
+        llama_cpp.llama_sampler_chain_add(
+            sampler, llama_cpp.llama_sampler_init_temp(0.2)
+        )
+        llama_cpp.llama_sampler_chain_add(
+            sampler, llama_cpp.llama_sampler_init_dist(llama_cpp.LLAMA_DEFAULT_SEED)
         )
 
-        llama_cpp.llama_sample_top_k(ctx, candidates_p, k=40, min_keep=1)
-        llama_cpp.llama_sample_top_p(ctx, candidates_p, p=0.8, min_keep=1)
-        llama_cpp.llama_sample_temperature(ctx, candidates_p, temp=0.2)
-        id = llama_cpp.llama_sample_token(ctx, candidates_p)
-
-        last_n_tokens_data = last_n_tokens_data[1:] + [id]
-        embd.append(id)
-        input_noecho = False
-        remaining_tokens -= 1
-    else:
-        while len(embd_inp) > input_consumed:
-            embd.append(embd_inp[input_consumed])
-            last_n_tokens_data = last_n_tokens_data[1:] + [embd_inp[input_consumed]]
-            input_consumed += 1
-            if len(embd) >= n_batch:
+        print(prompt, end="", flush=True)
+        decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+        end = min(n_ctx, n_tokens + n_predict)
+        for pos in range(n_tokens, end):
+            token = llama_cpp.llama_sampler_sample(sampler, ctx, -1)
+            if llama_cpp.llama_vocab_is_eog(vocab, token):
                 break
-    if not input_noecho:
-        for id in embd:
-            size = 32
-            buffer = (ctypes.c_char * size)()
-            n = llama_cpp.llama_token_to_piece(
-                vocab, llama_cpp.llama_token(id), buffer, size, 0, False
-            )
-            assert n <= size
-            print(
-                buffer[:n].decode("utf-8"),
-                end="",
-                flush=True,
-            )
+            print(decoder.decode(token_piece(vocab, token)), end="", flush=True)
+            if pos + 1 < end:
+                decode(ctx, batch, [token], pos)
+        print(decoder.decode(b"", final=True))
+        llama_cpp.llama_perf_context_print(ctx)
 
-    if len(embd) > 0 and embd[-1] == llama_cpp.llama_vocab_eos(vocab):
-        break
 
-print()
-
-llama_cpp.llama_print_timings(ctx)
-
-llama_cpp.llama_free(ctx)
-llama_cpp.llama_model_free(model)
+if __name__ == "__main__":
+    generate(os.environ.get("MODEL", "models/model.gguf"), PROMPT, N_PREDICT)
