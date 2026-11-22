@@ -31,6 +31,31 @@ python3 -m llama_cpp.server \
   --chat_template_kwargs '{"enable_thinking": true}'
 ```
 
+### Queue streaming requests
+
+By default, an incoming request can interrupt an in-progress streaming completion.
+To let the active stream finish before the next request is processed, start the server with:
+
+```bash
+python3 -m llama_cpp.server --model ./model.gguf --interrupt_requests false
+```
+
+If you use a [configuration file](#configuration-and-multi-model-support), set `interrupt_requests` at the top level alongside `models`:
+
+```json
+{
+    "interrupt_requests": false,
+    "models": [
+        {
+            "model": "./model.gguf"
+        }
+    ]
+}
+```
+
+The setting changes how requests wait for the model.
+Inference still runs one request at a time in the server process.
+
 ### Server options
 
 For a full list of options, run:
