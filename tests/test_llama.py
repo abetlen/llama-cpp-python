@@ -11,6 +11,7 @@ import pytest
 
 import llama_cpp
 import llama_cpp._internals as internals
+from llama_cpp.llama_speculative import LlamaPromptLookupDecoding
 
 
 MODEL = "./vendor/llama.cpp/models/ggml-vocab-llama-spm.gguf"
@@ -665,19 +666,22 @@ def test_real_llama_embeddings(llama_cpp_embedding_model_path):
 
 
 @pytest.mark.parametrize("n_ctx", [0, 200, 256])
-@pytest.mark.parametrize("logits_all", [False, True])
+@pytest.mark.parametrize(
+    ("logits_all", "use_draft"), [(False, False), (True, False), (True, True)]
+)
 def test_completion_uses_rounded_context(
-    llama_cpp_transformer_model_path, n_ctx, logits_all
+    llama_cpp_transformer_model_path, n_ctx, logits_all, use_draft
 ):
     # Regression for #1438: the native context can be larger than requested.
     model = llama_cpp.Llama(
         llama_cpp_transformer_model_path,
         n_ctx=n_ctx,
-        n_batch=200,
+        n_batch=256 if n_ctx == 256 else 200,
         n_threads=2,
         n_threads_batch=2,
         n_gpu_layers=0,
         logits_all=logits_all,
+        draft_model=LlamaPromptLookupDecoding() if use_draft else None,
         verbose=False,
     )
     try:
@@ -697,8 +701,13 @@ def test_completion_uses_rounded_context(
             "total_tokens": model.n_ctx(),
         }
         assert output["choices"][0]["finish_reason"] == "length"
-        assert list(model.eval_tokens) == prompt_tokens + [token] * (
-            model.n_ctx() - len(prompt_tokens) - 1
-        )
+        evaluated_tokens = list(model.eval_tokens)
+        expected_tokens = prompt_tokens + [token] * (model.n_ctx() - len(prompt_tokens))
+        # Draft evaluation may already include the final accepted token.
+        if use_draft:
+            assert model.n_ctx() - 1 <= len(evaluated_tokens) <= model.n_ctx()
+        else:
+            assert len(evaluated_tokens) == model.n_ctx() - 1
+        assert evaluated_tokens == expected_tokens[: len(evaluated_tokens)]
     finally:
         model.close()
