@@ -480,9 +480,10 @@ class Llama:
         self.n_tokens = 0
         # Restored or truncated state must decode before sampling.
         self._requires_eval = True
-        self.input_ids: npt.NDArray[np.intc] = np.ndarray((n_ctx,), dtype=np.intc)
+        self.input_ids: npt.NDArray[np.intc] = np.ndarray((self._n_ctx,), dtype=np.intc)
         self.scores: npt.NDArray[np.single] = np.ndarray(
-            (n_ctx if logits_all == True else n_batch, self._n_vocab), dtype=np.single
+            (self._n_ctx if logits_all == True else n_batch, self._n_vocab),
+            dtype=np.single,
         )
 
         self._mirostat_mu = ctypes.c_float(
