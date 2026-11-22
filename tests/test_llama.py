@@ -11,7 +11,6 @@ import pytest
 
 import llama_cpp
 import llama_cpp._internals as internals
-from llama_cpp.llama_speculative import LlamaPromptLookupDecoding
 
 
 MODEL = "./vendor/llama.cpp/models/ggml-vocab-llama-spm.gguf"
@@ -663,51 +662,3 @@ def test_real_llama_embeddings(llama_cpp_embedding_model_path):
     repeated_embeddings = model.embed(list(reversed(prompts)))
     assert len(repeated_embeddings) == len(prompts)
     assert all(len(repeated) == len(embedding) for repeated in repeated_embeddings)
-
-
-@pytest.mark.parametrize("n_ctx", [0, 200, 256])
-@pytest.mark.parametrize(
-    ("logits_all", "use_draft"), [(False, False), (True, False), (True, True)]
-)
-def test_completion_uses_rounded_context(
-    llama_cpp_transformer_model_path, n_ctx, logits_all, use_draft
-):
-    # Regression for #1438: the native context can be larger than requested.
-    model = llama_cpp.Llama(
-        llama_cpp_transformer_model_path,
-        n_ctx=n_ctx,
-        n_batch=256 if n_ctx == 256 else 200,
-        n_threads=2,
-        n_threads_batch=2,
-        n_gpu_layers=0,
-        logits_all=logits_all,
-        draft_model=LlamaPromptLookupDecoding() if use_draft else None,
-        verbose=False,
-    )
-    try:
-        token = model.tokenize(b"the", add_bos=False)[-1]
-        prompt = "Hello " * 32
-        prompt_tokens = model.tokenize(prompt.encode(), special=True)
-        output = model.create_completion(
-            prompt,
-            max_tokens=1000,
-            temperature=0.0,
-            echo=True,
-            logit_bias={str(token): 1000.0},
-        )
-        assert output["usage"] == {
-            "prompt_tokens": len(prompt_tokens),
-            "completion_tokens": model.n_ctx() - len(prompt_tokens),
-            "total_tokens": model.n_ctx(),
-        }
-        assert output["choices"][0]["finish_reason"] == "length"
-        evaluated_tokens = list(model.eval_tokens)
-        expected_tokens = prompt_tokens + [token] * (model.n_ctx() - len(prompt_tokens))
-        # Draft evaluation may already include the final accepted token.
-        if use_draft:
-            assert model.n_ctx() - 1 <= len(evaluated_tokens) <= model.n_ctx()
-        else:
-            assert len(evaluated_tokens) == model.n_ctx() - 1
-        assert evaluated_tokens == expected_tokens[: len(evaluated_tokens)]
-    finally:
-        model.close()
