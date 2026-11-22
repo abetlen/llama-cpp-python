@@ -41,6 +41,7 @@ from llama_cpp.server.types import (
     TokenizeInputCountResponse,
     DetokenizeInputRequest,
     DetokenizeInputResponse,
+    SystemOneRequest,
 )
 from llama_cpp.server.errors import RouteErrorHandler
 
@@ -371,6 +372,23 @@ async def create_embedding(
         llama_proxy(request.model).create_embedding,
         **request.model_dump(exclude={"user"}),
     )
+
+
+@router.post(
+    "/v1/systemone",
+    summary="System One Decision Evaluation",
+    dependencies=[Depends(authenticate)],
+    response_model=llama_cpp.SystemOneResponse,
+)
+async def create_system_one(
+    request: SystemOneRequest,
+    llama_proxy: LlamaProxy = Depends(get_llama_proxy),
+):
+    return await run_in_threadpool(
+        llama_proxy(request.model).create_system_one,
+        **request.model_dump(),
+    )
+
 
 
 @router.post(
