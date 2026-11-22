@@ -662,3 +662,43 @@ def test_real_llama_embeddings(llama_cpp_embedding_model_path):
     repeated_embeddings = model.embed(list(reversed(prompts)))
     assert len(repeated_embeddings) == len(prompts)
     assert all(len(repeated) == len(embedding) for repeated in repeated_embeddings)
+
+
+@pytest.mark.parametrize("n_ctx", [0, 200, 256])
+@pytest.mark.parametrize("logits_all", [False, True])
+def test_completion_uses_rounded_context(
+    llama_cpp_transformer_model_path, n_ctx, logits_all
+):
+    # Regression for #1438: the native context can be larger than requested.
+    model = llama_cpp.Llama(
+        llama_cpp_transformer_model_path,
+        n_ctx=n_ctx,
+        n_batch=200,
+        n_threads=2,
+        n_threads_batch=2,
+        n_gpu_layers=0,
+        logits_all=logits_all,
+        verbose=False,
+    )
+    try:
+        token = model.tokenize(b"the", add_bos=False)[-1]
+        prompt = "Hello " * 32
+        prompt_tokens = model.tokenize(prompt.encode(), special=True)
+        output = model.create_completion(
+            prompt,
+            max_tokens=1000,
+            temperature=0.0,
+            echo=True,
+            logit_bias={str(token): 1000.0},
+        )
+        assert output["usage"] == {
+            "prompt_tokens": len(prompt_tokens),
+            "completion_tokens": model.n_ctx() - len(prompt_tokens),
+            "total_tokens": model.n_ctx(),
+        }
+        assert output["choices"][0]["finish_reason"] == "length"
+        assert list(model.eval_tokens) == prompt_tokens + [token] * (
+            model.n_ctx() - len(prompt_tokens) - 1
+        )
+    finally:
+        model.close()
