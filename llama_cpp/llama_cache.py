@@ -108,7 +108,12 @@ class LlamaDiskCache(BaseLlamaCache):
         self, cache_dir: str = ".cache/llama_cache", capacity_bytes: int = (2 << 30)
     ):
         super().__init__(capacity_bytes)
-        self.cache = diskcache.Cache(cache_dir)
+        self.cache = diskcache.Cache(
+            cache_dir,
+            size_limit=capacity_bytes,
+            eviction_policy="least-recently-used",
+            cull_limit=0,
+        )
 
     @property
     def cache_size(self):
@@ -141,12 +146,7 @@ class LlamaDiskCache(BaseLlamaCache):
     def __setitem__(self, key: Sequence[int], value: "llama_cpp.llama.LlamaState"):
         print("LlamaDiskCache.__setitem__: called", file=sys.stderr)
         key = tuple(key)
-        if key in self.cache:
-            print("LlamaDiskCache.__setitem__: delete", file=sys.stderr)
-            del self.cache[key]
         self.cache[key] = value
         print("LlamaDiskCache.__setitem__: set", file=sys.stderr)
-        while self.cache_size > self.capacity_bytes and len(self.cache) > 0:
-            key_to_remove = next(iter(self.cache))
-            del self.cache[key_to_remove]
+        self.cache.cull()
         print("LlamaDiskCache.__setitem__: trim", file=sys.stderr)
