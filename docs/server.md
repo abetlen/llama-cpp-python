@@ -142,6 +142,31 @@ response = client.chat.completions.create(
 print(response)
 ```
 
+### Text Embeddings
+
+Use a GGUF embedding model that produces one vector per input string, and start the server with `--embedding true`:
+
+```bash
+python3 -m llama_cpp.server \
+  --model ./embedding-model.gguf \
+  --model_alias local-embeddings \
+  --embedding true \
+  --host 127.0.0.1 \
+  --port 8000
+```
+
+Send a string or an array of strings to `POST /v1/embeddings`.
+Use the model alias from the server command in the request:
+
+```bash
+curl --fail-with-body http://127.0.0.1:8000/v1/embeddings \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"local-embeddings","input":["first document","second document"]}'
+```
+
+Each entry in `data` contains an `embedding` vector and an `index` identifying its input.
+For a server started with a configuration file, set `"embedding": true` on the corresponding entry in `models`.
+
 ## Configuration and Multi-Model Support
 
 The server supports configuration via a JSON config file that can be passed using the `--config_file` parameter or the `CONFIG_FILE` environment variable.
