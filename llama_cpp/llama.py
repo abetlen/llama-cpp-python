@@ -1606,17 +1606,36 @@ class Llama:
             else:
                 end = len(remaining_text)
 
-            token_end_position = 0
-            for token in remaining_tokens:
-                token_end_position += len(
-                    self.detokenize(
-                        [token],
-                        prev_tokens=prompt_tokens + completion_tokens[:returned_tokens],
+            if logprobs is None:
+                # Decode the buffered tail together so a Unicode character can
+                # span tokens even when generation ends at a stop sequence.
+                tail = remaining_text[:end].decode("utf-8", errors="ignore")
+                if tail:
+                    yield {
+                        "id": completion_id,
+                        "object": "text_completion",
+                        "created": created,
+                        "model": model_name,
+                        "choices": [
+                            {
+                                "text": tail,
+                                "index": 0,
+                                "logprobs": None,
+                                "finish_reason": None,
+                            }
+                        ],
+                    }
+            else:
+                token_end_position = 0
+                for token in remaining_tokens:
+                    token_end_position += len(
+                        self.detokenize(
+                            [token],
+                            prev_tokens=prompt_tokens
+                            + completion_tokens[:returned_tokens],
+                        )
                     )
-                )
 
-                logprobs_or_none: Optional[CompletionLogprobs] = None
-                if logprobs is not None:
                     if token == bos_token_id:
                         continue
                     token_str = self.detokenize([token]).decode(
@@ -1652,9 +1671,27 @@ class Llama:
                         "top_logprobs": [top_logprob],
                     }
 
-                if token_end_position >= end:
-                    last_text = self.detokenize([token])
-                    if token_end_position == end - 1:
+                    if token_end_position >= end:
+                        last_text = self.detokenize([token])
+                        if token_end_position == end - 1:
+                            break
+                        returned_tokens += 1
+                        yield {
+                            "id": completion_id,
+                            "object": "text_completion",
+                            "created": created,
+                            "model": model_name,
+                            "choices": [
+                                {
+                                    "text": last_text[
+                                        : len(last_text) - (token_end_position - end)
+                                    ].decode("utf-8", errors="ignore"),
+                                    "index": 0,
+                                    "logprobs": logprobs_or_none,
+                                    "finish_reason": None,
+                                }
+                            ],
+                        }
                         break
                     returned_tokens += 1
                     yield {
@@ -1664,33 +1701,15 @@ class Llama:
                         "model": model_name,
                         "choices": [
                             {
-                                "text": last_text[
-                                    : len(last_text) - (token_end_position - end)
-                                ].decode("utf-8", errors="ignore"),
+                                "text": self.detokenize([token]).decode(
+                                    "utf-8", errors="ignore"
+                                ),
                                 "index": 0,
                                 "logprobs": logprobs_or_none,
                                 "finish_reason": None,
                             }
                         ],
                     }
-                    break
-                returned_tokens += 1
-                yield {
-                    "id": completion_id,
-                    "object": "text_completion",
-                    "created": created,
-                    "model": model_name,
-                    "choices": [
-                        {
-                            "text": self.detokenize([token]).decode(
-                                "utf-8", errors="ignore"
-                            ),
-                            "index": 0,
-                            "logprobs": logprobs_or_none,
-                            "finish_reason": None,
-                        }
-                    ],
-                }
             yield {
                 "id": completion_id,
                 "object": "text_completion",
