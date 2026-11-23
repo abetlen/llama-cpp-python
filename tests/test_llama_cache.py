@@ -49,16 +49,28 @@ def test_disk_cache_still_rejects_states_larger_than_capacity(tmp_path):
         cache.cache.close()
 
 
-def test_disk_cache_retains_recent_states_when_full(tmp_path):
+@pytest.mark.parametrize(
+    "access_first,new_size,expected",
+    [
+        (False, 64 << 10, [(1, 11), (2, 12), (3, 13)]),
+        (True, 64 << 10, [(0, 10), (2, 12), (3, 13)]),
+        (True, 128 << 10, [(0, 10), (3, 13)]),
+    ],
+)
+def test_disk_cache_retains_recent_states_when_full(
+    tmp_path, access_first, new_size, expected
+):
     cache = LlamaDiskCache(str(tmp_path / "cache"), capacity_bytes=256 << 10)
     try:
-        for i in range(4):
+        for i in range(3):
             tokens = [i, i + 10]
             cache[tokens] = make_state(tokens, 64 << 10)
 
-        # Three states fit. Evict only the oldest state rather than letting
-        # diskcache's batch culling remove all four, including the newest.
-        assert list(cache.cache) == [(1, 11), (2, 12), (3, 13)]
+        if access_first:
+            cache[[0, 10]]
+        cache[[3, 13]] = make_state([3, 13], new_size)
+
+        assert list(cache.cache) == expected
         assert cache.cache_size <= cache.capacity_bytes
         restored = cache[[3, 13]]
         np.testing.assert_array_equal(restored.input_ids, [3, 13])

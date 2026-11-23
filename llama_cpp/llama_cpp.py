@@ -4,6 +4,7 @@ import os
 import ctypes
 import pathlib
 import warnings
+import re
 
 from typing import (
     Callable,
@@ -557,6 +558,21 @@ LLAMA_CONTEXT_TYPE_DEFAULT = 0
 LLAMA_CONTEXT_TYPE_MTP = 1
 
 
+# // the head on the block of a DFlash draft model
+# enum llama_dflash_variant {
+#     LLAMA_DFLASH_VARIANT_NONE     = -1, // not a DFlash draft model
+#     LLAMA_DFLASH_VARIANT_DFLASH   = 0,
+#     LLAMA_DFLASH_VARIANT_DFLASH2  = 1,
+#     LLAMA_DFLASH_VARIANT_DSPARK   = 2,
+#     LLAMA_DFLASH_VARIANT_LILICORR = 3,
+# };
+LLAMA_DFLASH_VARIANT_NONE = -1
+LLAMA_DFLASH_VARIANT_DFLASH = 0
+LLAMA_DFLASH_VARIANT_DFLASH2 = 1
+LLAMA_DFLASH_VARIANT_DSPARK = 2
+LLAMA_DFLASH_VARIANT_LILICORR = 3
+
+
 # typedef struct llama_token_data {
 #     llama_token id; // token id
 #     float logit;    // log-odds of the token
@@ -640,6 +656,7 @@ llama_progress_callback = ctypes.CFUNCTYPE(
 # //               - if not:        only the last token is output
 # //            )
 # //
+# // [DEPRECATED] use llama_batch_ext instead
 # typedef struct llama_batch {
 #     int32_t n_tokens;
 
@@ -964,7 +981,6 @@ class llama_sampler_seq_config(ctypes.Structure):
 #     float    yarn_beta_fast;   // YaRN low correction dim
 #     float    yarn_beta_slow;   // YaRN high correction dim
 #     uint32_t yarn_orig_ctx;    // YaRN original context size
-#     float    defrag_thold;     // defragment the KV cache if holes/size > thold, <= 0 disabled (default)
 
 #     ggml_backend_sched_eval_callback cb_eval;
 #     void * cb_eval_user_data;
@@ -1022,11 +1038,12 @@ class llama_context_params(ctypes.Structure):
         yarn_beta_fast (float): YaRN low correction dim
         yarn_beta_slow (float): YaRN high correction dim
         yarn_orig_ctx (int): YaRN original context size
-        defrag_thold (float): defragment the KV cache if holes/size > thold, <= 0 disabled (default)
         cb_eval (ggml_backend_sched_eval_callback): callback for scheduling eval
         cb_eval_user_data (ctypes.ctypes.c_void_p): user data for cb_eval
         type_k (int): data type for K cache
         type_v (int): data type for V cache
+        moe_cache_size (int): device cache size in bytes for host-resident MoE experts
+        moe_cache_cpu_share (float): share of MoE cache misses computed on the CPU
         abort_callback (ggml_abort_callback): abort callback if it returns true, execution of llama_decode() will be aborted
         abort_callback_data (ctypes.ctypes.c_void_p): data for abort_callback
         embeddings (bool): if true, extract embeddings (together with logits)
@@ -1062,11 +1079,12 @@ class llama_context_params(ctypes.Structure):
         yarn_beta_fast: float
         yarn_beta_slow: float
         yarn_orig_ctx: int
-        defrag_thold: float
         cb_eval: Callable[[ctypes.c_void_p, bool], bool]
         cb_eval_user_data: ctypes.c_void_p
         type_k: int
         type_v: int
+        moe_cache_size: int
+        moe_cache_cpu_share: float
         abort_callback: Callable[[ctypes.c_void_p], bool]
         abort_callback_data: ctypes.c_void_p
         embeddings: bool
@@ -1101,11 +1119,12 @@ class llama_context_params(ctypes.Structure):
         ("yarn_beta_fast", ctypes.c_float),
         ("yarn_beta_slow", ctypes.c_float),
         ("yarn_orig_ctx", ctypes.c_uint32),
-        ("defrag_thold", ctypes.c_float),
         ("cb_eval", ggml_backend_sched_eval_callback),
         ("cb_eval_user_data", ctypes.c_void_p),
         ("type_k", ctypes.c_int),
         ("type_v", ctypes.c_int),
+        ("moe_cache_size", ctypes.c_size_t),
+        ("moe_cache_cpu_share", ctypes.c_float),
         ("abort_callback", ggml_abort_callback),
         ("abort_callback_data", ctypes.c_void_p),
         ("embeddings", ctypes.c_bool),
@@ -1421,19 +1440,6 @@ def llama_numa_init(numa: int, /): ...
 #                          const char * path_model,
 #           struct llama_model_params   params),
 #         "use llama_model_load_from_file instead");
-@ctypes_function(
-    "llama_load_model_from_file",
-    [ctypes.c_char_p, llama_model_params],
-    llama_model_p_ctypes,
-)
-def llama_load_model_from_file(
-    path_model: bytes, params: llama_model_params, /
-) -> Optional[llama_model_p]: ...
-
-
-_llama_load_model_from_file = llama_load_model_from_file
-
-
 def llama_load_model_from_file(
     path_model: bytes, params: llama_model_params, /
 ) -> Optional[llama_model_p]:
@@ -1441,7 +1447,7 @@ def llama_load_model_from_file(
         "llama_load_model_from_file",
         "use llama_model_load_from_file instead",
     )
-    return _llama_load_model_from_file(path_model, params)
+    return llama_model_load_from_file(path_model, params)
 
 
 # // Load the model from a file
@@ -1523,20 +1529,9 @@ def llama_model_save_to_file(model: llama_model_p, path_model: bytes, /):
 
 # DEPRECATED(LLAMA_API void llama_free_model(struct llama_model * model),
 #         "use llama_model_free instead");
-@ctypes_function(
-    "llama_free_model",
-    [llama_model_p_ctypes],
-    None,
-)
-def llama_free_model(model: llama_model_p, /): ...
-
-
-_llama_free_model = llama_free_model
-
-
 def llama_free_model(model: llama_model_p, /):
     _warn_deprecated("llama_free_model", "use llama_model_free instead")
-    return _llama_free_model(model)
+    return llama_model_free(model)
 
 
 # LLAMA_API void llama_model_free(struct llama_model * model);
@@ -1595,19 +1590,6 @@ def llama_init_from_model(
 #                  struct llama_model * model,
 #         struct llama_context_params   params),
 #         "use llama_init_from_model instead");
-@ctypes_function(
-    "llama_new_context_with_model",
-    [llama_model_p_ctypes, llama_context_params],
-    llama_context_p_ctypes,
-)
-def llama_new_context_with_model(
-    model: llama_model_p, params: llama_context_params, /
-) -> Optional[llama_context_p]: ...
-
-
-_llama_new_context_with_model = llama_new_context_with_model
-
-
 def llama_new_context_with_model(
     model: llama_model_p, params: llama_context_params, /
 ) -> Optional[llama_context_p]:
@@ -1615,7 +1597,7 @@ def llama_new_context_with_model(
         "llama_new_context_with_model",
         "use llama_init_from_model instead",
     )
-    return _llama_new_context_with_model(model, params)
+    return llama_init_from_model(model, params)
 
 
 # // Frees all allocated memory
@@ -1709,68 +1691,33 @@ def llama_n_rs_seq(ctx: llama_context_p, /) -> int: ...
 
 
 # DEPRECATED(LLAMA_API int32_t llama_n_ctx_train(const struct llama_model * model), "use llama_model_n_ctx_train instead");
-@ctypes_function("llama_n_ctx_train", [llama_model_p_ctypes], ctypes.c_int32)
-def llama_n_ctx_train(model: llama_model_p, /) -> int: ...
-
-
-_llama_n_ctx_train = llama_n_ctx_train
-
-
 def llama_n_ctx_train(model: llama_model_p, /) -> int:
     _warn_deprecated("llama_n_ctx_train", "use llama_model_n_ctx_train instead")
-    return _llama_n_ctx_train(model)
+    return llama_model_n_ctx_train(model)
 
 
 # DEPRECATED(LLAMA_API int32_t llama_n_embd     (const struct llama_model * model), "use llama_model_n_embd instead");
-@ctypes_function("llama_n_embd", [llama_model_p_ctypes], ctypes.c_int32)
-def llama_n_embd(model: llama_model_p, /) -> int: ...
-
-
-_llama_n_embd = llama_n_embd
-
-
 def llama_n_embd(model: llama_model_p, /) -> int:
     _warn_deprecated("llama_n_embd", "use llama_model_n_embd instead")
-    return _llama_n_embd(model)
+    return llama_model_n_embd(model)
 
 
 # DEPRECATED(LLAMA_API int32_t llama_n_layer    (const struct llama_model * model), "use llama_model_n_layer instead");
-@ctypes_function("llama_n_layer", [llama_model_p_ctypes], ctypes.c_int32)
-def llama_n_layer(model: llama_model_p, /) -> int: ...
-
-
-_llama_n_layer = llama_n_layer
-
-
 def llama_n_layer(model: llama_model_p, /) -> int:
     _warn_deprecated("llama_n_layer", "use llama_model_n_layer instead")
-    return _llama_n_layer(model)
+    return llama_model_n_layer(model)
 
 
 # DEPRECATED(LLAMA_API int32_t llama_n_head     (const struct llama_model * model), "use llama_model_n_head instead");
-@ctypes_function("llama_n_head", [llama_model_p_ctypes], ctypes.c_int32)
-def llama_n_head(model: llama_model_p, /) -> int: ...
-
-
-_llama_n_head = llama_n_head
-
-
 def llama_n_head(model: llama_model_p, /) -> int:
     _warn_deprecated("llama_n_head", "use llama_model_n_head instead")
-    return _llama_n_head(model)
+    return llama_model_n_head(model)
 
 
 # DEPRECATED(LLAMA_API int32_t llama_n_vocab    (const struct llama_vocab * vocab), "use llama_vocab_n_tokens instead");
-@ctypes_function("llama_n_vocab", [llama_vocab_p_ctypes], ctypes.c_int32)
-def llama_n_vocab(model: llama_vocab_p, /) -> int: ...
-
-
-_llama_n_vocab = llama_n_vocab
-
-
 def llama_n_vocab(model: llama_vocab_p, /) -> int:
     _warn_deprecated("llama_n_vocab", "use llama_vocab_n_tokens instead")
-    return _llama_n_vocab(model)
+    return llama_vocab_n_tokens(model)
 
 
 # LLAMA_API const struct llama_model * llama_get_model   (const struct llama_context * ctx);
@@ -1979,6 +1926,32 @@ def llama_model_meta_val_str_by_index(
     ...
 
 
+# // GGUF metadata arrays of strings
+# // currently, only these keys are support:
+# // - tokenizer.tts_dicts
+# // - tokenizer.tts_dict.*
+
+
+# // Get the number of elements, or -1 if there is no such array
+# LLAMA_API int32_t llama_model_meta_arr_n(const struct llama_model * model, const char * key);
+@ctypes_function(
+    "llama_model_meta_arr_n", [llama_model_p_ctypes, ctypes.c_char_p], ctypes.c_int32
+)
+def llama_model_meta_arr_n(model: llama_model_p, key: bytes, /) -> int: ...
+
+
+# // Get element i, owned by the model; None if not found
+# LLAMA_API const char * llama_model_meta_arr_str(const struct llama_model * model, const char * key, int32_t i);
+@ctypes_function(
+    "llama_model_meta_arr_str",
+    [llama_model_p_ctypes, ctypes.c_char_p, ctypes.c_int32],
+    ctypes.c_char_p,
+)
+def llama_model_meta_arr_str(
+    model: llama_model_p, key: bytes, i: int, /
+) -> Optional[bytes]: ...
+
+
 # // Get a string describing the model type
 # LLAMA_API int32_t llama_model_desc(const struct llama_model * model, char * buf, size_t buf_size);
 @ctypes_function(
@@ -2111,6 +2084,46 @@ def llama_model_quantize(
 ) -> int:
     """Returns 0 on success"""
     ...
+
+
+# //
+# // NextN / speculative draft model queries
+# //
+
+
+# // the DFlash variant the model loader picked from the head of the draft
+# LLAMA_API enum llama_dflash_variant llama_model_dflash_variant(const struct llama_model * model);
+@ctypes_function("llama_model_dflash_variant", [llama_model_p_ctypes], ctypes.c_int)
+def llama_model_dflash_variant(model: llama_model_p, /) -> int: ...
+
+
+# // DFlash2 selector: number of candidate tokens the draft keeps per block position from its logits
+# // (the packed lattice also holds the top_k x top_k pairwise transition scores); 0 if the model has no selector head
+# LLAMA_API int32_t llama_model_dflash_selector_top_k(const struct llama_model * model);
+@ctypes_function(
+    "llama_model_dflash_selector_top_k", [llama_model_p_ctypes], ctypes.c_int32
+)
+def llama_model_dflash_selector_top_k(model: llama_model_p, /) -> int: ...
+
+
+# // returns pointer to the target-model layer indices
+# LLAMA_API const int32_t * llama_model_target_layer_ids  (const struct llama_model * model);
+@ctypes_function(
+    "llama_model_target_layer_ids",
+    [llama_model_p_ctypes],
+    ctypes.POINTER(ctypes.c_int32),
+)
+def llama_model_target_layer_ids(
+    model: llama_model_p, /
+) -> CtypesPointer[ctypes.c_int32]: ...
+
+
+# // returns the number of extracted layers from target model
+# LLAMA_API uint32_t        llama_model_target_layer_ids_n(const struct llama_model * model);
+@ctypes_function(
+    "llama_model_target_layer_ids_n", [llama_model_p_ctypes], ctypes.c_uint32
+)
+def llama_model_target_layer_ids_n(model: llama_model_p, /) -> int: ...
 
 
 # //
@@ -2603,18 +2616,9 @@ def llama_state_get_size(ctx: llama_context_p, /) -> int:
 
 # LLAMA_API DEPRECATED(size_t llama_get_state_size(struct llama_context * ctx),
 #     "use llama_state_get_size instead");
-@ctypes_function("llama_get_state_size", [llama_context_p_ctypes], ctypes.c_size_t)
-def llama_get_state_size(ctx: llama_context_p, /) -> int:
-    """Returns the size in bytes of the state (DEPRECATED)"""
-    ...
-
-
-_llama_get_state_size = llama_get_state_size
-
-
 def llama_get_state_size(ctx: llama_context_p, /) -> int:
     _warn_deprecated("llama_get_state_size", "use llama_state_get_size instead")
-    return _llama_get_state_size(ctx)
+    return llama_state_get_size(ctx)
 
 
 # // Copies the state to the specified destination address.
@@ -2649,29 +2653,11 @@ def llama_state_get_data(
 #         struct llama_context * ctx,
 #                      uint8_t * dst),
 #     "use llama_state_get_data instead");
-@ctypes_function(
-    "llama_copy_state_data",
-    [
-        llama_context_p_ctypes,
-        ctypes.POINTER(ctypes.c_uint8),
-    ],
-    ctypes.c_size_t,
-)
-def llama_copy_state_data(
-    ctx: llama_context_p, dst: CtypesArray[ctypes.c_uint8], /
-) -> int:
-    """Copies the state to the specified destination address (DEPRECATED)"""
-    ...
-
-
-_llama_copy_state_data = llama_copy_state_data
-
-
 def llama_copy_state_data(
     ctx: llama_context_p, dst: CtypesArray[ctypes.c_uint8], /
 ) -> int:
     _warn_deprecated("llama_copy_state_data", "use llama_state_get_data instead")
-    return _llama_copy_state_data(ctx, dst)
+    return llama_state_get_data(ctx, dst, ctypes.c_size_t(-1).value)
 
 
 # // Set the state reading from the specified address
@@ -2700,26 +2686,11 @@ def llama_state_set_data(
 #         struct llama_context * ctx,
 #                const uint8_t * src),
 #     "use llama_state_set_data instead");
-@ctypes_function(
-    "llama_set_state_data",
-    [llama_context_p_ctypes, ctypes.POINTER(ctypes.c_uint8)],
-    ctypes.c_size_t,
-)
-def llama_set_state_data(
-    ctx: llama_context_p, src: CtypesArray[ctypes.c_uint8], /
-) -> int:
-    """Set the state reading from the specified address (DEPRECATED)"""
-    ...
-
-
-_llama_set_state_data = llama_set_state_data
-
-
 def llama_set_state_data(
     ctx: llama_context_p, src: CtypesArray[ctypes.c_uint8], /
 ) -> int:
     _warn_deprecated("llama_set_state_data", "use llama_state_set_data instead")
-    return _llama_set_state_data(ctx, src)
+    return llama_state_set_data(ctx, src, ctypes.c_size_t(-1).value)
 
 
 # Save/load session file
@@ -2757,30 +2728,6 @@ def llama_state_load_file(
 #                       size_t   n_token_capacity,
 #                       size_t * n_token_count_out),
 #     "use llama_state_load_file instead");
-@ctypes_function(
-    "llama_load_session_file",
-    [
-        llama_context_p_ctypes,
-        ctypes.c_char_p,
-        llama_token_p,
-        ctypes.c_size_t,
-        ctypes.POINTER(ctypes.c_size_t),
-    ],
-    ctypes.c_bool,
-)
-def llama_load_session_file(
-    ctx: llama_context_p,
-    path_session: bytes,
-    tokens_out: CtypesArray[llama_token],
-    n_token_capacity: Union[ctypes.c_size_t, int],
-    n_token_count_out: CtypesPointerOrRef[ctypes.c_size_t],
-    /,
-) -> bool: ...
-
-
-_llama_load_session_file = llama_load_session_file
-
-
 def llama_load_session_file(
     ctx: llama_context_p,
     path_session: bytes,
@@ -2790,7 +2737,7 @@ def llama_load_session_file(
     /,
 ) -> bool:
     _warn_deprecated("llama_load_session_file", "use llama_state_load_file instead")
-    return _llama_load_session_file(
+    return llama_state_load_file(
         ctx, path_session, tokens_out, n_token_capacity, n_token_count_out
     )
 
@@ -2825,28 +2772,6 @@ def llama_state_save_file(
 #            const llama_token * tokens,
 #                       size_t   n_token_count),
 #     "use llama_state_save_file instead");
-@ctypes_function(
-    "llama_save_session_file",
-    [
-        llama_context_p_ctypes,
-        ctypes.c_char_p,
-        llama_token_p,
-        ctypes.c_size_t,
-    ],
-    ctypes.c_bool,
-)
-def llama_save_session_file(
-    ctx: llama_context_p,
-    path_session: bytes,
-    tokens: CtypesArray[llama_token],
-    n_token_count: Union[ctypes.c_size_t, int],
-    /,
-) -> bool: ...
-
-
-_llama_save_session_file = llama_save_session_file
-
-
 def llama_save_session_file(
     ctx: llama_context_p,
     path_session: bytes,
@@ -2855,7 +2780,7 @@ def llama_save_session_file(
     /,
 ) -> bool:
     _warn_deprecated("llama_save_session_file", "use llama_state_save_file instead")
-    return _llama_save_session_file(ctx, path_session, tokens, n_token_count)
+    return llama_state_save_file(ctx, path_session, tokens, n_token_count)
 
 
 # // Get the exact size needed to copy the state of a single sequence
@@ -3087,9 +3012,10 @@ def llama_state_seq_set_data_ext(
 # //
 # // NOTE: this is a helper function to facilitate transition to the new batch API - avoid using it
 # //
-# LLAMA_API struct llama_batch llama_batch_get_one(
+# DEPRECATED(LLAMA_API struct llama_batch llama_batch_get_one(
 #               llama_token * tokens,
-#                   int32_t   n_tokens);
+#                   int32_t   n_tokens),
+#         "use llama_batch_ext_init and llama_batch_ext_add_token instead");
 @ctypes_function(
     "llama_batch_get_one",
     [
@@ -3117,10 +3043,11 @@ def llama_batch_get_one(
 # // Otherwise, llama_batch.token will be allocated to store n_tokens llama_token
 # // The rest of the llama_batch members are allocated with size n_tokens
 # // All members are left uninitialized
-# LLAMA_API struct llama_batch llama_batch_init(
+# DEPRECATED(LLAMA_API struct llama_batch llama_batch_init(
 #         int32_t n_tokens,
 #         int32_t embd,
-#         int32_t n_seq_max);
+#         int32_t n_seq_max),
+#         "use llama_batch_ext_init instead");
 @ctypes_function(
     "llama_batch_init", [ctypes.c_int32, ctypes.c_int32, ctypes.c_int32], llama_batch
 )
@@ -3141,7 +3068,8 @@ def llama_batch_init(
 
 
 # // Frees a batch of tokens allocated with llama_batch_init()
-# LLAMA_API void llama_batch_free(struct llama_batch batch);
+# DEPRECATED(LLAMA_API void llama_batch_free(struct llama_batch batch),
+#         "use llama_batch_ext_free instead");
 @ctypes_function("llama_batch_free", [llama_batch], None)
 def llama_batch_free(batch: llama_batch, /):
     """Frees a batch of tokens allocated with llama_batch_init()"""
@@ -3154,9 +3082,10 @@ def llama_batch_free(batch: llama_batch, /):
 # // Can store the encoder output internally for later use by the decoder's cross-attention layers.
 # //   0 - success
 # // < 0 - error. the memory state is restored to the state before this call
-# LLAMA_API int32_t llama_encode(
+# DEPRECATED(LLAMA_API int32_t llama_encode(
 #         struct llama_context * ctx,
-#           struct llama_batch   batch);
+#           struct llama_batch   batch),
+#         "use llama_process with LLAMA_PROCESS_TYPE_ENCODE instead");
 @ctypes_function("llama_encode", [llama_context_p_ctypes, llama_batch], ctypes.c_int32)
 def llama_encode(ctx: llama_context_p, batch: llama_batch, /) -> int:
     """Process a batch of tokens.
@@ -3180,9 +3109,10 @@ def llama_encode(ctx: llama_context_p, batch: llama_batch, /) -> int:
 # //    2 - aborted     (processed ubatches will remain in the context's memory)
 # //   -1 - invalid input batch
 # // < -1 - fatal error (processed ubatches will remain in the context's memory)
-# LLAMA_API int32_t llama_decode(
+# DEPRECATED(LLAMA_API int32_t llama_decode(
 #         struct llama_context * ctx,
-#           struct llama_batch   batch);
+#           struct llama_batch   batch),
+#         "use llama_process with LLAMA_PROCESS_TYPE_DECODE instead");
 @ctypes_function("llama_decode", [llama_context_p_ctypes, llama_batch], ctypes.c_int32)
 def llama_decode(ctx: llama_context_p, batch: llama_batch, /) -> int:
     """Process a batch of tokens.
@@ -3333,6 +3263,33 @@ def llama_batch_ext_set_embd_state(
 ) -> bool: ...
 
 
+# // Add an entry whose embedding is row `row` of the layer input device buffer of ctx_other.
+# // All entries of the batch must be of this kind. Positions are set with llama_batch_ext_set_pos(), n_pos_per_embd of them.
+# // Returns the batch index (>= 0), or the llama_batch_ext_add() error codes.
+# LLAMA_API int32_t llama_batch_ext_add_embd_row(struct llama_batch_ext * batch, llama_seq_id seq_id, int32_t row);
+@ctypes_function(
+    "llama_batch_ext_add_embd_row",
+    [llama_batch_ext_p_ctypes, llama_seq_id, ctypes.c_int32],
+    ctypes.c_int32,
+)
+def llama_batch_ext_add_embd_row(
+    batch: llama_batch_ext_p, seq_id: int, row: int, /
+) -> int: ...
+
+
+# // The state of entry idx is row `row` of the h_nextn device buffer of the context set with llama_set_ctx_state_src().
+# // All entries of a batch have a state row, or none.
+# LLAMA_API bool llama_batch_ext_set_embd_state_row(struct llama_batch_ext * batch, int32_t idx, int32_t row);
+@ctypes_function(
+    "llama_batch_ext_set_embd_state_row",
+    [llama_batch_ext_p_ctypes, ctypes.c_int32, ctypes.c_int32],
+    ctypes.c_bool,
+)
+def llama_batch_ext_set_embd_state_row(
+    batch: llama_batch_ext_p, idx: int, row: int, /
+) -> bool: ...
+
+
 # // Set if output embeddings should be available for the token at index idx in the batch
 # // Note: for now, this is equivalent to setting the output logits
 # LLAMA_API bool llama_batch_ext_set_output_embd(
@@ -3471,14 +3428,9 @@ def llama_get_causal_attn(ctx: llama_context_p, /) -> bool:
     ...
 
 
-# // Set whether the model is in warmup mode or not
-# // If true, all model tensors are activated during llama_decode() to load and cache their weights.
-# LLAMA_API void llama_set_warmup(struct llama_context * ctx, bool warmup);
-@ctypes_function("llama_set_warmup", [llama_context_p_ctypes, ctypes.c_bool], None)
 def llama_set_warmup(ctx: llama_context_p, warmup: bool, /):
-    """Set whether the model is in warmup mode or not
-    If true, all model tensors are activated during llama_decode() to load and cache their weights."""
-    ...
+    """Deprecated compatibility no-op; perform warmup runs manually instead."""
+    _warn_deprecated("llama_set_warmup", "perform warmup runs manually instead")
 
 
 # // Set abort callback
@@ -3603,6 +3555,168 @@ def llama_get_embeddings_seq(
     Returns NULL if pooling_type is LLAMA_POOLING_TYPE_NONE
     shape: [n_embd] (1-dimensional)"""
     ...
+
+
+# //
+# // NextN / speculative decoding API
+# //
+
+
+# // Set whether the context outputs nextn embeddings or not
+# // If masked == true,  output the embeddings only for the tokens with batch.logits != 0
+# // If masked == false, output the embeddings for all tokens in the batch regardless of batch.logits
+# LLAMA_API void llama_set_embeddings_nextn(struct llama_context * ctx, bool value, bool masked);
+@ctypes_function(
+    "llama_set_embeddings_nextn",
+    [llama_context_p_ctypes, ctypes.c_bool, ctypes.c_bool],
+    None,
+)
+def llama_set_embeddings_nextn(
+    ctx: llama_context_p, value: bool, masked: bool, /
+) -> None: ...
+
+
+# // Select which appended NextN block the DECODER_MTP graph runs (offset past
+# // the trunk: il = n_layer() + offset). Used by the speculative NextN driver to
+# // chain multiple trained NextN heads. Default 0 (first head).
+# LLAMA_API void llama_set_nextn_layer_offset(struct llama_context * ctx, int32_t offset);
+@ctypes_function(
+    "llama_set_nextn_layer_offset", [llama_context_p_ctypes, ctypes.c_int32], None
+)
+def llama_set_nextn_layer_offset(ctx: llama_context_p, offset: int, /) -> None: ...
+
+
+# // Get all nextn embeddings, mirroring llama_get_embeddings()
+# LLAMA_API float * llama_get_embeddings_nextn(struct llama_context * ctx);
+@ctypes_function(
+    "llama_get_embeddings_nextn",
+    [llama_context_p_ctypes],
+    ctypes.POINTER(ctypes.c_float),
+)
+def llama_get_embeddings_nextn(
+    ctx: llama_context_p, /
+) -> CtypesPointer[ctypes.c_float]: ...
+
+
+# // Get the nextn embeddings for the ith token, mirroring llama_get_embeddings_ith()
+# LLAMA_API float * llama_get_embeddings_nextn_ith(struct llama_context * ctx, int32_t i);
+@ctypes_function(
+    "llama_get_embeddings_nextn_ith",
+    [llama_context_p_ctypes, ctypes.c_int32],
+    ctypes.POINTER(ctypes.c_float),
+)
+def llama_get_embeddings_nextn_ith(
+    ctx: llama_context_p, i: int, /
+) -> CtypesPointer[ctypes.c_float]: ...
+
+
+# // Set whether the context outputs the input embeddings of a specific layer
+# LLAMA_API void llama_set_embeddings_layer_inp(struct llama_context * ctx, uint32_t lid, bool value);
+@ctypes_function(
+    "llama_set_embeddings_layer_inp",
+    [llama_context_p_ctypes, ctypes.c_uint32, ctypes.c_bool],
+    None,
+)
+def llama_set_embeddings_layer_inp(
+    ctx: llama_context_p, lid: int, value: bool, /
+) -> None: ...
+
+
+# // Get the input embeddings of a specific layer, mirroring llama_get_embeddings()
+# LLAMA_API float * llama_get_embeddings_layer_inp(struct llama_context * ctx, uint32_t lid);
+@ctypes_function(
+    "llama_get_embeddings_layer_inp",
+    [llama_context_p_ctypes, ctypes.c_uint32],
+    ctypes.POINTER(ctypes.c_float),
+)
+def llama_get_embeddings_layer_inp(
+    ctx: llama_context_p, lid: int, /
+) -> CtypesPointer[ctypes.c_float]: ...
+
+
+# // Write the enabled layer inputs to a device buffer [n_layer_inp*n_embd, n_batch] instead of host memory.
+# // Row r holds the token at batch index r, layers in ascending layer id order.
+# LLAMA_API void llama_set_embeddings_layer_inp_dev(struct llama_context * ctx, bool value);
+@ctypes_function(
+    "llama_set_embeddings_layer_inp_dev", [llama_context_p_ctypes, ctypes.c_bool], None
+)
+def llama_set_embeddings_layer_inp_dev(
+    ctx: llama_context_p, value: bool, /
+) -> None: ...
+
+
+# // Whether decode accepts entries added with llama_batch_ext_add_embd_row()
+# // (needs a DFlash/DSpark decoder context whose ctx_other has a layer input device buffer).
+# LLAMA_API bool llama_supports_embd_row(const struct llama_context * ctx);
+@ctypes_function("llama_supports_embd_row", [llama_context_p_ctypes], ctypes.c_bool)
+def llama_supports_embd_row(ctx: llama_context_p, /) -> bool: ...
+
+
+# // Write the unmasked h_nextn rows (see llama_set_embeddings_nextn) of each decode to a device buffer
+# // [n_embd_out, n_batch + n_seq_max] instead of host memory: row r < n_batch is the token at batch index r of the last decode,
+# // row n_batch + s is free for the caller, e.g. for seq s (see llama_set_embeddings_nextn_rows()).
+# // Returns false if the buffer cannot be used, the rows are then extracted to host memory.
+# LLAMA_API bool llama_set_embeddings_nextn_dev(struct llama_context * ctx, bool value);
+@ctypes_function(
+    "llama_set_embeddings_nextn_dev",
+    [llama_context_p_ctypes, ctypes.c_bool],
+    ctypes.c_bool,
+)
+def llama_set_embeddings_nextn_dev(ctx: llama_context_p, value: bool, /) -> bool: ...
+
+
+# // Copy rows of the h_nextn device buffer to or from host memory, ordered after the last decode and its readers
+# LLAMA_API bool llama_get_embeddings_nextn_rows(struct llama_context * ctx, int64_t row0, int64_t n_rows, float * out);
+@ctypes_function(
+    "llama_get_embeddings_nextn_rows",
+    [
+        llama_context_p_ctypes,
+        ctypes.c_int64,
+        ctypes.c_int64,
+        ctypes.POINTER(ctypes.c_float),
+    ],
+    ctypes.c_bool,
+)
+def llama_get_embeddings_nextn_rows(
+    ctx: llama_context_p, row0: int, n_rows: int, out: CtypesPointer[ctypes.c_float], /
+) -> bool: ...
+
+
+# LLAMA_API bool llama_set_embeddings_nextn_rows(struct llama_context * ctx, int64_t row0, int64_t n_rows, const float * data);
+@ctypes_function(
+    "llama_set_embeddings_nextn_rows",
+    [
+        llama_context_p_ctypes,
+        ctypes.c_int64,
+        ctypes.c_int64,
+        ctypes.POINTER(ctypes.c_float),
+    ],
+    ctypes.c_bool,
+)
+def llama_set_embeddings_nextn_rows(
+    ctx: llama_context_p, row0: int, n_rows: int, data: CtypesPointer[ctypes.c_float], /
+) -> bool: ...
+
+
+# // Read the state rows of batches (see llama_batch_ext_set_embd_state_row()) from the h_nextn device buffer of ctx_src.
+# // Returns whether decode accepts batches with state rows.
+# LLAMA_API bool llama_set_ctx_state_src(struct llama_context * ctx, struct llama_context * ctx_src);
+@ctypes_function(
+    "llama_set_ctx_state_src",
+    [llama_context_p_ctypes, llama_context_p_ctypes],
+    ctypes.c_bool,
+)
+def llama_set_ctx_state_src(
+    ctx: llama_context_p, ctx_src: llama_context_p, /
+) -> bool: ...
+
+
+# // The paired context (llama_context_params::ctx_other), e.g. the target context of a draft context; may be None
+# LLAMA_API struct llama_context * llama_get_ctx_other(struct llama_context * ctx);
+@ctypes_function(
+    "llama_get_ctx_other", [llama_context_p_ctypes], llama_context_p_ctypes
+)
+def llama_get_ctx_other(ctx: llama_context_p, /) -> Optional[llama_context_p]: ...
 
 
 # // Get the backend sampled token for the ith token.
@@ -3903,101 +4017,36 @@ def llama_vocab_fim_sep(vocab: llama_vocab_p, /) -> llama_token: ...
 
 # DEPRECATED functions
 # DEPRECATED(LLAMA_API const char * llama_token_get_text(const struct llama_vocab * vocab, llama_token token), "use llama_vocab_get_text instead");
-@ctypes_function(
-    "llama_token_get_text",
-    [llama_vocab_p_ctypes, llama_token],
-    ctypes.c_char_p,
-)
-def llama_token_get_text(
-    vocab: llama_vocab_p, token: Union[llama_token, int], /
-) -> bytes: ...
-
-
-_llama_token_get_text = llama_token_get_text
-
-
 def llama_token_get_text(
     vocab: llama_vocab_p, token: Union[llama_token, int], /
 ) -> bytes:
     _warn_deprecated("llama_token_get_text", "use llama_vocab_get_text instead")
-    return _llama_token_get_text(vocab, token)
+    return llama_vocab_get_text(vocab, token)
 
 
 # DEPRECATED(LLAMA_API float llama_token_get_score(const struct llama_vocab * vocab, llama_token token), "use llama_vocab_get_score instead");
-@ctypes_function(
-    "llama_token_get_score",
-    [llama_vocab_p_ctypes, llama_token],
-    ctypes.c_float,
-)
-def llama_token_get_score(
-    vocab: llama_vocab_p, token: Union[llama_token, int], /
-) -> float: ...
-
-
-_llama_token_get_score = llama_token_get_score
-
-
 def llama_token_get_score(
     vocab: llama_vocab_p, token: Union[llama_token, int], /
 ) -> float:
     _warn_deprecated("llama_token_get_score", "use llama_vocab_get_score instead")
-    return _llama_token_get_score(vocab, token)
+    return llama_vocab_get_score(vocab, token)
 
 
 # DEPRECATED(LLAMA_API enum llama_token_attr llama_token_get_attr(const struct llama_vocab * vocab, llama_token token), "use llama_vocab_get_attr instead");
-@ctypes_function(
-    "llama_token_get_attr",
-    [llama_vocab_p_ctypes, llama_token],
-    ctypes.c_int,
-)
-def llama_token_get_attr(
-    vocab: llama_vocab_p, token: Union[llama_token, int], /
-) -> int: ...
-
-
-_llama_token_get_attr = llama_token_get_attr
-
-
 def llama_token_get_attr(
     vocab: llama_vocab_p, token: Union[llama_token, int], /
 ) -> int:
     _warn_deprecated("llama_token_get_attr", "use llama_vocab_get_attr instead")
-    return _llama_token_get_attr(vocab, token)
+    return llama_vocab_get_attr(vocab, token)
 
 
 # DEPRECATED(LLAMA_API bool llama_token_is_eog(const struct llama_vocab * vocab, llama_token token), "use llama_vocab_is_eog instead");
-@ctypes_function(
-    "llama_token_is_eog",
-    [llama_vocab_p_ctypes, llama_token],
-    ctypes.c_bool,
-)
-def llama_token_is_eog(
-    vocab: llama_vocab_p, token: Union[llama_token, int], /
-) -> bool: ...
-
-
-_llama_token_is_eog = llama_token_is_eog
-
-
 def llama_token_is_eog(vocab: llama_vocab_p, token: Union[llama_token, int], /) -> bool:
     _warn_deprecated("llama_token_is_eog", "use llama_vocab_is_eog instead")
-    return _llama_token_is_eog(vocab, token)
+    return llama_vocab_is_eog(vocab, token)
 
 
 # DEPRECATED(LLAMA_API bool llama_token_is_control(const struct llama_vocab * vocab, llama_token token), "use llama_vocab_is_control instead");
-@ctypes_function(
-    "llama_token_is_control",
-    [llama_vocab_p_ctypes, llama_token],
-    ctypes.c_bool,
-)
-def llama_token_is_control(
-    vocab: llama_vocab_p, token: Union[llama_token, int], /
-) -> bool: ...
-
-
-_llama_token_is_control = llama_token_is_control
-
-
 def llama_token_is_control(
     vocab: llama_vocab_p, token: Union[llama_token, int], /
 ) -> bool:
@@ -4005,281 +4054,105 @@ def llama_token_is_control(
         "llama_token_is_control",
         "use llama_vocab_is_control instead",
     )
-    return _llama_token_is_control(vocab, token)
+    return llama_vocab_is_control(vocab, token)
 
 
 # DEPRECATED(LLAMA_API llama_token llama_token_bos(const struct llama_vocab * vocab), "use llama_vocab_bos instead");
-@ctypes_function(
-    "llama_token_bos",
-    [llama_vocab_p_ctypes],
-    llama_token,
-)
-def llama_token_bos(vocab: llama_vocab_p, /) -> int: ...
-
-
-_llama_token_bos = llama_token_bos
-
-
 def llama_token_bos(vocab: llama_vocab_p, /) -> int:
     _warn_deprecated("llama_token_bos", "use llama_vocab_bos instead")
-    return _llama_token_bos(vocab)
+    return llama_vocab_bos(vocab)
 
 
 # DEPRECATED(LLAMA_API llama_token llama_token_eos(const struct llama_vocab * vocab), "use llama_vocab_eos instead");
-@ctypes_function(
-    "llama_token_eos",
-    [llama_vocab_p_ctypes],
-    llama_token,
-)
-def llama_token_eos(vocab: llama_vocab_p, /) -> int: ...
-
-
-_llama_token_eos = llama_token_eos
-
-
 def llama_token_eos(vocab: llama_vocab_p, /) -> int:
     _warn_deprecated("llama_token_eos", "use llama_vocab_eos instead")
-    return _llama_token_eos(vocab)
+    return llama_vocab_eos(vocab)
 
 
 # DEPRECATED(LLAMA_API llama_token llama_token_eot(const struct llama_vocab * vocab), "use llama_vocab_eot instead");
-@ctypes_function(
-    "llama_token_eot",
-    [llama_vocab_p_ctypes],
-    llama_token,
-)
-def llama_token_eot(vocab: llama_vocab_p, /) -> int: ...
-
-
-_llama_token_eot = llama_token_eot
-
-
 def llama_token_eot(vocab: llama_vocab_p, /) -> int:
     _warn_deprecated("llama_token_eot", "use llama_vocab_eot instead")
-    return _llama_token_eot(vocab)
+    return llama_vocab_eot(vocab)
 
 
 # DEPRECATED(LLAMA_API llama_token llama_token_cls(const struct llama_vocab * vocab), "use llama_vocab_cls instead");
-@ctypes_function(
-    "llama_token_cls",
-    [llama_vocab_p_ctypes],
-    llama_token,
-)
-def llama_token_cls(vocab: llama_vocab_p, /) -> int: ...
-
-
-_llama_token_cls = llama_token_cls
-
-
 def llama_token_cls(vocab: llama_vocab_p, /) -> int:
     _warn_deprecated("llama_token_cls", "use llama_vocab_cls instead")
-    return _llama_token_cls(vocab)
+    return llama_vocab_bos(vocab)
 
 
 # DEPRECATED(LLAMA_API llama_token llama_token_sep(const struct llama_vocab * vocab), "use llama_vocab_sep instead");
-@ctypes_function(
-    "llama_token_sep",
-    [llama_vocab_p_ctypes],
-    llama_token,
-)
-def llama_token_sep(vocab: llama_vocab_p, /) -> int: ...
-
-
-_llama_token_sep = llama_token_sep
-
-
 def llama_token_sep(vocab: llama_vocab_p, /) -> int:
     _warn_deprecated("llama_token_sep", "use llama_vocab_sep instead")
-    return _llama_token_sep(vocab)
+    return llama_vocab_sep(vocab)
 
 
 # DEPRECATED(LLAMA_API llama_token llama_token_nl (const struct llama_vocab * vocab), "use llama_vocab_nl instead");
-@ctypes_function(
-    "llama_token_nl",
-    [llama_vocab_p_ctypes],
-    llama_token,
-)
-def llama_token_nl(vocab: llama_vocab_p, /) -> int: ...
-
-
-_llama_token_nl = llama_token_nl
-
-
 def llama_token_nl(vocab: llama_vocab_p, /) -> int:
     _warn_deprecated("llama_token_nl", "use llama_vocab_nl instead")
-    return _llama_token_nl(vocab)
+    return llama_vocab_nl(vocab)
 
 
 # DEPRECATED(LLAMA_API llama_token llama_token_pad(const struct llama_vocab * vocab), "use llama_vocab_pad instead");
-@ctypes_function(
-    "llama_token_pad",
-    [llama_vocab_p_ctypes],
-    llama_token,
-)
-def llama_token_pad(vocab: llama_vocab_p, /) -> int: ...
-
-
-_llama_token_pad = llama_token_pad
-
-
 def llama_token_pad(vocab: llama_vocab_p, /) -> int:
     _warn_deprecated("llama_token_pad", "use llama_vocab_pad instead")
-    return _llama_token_pad(vocab)
+    return llama_vocab_pad(vocab)
 
 
 # DEPRECATED(LLAMA_API bool llama_add_bos_token(const struct llama_vocab * vocab), "use llama_vocab_get_add_bos instead");
-@ctypes_function(
-    "llama_add_bos_token",
-    [llama_vocab_p_ctypes],
-    ctypes.c_bool,
-)
-def llama_add_bos_token(vocab: llama_vocab_p, /) -> bool: ...
-
-
-_llama_add_bos_token = llama_add_bos_token
-
-
 def llama_add_bos_token(vocab: llama_vocab_p, /) -> bool:
     _warn_deprecated("llama_add_bos_token", "use llama_vocab_get_add_bos instead")
-    return _llama_add_bos_token(vocab)
+    return llama_vocab_get_add_bos(vocab)
 
 
 # DEPRECATED(LLAMA_API bool llama_add_eos_token(const struct llama_vocab * vocab), "use llama_vocab_get_add_eos instead");
-@ctypes_function(
-    "llama_add_eos_token",
-    [llama_vocab_p_ctypes],
-    ctypes.c_bool,
-)
-def llama_add_eos_token(vocab: llama_vocab_p, /) -> bool: ...
-
-
-_llama_add_eos_token = llama_add_eos_token
-
-
 def llama_add_eos_token(vocab: llama_vocab_p, /) -> bool:
     _warn_deprecated("llama_add_eos_token", "use llama_vocab_get_add_eos instead")
-    return _llama_add_eos_token(vocab)
+    return llama_vocab_get_add_eos(vocab)
 
 
 # DEPRECATED(LLAMA_API llama_token llama_token_fim_pre(const struct llama_vocab * vocab), "use llama_vocab_fim_pre instead");
-@ctypes_function(
-    "llama_token_fim_pre",
-    [llama_vocab_p_ctypes],
-    llama_token,
-)
-def llama_token_fim_pre(vocab: llama_vocab_p, /) -> llama_token: ...
-
-
-_llama_token_fim_pre = llama_token_fim_pre
-
-
 def llama_token_fim_pre(vocab: llama_vocab_p, /) -> llama_token:
     _warn_deprecated("llama_token_fim_pre", "use llama_vocab_fim_pre instead")
-    return _llama_token_fim_pre(vocab)
+    return llama_vocab_fim_pre(vocab)
 
 
 # DEPRECATED(LLAMA_API llama_token llama_token_fim_suf(const struct llama_vocab * vocab), "use llama_vocab_fim_suf instead");
-@ctypes_function(
-    "llama_token_fim_suf",
-    [llama_vocab_p_ctypes],
-    llama_token,
-)
-def llama_token_fim_suf(vocab: llama_vocab_p, /) -> llama_token: ...
-
-
-_llama_token_fim_suf = llama_token_fim_suf
-
-
 def llama_token_fim_suf(vocab: llama_vocab_p, /) -> llama_token:
     _warn_deprecated("llama_token_fim_suf", "use llama_vocab_fim_suf instead")
-    return _llama_token_fim_suf(vocab)
+    return llama_vocab_fim_suf(vocab)
 
 
 # DEPRECATED(LLAMA_API llama_token llama_token_fim_mid(const struct llama_vocab * vocab), "use llama_vocab_fim_mid instead");
-@ctypes_function(
-    "llama_token_fim_mid",
-    [llama_vocab_p_ctypes],
-    llama_token,
-)
-def llama_token_fim_mid(vocab: llama_vocab_p, /) -> llama_token: ...
-
-
-_llama_token_fim_mid = llama_token_fim_mid
-
-
 def llama_token_fim_mid(vocab: llama_vocab_p, /) -> llama_token:
     _warn_deprecated("llama_token_fim_mid", "use llama_vocab_fim_mid instead")
-    return _llama_token_fim_mid(vocab)
+    return llama_vocab_fim_mid(vocab)
 
 
 # DEPRECATED(LLAMA_API llama_token llama_token_fim_pad(const struct llama_vocab * vocab), "use llama_vocab_fim_pad instead");
-@ctypes_function(
-    "llama_token_fim_pad",
-    [llama_vocab_p_ctypes],
-    llama_token,
-)
-def llama_token_fim_pad(vocab: llama_vocab_p, /) -> llama_token: ...
-
-
-_llama_token_fim_pad = llama_token_fim_pad
-
-
 def llama_token_fim_pad(vocab: llama_vocab_p, /) -> llama_token:
     _warn_deprecated("llama_token_fim_pad", "use llama_vocab_fim_pad instead")
-    return _llama_token_fim_pad(vocab)
+    return llama_vocab_fim_pad(vocab)
 
 
 # DEPRECATED(LLAMA_API llama_token llama_token_fim_rep(const struct llama_vocab * vocab), "use llama_vocab_fim_rep instead");
-@ctypes_function(
-    "llama_token_fim_rep",
-    [llama_vocab_p_ctypes],
-    llama_token,
-)
-def llama_token_fim_rep(vocab: llama_vocab_p, /) -> llama_token: ...
-
-
-_llama_token_fim_rep = llama_token_fim_rep
-
-
 def llama_token_fim_rep(vocab: llama_vocab_p, /) -> llama_token:
     _warn_deprecated("llama_token_fim_rep", "use llama_vocab_fim_rep instead")
-    return _llama_token_fim_rep(vocab)
+    return llama_vocab_fim_rep(vocab)
 
 
 # DEPRECATED(LLAMA_API llama_token llama_token_fim_sep(const struct llama_vocab * vocab), "use llama_vocab_fim_sep instead");
-@ctypes_function(
-    "llama_token_fim_sep",
-    [llama_vocab_p_ctypes],
-    llama_token,
-)
-def llama_token_fim_sep(vocab: llama_vocab_p, /) -> llama_token: ...
-
-
-_llama_token_fim_sep = llama_token_fim_sep
-
-
 def llama_token_fim_sep(vocab: llama_vocab_p, /) -> llama_token:
     _warn_deprecated("llama_token_fim_sep", "use llama_vocab_fim_sep instead")
-    return _llama_token_fim_sep(vocab)
+    return llama_vocab_fim_sep(vocab)
 
 
 # // CLS is equivalent to BOS
 # DEPRECATED(LLAMA_API llama_token llama_vocab_cls(const struct llama_vocab * vocab), // classification
 #         "use llama_vocab_bos instead");
-@ctypes_function(
-    "llama_vocab_cls",
-    [llama_vocab_p_ctypes],
-    llama_token,
-)
-def llama_vocab_cls(vocab: llama_vocab_p, /) -> llama_token: ...
-
-
-_llama_vocab_cls = llama_vocab_cls
-
-
 def llama_vocab_cls(vocab: llama_vocab_p, /) -> llama_token:
     _warn_deprecated("llama_vocab_cls", "use llama_vocab_bos instead")
-    return _llama_vocab_cls(vocab)
+    return llama_vocab_bos(vocab)
 
 
 # //
@@ -4928,34 +4801,6 @@ def llama_sampler_init_grammar(
 #                const llama_token * trigger_tokens,
 #                             size_t num_trigger_tokens),
 #     "use llama_sampler_init_grammar_lazy_patterns instead");
-@ctypes_function(
-    "llama_sampler_init_grammar_lazy",
-    [
-        llama_vocab_p_ctypes,
-        ctypes.c_char_p,
-        ctypes.c_char_p,
-        ctypes.POINTER(ctypes.c_char_p),
-        ctypes.c_size_t,
-        ctypes.POINTER(llama_token),
-        ctypes.c_size_t,
-    ],
-    llama_sampler_p_ctypes,
-)
-def llama_sampler_init_grammar_lazy(
-    vocab: llama_vocab_p,
-    grammar_str: bytes,
-    grammar_root: bytes,
-    trigger_words: CtypesArray[bytes],
-    num_trigger_words: int,
-    trigger_tokens: CtypesArray[llama_token],
-    num_trigger_tokens: int,
-    /,
-) -> llama_sampler_p: ...
-
-
-_llama_sampler_init_grammar_lazy = llama_sampler_init_grammar_lazy
-
-
 def llama_sampler_init_grammar_lazy(
     vocab: llama_vocab_p,
     grammar_str: bytes,
@@ -4970,12 +4815,17 @@ def llama_sampler_init_grammar_lazy(
         "llama_sampler_init_grammar_lazy",
         "use llama_sampler_init_grammar_lazy_patterns instead",
     )
-    return _llama_sampler_init_grammar_lazy(
+    # Match the literal-trigger conversion used by the removed native wrapper.
+    patterns = (ctypes.c_char_p * (1 if trigger_words and num_trigger_words else 0))()
+    if patterns:
+        words = [re.escape(trigger_words[i]) for i in range(num_trigger_words)]
+        patterns[0] = rb"[\s\S]*?(" + b"|".join(words) + rb")[\s\S]*"
+    return llama_sampler_init_grammar_lazy_patterns(
         vocab,
         grammar_str,
         grammar_root,
-        trigger_words,
-        num_trigger_words,
+        patterns,
+        len(patterns),
         trigger_tokens,
         num_trigger_tokens,
     )
@@ -5238,6 +5088,8 @@ def llama_log_set(
 #     int32_t n_p_eval;
 #     int32_t n_eval;
 #     int32_t n_reused; // number of times a ggml compute graph had been reused
+#     int32_t n_reallocs_same; // reallocations with unchanged graph size
+#     int32_t n_reallocs_diff; // reallocations with changed graph size
 # };
 class llama_perf_context_data(ctypes.Structure):
     _fields_ = [
@@ -5248,6 +5100,8 @@ class llama_perf_context_data(ctypes.Structure):
         ("n_p_eval", ctypes.c_int32),
         ("n_eval", ctypes.c_int32),
         ("n_reused", ctypes.c_int32),
+        ("n_reallocs_same", ctypes.c_int32),
+        ("n_reallocs_diff", ctypes.c_int32),
     ]
 
 

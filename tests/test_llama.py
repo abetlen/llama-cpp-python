@@ -645,7 +645,7 @@ def test_real_llama_embeddings(llama_cpp_embedding_model_path):
         n_threads=multiprocessing.cpu_count(),
         n_threads_batch=multiprocessing.cpu_count(),
         logits_all=False,
-        flash_attn=True,
+        flash_attn=False,
         embedding=True,
     )
     embedding = model.embed("Hello World")

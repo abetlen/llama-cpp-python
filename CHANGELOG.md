@@ -7,7 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- fix(cache): honor configured disk cache capacity by @DiadkoShmek in #2400 (fixes #1402)
+- fix(cache): evict disk cache states one at a time in LRU order by @DiadkoShmek in #2400
+- fix(index): include available SHA256 hashes in wheel links by @hakarrr in #2409
+- fix(server): close tokenizer config files after reading by @cloudgpuapp in #2422
+- fix(cache): preserve disk cache entries on lookup and evict least-recently-used states by @remote-controlled-man in #2423
+- fix: size Python buffers to the actual context by @remote-controlled-man in #2436
+- feat: update llama.cpp to ggml-org/llama.cpp@afe77e18f
+- fix(ci): remove unsupported macOS 14 release runners by @abetlen in #2416
+
+## [0.3.37]
+
+- feat: update llama.cpp to ggml-org/llama.cpp@a956a852c
+- fix(ci): use supported Python versions on Ubuntu by @abetlen in #2407
 
 ## [0.3.36]
 
