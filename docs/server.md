@@ -47,6 +47,23 @@ CLI arguments and environment variables are available for all of the fields defi
 Additionally the server supports configuration check out the [configuration section](#configuration-and-multi-model-support) for more information and examples.
 
 
+### Prompt caching
+
+To reuse model state for prompts that share a token prefix, enable the prompt cache when you start the server.
+
+```bash
+python3 -m llama_cpp.server \
+  --model ./model.gguf \
+  --cache true \
+  --cache_type ram \
+  --cache_size 536870912
+```
+
+Replace `./model.gguf` with the path to your GGUF model.
+Caching is disabled by default, and `--cache` takes a boolean value.
+With caching enabled, `--cache_type` selects `ram` (the default) or `disk`.
+Set `--cache_size` in bytes (536870912 is 512 MiB, and the default is 2 GiB).
+
 ## Guides
 
 ### Code Completion
