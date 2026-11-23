@@ -738,6 +738,20 @@ A Docker image is available on [GHCR](https://ghcr.io/abetlen/llama-cpp-python).
 docker run --rm -it -p 8000:8000 -v /path/to/models:/models -e MODEL=/models/llama-model.gguf ghcr.io/abetlen/llama-cpp-python:latest
 ```
 
+The default container command starts Uvicorn, so pass model settings as environment variables such as `N_CTX` and `USE_MLOCK`.
+Uvicorn accepts its own command-line options and rejects model flags such as `--n_ctx`.
+
+```bash
+docker run --rm -it -p 127.0.0.1:8000:8000 \
+  -v /path/to/models:/models:ro \
+  -e MODEL=/models/llama-model.gguf \
+  -e N_CTX=4096 \
+  -e USE_MLOCK=false \
+  ghcr.io/abetlen/llama-cpp-python:latest
+```
+
+See the [server settings reference](https://llama-cpp-python.readthedocs.io/en/latest/server/#server-options-reference) for more options.
+
 [Docker on termux (requires root)](https://gist.github.com/FreddieOliveira/efe850df7ff3951cb62d74bd770dce27) is currently the only known way to run this on phones, see [termux support issue](https://github.com/abetlen/llama-cpp-python/issues/389)
 
 ## Low-level API
