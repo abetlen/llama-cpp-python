@@ -1,4 +1,5 @@
 import sys
+import time
 from abc import ABC, abstractmethod
 from typing import (
     Optional,
@@ -146,7 +147,10 @@ class LlamaDiskCache(BaseLlamaCache):
     def __setitem__(self, key: Sequence[int], value: "llama_cpp.llama.LlamaState"):
         print("LlamaDiskCache.__setitem__: called", file=sys.stderr)
         key = tuple(key)
-        self.cache[key] = value
-        print("LlamaDiskCache.__setitem__: set", file=sys.stderr)
-        self.cache.cull()
+        # Public cull() evicts ten entries at once, regardless of cull_limit.
+        with self.cache._transact(retry=True) as (sql, cleanup):
+            self.cache[key] = value
+            print("LlamaDiskCache.__setitem__: set", file=sys.stderr)
+            while self.cache_size > self.capacity_bytes and len(self.cache) > 0:
+                self.cache._cull(time.time(), sql, cleanup, limit=1)
         print("LlamaDiskCache.__setitem__: trim", file=sys.stderr)
