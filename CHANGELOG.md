@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - fix(server): close tokenizer config files after reading by @cloudgpuapp in #2422
 - fix(cache): preserve disk cache entries on lookup and evict least-recently-used states by @remote-controlled-man in #2423
 - fix: size Python buffers to the actual context by @remote-controlled-man in #2436
-- feat: update llama.cpp to ggml-org/llama.cpp@afe77e18f
+- feat: update llama.cpp to ggml-org/llama.cpp@f5e6915c2
 - fix(ci): remove unsupported macOS 14 release runners by @abetlen in #2416
 
 ## [0.3.37]
