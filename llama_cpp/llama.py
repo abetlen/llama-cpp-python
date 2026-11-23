@@ -999,7 +999,11 @@ class Llama:
                 sample_idx += 1
                 if stopping_criteria is not None and stopping_criteria(
                     self._input_ids[:sample_idx],
-                    self._scores[sample_idx - self.n_tokens, :],
+                    self._scores[sample_idx - 1, :]
+                    if self._logits_all
+                    else np.ctypeslib.as_array(
+                        self._ctx.get_logits_ith(-1), shape=(self._n_vocab,)
+                    ).copy(),
                 ):
                     return
                 tokens_or_none = yield token
@@ -1585,9 +1589,8 @@ class Llama:
                 finish_reason = "length"
                 break
 
-        if stopping_criteria is not None and stopping_criteria(
-            self._input_ids, self._scores[-1, :]
-        ):
+        else:
+            # generate() returns when a stopping criterion is met.
             text = self.detokenize(completion_tokens, prev_tokens=prompt_tokens)
             finish_reason = "stop"
 

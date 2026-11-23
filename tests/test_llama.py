@@ -1,6 +1,7 @@
 import ctypes
 import itertools
 import multiprocessing
+from contextlib import closing
 
 import numpy as np
 from scipy.special import log_softmax
@@ -11,6 +12,7 @@ import pytest
 
 import llama_cpp
 import llama_cpp._internals as internals
+from llama_cpp.llama_speculative import LlamaPromptLookupDecoding
 
 
 MODEL = "./vendor/llama.cpp/models/ggml-vocab-llama-spm.gguf"
@@ -265,6 +267,94 @@ root ::= "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10"
 
     assert number_1 != number_2
     assert number_1 == number_3
+
+
+@pytest.mark.parametrize("logits_all", [False, True])
+@pytest.mark.parametrize("draft", [False, True])
+@pytest.mark.parametrize("api", ["generate", "completion", "stream"])
+@pytest.mark.parametrize("stop_after", [1, 8, None])
+def test_stopping_criteria_receives_current_logits(
+    llama_cpp_transformer_model_path, logits_all, draft, api, stop_after
+):
+    with closing(
+        llama_cpp.Llama(
+            llama_cpp_transformer_model_path,
+            n_ctx=64,
+            n_batch=64,
+            n_ubatch=64,
+            logits_all=True,
+            verbose=False,
+        )
+    ) as reference:
+        prompt = reference.tokenize(
+            b"Once upon a time, there was a little girl. " * 2 + b"Once upon a time,"
+        )
+        expected_tokens = []
+        expected_logits = []
+        reference.eval(prompt)
+        for _ in range(8):
+            scores = np.array(reference.eval_logits[-1])
+            expected_logits.append(scores)
+            token = int(np.argmax(scores))
+            expected_tokens.append(token)
+            reference.eval([token])
+
+    calls = 0
+    draft_suffix_seen = False
+
+    def stop(input_ids, scores):
+        nonlocal calls, draft_suffix_seen
+        assert input_ids.tolist() == prompt + expected_tokens[:calls]
+        draft_suffix_seen |= model.n_tokens > len(input_ids)
+        np.testing.assert_allclose(scores, expected_logits[calls], rtol=1e-4, atol=1e-4)
+        calls += 1
+        return calls == stop_after
+
+    with closing(
+        llama_cpp.Llama(
+            llama_cpp_transformer_model_path,
+            n_ctx=64,
+            n_batch=64,
+            n_ubatch=64,
+            logits_all=logits_all,
+            draft_model=LlamaPromptLookupDecoding(num_pred_tokens=4) if draft else None,
+            verbose=False,
+        )
+    ) as model:
+        stopping_criteria = llama_cpp.StoppingCriteriaList([stop])
+        output_count = stop_after - 1 if stop_after is not None else 3
+        if api == "generate":
+            generator = model.generate(
+                prompt, temp=0.0, stopping_criteria=stopping_criteria
+            )
+            try:
+                tokens = list(itertools.islice(generator, 10 if stop_after else 3))
+            finally:
+                generator.close()
+            assert tokens == expected_tokens[:output_count]
+        else:
+            output = model.create_completion(
+                prompt,
+                temperature=0.0,
+                max_tokens=10 if stop_after else 3,
+                stream=api == "stream",
+                stopping_criteria=stopping_criteria,
+            )
+            if api == "stream":
+                chunks = list(output)
+                text = "".join(chunk["choices"][0]["text"] for chunk in chunks)
+                finish_reason = chunks[-1]["choices"][0]["finish_reason"]
+            else:
+                text = output["choices"][0]["text"]
+                finish_reason = output["choices"][0]["finish_reason"]
+                assert output["usage"]["completion_tokens"] == output_count
+            assert text == model.detokenize(
+                expected_tokens[:output_count], prev_tokens=prompt
+            ).decode("utf-8", errors="ignore")
+            assert finish_reason == ("stop" if stop_after else "length")
+
+    assert calls == (stop_after if stop_after else 3)
+    assert draft_suffix_seen == (draft and stop_after != 1)
 
 
 def test_real_llama_repeated_prompt_cache(llama_cpp_model_path):

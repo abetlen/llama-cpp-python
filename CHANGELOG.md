@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- fix: pass current logits to stopping criteria by @remote-controlled-man
 - fix(cache): evict disk cache states one at a time in LRU order by @DiadkoShmek in #2400
 - fix(index): include available SHA256 hashes in wheel links by @hakarrr in #2409
 - fix(server): close tokenizer config files after reading by @cloudgpuapp in #2422
