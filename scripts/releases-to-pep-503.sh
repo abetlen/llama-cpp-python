@@ -85,8 +85,12 @@ for release in $releases; do
         continue
     fi
 
-    wheel_urls=$(echo "$response" | jq -r '.assets[] | select(.name | endswith(".whl")) | .browser_download_url')
-    if [ -z "$wheel_urls" ]; then
+    wheel_assets=$(echo "$response" | jq -r '
+        .assets[] | select(.name | endswith(".whl")) |
+        [.browser_download_url,
+         (if (.digest | type) == "string" then .digest else "" end)] | @tsv
+    ')
+    if [ -z "$wheel_assets" ]; then
         log_error "No wheel files found for release $release"
         continue
     fi
@@ -95,8 +99,12 @@ for release in $releases; do
     release_version=$(echo "$release" | grep -oE "^[v]?[0-9]+\.[0-9]+\.[0-9]+")
     echo "    <h2>$release_version</h2>" >> "$output_dir/llama-cpp-python/index.html"
 
-    echo "$wheel_urls" | while read -r asset; do
-        echo "    <a href=\"$asset\">$asset</a>" >> "$output_dir/llama-cpp-python/index.html"
+    echo "$wheel_assets" | while IFS=$'\t' read -r asset digest; do
+        href="$asset"
+        if [[ "$digest" =~ ^sha256:([[:xdigit:]]{64})$ ]]; then
+            href="$asset#sha256=${BASH_REMATCH[1]}"
+        fi
+        echo "    <a href=\"$href\">$asset</a>" >> "$output_dir/llama-cpp-python/index.html"
         echo "    <br>" >> "$output_dir/llama-cpp-python/index.html"
     done
 done

@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- fix(index): include available SHA256 hashes in wheel links by @hakarrr in #2409
 - fix(server): close tokenizer config files after reading by @cloudgpuapp in #2422
 - fix(cache): preserve disk cache entries on lookup and evict least-recently-used states by @remote-controlled-man in #2423
 - fix: size Python buffers to the actual context by @remote-controlled-man in #2436
