@@ -243,8 +243,8 @@ SPACE_RULE = '" "?'
 
 
 INVALID_RULE_CHARS_RE = re.compile(r"[^a-zA-Z0-9-]+")
-GRAMMAR_LITERAL_ESCAPE_RE = re.compile(r'[\r\n"]')
-GRAMMAR_LITERAL_ESCAPES = {"\r": "\\r", "\n": "\\n", '"': '\\"'}
+GRAMMAR_LITERAL_ESCAPE_RE = re.compile(r'[\r\n"\\]')
+GRAMMAR_LITERAL_ESCAPES = {"\r": "\\r", "\n": "\\n", '"': '\\"', "\\": "\\\\"}
 
 # whitespace is constrained to a single space char to prevent model "running away" in
 # whitespace. Also maybe improves generation quality?
