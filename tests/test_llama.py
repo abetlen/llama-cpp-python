@@ -1,6 +1,7 @@
 import ctypes
 import itertools
 import multiprocessing
+from contextlib import closing
 
 import numpy as np
 from scipy.special import log_softmax
@@ -634,6 +635,82 @@ def test_shorter_prompt_prefix_reuse_matches_fresh(
         is_recurrent=is_recurrent,
         is_hybrid=is_hybrid,
     )
+
+
+@pytest.mark.parametrize(
+    "pooling_type",
+    [llama_cpp.LLAMA_POOLING_TYPE_NONE, llama_cpp.LLAMA_POOLING_TYPE_CLS],
+)
+@pytest.mark.parametrize("method", ["embed", "create_embedding"])
+def test_empty_embedding_batch(llama_cpp_embedding_model_path, pooling_type, method):
+    with closing(
+        llama_cpp.Llama(
+            llama_cpp_embedding_model_path,
+            n_ctx=32,
+            n_batch=32,
+            n_ubatch=32,
+            n_gpu_layers=0,
+            n_threads=2,
+            n_threads_batch=2,
+            embedding=True,
+            pooling_type=pooling_type,
+            verbose=False,
+        )
+    ) as model:
+        expected = model.embed("Hello World")
+        if method == "embed":
+            assert model.embed([]) == []
+            assert model.embed([], normalize=True, return_count=True) == ([], 0)
+        else:
+            response = model.create_embedding([])
+            assert response["data"] == []
+            assert response["usage"] == {"prompt_tokens": 0, "total_tokens": 0}
+        np.testing.assert_allclose(model.embed("Hello World"), expected)
+
+
+@pytest.mark.parametrize("input_text", ["", [""], ["Hello", ""], ["", "Hello"]])
+@pytest.mark.parametrize("method", ["embed", "create_embedding"])
+def test_embedding_rejects_zero_token_input(llama_cpp_model_path, input_text, method):
+    with closing(
+        llama_cpp.Llama(
+            llama_cpp_model_path,
+            n_ctx=32,
+            n_batch=32,
+            n_ubatch=32,
+            n_gpu_layers=0,
+            n_threads=2,
+            n_threads_batch=2,
+            embedding=True,
+            verbose=False,
+        )
+    ) as model:
+        assert model.tokenize(b"") == []
+        with pytest.raises(ValueError, match="at least one token"):
+            getattr(model, method)(input_text)
+        assert len(model.embed("Hello")) > 0
+
+
+def test_embedding_accepts_empty_text_with_special_tokens(
+    llama_cpp_embedding_model_path,
+):
+    with closing(
+        llama_cpp.Llama(
+            llama_cpp_embedding_model_path,
+            n_ctx=32,
+            n_batch=32,
+            n_ubatch=32,
+            n_gpu_layers=0,
+            n_threads=2,
+            n_threads_batch=2,
+            embedding=True,
+            verbose=False,
+        )
+    ) as model:
+        assert len(model.tokenize(b"")) > 0
+        embedding, count = model.embed("", return_count=True)
+        assert len(embedding) == model.n_embd()
+        assert count == len(model.tokenize(b""))
+        assert np.isfinite(embedding).all()
 
 
 def test_real_llama_embeddings(llama_cpp_embedding_model_path):
