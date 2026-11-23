@@ -97,6 +97,52 @@ def llama_cpp_hybrid_model_path():
     return model_path
 
 
+@pytest.mark.parametrize("kind", ["const", "enum", "property"])
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param("line\nend", id="newline"),
+        pytest.param("line\rend", id="carriage-return"),
+        pytest.param("tab\tend", id="tab"),
+        pytest.param('say "hello"', id="quote"),
+        pytest.param("C:\\temp\\file", id="backslash"),
+        pytest.param(r"literal\n", id="literal-escape"),
+        pytest.param("caf\u00e9", id="unicode"),
+        pytest.param("plain", id="plain"),
+        pytest.param("a/b", id="slash"),
+    ],
+)
+def test_json_schema_escaped_literal(llama_cpp_transformer_model_path, kind, value):
+    import json
+
+    if kind == "property":
+        schema = {
+            "type": "object",
+            "properties": {value: {"const": 42}},
+            "required": [value],
+            "additionalProperties": False,
+        }
+        expected = {value: 42}
+    else:
+        schema = {kind: [value] if kind == "enum" else value}
+        expected = value
+    grammar = llama_cpp.LlamaGrammar.from_json_schema(json.dumps(schema))
+    model = llama_cpp.Llama(
+        model_path=llama_cpp_transformer_model_path,
+        n_ctx=128,
+        n_gpu_layers=0,
+        verbose=False,
+    )
+    try:
+        result = model.create_completion(
+            "Output JSON:", grammar=grammar, temperature=0, max_tokens=64
+        )
+    finally:
+        model.close()
+
+    assert json.loads(result["choices"][0]["text"]) == expected
+
+
 def test_real_model(llama_cpp_model_path):
     import os
 
