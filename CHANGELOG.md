@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- fix(ci): install matching NVML headers for CUDA wheel builds
+
 ## [0.3.38]
 
 - fix(cache): evict disk cache states one at a time in LRU order by @DiadkoShmek in #2400
