@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - fix: load cached pretrained models in offline mode by @emme1t in #2396
+- fix(ci): install matching NVML headers for CUDA wheel builds
+
+## [0.3.38]
+
+- fix(cache): evict disk cache states one at a time in LRU order by @DiadkoShmek in #2400
+- fix(index): include available SHA256 hashes in wheel links by @hakarrr in #2409
+- fix(server): close tokenizer config files after reading by @cloudgpuapp in #2422
+- fix(cache): preserve disk cache entries on lookup and evict least-recently-used states by @remote-controlled-man in #2423
+- fix: size Python buffers to the actual context by @remote-controlled-man in #2436
+- feat: update llama.cpp to ggml-org/llama.cpp@f5e6915c2
 - fix(ci): remove unsupported macOS 14 release runners by @abetlen in #2416
 
 ## [0.3.37]
