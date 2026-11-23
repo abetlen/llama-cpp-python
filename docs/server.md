@@ -47,6 +47,20 @@ CLI arguments and environment variables are available for all of the fields defi
 Additionally the server supports configuration check out the [configuration section](#configuration-and-multi-model-support) for more information and examples.
 
 
+#### Binding address and port
+
+When you launch with `python3 -m llama_cpp.server`, the process environment variables `HOST` and `PORT` override the corresponding command-line flags or values in a server config file.
+If the server reports an unexpected port, check whether your shell or launcher sets `PORT`.
+For example, on Linux or macOS, the following command removes the inherited overrides for this invocation only:
+
+```bash
+env -u HOST -u PORT python3 -m llama_cpp.server --model model.gguf --host 127.0.0.1 --port 8080
+```
+
+If you use `--config_file`, set `host` and `port` in that file and clear any conflicting environment values.
+In config-file mode the server reads its settings from the file instead of the corresponding CLI flags.
+
+
 ## Guides
 
 ### Code Completion
