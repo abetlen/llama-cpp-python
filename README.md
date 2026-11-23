@@ -344,6 +344,22 @@ By default `llama-cpp-python` generates completions in an OpenAI compatible form
 
 Text completion is available through the [`__call__`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.__call__) and [`create_completion`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.create_completion) methods of the [`Llama`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama) class.
 
+### Generating multiple text completion candidates
+
+A non-streaming call to the Python text completion API returns one candidate in the `choices` list.
+Read its generated text from `output["choices"][0]["text"]`.
+To sample several candidates for the same prompt, call `create_completion` once per candidate with a different sampling seed.
+
+```python
+prompt = "Suggest a short title for a story about a robot gardener."
+candidates = []
+for seed in (11, 22, 33):
+    completion = llm.create_completion(prompt, max_tokens=24, temperature=0.8, seed=seed)
+    candidates.append(completion["choices"][0]["text"])
+```
+
+Each call samples separately, and different seeds can still produce the same text.
+
 ### Pulling models from Hugging Face Hub
 
 You can download `Llama` models in `gguf` format directly from Hugging Face using the [`from_pretrained`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.from_pretrained) method.
