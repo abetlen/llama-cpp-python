@@ -1072,7 +1072,10 @@ class Llama:
         truncate: bool = True,
         return_count: bool = False,
     ):
-        """Embed a string.
+        """Embed a string or list of strings.
+
+        An empty list returns no embeddings. Each text must tokenize to at least
+        one token, including any special tokens added by the tokenizer.
 
         Args:
             input: The utf-8 encoded string to embed.
@@ -1154,6 +1157,8 @@ class Llama:
                 tokens = tokens[:n_batch]
 
             n_tokens = len(tokens)
+            if n_tokens == 0:
+                raise ValueError("Input text must tokenize to at least one token")
             total_tokens += n_tokens
 
             # check for overrun
@@ -1177,8 +1182,9 @@ class Llama:
             t_batch += n_tokens
             p_batch += 1
 
-        # hanlde last batch
-        decode_batch(s_batch)
+        # handle last batch
+        if s_batch:
+            decode_batch(s_batch)
 
         if self.verbose:
             llama_cpp.llama_perf_context_print(self._ctx.ctx)
