@@ -480,6 +480,8 @@ class Llama:
         self.n_tokens = 0
         # Restored or truncated state must decode before sampling.
         self._requires_eval = True
+        # Embedding inputs are truncated silently by default, warn at most once per model
+        self._embedding_truncation_warned = False
         self.input_ids: npt.NDArray[np.intc] = np.ndarray((self._n_ctx,), dtype=np.intc)
         self.scores: npt.NDArray[np.single] = np.ndarray(
             (self._n_ctx if logits_all == True else n_batch, self._n_vocab),
@@ -1065,6 +1067,20 @@ class Llama:
             },
         }
 
+    def _warn_embedding_truncation(self, n_tokens: int, limit: int) -> None:
+        """Warn, at most once per model, that an embedding input was truncated."""
+        if self._embedding_truncation_warned:
+            return
+        self._embedding_truncation_warned = True
+        warnings.warn(
+            f"Embedding input of {n_tokens} tokens was truncated to {limit} to fit the "
+            f"batch size. Raise n_batch and n_ubatch together to embed longer inputs "
+            f"(a single embedding sequence has to fit in one batch), or pass "
+            f"truncate=False to raise an error instead. Further truncations by this "
+            f"model will not be reported.",
+            RuntimeWarning,
+        )
+
     def embed(
         self,
         input: Union[str, List[str]],
@@ -1086,6 +1102,15 @@ class Llama:
 
         # get pooling information
         pooling_type = self.pooling_type()
+
+        # Token the tokenizer appends to frame the input, if any. Truncation has to
+        # preserve it so that LAST pooling still reads a sentinel rather than a
+        # mid-sentence token.
+        sentinels_to_preserve_in_truncation = {
+            self._model.token_eos(),
+            self._model.token_sep(),
+        }
+
         # In embedding mode every input token must be marked as an output, regardless of
         # pooling type. llama.cpp would otherwise override per-token `logits[i]` and emit
         # "embeddings required but some input tokens were not marked as outputs ->
@@ -1151,7 +1176,12 @@ class Llama:
         for text in inputs:
             tokens = self.tokenize(text.encode("utf-8"))
             if truncate:
-                tokens = tokens[:n_batch]
+                n_before = len(tokens)
+                tokens = internals.truncate_embedding_tokens(
+                    tokens, n_batch, sentinels_to_preserve_in_truncation
+                )
+                if len(tokens) < n_before:
+                    self._warn_embedding_truncation(n_before, n_batch)
 
             n_tokens = len(tokens)
             total_tokens += n_tokens
