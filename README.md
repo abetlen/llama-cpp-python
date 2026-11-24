@@ -344,6 +344,44 @@ By default `llama-cpp-python` generates completions in an OpenAI compatible form
 
 Text completion is available through the [`__call__`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.__call__) and [`create_completion`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.create_completion) methods of the [`Llama`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama) class.
 
+### Sharing a model between threads
+
+A `Llama` instance holds mutable inference state and is not safe for concurrent inference calls.
+Overlapping calls on the same instance can crash the process in native code; a Python `try`/`except` cannot catch a native abort.
+If multiple threads share an instance, use the same lock around every inference operation on it:
+
+```python
+from threading import Lock
+from llama_cpp import Llama
+
+llm = Llama(model_path="path/to/embedding-model.gguf", embedding=True)
+model_lock = Lock()
+
+def embed_text(text):
+    with model_lock:
+        return llm.embed(text)
+```
+
+This serializes calls; it does not perform parallel inference.
+For a text-generation model, hold the lock while consuming and closing the stream, not only while creating it:
+
+```python
+from contextlib import closing
+from threading import Lock
+from llama_cpp import Llama
+
+llm = Llama(model_path="path/to/generation-model.gguf")
+model_lock = Lock()
+
+with model_lock:
+    with closing(llm.create_completion("Hello", stream=True)) as stream:
+        for chunk in stream:
+            print(chunk["choices"][0]["text"], end="", flush=True)
+```
+
+Use this pattern in synchronous worker threads.
+Do not hold a blocking `threading.Lock` across `await` calls in an async application.
+
 ### Pulling models from Hugging Face Hub
 
 You can download `Llama` models in `gguf` format directly from Hugging Face using the [`from_pretrained`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.from_pretrained) method.
@@ -653,6 +691,8 @@ llama = Llama(
 ```
 
 ### Embeddings
+
+If multiple threads share your embedding model, follow [Sharing a model between threads](#sharing-a-model-between-threads).
 
 To generate text embeddings use [`create_embedding`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.create_embedding) or [`embed`](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.Llama.embed). Note that you must pass `embedding=True` to the constructor upon model creation for these to work properly.
 
