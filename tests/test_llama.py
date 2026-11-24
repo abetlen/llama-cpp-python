@@ -267,6 +267,32 @@ root ::= "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10"
     assert number_1 == number_3
 
 
+@pytest.mark.parametrize("seed", [0, 1337])
+def test_constructor_seed_matches_set_seed(llama_cpp_transformer_model_path, seed):
+    model = llama_cpp.Llama(
+        llama_cpp_transformer_model_path,
+        seed=seed,
+        n_ctx=128,
+        n_batch=128,
+        n_ubatch=128,
+        n_threads=1,
+        n_threads_batch=1,
+        verbose=False,
+    )
+    try:
+        tokens = model.tokenize(b"Once upon a time")
+        model.eval(tokens)
+        assert model.save_state().seed == seed
+
+        actual = list(itertools.islice(model.generate(tokens, temp=1.0), 16))
+        model.set_seed(seed)
+        expected = list(itertools.islice(model.generate(tokens, temp=1.0), 16))
+
+        assert actual == expected
+    finally:
+        model.close()
+
+
 def test_real_llama_repeated_prompt_cache(llama_cpp_model_path):
     model = llama_cpp.Llama(
         llama_cpp_model_path,
