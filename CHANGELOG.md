@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- fix: apply sampling penalties to prompt tokens by @remote-controlled-man
+- fix: apply sampling penalties to prompt tokens by @remote-controlled-man in #2447
 - fix: load cached pretrained models in offline mode by @emme1t in #2396
 - fix(ci): install matching NVML headers for CUDA wheel builds
 
