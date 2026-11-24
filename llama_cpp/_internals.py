@@ -565,6 +565,17 @@ def normalize_embedding(embedding):
     return [v / norm for v in embedding]
 
 
+def truncate_embedding_tokens(
+    tokens: List[int], limit: int, sentinels_to_preserve: set[int]
+) -> List[int]:
+    """Head-truncate `tokens` to `limit`, preserving any trailing sentinel token."""
+    if len(tokens) <= limit:
+        return tokens
+    if limit > 0 and tokens[-1] in sentinels_to_preserve:
+        return tokens[: limit - 1] + [tokens[-1]]
+    return tokens[:limit]
+
+
 # Python wrappers over common/sampling structs
 
 

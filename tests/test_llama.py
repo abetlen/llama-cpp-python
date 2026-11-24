@@ -662,3 +662,34 @@ def test_real_llama_embeddings(llama_cpp_embedding_model_path):
     repeated_embeddings = model.embed(list(reversed(prompts)))
     assert len(repeated_embeddings) == len(prompts)
     assert all(len(repeated) == len(embedding) for repeated in repeated_embeddings)
+
+
+def test_real_llama_embedding_truncation_preserves_sentinel(
+    llama_cpp_embedding_model_path,
+):
+    model = llama_cpp.Llama(
+        llama_cpp_embedding_model_path,
+        n_ctx=32,
+        n_batch=32,
+        n_ubatch=32,
+        embedding=True,
+        verbose=False,
+    )
+    sentinels = {model._model.token_eos(), model._model.token_sep()}
+
+    # Inputs that already fit are returned as-is, with no duplicated trailing sentinel.
+    short = model.tokenize(b"a short input")
+    assert internals.truncate_embedding_tokens(short, model.n_batch, sentinels) == short
+
+    tokens = model.tokenize(("the quick brown fox " * 50).encode("utf-8"))
+    # Premise: llama.cpp frames the input with a trailing sentinel token.
+    assert len(tokens) > model.n_batch
+    assert tokens[-1] in sentinels
+
+    # A plain head slice drops it
+    assert tokens[: model.n_batch][-1] not in sentinels
+
+    # Truncation code re-adds it
+    truncated = internals.truncate_embedding_tokens(tokens, model.n_batch, sentinels)
+    assert len(truncated) == model.n_batch
+    assert truncated[-1] in sentinels
