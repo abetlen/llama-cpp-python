@@ -847,7 +847,10 @@ class Llama:
         ridx = idx - self.n_tokens if idx is not None else -1
 
         assert self.ctx is not None
-        token = self._sampler.sample(self._ctx, ridx)
+        prefix_len = self.n_tokens if idx is None else idx + 1
+        token = self._sampler.sample(
+            self._ctx, ridx, penalty_tokens=self.input_ids[:prefix_len]
+        )
         if tmp_sampler:
             self._sampler = None
         return token

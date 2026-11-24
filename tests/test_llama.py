@@ -382,6 +382,148 @@ def _generate_test_tokens(model, tokens, max_tokens=3):
     )
 
 
+@pytest.mark.parametrize(
+    "entrypoint", ["sample", "generate", "cached_generate", "continue_generate"]
+)
+@pytest.mark.parametrize(
+    "penalty",
+    [
+        {"repeat_penalty": 2.0},
+        {"frequency_penalty": 2.0},
+        {"presence_penalty": 2.0},
+    ],
+)
+def test_sampling_penalizes_prompt_tokens(
+    llama_cpp_transformer_model_path, entrypoint, penalty
+):
+    model = _create_test_model(llama_cpp_transformer_model_path)
+    try:
+        prompt = model.tokenize(b"Hello")
+        repeated = prompt[-1]
+        alternative = model.tokenize(b" world", add_bos=False)[-1]
+
+        def fixed_logits(input_ids, scores):
+            scores[:] = -np.inf
+            scores[repeated] = 10.0
+            scores[alternative] = 9.0
+            return scores
+
+        processors = llama_cpp.LogitsProcessorList([fixed_logits])
+
+        def sample_next(**kwargs):
+            model.reset()
+            if entrypoint == "sample":
+                model.eval(prompt)
+                return model.sample(temp=0.0, logits_processor=processors, **kwargs)
+            if entrypoint == "cached_generate":
+                model.eval(prompt)
+            elif entrypoint == "continue_generate":
+                model.eval(prompt[:-1])
+            generation = model.generate(
+                prompt[-1:] if entrypoint == "continue_generate" else prompt,
+                reset=entrypoint != "continue_generate",
+                temp=0.0,
+                logits_processor=processors,
+                **kwargs,
+            )
+            try:
+                return next(generation)
+            finally:
+                generation.close()
+
+        assert sample_next() == repeated
+        assert sample_next(**penalty) == alternative
+    finally:
+        model.close()
+
+
+@pytest.mark.parametrize(
+    "prompt,last_n,idx,penalized",
+    [
+        ([1, 15043, 15043], 0, None, False),
+        ([1, 15043, 15043], 1, None, True),
+        ([1, 15043, 15043], 1, 0, False),
+        ([15043, 1, 1], 2, None, False),
+        ([15043, 1, 1], 3, None, True),
+    ],
+)
+def test_sampling_penalty_window(
+    llama_cpp_transformer_model_path, prompt, last_n, idx, penalized
+):
+    model = llama_cpp.Llama(
+        llama_cpp_transformer_model_path,
+        n_ctx=64,
+        n_batch=64,
+        logits_all=True,
+        last_n_tokens_size=last_n,
+        verbose=False,
+    )
+    try:
+        model.eval(prompt)
+
+        def fixed_logits(input_ids, scores):
+            scores[:] = -np.inf
+            scores[15043] = 10.0
+            scores[3186] = 9.0
+            return scores
+
+        token = model.sample(
+            temp=0.0,
+            frequency_penalty=2.0,
+            logits_processor=llama_cpp.LogitsProcessorList([fixed_logits]),
+            idx=idx,
+        )
+        assert token == (3186 if penalized else 15043)
+    finally:
+        model.close()
+
+
+def test_generate_penalty_history_continues(llama_cpp_transformer_model_path):
+    model = _create_test_model(llama_cpp_transformer_model_path)
+    try:
+
+        def fixed_logits(input_ids, scores):
+            scores[:] = -np.inf
+            scores[15043] = 10.0
+            scores[3186] = 9.0
+            return scores
+
+        generation = model.generate(
+            model.tokenize(b"Hello"),
+            temp=0.0,
+            frequency_penalty=2.0,
+            logits_processor=llama_cpp.LogitsProcessorList([fixed_logits]),
+        )
+        try:
+            assert list(itertools.islice(generation, 3)) == [3186, 15043, 3186]
+        finally:
+            generation.close()
+    finally:
+        model.close()
+
+
+def test_prompt_penalties_do_not_advance_grammar(llama_cpp_transformer_model_path):
+    model = _create_test_model(llama_cpp_transformer_model_path)
+    try:
+        model.eval(model.tokenize(b"Hello"))
+
+        def fixed_logits(input_ids, scores):
+            scores[:] = -np.inf
+            scores[15043] = 10.0
+            scores[3186] = 9.0
+            return scores
+
+        token = model.sample(
+            temp=0.0,
+            frequency_penalty=2.0,
+            grammar=llama_cpp.LlamaGrammar.from_string('root ::= " world"'),
+            logits_processor=llama_cpp.LogitsProcessorList([fixed_logits]),
+        )
+        assert model.detokenize([token]) == b" world"
+    finally:
+        model.close()
+
+
 MODEL_CACHE_CASES = (
     ("llama_cpp_transformer_model_path", False, False),
     ("llama_cpp_recurrent_model_path", True, False),

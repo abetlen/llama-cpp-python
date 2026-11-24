@@ -679,6 +679,7 @@ class LlamaSampler:
         params = llama_cpp.llama_sampler_chain_default_params()
         self.sampler = llama_cpp.llama_sampler_chain_init(params)
         self.custom_samplers: List[Tuple[int, CustomSampler]] = []
+        self._penalties: List[Tuple[int, int]] = []
         self._exit_stack = ExitStack()
 
         def free_sampler():
@@ -800,6 +801,12 @@ class LlamaSampler:
             penalty_present,
         )
         llama_cpp.llama_sampler_chain_add(self.sampler, sampler)
+        if penalty_last_n > 0 and (
+            penalty_repeat != 1.0 or penalty_freq != 0.0 or penalty_present != 0.0
+        ):
+            self._penalties.append(
+                (llama_cpp.llama_sampler_chain_n(self.sampler) - 1, penalty_last_n)
+            )
 
     def add_dry(
         self,
@@ -856,7 +863,19 @@ class LlamaSampler:
     def get_seed(self) -> int:
         return llama_cpp.llama_sampler_get_seed(self.sampler)
 
-    def sample(self, ctx: LlamaContext, idx: int = -1) -> int:
+    def sample(
+        self,
+        ctx: LlamaContext,
+        idx: int = -1,
+        penalty_tokens: Optional[Sequence[int]] = None,
+    ) -> int:
+        if penalty_tokens is not None:
+            # Refresh the evaluated prefix without advancing grammar samplers.
+            for index, last_n in self._penalties:
+                sampler = llama_cpp.llama_sampler_chain_get(self.sampler, index)
+                llama_cpp.llama_sampler_reset(sampler)
+                for token in penalty_tokens[-last_n:]:
+                    llama_cpp.llama_sampler_accept(sampler, int(token))
         return llama_cpp.llama_sampler_sample(self.sampler, ctx.ctx, idx)
 
     def accept(self, token: int):
@@ -877,6 +896,7 @@ class LlamaSampler:
         new_sampler = LlamaSampler.__new__(LlamaSampler)
         new_sampler.sampler = cloned_sampler
         new_sampler.custom_samplers = []
+        new_sampler._penalties = self._penalties.copy()
         new_sampler._exit_stack = ExitStack()
 
         def free_sampler():
