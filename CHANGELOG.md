@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- fix(chat_format): keep the text of list-typed message content in the built-in chat formats by @sohailshk in #2448
 - fix: load cached pretrained models in offline mode by @emme1t in #2396
 - fix(ci): install matching NVML headers for CUDA wheel builds
 

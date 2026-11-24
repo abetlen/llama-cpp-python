@@ -872,13 +872,28 @@ def guess_chat_format_from_gguf_metadata(metadata: Dict[str, str]) -> Optional[s
 # TODO: Replace these with jinja2 templates
 
 
+def _content_text(content: Any) -> Optional[str]:
+    """Return the text of message content, joining the text parts of a list."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        texts = [
+            part.get("text") or ""
+            for part in content
+            if isinstance(part, dict) and part.get("type") == "text"
+        ]
+        if texts:
+            return "".join(texts)
+    return None
+
+
 def _get_system_message(
     messages: List[llama_types.ChatCompletionRequestMessage],
 ) -> str:
     """Get the first system message."""
     for message in messages:
         if message["role"] == "system":
-            return message["content"] or ""
+            return _content_text(message["content"]) or ""
     return ""
 
 
@@ -891,9 +906,7 @@ def _map_roles(
     for message in messages:
         role = message["role"]
         if role in role_map:
-            content: str | None = (
-                message["content"] if isinstance(message["content"], str) else None
-            )
+            content: str | None = _content_text(message["content"])
             output.append((role_map[role], content))
     return output
 
@@ -1364,14 +1377,11 @@ def format_mistral_instruct(
     stop = eos
     prompt = ""
     for message in messages:
-        if (
-            message["role"] == "user"
-            and message["content"] is not None
-            and isinstance(message["content"], str)
-        ):
-            prompt += "[INST] " + message["content"]
-        elif message["role"] == "assistant" and message["content"] is not None:
-            prompt += " [/INST]" + message["content"] + eos
+        content = _content_text(message["content"])
+        if message["role"] == "user" and content is not None:
+            prompt += "[INST] " + content
+        elif message["role"] == "assistant" and content is not None:
+            prompt += " [/INST]" + content + eos
     prompt += " [/INST]"
     return ChatFormatterResponse(prompt=prompt, stop=stop)
 
