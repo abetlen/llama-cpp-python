@@ -1,6 +1,7 @@
 import json
 
 import jinja2
+import pytest
 
 from llama_cpp import (
     ChatCompletionRequestUserMessage,
@@ -35,6 +36,42 @@ def test_mistral_instruct():
         eos_token="</s>",
     )
     assert prompt == reference
+
+
+@pytest.mark.parametrize(
+    "formatter",
+    [
+        llama_chat_format.format_llama2,
+        llama_chat_format.format_llama3,
+        llama_chat_format.format_chatml,
+        llama_chat_format.format_zephyr,
+        llama_chat_format.format_mistral_instruct,
+        llama_chat_format.format_gemma,
+    ],
+)
+def test_chat_formatters_keep_text_of_content_parts(formatter):
+    text_messages = [
+        {"role": "system", "content": "Be brief."},
+        {"role": "user", "content": "Hello there"},
+        {"role": "assistant", "content": "Hi"},
+        {"role": "user", "content": "Bye"},
+    ]
+    part_messages = [
+        {"role": "system", "content": [{"type": "text", "text": "Be brief."}]},
+        {
+            "role": "user",
+            "content": [
+                {"type": "image_url", "image_url": {"url": "data:image/png;base64,"}},
+                {"type": "text", "text": "Hello "},
+                {"type": "text", "text": "there"},
+            ],
+        },
+        {"role": "assistant", "content": [{"type": "text", "text": "Hi"}]},
+        {"role": "user", "content": [{"type": "text", "text": "Bye"}]},
+    ]
+    prompt = formatter(messages=part_messages).prompt
+    assert "Hello there" in prompt
+    assert prompt == formatter(messages=text_messages).prompt
 
 
 mistral_7b_tokenizer_config = """{
