@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- fix: preserve nested pretrained model paths in local directories by @original4422
+
 - fix: load cached pretrained models in offline mode by @emme1t in #2396
 - fix(ci): install matching NVML headers for CUDA wheel builds
 

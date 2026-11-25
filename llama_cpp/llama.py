@@ -2480,7 +2480,7 @@ class Llama:
                 local_files_only=True,
             )
         else:
-            model_path = os.path.join(local_dir, filename)
+            model_path = os.path.join(local_dir, matching_file)
 
         # loading the first file of a sharded GGUF loads all remaining shard files in the subfolder
         return cls(
