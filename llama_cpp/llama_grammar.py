@@ -711,7 +711,9 @@ class SchemaConverter:
         elif isinstance(schema_type, list):
             return self._add_rule(
                 rule_name,
-                self._generate_union_rule(name, [{"type": t} for t in schema_type]),
+                self._generate_union_rule(
+                    name, [{**schema, "type": t} for t in schema_type]
+                ),
             )
 
         elif "const" in schema:
