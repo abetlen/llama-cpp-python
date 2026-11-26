@@ -48,6 +48,7 @@ nav:
   - "Getting Started": "index.md"
   - "Installation Guides":
     - "macOS (Metal)": "install/macos.md"
+    - "Dynamic Backends (Internal)": "install/dynamic_backends.md"
   - "API Reference": "api-reference.md"
   - "OpenAI Compatible Web Server": "server.md"
   - "Changelog": "changelog.md"
