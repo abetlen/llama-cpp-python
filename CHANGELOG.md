@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - fix: load cached pretrained models in offline mode by @emme1t in #2396
 - fix(ci): install matching NVML headers for CUDA wheel builds
-- fix: honor `add_bos=False` with Hugging Face tokenizers by @remote-controlled-man
+- fix: honor `add_bos=False` with Hugging Face tokenizers by @remote-controlled-man in #2453
 
 ## [0.3.38]
 
