@@ -11,6 +11,7 @@ import pytest
 
 import llama_cpp
 import llama_cpp._internals as internals
+from llama_cpp.llama_tokenizer import LlamaHFTokenizer
 
 
 MODEL = "./vendor/llama.cpp/models/ggml-vocab-llama-spm.gguf"
@@ -57,6 +58,83 @@ def test_llama_cpp_tokenization():
     assert text == llama.detokenize(tokens)
 
 
+class _HFTokenizer:
+    bos_token_id = 1
+
+    def __init__(self, prepend_bos=True, append_eos=True, eos_token_id=2):
+        self.add_bos_token = prepend_bos
+        self.append_eos = append_eos
+        self.eos_token_id = eos_token_id
+
+    def encode(self, text, add_special_tokens=True):
+        return self(text, add_special_tokens=add_special_tokens)["input_ids"]
+
+    def get_special_tokens_mask(self, tokens):
+        return [1] * self.add_bos_token + [0] * len(tokens) + [1] * self.append_eos
+
+    def __call__(self, text, add_special_tokens=True, return_special_tokens_mask=False):
+        tokens = [15043] if text else []
+        if text.startswith("<s>"):
+            tokens.insert(0, self.bos_token_id)
+        mask = (
+            self.get_special_tokens_mask(tokens)
+            if add_special_tokens
+            else [0] * len(tokens)
+        )
+        if add_special_tokens and self.add_bos_token:
+            tokens.insert(0, self.bos_token_id)
+        if add_special_tokens and self.append_eos:
+            tokens.append(self.eos_token_id)
+        result = {"input_ids": tokens}
+        if return_special_tokens_mask:
+            result["special_tokens_mask"] = mask
+        return result
+
+    def decode(self, tokens, skip_special_tokens=True):
+        return "Hello"
+
+
+@pytest.mark.parametrize(
+    "text, prepend_bos, add_bos, special, expected",
+    [
+        (b"Hello", True, False, True, [15043, 2]),
+        (b"<s>Hello", True, False, True, [1, 15043, 2]),
+        (b"<s>Hello", False, False, True, [1, 15043, 2]),
+        (b"Hello", True, True, True, [1, 15043, 2]),
+        (b"Hello", True, False, False, [15043]),
+    ],
+)
+def test_hf_tokenizer_respects_add_bos(text, prepend_bos, add_bos, special, expected):
+    llama = llama_cpp.Llama(
+        model_path=MODEL,
+        vocab_only=True,
+        verbose=False,
+        tokenizer=LlamaHFTokenizer(_HFTokenizer(prepend_bos=prepend_bos)),
+    )
+    assert llama.tokenize(text, add_bos=add_bos, special=special) == expected
+
+
+@pytest.mark.parametrize("prepend_bos", [False, True])
+def test_hf_tokenizer_keeps_shared_eos_on_empty_input(prepend_bos):
+    tokenizer = LlamaHFTokenizer(
+        _HFTokenizer(prepend_bos=prepend_bos, eos_token_id=_HFTokenizer.bos_token_id)
+    )
+    assert tokenizer.tokenize(b"", add_bos=False, special=True) == [1]
+
+
+def test_hf_tokenizer_accepts_existing_encode_adapter():
+    class EncodeAdapter:
+        bos_token_id = 1
+
+        def encode(self, text, add_special_tokens=True):
+            return [15043]
+
+        __call__ = encode
+
+    tokenizer = LlamaHFTokenizer(EncodeAdapter())
+    assert tokenizer.tokenize(b"Hello", add_bos=False, special=True) == [15043]
+
+
 @pytest.fixture
 def llama_cpp_model_path():
     repo_id = "lmstudio-community/Qwen3.5-0.8B-GGUF"
@@ -71,6 +149,20 @@ def llama_cpp_transformer_model_path():
     filename = "tinyllamas/stories15M-q4_0.gguf"
     model_path = hf_hub_download(repo_id, filename)
     return model_path
+
+
+@pytest.mark.filterwarnings("error:Detected duplicate leading:RuntimeWarning")
+def test_hf_tokenizer_completion_adds_one_bos(llama_cpp_transformer_model_path):
+    llama = llama_cpp.Llama(
+        model_path=llama_cpp_transformer_model_path,
+        n_ctx=64,
+        n_batch=64,
+        n_ubatch=64,
+        verbose=False,
+        tokenizer=LlamaHFTokenizer(_HFTokenizer(append_eos=False)),
+    )
+    result = llama.create_completion("Hello", max_tokens=1, temperature=0)
+    assert result["usage"]["prompt_tokens"] == 2
 
 
 @pytest.fixture

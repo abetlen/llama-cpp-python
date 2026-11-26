@@ -81,9 +81,32 @@ class LlamaHFTokenizer(BaseLlamaTokenizer):
     def tokenize(
         self, text: bytes, add_bos: bool = True, special: bool = True
     ) -> List[int]:
-        return self.hf_tokenizer.encode(
-            text.decode("utf-8", errors="ignore"), add_special_tokens=special
-        )
+        decoded = text.decode("utf-8", errors="ignore")
+        tokenizer = self.hf_tokenizer
+        bos_token_id = getattr(tokenizer, "bos_token_id", None)
+        if (
+            not add_bos
+            and special
+            and bos_token_id is not None
+            and callable(tokenizer)
+            and callable(getattr(tokenizer, "get_special_tokens_mask", None))
+        ):
+            encoding = tokenizer(
+                decoded, add_special_tokens=True, return_special_tokens_mask=True
+            )
+            tokens = encoding["input_ids"]
+            mask = encoding["special_tokens_mask"]
+            if tokens and tokens[0] == bos_token_id and mask[0]:
+                # With no text tokens, a shared BOS/EOS ID can be a trailing EOS.
+                if (
+                    bos_token_id == getattr(tokenizer, "eos_token_id", None)
+                    and getattr(tokenizer, "add_bos_token", None) is not True
+                    and all(mask)
+                ):
+                    return tokens
+                return tokens[1:]
+            return tokens
+        return tokenizer.encode(decoded, add_special_tokens=special)
 
     def detokenize(
         self,
