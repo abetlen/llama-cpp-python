@@ -592,6 +592,12 @@ async def detokenize(
     body: DetokenizeInputRequest,
     llama_proxy: LlamaProxy = Depends(get_llama_proxy),
 ) -> DetokenizeInputResponse:
-    text = llama_proxy(body.model).detokenize(body.tokens).decode("utf-8")
+    # A token list can end in the middle of a multi-byte UTF-8 character
+    # (for example a single byte-fallback token), so do not fail the request.
+    text = (
+        llama_proxy(body.model)
+        .detokenize(body.tokens)
+        .decode("utf-8", errors="replace")
+    )
 
     return DetokenizeInputResponse(text=text)
