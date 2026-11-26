@@ -1337,7 +1337,9 @@ class Llama:
             if logits_processor is None:
                 logits_processor = _logit_bias_processor
             else:
-                logits_processor = logits_processor.extend(_logit_bias_processor)
+                logits_processor = LogitsProcessorList(
+                    [*logits_processor, *_logit_bias_processor]
+                )
 
         if self.verbose:
             self._ctx.reset_timings()
