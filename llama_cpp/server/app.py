@@ -47,6 +47,14 @@ from llama_cpp.server.errors import RouteErrorHandler
 
 router = APIRouter(route_class=RouteErrorHandler)
 
+
+class _RequestIdPlugin(RequestIdPlugin):
+    """Keep proxy-supplied IDs while retaining context and generated UUIDs."""
+
+    def __init__(self):
+        super().__init__(validate=False)
+
+
 _server_settings: Optional[ServerSettings] = None
 
 
@@ -130,7 +138,7 @@ def create_app(
     )
 
     set_server_settings(server_settings)
-    middleware = [Middleware(RawContextMiddleware, plugins=(RequestIdPlugin(),))]
+    middleware = [Middleware(RawContextMiddleware, plugins=(_RequestIdPlugin(),))]
     app = FastAPI(
         middleware=middleware,
         title="🦙 llama.cpp Python API",
