@@ -31,6 +31,22 @@ python3 -m llama_cpp.server \
   --chat_template_kwargs '{"enable_thinking": true}'
 ```
 
+### Serving a static directory
+
+Use `--static_dir` to serve a local directory alongside the API, for example a small HTML client and its assets:
+
+```bash
+python3 -m llama_cpp.server --model <model_path> --static_dir ./web
+```
+
+The directory must exist; `index.html` is served for directory requests when present.
+The same setting is available as `STATIC_DIR` or the top-level `static_dir` field in a server configuration file.
+Static serving is disabled unless a directory is configured.
+The API and documentation routes take precedence over static files with matching paths.
+Static files are public even when `api_key` is configured; API-key checks on the existing API routes remain unchanged.
+Only point this option at files intended for public access.
+Starlette's default directory confinement remains enabled, including protection against links to files outside the configured directory.
+
 ### Server options
 
 For a full list of options, run:
