@@ -220,6 +220,10 @@ class ServerSettings(BaseSettings):
         default=None,
         description="API key for authentication. If set all requests need to be authenticated.",
     )
+    grammar: Optional[str] = Field(
+        default=None,
+        description="Default GBNF grammar for completions. A request grammar overrides it.",
+    )
     interrupt_requests: bool = Field(
         default=True,
         description="Whether to interrupt requests when a new request is received.",

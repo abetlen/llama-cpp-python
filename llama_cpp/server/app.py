@@ -174,8 +174,13 @@ def prepare_request_resources(
             else body.logit_bias
         )
 
-    if body.grammar is not None:
-        kwargs["grammar"] = llama_cpp.LlamaGrammar.from_string(body.grammar)
+    grammar = body.grammar
+    if grammar is None and isinstance(body, CreateCompletionRequest):
+        server_settings = next(get_server_settings())
+        if server_settings is not None:
+            grammar = server_settings.grammar
+    if grammar is not None:
+        kwargs["grammar"] = llama_cpp.LlamaGrammar.from_string(grammar)
 
     if body.min_tokens > 0:
         _min_tokens_logits_processor = llama_cpp.LogitsProcessorList(
