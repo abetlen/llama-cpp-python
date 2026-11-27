@@ -5,6 +5,7 @@ import os
 import ctypes
 import functools
 import pathlib
+from contextlib import ExitStack
 
 from typing import (
     Any,
@@ -53,21 +54,6 @@ def load_shared_library(lib_base_name: str, base_path: pathlib.Path):
 
     cdll_args = dict()  # type: ignore
 
-    # Add the library directory to the DLL search path on Windows (if needed)
-    if sys.platform == "win32":
-        os.add_dll_directory(str(base_path))
-        os.environ["PATH"] = str(base_path) + os.pathsep + os.environ["PATH"]
-
-    if sys.platform == "win32" and sys.version_info >= (3, 8):
-        os.add_dll_directory(str(base_path))
-        if "CUDA_PATH" in os.environ:
-            os.add_dll_directory(os.path.join(os.environ["CUDA_PATH"], "bin"))
-            os.add_dll_directory(os.path.join(os.environ["CUDA_PATH"], "lib"))
-        if "HIP_PATH" in os.environ:
-            os.add_dll_directory(os.path.join(os.environ["HIP_PATH"], "bin"))
-            os.add_dll_directory(os.path.join(os.environ["HIP_PATH"], "lib"))
-        cdll_args["winmode"] = ctypes.RTLD_GLOBAL
-
     if sys.platform == "emscripten":
         cdll_args["mode"] = ctypes.RTLD_GLOBAL
         lib_dir = str(base_path)
@@ -95,13 +81,45 @@ def load_shared_library(lib_base_name: str, base_path: pathlib.Path):
                         f"Failed to load shared library '{dependency_path}': {e}"
                     )
 
-    # Try to load the shared library, handling potential errors
-    for lib_path in lib_paths:
-        if lib_path.exists():
-            try:
-                return ctypes.CDLL(str(lib_path), **cdll_args)  # type: ignore
-            except Exception as e:
-                raise RuntimeError(f"Failed to load shared library '{lib_path}': {e}")
+    with ExitStack() as dll_search:
+        if sys.platform == "win32":
+            lib_dir = str(base_path)
+            original_path = os.environ.get("PATH")
+            if lib_dir not in (original_path or "").split(os.pathsep):
+                if original_path is None:
+                    dll_search.callback(os.environ.pop, "PATH", None)
+                else:
+                    dll_search.callback(os.environ.__setitem__, "PATH", original_path)
+                os.environ["PATH"] = (
+                    lib_dir
+                    if not original_path
+                    else lib_dir + os.pathsep + original_path
+                )
+
+            dll_dirs = [lib_dir]
+            for sdk in ("CUDA_PATH", "HIP_PATH"):
+                if sdk in os.environ:
+                    dll_dirs.extend(
+                        os.path.join(os.environ[sdk], subdir)
+                        for subdir in ("bin", "lib")
+                    )
+            for dll_dir in dict.fromkeys(dll_dirs):
+                handle = os.add_dll_directory(dll_dir)
+                dll_search.callback(handle.close)
+            cdll_args["winmode"] = ctypes.RTLD_GLOBAL
+
+        # Try to load the shared library, handling potential errors
+        for lib_path in lib_paths:
+            if lib_path.exists():
+                try:
+                    lib = ctypes.CDLL(str(lib_path), **cdll_args)  # type: ignore
+                except Exception as e:
+                    raise RuntimeError(
+                        f"Failed to load shared library '{lib_path}': {e}"
+                    )
+                # Keep dependency search paths after a successful load.
+                dll_search.pop_all()
+                return lib
 
     raise FileNotFoundError(
         f"Shared library with base name '{lib_base_name}' not found"
