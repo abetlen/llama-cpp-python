@@ -94,6 +94,7 @@ jobs:
         run: |
           $cudaVersion = $env:CUDAVER
           $cudaChannel = "nvidia/label/cuda-$cudaVersion"
+          # Keep NVML headers in the same toolkit layout as the CUDA compiler.
           if ($cudaVersion -eq '11.8.0') {
             if ($IsLinux) {
               $cudaPackages = @(
@@ -102,12 +103,14 @@ jobs:
                 "${cudaChannel}::cuda-cudart=11.8.89",
                 "${cudaChannel}::cuda-cudart-dev=11.8.89",
                 "${cudaChannel}::cuda-driver-dev=11.8.89",
+                "${cudaChannel}::cuda-nvml-dev=11.8.86",
                 "${cudaChannel}::libcublas=11.11.3.6",
                 "${cudaChannel}::libcublas-dev=11.11.3.6"
               )
             } elseif ($IsWindows) {
               $cudaPackages = @(
                 "${cudaChannel}::cuda-nvcc_win-64=11.8.0",
+                "${cudaChannel}::cuda-nvml-dev=11.8.86",
                 "${cudaChannel}::cuda-cccl=11.8.89",
                 "${cudaChannel}::cuda-cudart=11.8.89",
                 "${cudaChannel}::cuda-cudart-dev=11.8.89",
@@ -119,14 +122,14 @@ jobs:
             }
             mamba install -y --channel-priority flexible --override-channels -c $cudaChannel $cudaPackages
           } elseif ($IsLinux) {
-            mamba install -y --channel-priority flexible --override-channels -c $cudaChannel "${cudaChannel}::cuda-toolkit=$cudaVersion" "${cudaChannel}::cuda-nvcc_linux-64" "${cudaChannel}::cuda-cccl" "${cudaChannel}::cuda-cudart" "${cudaChannel}::cuda-cudart-dev"
+            mamba install -y --channel-priority flexible --override-channels -c $cudaChannel "${cudaChannel}::cuda-toolkit=$cudaVersion" "${cudaChannel}::cuda-nvcc_linux-64" "${cudaChannel}::cuda-cccl" "${cudaChannel}::cuda-cudart" "${cudaChannel}::cuda-cudart-dev" "${cudaChannel}::cuda-nvml-dev"
           } elseif ($IsWindows) {
             if ($cudaVersion -like '12.5.*' -or [version]$cudaVersion -ge [version]"13.0") {
               # The Windows 12.5+ toolkit meta-package pulls compiler activation
               # scripts that overflow cmd.exe after MSVC is already initialized.
-              mamba install -y --channel-priority flexible --override-channels -c $cudaChannel "${cudaChannel}::cuda-nvcc_win-64" "${cudaChannel}::cuda-cccl" "${cudaChannel}::cuda-libraries-dev=$cudaVersion" "${cudaChannel}::cuda-cudart" "${cudaChannel}::cuda-cudart-dev"
+              mamba install -y --channel-priority flexible --override-channels -c $cudaChannel "${cudaChannel}::cuda-nvcc_win-64" "${cudaChannel}::cuda-cccl" "${cudaChannel}::cuda-libraries-dev=$cudaVersion" "${cudaChannel}::cuda-cudart" "${cudaChannel}::cuda-cudart-dev" "${cudaChannel}::cuda-nvml-dev"
             } else {
-              mamba install -y --channel-priority flexible --override-channels -c $cudaChannel "${cudaChannel}::cuda-toolkit=$cudaVersion" "${cudaChannel}::cuda-nvcc_win-64" "${cudaChannel}::cuda-cccl" "${cudaChannel}::cuda-cudart" "${cudaChannel}::cuda-cudart-dev"
+              mamba install -y --channel-priority flexible --override-channels -c $cudaChannel "${cudaChannel}::cuda-toolkit=$cudaVersion" "${cudaChannel}::cuda-nvcc_win-64" "${cudaChannel}::cuda-cccl" "${cudaChannel}::cuda-cudart" "${cudaChannel}::cuda-cudart-dev" "${cudaChannel}::cuda-nvml-dev"
             }
           } else {
             throw 'Unsupported CUDA wheel build platform'
