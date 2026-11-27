@@ -209,6 +209,7 @@ class LlamaModel:
     # Extra
     def metadata(self) -> Dict[str, str]:
         metadata: Dict[str, str] = {}
+        # Native string lengths exclude the terminating null byte.
         buffer_size = 1024
         buffer = ctypes.create_string_buffer(buffer_size)
         # zero the buffer
@@ -218,7 +219,7 @@ class LlamaModel:
             nbytes = llama_cpp.llama_model_meta_key_by_index(
                 self.model, i, buffer, buffer_size
             )
-            if nbytes > buffer_size:
+            if nbytes >= buffer_size:
                 buffer_size = nbytes + 1
                 buffer = ctypes.create_string_buffer(buffer_size)
                 nbytes = llama_cpp.llama_model_meta_key_by_index(
@@ -228,7 +229,7 @@ class LlamaModel:
             nbytes = llama_cpp.llama_model_meta_val_str_by_index(
                 self.model, i, buffer, buffer_size
             )
-            if nbytes > buffer_size:
+            if nbytes >= buffer_size:
                 buffer_size = nbytes + 1
                 buffer = ctypes.create_string_buffer(buffer_size)
                 nbytes = llama_cpp.llama_model_meta_val_str_by_index(
