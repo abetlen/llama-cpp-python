@@ -1434,8 +1434,8 @@ class Llama:
 
             any_stop = [s for s in stop_sequences if s in all_text]
             if len(any_stop) > 0:
-                first_stop = any_stop[0]
-                text = all_text[: all_text.index(first_stop)]
+                end = min(all_text.index(stop) for stop in any_stop)
+                text = all_text[:end]
                 finish_reason = "stop"
                 break
 

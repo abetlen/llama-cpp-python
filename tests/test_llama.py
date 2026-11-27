@@ -662,3 +662,51 @@ def test_real_llama_embeddings(llama_cpp_embedding_model_path):
     repeated_embeddings = model.embed(list(reversed(prompts)))
     assert len(repeated_embeddings) == len(prompts)
     assert all(len(repeated) == len(embedding) for repeated in repeated_embeddings)
+
+
+@pytest.mark.parametrize("stream", [False, True])
+@pytest.mark.parametrize("logprobs", [None, 1])
+def test_completion_earliest_stop(llama_cpp_model_path, stream, logprobs):
+    model = llama_cpp.Llama(
+        llama_cpp_model_path,
+        n_ctx=256,
+        n_batch=64,
+        n_ubatch=64,
+        n_gpu_layers=0,
+        logits_all=True,
+        verbose=False,
+    )
+    try:
+        # Keep both matches in one sampled token, independent of model wording.
+        tokens = model.tokenize(b" very", add_bos=False)
+        assert len(tokens) == 1
+        kwargs = dict(
+            prompt="Once upon a time",
+            max_tokens=1,
+            temperature=0,
+            logit_bias={str(tokens[0]): 1000},
+            logprobs=logprobs,
+        )
+        control = model.create_completion(**kwargs)
+        assert control["choices"][0]["text"] == " very"
+
+        for stop, expected_text, finish_reason in [
+            (["ry", "er"], " v", "stop"),
+            (["er", "ry"], " v", "stop"),
+            (["er", "very"], " ", "stop"),
+            (["very", "er"], " ", "stop"),
+            (["missing", "ry"], " ve", "stop"),
+            (["missing"], " very", "length"),
+        ]:
+            response = model.create_completion(stop=stop, stream=stream, **kwargs)
+            choices = (
+                [chunk["choices"][0] for chunk in response]
+                if stream
+                else response["choices"]
+            )
+            assert "".join(choice["text"] for choice in choices) == expected_text, stop
+            assert choices[-1]["finish_reason"] == finish_reason
+            if logprobs is not None:
+                assert choices[0]["logprobs"] is not None
+    finally:
+        model.close()
