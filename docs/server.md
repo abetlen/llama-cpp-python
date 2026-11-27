@@ -31,6 +31,19 @@ python3 -m llama_cpp.server \
   --chat_template_kwargs '{"enable_thinking": true}'
 ```
 
+### Default completion grammar
+
+Use `--grammar` to apply a default GBNF grammar to `/v1/completions` requests that omit their own `grammar`:
+
+```bash
+python3 -m llama_cpp.server --model <model_path> --grammar 'root ::= "a"'
+```
+
+The same setting is available through the `GRAMMAR` environment variable or the top-level `grammar` field in a server configuration file.
+An explicit request `grammar` overrides the default.
+Without a configured default, completion behavior is unchanged.
+This option does not apply to `/v1/chat/completions`, whose grammar and response-format handling remain request-specific.
+
 ### Server options
 
 For a full list of options, run:
