@@ -18,6 +18,7 @@ from fastapi import Depends, FastAPI, APIRouter, Request, HTTPException, status,
 from fastapi.middleware import Middleware
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer
+from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 from starlette_context.plugins import RequestIdPlugin  # type: ignore
 from starlette_context.middleware import RawContextMiddleware
@@ -145,6 +146,8 @@ def create_app(
         allow_headers=["*"],
     )
     app.include_router(router)
+    if server_settings.static_dir is not None:
+        app.mount("/", StaticFiles(directory=server_settings.static_dir, html=True))
 
     assert model_settings is not None
     set_llama_proxy(model_settings=model_settings)

@@ -218,7 +218,11 @@ class ServerSettings(BaseSettings):
     # FastAPI Settings
     api_key: Optional[str] = Field(
         default=None,
-        description="API key for authentication. If set all requests need to be authenticated.",
+        description="API key for API requests. Static files and API docs remain public.",
+    )
+    static_dir: Optional[str] = Field(
+        default=None,
+        description="Directory of public static files served at /. Disabled by default.",
     )
     interrupt_requests: bool = Field(
         default=True,
