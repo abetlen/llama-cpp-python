@@ -245,3 +245,10 @@ The config file format is defined by the [`ConfigFileSettings`](#llama_cpp.serve
 ::: llama_cpp.server.settings.ModelSettings
     options:
         show_if_no_docstring: true
+
+## Request IDs
+
+The server accepts a client-provided `X-Request-ID` header, including non-UUID IDs from reverse proxies, and returns the same value in the response header.
+If the header is absent or empty, the server generates a UUID for that request.
+Request IDs are correlation metadata and do not replace API-key authentication.
+This applies to both ordinary responses and streamed completions.
