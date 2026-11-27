@@ -59,7 +59,10 @@ class LlamaRAMCache(BaseLlamaCache):
 
     @property
     def cache_size(self):
-        return sum([state.llama_state_size for state in self.cache_state.values()])
+        return sum(
+            state.llama_state_size + state.scores.nbytes + state.input_ids.nbytes
+            for state in self.cache_state.values()
+        )
 
     def _find_longest_prefix_key(
         self,
