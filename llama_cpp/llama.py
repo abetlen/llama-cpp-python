@@ -1729,7 +1729,9 @@ class Llama:
         logprobs_or_none: Optional[CompletionLogprobs] = None
         if logprobs is not None:
             text_offset = 0 if echo else len(prompt)
-            token_offset = 0 if echo else len(prompt_tokens[1:])
+            token_offset = len(prompt_tokens) - 1
+            if echo:
+                token_offset = 0 if prompt_tokens[0] == self.token_bos() else -1
             text_offsets: List[int] = []
             token_logprobs: List[Optional[float]] = []
             tokens: List[str] = []
@@ -1750,13 +1752,14 @@ class Llama:
                 )
                 for i, token in enumerate(all_tokens)
             ]
-            all_logprobs = Llama.logits_to_logprobs(self._scores)[token_offset:]
-            # TODO: may be able to change this loop to use np.take_along_dim
-            for idx, (token, token_str, logprobs_token) in enumerate(
-                zip(all_tokens, all_token_strs, all_logprobs)
-            ):
+            for idx, (token, token_str) in enumerate(zip(all_tokens, all_token_strs)):
                 if token == bos_token_id:
                     continue
+                # Each logits row predicts the next token. The first echoed
+                # token's probability is set to None below.
+                logprobs_token = Llama.logits_to_logprobs(
+                    self._scores[max(token_offset + idx, 0), :]
+                )
                 text_offsets.append(
                     text_offset
                     + len(
